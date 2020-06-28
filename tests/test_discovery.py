@@ -2,7 +2,7 @@ import os
 
 from py_oidc import DiscoveryDocumentRequest, get_discovery_document
 
-TEST_DISCO_ADDRESS = os.environ['TEST_DISCO_ADDRESS']
+TEST_DISCO_ADDRESS = os.environ["TEST_DISCO_ADDRESS"]
 
 
 def test_get_discovery_document_is_successful():

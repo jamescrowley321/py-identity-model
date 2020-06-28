@@ -20,24 +20,30 @@ class DiscoveryDocumentResponse:
     error: Optional[str] = None
 
 
-def get_discovery_document(disco_doc_req: DiscoveryDocumentRequest) -> DiscoveryDocumentResponse:
+def get_discovery_document(
+    disco_doc_req: DiscoveryDocumentRequest,
+) -> DiscoveryDocumentResponse:
     response = requests.get(disco_doc_req.address)
     # TODO: raise for status and handle exceptions
     if response.ok:
         response_json = response.json()
-        return DiscoveryDocumentResponse(issuer=response_json['issuer'],
-                                         jwks_uri=response_json['jwks_uri'],
-                                         authorization_endpoint=response_json['authorization_endpoint'],
-                                         token_endpoint=response_json['token_endpoint'],
-                                         is_successful=True)
+        return DiscoveryDocumentResponse(
+            issuer=response_json["issuer"],
+            jwks_uri=response_json["jwks_uri"],
+            authorization_endpoint=response_json["authorization_endpoint"],
+            token_endpoint=response_json["token_endpoint"],
+            is_successful=True,
+        )
     else:
-        return DiscoveryDocumentResponse(is_successful=False,
-                                         error=f'Discovery document request failed with status code: '
-                                               f'{response.status_code}. Response Content: {response.content}')
+        return DiscoveryDocumentResponse(
+            is_successful=False,
+            error=f"Discovery document request failed with status code: "
+            f"{response.status_code}. Response Content: {response.content}",
+        )
 
 
 __all__ = [
-    'DiscoveryDocumentRequest',
-    'DiscoveryDocumentResponse',
-    'get_discovery_document'
+    "DiscoveryDocumentRequest",
+    "DiscoveryDocumentResponse",
+    "get_discovery_document",
 ]

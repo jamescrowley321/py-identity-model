@@ -22,14 +22,14 @@ class JsonWebKey:
 
     def as_dict(self):
         return {
-            'kty': self.kty,
-            'use': self.use,
-            'kid': self.kid,
-            'x5t': self.x5t,
-            'n': self.n,
-            'e': self.e,
-            'x5c': self.x5c,
-            'issuer': self.issuer
+            "kty": self.kty,
+            "use": self.use,
+            "kid": self.kid,
+            "x5t": self.x5t,
+            "n": self.n,
+            "e": self.e,
+            "x5c": self.x5c,
+            "issuer": self.issuer,
         }
 
 
@@ -45,18 +45,14 @@ def get_jwks(jwks_request: JwksRequest) -> JwksResponse:
     # TODO: raise for status and handle exceptions
     if response.ok:
         response_json = response.json()
-        keys = [JsonWebKey(**key) for key in response_json['keys']]
-        return JwksResponse(is_successful=True,
-                            keys=keys)
+        keys = [JsonWebKey(**key) for key in response_json["keys"]]
+        return JwksResponse(is_successful=True, keys=keys)
     else:
-        return JwksResponse(is_successful=False,
-                            error=f'JSON web keys request failed with status code: '
-                                  f'{response.status_code}. Response Content: {response.content}')
+        return JwksResponse(
+            is_successful=False,
+            error=f"JSON web keys request failed with status code: "
+            f"{response.status_code}. Response Content: {response.content}",
+        )
 
 
-__all__ = [
-    'JwksRequest',
-    'JwksResponse',
-    'JsonWebKey',
-    'get_jwks'
-]
+__all__ = ["JwksRequest", "JwksResponse", "JsonWebKey", "get_jwks"]

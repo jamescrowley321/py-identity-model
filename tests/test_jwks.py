@@ -2,7 +2,7 @@ import os
 
 from py_oidc import JwksRequest, get_jwks
 
-TEST_JWKS_ADDRESS = os.environ['TEST_JWKS_ADDRESS']
+TEST_JWKS_ADDRESS = os.environ["TEST_JWKS_ADDRESS"]
 
 
 def test_get_jwks_is_successful():

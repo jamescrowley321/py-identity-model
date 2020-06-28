@@ -19,29 +19,34 @@ class ClientCredentialsTokenResponse:
     error: Optional[str] = None
 
 
-def request_client_credentials_token(request: ClientCredentialsTokenRequest) -> ClientCredentialsTokenResponse:
-    params = {
-        'grant_type': 'client_credentials',
-        'scope': request.scope
-    }
+def request_client_credentials_token(
+    request: ClientCredentialsTokenRequest,
+) -> ClientCredentialsTokenResponse:
+    params = {"grant_type": "client_credentials", "scope": request.scope}
 
-    headers = {
-        'Content-Type': 'application/x-www-form-urlencoded'
-    }
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
-    response = requests.post(request.address, data=params, headers=headers,
-                             auth=(request.client_id, request.client_secret))
+    response = requests.post(
+        request.address,
+        data=params,
+        headers=headers,
+        auth=(request.client_id, request.client_secret),
+    )
 
     if response.ok:
-        return ClientCredentialsTokenResponse(is_successful=True, token=response.json())
+        return ClientCredentialsTokenResponse(
+            is_successful=True, token=response.json()
+        )
     else:
-        return ClientCredentialsTokenResponse(is_successful=False,
-                                              error=f'Token generation request failed with status code: '
-                                                    f'{response.status_code}. Response Content: {response.content}')
+        return ClientCredentialsTokenResponse(
+            is_successful=False,
+            error=f"Token generation request failed with status code: "
+            f"{response.status_code}. Response Content: {response.content}",
+        )
 
 
 __all__ = [
-    'ClientCredentialsTokenRequest',
-    'ClientCredentialsTokenResponse',
-    'request_client_credentials_token'
+    "ClientCredentialsTokenRequest",
+    "ClientCredentialsTokenResponse",
+    "request_client_credentials_token",
 ]
