@@ -5,7 +5,6 @@ import pytest
 from py_oidc import PyOidcException, validate_token
 
 TEST_DISCO_ADDRESS = os.environ["TEST_DISCO_ADDRESS"]
-# TODO: make env variable
 TEST_EXPIRED_TOKEN = os.environ["TEST_EXPIRED_TOKEN"]
 
 
