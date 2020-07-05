@@ -9,7 +9,7 @@ test_require = ["python-jose", "requests", "pytest"]
 
 setup(
     name="py_identity_model",
-    version="0.3.0",
+    version="0.4.0",
     description="OIDC helper library",
     long_description=long_description,
     long_description_content_type="text/markdown",
