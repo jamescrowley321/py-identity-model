@@ -16,3 +16,7 @@ test-upload-dist:
     TWINE_PASSWORD="${TWINE_PASSWORD}" \
     TWINE_REPOSITORY_URL="https://test.pypi.org/legacy/" \
     twine upload --verbose dist/*
+
+.PHONY: lint
+lint:
+    black --check py_identity_model
