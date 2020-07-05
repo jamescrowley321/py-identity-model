@@ -6,7 +6,7 @@ from jose import jwt as jwt_utils
 from jose.utils import base64url_decode
 
 from .discovery import get_discovery_document, DiscoveryDocumentRequest
-from .exceptions import PyOidcException
+from .exceptions import PyIdentityModelException
 from .jwks import get_jwks, JwksRequest, JsonWebKey
 
 
@@ -14,7 +14,7 @@ def get_public_key(jwt: str, keys: List[JsonWebKey]) -> JsonWebKey:
     headers = jwt_utils.get_unverified_headers(jwt)
     key = list(filter(lambda x: x.kid == headers["kid"], keys))
     if not key:
-        raise PyOidcException("No matching kid found")
+        raise PyIdentityModelException("No matching kid found")
 
     return key[0]
 
@@ -25,11 +25,11 @@ def validate_token(jwt: str, disco_doc_address: str) -> dict:
         DiscoveryDocumentRequest(address=disco_doc_address)
     )
     if not disco_doc_response.is_successful:
-        raise PyOidcException(disco_doc_response.error)
+        raise PyIdentityModelException(disco_doc_response.error)
 
     jwks_response = get_jwks(JwksRequest(address=disco_doc_response.jwks_uri))
     if not jwks_response.is_successful:
-        raise PyOidcException(jwks_response.error)
+        raise PyIdentityModelException(jwks_response.error)
 
     # TODO: refactor this
     message, encoded_signature = str(jwt).rsplit(".", 1)
@@ -44,12 +44,12 @@ def validate_token(jwt: str, disco_doc_address: str) -> dict:
     json_web_key = jwk.construct(key)
 
     if not json_web_key.verify(message.encode("utf-8"), decoded_signature):
-        raise PyOidcException("Invalid signature.")
+        raise PyIdentityModelException("Invalid signature.")
 
     claims = jwt_utils.get_unverified_claims(jwt)
 
     if claims["exp"] < time.time():
-        raise PyOidcException("Expired token.")
+        raise PyIdentityModelException("Expired token.")
 
     return claims
 

@@ -8,7 +8,7 @@ install_requires = ["python-jose", "requests"]
 test_require = ["python-jose", "requests", "pytest"]
 
 setup(
-    name="py_oidc",
+    name="py_identity_model",
     version="0.2.0",
     description="OIDC helper library",
     long_description=long_description,
@@ -21,7 +21,7 @@ setup(
     install_requires=install_requires,
     extras_require={"test": test_require},
     keywords="OpenID jwt",
-    packages=["py_oidc"],
+    packages=["py_identity_model"],
     classifiers=[
         "Intended Audience :: Developers",
         "License :: OSI Approved :: Apache Software License",

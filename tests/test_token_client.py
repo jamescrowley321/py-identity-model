@@ -1,6 +1,6 @@
 import os
 
-from py_oidc import (
+from py_identity_model import (
     ClientCredentialsTokenRequest,
     request_client_credentials_token,
     get_discovery_document,
