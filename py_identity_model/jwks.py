@@ -19,6 +19,7 @@ class JsonWebKey:
     e: str
     x5c: List[str]
     issuer: str
+    alg: Optional[str] = None
 
     def as_dict(self):
         return {
@@ -30,6 +31,7 @@ class JsonWebKey:
             "e": self.e,
             "x5c": self.x5c,
             "issuer": self.issuer,
+            "alg": self.alg,
         }
 
 
