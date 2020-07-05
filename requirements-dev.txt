@@ -1,4 +1,5 @@
-pre-commit
 black
 flake8
+pre-commit
+python-dotenv
 twine

@@ -19,3 +19,8 @@ test-upload-dist:
 .PHONY: lint
 lint:
 	black --check py_identity_model
+
+.PHONY: test
+test:
+	pytest tests
+

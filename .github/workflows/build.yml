@@ -18,3 +18,12 @@ jobs:
           pip install -r requirements-dev.txt
       - name: Lint
         run: make lint
+      - name: Test
+        run: pytest tests
+        env:
+          TEST_DISCO_ADDRESS=${{ secrets.TEST_DISCO_ADDRESS }}
+          TEST_JWKS_ADDRESS=${{ secrets.TEST_JWKS_ADDRESS }}
+          TEST_CLIENT_ID=${{ secrets.TEST_CLIENT_ID }}
+          TEST_CLIENT_SECRET=${{ secrets.TEST_CLIENT_SECRET }}
+          TEST_SCOPE=${{ secrets.TEST_SCOPE }}
+          TEST_EXPIRED_TOKEN=${{ secrets.TEST_EXPIRED_TOKEN }}
