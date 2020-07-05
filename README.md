@@ -2,10 +2,6 @@
 
 WIP - OIDC helper library. This project is very immature and rough, so check back in periodically as more features and documentation are added.
 
-TODO:
-
-* See GitHub issues
-
 Inspired By:
 
 * [IdentityModel](https://github.com/IdentityModel/IdentityModel)
@@ -60,13 +56,13 @@ If an `alg` value is not provided as part of the JWKs discovery document, `RS256
 ```python
 import os
 
-from py_oidc import PyOidcException, validate_token
+from py_identity_model import PyIdentityModelException, validate_token
 
 DISCO_ADDRESS = os.environ["DISCO_ADDRESS"]
 
 token = get_token() # Get the token in the manner best suited to your application
 
-claims = validate_token(jwt=token, disco_doc_address)
+claims = validate_token(jwt=token, disco_doc_address=DISCO_ADDRESS)
 print(claims)
 ```
 
@@ -105,5 +101,19 @@ client_creds_token = request_client_credentials_token(client_creds_req)
 print(client_creds_token)
 ```
 
-
-
+##Roadmap
+These are in no particular order of importance. I am working on this project to bring a library as capable as IdentityModel to the Python ecosystem and will most likely focus on the needful and most used features first.
+* Protocol abstractions and constants
+* Discovery Endpoint
+* Token Endpoint
+* Token Introspection Endpoint
+* Toen Revocation Endpoint
+* UserInfo Endpoint
+* Dynamic Client Registration
+* Device Authorization Endpoint
+* Token Validation
+* Example integrations with popular providers
+* Example middleware implementations for Flask and FastApi
+* async Support
+* Setup documentation
+* CI setup
