@@ -1,6 +1,6 @@
 import os
 
-from py_oidc import DiscoveryDocumentRequest, get_discovery_document
+from py_identity_model import DiscoveryDocumentRequest, get_discovery_document
 
 TEST_DISCO_ADDRESS = os.environ["TEST_DISCO_ADDRESS"]
 

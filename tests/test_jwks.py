@@ -1,6 +1,6 @@
 import os
 
-from py_oidc import JwksRequest, get_jwks
+from py_identity_model import JwksRequest, get_jwks
 
 TEST_JWKS_ADDRESS = os.environ["TEST_JWKS_ADDRESS"]
 
