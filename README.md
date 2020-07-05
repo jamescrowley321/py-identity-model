@@ -1,4 +1,4 @@
-# py-oidc
+# py-identity-model
 
 WIP - OIDC helper library. This project is very immature and rough, so check back in periodically as more features and documentation are added.
 
@@ -20,7 +20,7 @@ Only a subset of fields is currently mapped.
 ```python
 import os
 
-from py_oidc import DiscoveryDocumentRequest, get_discovery_document
+from py_identity_model import DiscoveryDocumentRequest, get_discovery_document
 
 DISCO_ADDRESS = os.environ["DISCO_ADDRESS"]
     
@@ -34,10 +34,10 @@ print(disco_doc_response)
 ```python
 import os
 
-from py_oidc import (
+from py_identity_model import (
 	DiscoveryDocumentRequest, 
    	get_discovery_document,
-    jwksRequest, 
+    JwksRequest, 
     get_jwks,
 )
 
@@ -46,7 +46,7 @@ DISCO_ADDRESS = os.environ["DISCO_ADDRESS"]
 disco_doc_request = DiscoveryDocumentRequest(address=DISCO_ADDRESS)
 disco_doc_response = get_discovery_document(disco_doc_request)  
 
-jwks_request = JwksRequest(address=TEST_JWKS_ADDRESS)
+jwks_request = JwksRequest(address=disco_doc_response.jwks_uri)
 jwks_response = get_jwks(jwks_request)
 print(jwks_response)
 ```
@@ -79,7 +79,7 @@ Example:
 ```python
 import os
 
-from py_oidc import (
+from py_identity_model import (
     ClientCredentialsTokenRequest,
     request_client_credentials_token,
     get_discovery_document,
@@ -92,14 +92,14 @@ CLIENT_SECRET = os.environ["CLIENT_SECRET"]
 SCOPE = os.environ["SCOPE"]
 
 disco_doc_response = get_discovery_document(
-    DiscoveryDocumentRequest(address=TEST_DISCO_ADDRESS)
+    DiscoveryDocumentRequest(address=DISCO_ADDRESS)
 )
 
 client_creds_req = ClientCredentialsTokenRequest(
-	client_id=TEST_CLIENT_ID,
-    client_secret=TEST_CLIENT_SECRET,
+	client_id=CLIENT_ID,
+    client_secret=CLIENT_SECRET,
     address=disco_doc_response.token_endpoint,
-    scope=TEST_SCOPE,
+    scope=SCOPE,
 )
 client_creds_token = request_client_credentials_token(client_creds_req)
 print(client_creds_token)
