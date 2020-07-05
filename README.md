@@ -1,4 +1,6 @@
 # py-identity-model
+![Build](https://github.com/jamescrowley321/py-identity-model/workflows/Build/badge.svg)
+![License](https://img.shields.io/pypi/l/py-identity-model)
 
 WIP - OIDC helper library. This project is very immature and rough, so check back in periodically as more features and documentation are added.
 
