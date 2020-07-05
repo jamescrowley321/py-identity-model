@@ -12,11 +12,15 @@ from .jwks import get_jwks, JwksRequest, JsonWebKey
 
 def get_public_key(jwt: str, keys: List[JsonWebKey]) -> JsonWebKey:
     headers = jwt_utils.get_unverified_headers(jwt)
-    key = list(filter(lambda x: x.kid == headers["kid"], keys))
-    if not key:
+    keys = list(filter(lambda x: x.kid == headers["kid"], keys))
+    if not keys:
         raise PyIdentityModelException("No matching kid found")
 
-    return key[0]
+    key = keys[0]
+    if not key.alg:
+        key.alg = headers["alg"]
+
+    return key
 
 
 # TODO: Validate issuer, audience, etc.
@@ -36,11 +40,7 @@ def validate_token(jwt: str, disco_doc_address: str) -> dict:
 
     decoded_signature = base64url_decode(encoded_signature.encode("utf-8"))
 
-    # TODO: find a better way to handle not passing an alg - Azure issue
     key = get_public_key(jwt, jwks_response.keys).as_dict()
-    if not key.get("alg"):
-        key["alg"] = "RS256"
-
     json_web_key = jwk.construct(key)
 
     if not json_web_key.verify(message.encode("utf-8"), decoded_signature):
