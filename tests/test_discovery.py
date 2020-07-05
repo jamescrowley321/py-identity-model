@@ -1,8 +1,7 @@
-import os
-
 from py_identity_model import DiscoveryDocumentRequest, get_discovery_document
+from .test_utils import get_config
 
-TEST_DISCO_ADDRESS = os.environ["TEST_DISCO_ADDRESS"]
+TEST_DISCO_ADDRESS = get_config()["TEST_DISCO_ADDRESS"]
 
 
 def test_get_discovery_document_is_successful():

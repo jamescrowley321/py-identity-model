@@ -1,8 +1,9 @@
 import os
 
 from py_identity_model import JwksRequest, get_jwks
+from .test_utils import get_config
 
-TEST_JWKS_ADDRESS = os.environ["TEST_JWKS_ADDRESS"]
+TEST_JWKS_ADDRESS = get_config()["TEST_JWKS_ADDRESS"]
 
 
 def test_get_jwks_is_successful():
