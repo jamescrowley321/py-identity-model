@@ -1,0 +1,29 @@
+name: Build
+
+on: [push]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Set up Python 3.7
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.7
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      - name: Lint
+        run: make lint
+      - name: Test
+        run: make test
+        env:
+          TEST_DISCO_ADDRESS: ${{ secrets.TEST_DISCO_ADDRESS }}
+          TEST_JWKS_ADDRESS: ${{ secrets.TEST_JWKS_ADDRESS }}
+          TEST_CLIENT_ID: ${{ secrets.TEST_CLIENT_ID }}
+          TEST_CLIENT_SECRET: ${{ secrets.TEST_CLIENT_SECRET }}
+          TEST_SCOPE: ${{ secrets.TEST_SCOPE }}
+          TEST_EXPIRED_TOKEN: ${{ secrets.TEST_EXPIRED_TOKEN }}
