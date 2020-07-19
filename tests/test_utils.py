@@ -1,4 +1,5 @@
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,4 +13,5 @@ def get_config() -> dict:
         "TEST_CLIENT_SECRET": os.environ["TEST_CLIENT_SECRET"],
         "TEST_SCOPE": os.environ["TEST_SCOPE"],
         "TEST_EXPIRED_TOKEN": os.environ["TEST_EXPIRED_TOKEN"],
+        "TEST_AUDIENCE": os.environ["TEST_AUDIENCE"],
     }
