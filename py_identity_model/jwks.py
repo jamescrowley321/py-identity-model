@@ -17,8 +17,8 @@ class JsonWebKey:
     x5t: str
     n: str
     e: str
-    x5c: List[str]
-    issuer: str
+    x5c: List[str] = None
+    issuer: Optional[str] = None
     alg: Optional[str] = None
 
     def as_dict(self):
