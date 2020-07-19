@@ -35,7 +35,7 @@ def _get_public_key(jwt: str, keys: List[JsonWebKey]) -> JsonWebKey:
 def _validate_token_config(
     token_validation_config: TokenValidationConfig,
 ) -> bool:
-    if token_validation_config:
+    if token_validation_config.perform_disco:
         return True
 
     if (
@@ -47,7 +47,6 @@ def _validate_token_config(
         )
 
 
-# TODO: Use correct validation methodology -  https://auth0.com/docs/quickstart/backend/python/01-authorization?_ga=2.221043800.1718553743.1594267304-296270163.1594267304#create-the-jwt-validation-decorator
 def validate_token(
     jwt: str,
     token_validation_config: TokenValidationConfig,
