@@ -1,4 +1,5 @@
 import pytest
+from jose import ExpiredSignatureError
 
 from py_identity_model import (
     PyIdentityModelException,
@@ -36,13 +37,13 @@ def _generate_token():
 
 
 def test_token_validation_expired_token():
-    with pytest.raises(
-        PyIdentityModelException
-    ):  # TODO: Create more specific exceptions
+    with pytest.raises(ExpiredSignatureError):
         validate_token(
             jwt=TEST_EXPIRED_TOKEN,
             disco_doc_address=TEST_DISCO_ADDRESS,
-            token_validation_config=TokenValidationConfig(perform_disco=True),
+            token_validation_config=TokenValidationConfig(
+                perform_disco=True, audience=TEST_AUDIENCE
+            ),
         )
 
 
