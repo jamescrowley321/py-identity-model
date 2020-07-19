@@ -150,7 +150,7 @@ These are in no particular order of importance. I am working on this project to 
 * Discovery Endpoint
 * Token Endpoint
 * Token Introspection Endpoint
-* aToen Revocation Endpoint
+* Token Revocation Endpoint
 * UserInfo Endpoint
 * Dynamic Client Registration
 * Device Authorization Endpoint

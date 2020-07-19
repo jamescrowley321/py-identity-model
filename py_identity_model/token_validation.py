@@ -1,11 +1,16 @@
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import List, Optional
 
 from jose import jwt as jwt_utils
 
-from .discovery import get_discovery_document, DiscoveryDocumentRequest
+from .discovery import (
+    get_discovery_document,
+    DiscoveryDocumentRequest,
+    DiscoveryDocumentResponse,
+)
 from .exceptions import PyIdentityModelException
-from .jwks import get_jwks, JwksRequest, JsonWebKey
+from .jwks import get_jwks, JwksRequest, JsonWebKey, JwksResponse
 
 
 @dataclass
@@ -47,6 +52,18 @@ def _validate_token_config(
         )
 
 
+@lru_cache(maxsize=32)
+def _get_disco_response(disco_doc_address: str) -> DiscoveryDocumentResponse:
+    return get_discovery_document(
+        DiscoveryDocumentRequest(address=disco_doc_address)
+    )
+
+
+@lru_cache(maxsize=32)
+def _get_jwks_response(jwks_uri: str) -> JwksResponse:
+    return get_jwks(JwksRequest(address=jwks_uri))
+
+
 def validate_token(
     jwt: str,
     token_validation_config: TokenValidationConfig,
@@ -55,16 +72,12 @@ def validate_token(
     _validate_token_config(token_validation_config)
 
     if token_validation_config.perform_disco:
-        disco_doc_response = get_discovery_document(
-            DiscoveryDocumentRequest(address=disco_doc_address)
-        )
+        disco_doc_response = _get_disco_response(disco_doc_address)
 
         if not disco_doc_response.is_successful:
             raise PyIdentityModelException(disco_doc_response.error)
 
-        jwks_response = get_jwks(
-            JwksRequest(address=disco_doc_response.jwks_uri)
-        )
+        jwks_response = _get_jwks_response(disco_doc_response.jwks_uri)
         if not jwks_response.is_successful:
             raise PyIdentityModelException(jwks_response.error)
 
