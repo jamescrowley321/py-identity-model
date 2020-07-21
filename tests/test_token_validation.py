@@ -149,3 +149,49 @@ def test_benchmark_validation():
     elapsed_time = datetime.datetime.now() - start_time
     print(elapsed_time)
     assert elapsed_time.total_seconds() < 1
+
+
+def test_claim_validation_function_succeeds():
+    client_creds_response = _generate_token()
+
+    def validate_claims(token: dict):
+        # Do some token validation here
+        # and raise an exception if the validation fails
+        pass
+
+    validation_config = TokenValidationConfig(
+        perform_disco=True,
+        audience=TEST_AUDIENCE,
+        options=DEFAULT_OPTIONS,
+        claims_validator=validate_claims,
+    )
+
+    decoded_token = validate_token(
+        jwt=client_creds_response.token["access_token"],
+        disco_doc_address=TEST_DISCO_ADDRESS,
+        token_validation_config=validation_config,
+    )
+
+    assert decoded_token
+    assert decoded_token["iss"]
+
+
+def test_claim_validation_function_fails():
+    client_creds_response = _generate_token()
+
+    def validate_claims(token: dict):
+        raise PyIdentityModelException("Validation failed!")
+
+    validation_config = TokenValidationConfig(
+        perform_disco=True,
+        audience=TEST_AUDIENCE,
+        options=DEFAULT_OPTIONS,
+        claims_validator=validate_claims,
+    )
+
+    with pytest.raises(PyIdentityModelException):
+        validate_token(
+            jwt=client_creds_response.token["access_token"],
+            disco_doc_address=TEST_DISCO_ADDRESS,
+            token_validation_config=validation_config,
+        )

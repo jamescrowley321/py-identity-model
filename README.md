@@ -33,8 +33,8 @@ print(disco_doc_response)
 import os
 
 from py_identity_model import (
-	DiscoveryDocumentRequest, 
-   	get_discovery_document,
+    DiscoveryDocumentRequest, 
+    get_discovery_document,
     JwksRequest, 
     get_jwks,
 )
@@ -79,7 +79,7 @@ DISCO_ADDRESS = os.environ["DISCO_ADDRESS"]
 token = get_token() # Get the token in the manner best suited to your application
 
 validation_options = {
-	"verify_signature": True,
+    "verify_signature": True,
      "verify_aud": True,
      "verify_iat": True,
      "verify_exp": True,
