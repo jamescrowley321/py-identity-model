@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import List, Optional
+from typing import List, Optional, Callable
 
 from jose import jwt as jwt_utils
 
@@ -22,6 +22,7 @@ class TokenValidationConfig:
     issuer: Optional[List[str]] = None
     subject: Optional[str] = None
     options: Optional[dict] = None
+    claims_validator: Optional[Callable] = None
 
 
 def _get_public_key(jwt: str, keys: List[JsonWebKey]) -> JsonWebKey:
@@ -94,6 +95,10 @@ def validate_token(
         subject=token_validation_config.subject,
         options=token_validation_config.options,
     )
+
+    if token_validation_config.claims_validator:
+        token_validation_config.claims_validator(decoded_token)
+
     return decoded_token
 
 
