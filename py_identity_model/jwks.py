@@ -14,9 +14,9 @@ class JsonWebKey:
     kty: str
     use: str
     kid: str
-    x5t: str
     n: str
     e: str
+    x5t: str = None
     x5c: List[str] = None
     issuer: Optional[str] = None
     alg: Optional[str] = None
