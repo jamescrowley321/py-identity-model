@@ -53,14 +53,14 @@ def _validate_token_config(
         )
 
 
-@lru_cache(maxsize=32)
+@lru_cache
 def _get_disco_response(disco_doc_address: str) -> DiscoveryDocumentResponse:
     return get_discovery_document(
         DiscoveryDocumentRequest(address=disco_doc_address)
     )
 
 
-@lru_cache(maxsize=32)
+@lru_cache
 def _get_jwks_response(jwks_uri: str) -> JwksResponse:
     return get_jwks(JwksRequest(address=jwks_uri))
 

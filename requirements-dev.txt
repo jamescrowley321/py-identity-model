@@ -4,3 +4,4 @@ pre-commit
 python-dotenv
 twine
 upgrade-requirements
+pytest

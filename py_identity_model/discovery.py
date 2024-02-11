@@ -25,7 +25,9 @@ def get_discovery_document(
 ) -> DiscoveryDocumentResponse:
     response = requests.get(disco_doc_req.address)
     # TODO: raise for status and handle exceptions
-    if response.ok:
+    if response.ok and "application/json" in response.headers.get(
+        "Content-Type", ""
+    ):
         response_json = response.json()
         return DiscoveryDocumentResponse(
             issuer=response_json["issuer"],

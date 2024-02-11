@@ -2,7 +2,9 @@
 ![Build](https://github.com/jamescrowley321/py-identity-model/workflows/Build/badge.svg)
 ![License](https://img.shields.io/pypi/l/py-identity-model)
 
-WIP - OIDC helper library. This project is very immature and rough, so check back in periodically as more features and documentation are added.
+OIDC helper library. This project is very limited in functionality, but it has been used in production for years as the foundation of Flask/FastAPI middleware implementations.
+
+Does not currently support opaque tokens.
 
 Inspired By:
 
@@ -159,3 +161,4 @@ These are in no particular order of importance. I am working on this project to 
 * Example middleware implementations for Flask and FastApi
 * async Support
 * Setup documentation
+* Opaque tokens

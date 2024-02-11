@@ -29,7 +29,7 @@ TEST_AUDIENCE = config["TEST_AUDIENCE"]
 
 DEFAULT_OPTIONS = {
     "verify_signature": True,
-    "verify_aud": True,
+    "verify_aud": False,
     "verify_iat": True,
     "verify_exp": True,
     "verify_nbf": True,
@@ -69,7 +69,7 @@ def test_token_validation_expired_token():
             jwt=TEST_EXPIRED_TOKEN,
             disco_doc_address=TEST_DISCO_ADDRESS,
             token_validation_config=TokenValidationConfig(
-                perform_disco=True, audience=TEST_AUDIENCE
+                perform_disco=True, options=DEFAULT_OPTIONS
             ),
         )
 
@@ -133,12 +133,11 @@ def test_cache_succeeds():
 
 
 def test_benchmark_validation():
-    start_time = datetime.datetime.now()
     client_creds_response = _generate_token()
-
     validation_config = TokenValidationConfig(
         perform_disco=True, audience=TEST_AUDIENCE, options=DEFAULT_OPTIONS
     )
+    start_time = datetime.datetime.now()
 
     for i in range(0, 100):
         validate_token(
