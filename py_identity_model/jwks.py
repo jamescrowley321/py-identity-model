@@ -14,11 +14,11 @@ class JsonWebKey:
     kty: str
     use: str
     kid: str
-    x5t: str
     n: str
     e: str
-    x5c: List[str]
-    issuer: str
+    x5t: str = None
+    x5c: List[str] = None
+    issuer: Optional[str] = None
     alg: Optional[str] = None
 
     def as_dict(self):
@@ -45,7 +45,9 @@ class JwksResponse:
 def get_jwks(jwks_request: JwksRequest) -> JwksResponse:
     response = requests.get(jwks_request.address)
     # TODO: raise for status and handle exceptions
-    if response.ok:
+    if response.ok and "application/json" in response.headers.get(
+        "Content-Type", ""
+    ):
         response_json = response.json()
         keys = [JsonWebKey(**key) for key in response_json["keys"]]
         return JwksResponse(is_successful=True, keys=keys)
