@@ -45,7 +45,9 @@ class JwksResponse:
 def get_jwks(jwks_request: JwksRequest) -> JwksResponse:
     response = requests.get(jwks_request.address)
     # TODO: raise for status and handle exceptions
-    if response.ok:
+    if response.ok and "application/json" in response.headers.get(
+        "Content-Type", ""
+    ):
         response_json = response.json()
         keys = [JsonWebKey(**key) for key in response_json["keys"]]
         return JwksResponse(is_successful=True, keys=keys)
