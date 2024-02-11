@@ -11,8 +11,9 @@ jobs:
         with:
           python-version: 3.12
       - uses: rayepps/require-semver-bump@v1
+        env:
+          GITHUB_TOKEN-token: ${{ secrets.GITHUB_TOKEN }}
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          version-regex-pattern: >
-            VERSION = \\'(.+?)\\'
-          version-file-path: 'setup.py'
+          file: setup.py
+          pattern: >
+            VERSION = [\\'\\"](.+?)[\\'\\"]
