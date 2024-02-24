@@ -3,7 +3,7 @@ name: Publish Distribution 📦
 on:
   push:
     branches:
-      - develop
+      - main
 
 jobs:
   publish-to-pypi:
