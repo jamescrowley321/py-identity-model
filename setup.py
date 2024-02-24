@@ -9,8 +9,8 @@ test_require = ["python-jose", "requests", "pytest"]
 
 setup(
     name="py_identity_model",
-    version="0.11.0",
-    description="OIDC helper library",
+    version="0.11.2",
+    description="OAuth2.0 and OpenID Connect Client Library",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/jamescrowley321/py-oidc",
