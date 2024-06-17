@@ -1,6 +1,7 @@
 
 .PHONY: build-dist
 build-dist:
+	pip install setuptools
 	python setup.py sdist
 
 .PHONY: upload-dist
