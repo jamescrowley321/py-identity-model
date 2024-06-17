@@ -1,5 +1,5 @@
 # tests
-Due to the nature of the library, the tests are written as integration tests against a live OIDC provider.
+Due to the nature of the library, the tests are written as integration tests against a live OIDC provider. Currently, Ory is used  as the OIDC provider.
 # Environment Configuration
 ```shell
 touch .env
