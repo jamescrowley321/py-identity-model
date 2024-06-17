@@ -20,6 +20,8 @@ jobs:
         run: make lint
       - name: Test
         run: make test
+      - name: Build
+        run: make build-dist
         env:
           TEST_DISCO_ADDRESS: ${{ secrets.TEST_DISCO_ADDRESS }}
           TEST_JWKS_ADDRESS: ${{ secrets.TEST_JWKS_ADDRESS }}
