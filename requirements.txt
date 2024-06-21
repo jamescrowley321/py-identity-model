@@ -9,4 +9,4 @@ python-jose[cryptography]==3.3.0
 requests==2.32.0
 rsa==4.9
 six==1.16.0
-urllib3==2.2.0
+urllib3==2.2.2
