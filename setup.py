@@ -9,7 +9,7 @@ test_require = ["python-jose", "requests", "pytest"]
 
 setup(
     name="py_identity_model",
-    version="0.11.2",
+    version="0.11.5",
     description="OAuth2.0 and OpenID Connect Client Library",
     long_description=long_description,
     long_description_content_type="text/markdown",
