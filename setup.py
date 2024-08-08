@@ -3,9 +3,9 @@ from setuptools import setup
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-install_requires = ["python-jose", "requests"]
+install_requires = ["PyJWT", "requests"]
 
-test_require = ["python-jose", "requests", "pytest"]
+test_require = ["PyJWT", "requests", "pytest"]
 
 setup(
     name="py_identity_model",
