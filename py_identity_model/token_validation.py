@@ -29,7 +29,9 @@ class TokenValidationConfig:
 def _get_public_key(jwt: str, keys: List[JsonWebKey]) -> JsonWebKey:
     # TODO: clean up flow to prevent multiple decodes
     headers = jwt_utils.get_unverified_header(jwt)
-    filtered_keys = list(filter(lambda x: x.kid == headers.get("kid", None), keys))
+    filtered_keys = list(
+        filter(lambda x: x.kid == headers.get("kid", None), keys)
+    )
     if not filtered_keys:
         raise PyIdentityModelException("No matching kid found")
 
@@ -41,14 +43,14 @@ def _get_public_key(jwt: str, keys: List[JsonWebKey]) -> JsonWebKey:
 
 
 def _validate_token_config(
-        token_validation_config: TokenValidationConfig,
+    token_validation_config: TokenValidationConfig,
 ) -> bool:
     if token_validation_config.perform_disco:
         return True
 
     if (
-            not token_validation_config.key
-            and not token_validation_config.algorithms
+        not token_validation_config.key
+        and not token_validation_config.algorithms
     ):
         raise PyIdentityModelException(
             "TokenValidationConfig.key and TokenValidationConfig.algorithms are required if perform_disco is False"
@@ -68,9 +70,9 @@ def _get_jwks_response(jwks_uri: str) -> JwksResponse:
 
 
 def validate_token(
-        jwt: str,
-        token_validation_config: TokenValidationConfig,
-        disco_doc_address: str = None,
+    jwt: str,
+    token_validation_config: TokenValidationConfig,
+    disco_doc_address: str = None,
 ) -> dict:
     _validate_token_config(token_validation_config)
 
@@ -92,7 +94,9 @@ def validate_token(
         # ).as_dict()
     # TODO: set custom headers
     optional_custom_headers = {"User-agent": "custom-user-agent"}
-    jwks_client = PyJWKClient(disco_doc_response.jwks_uri, headers=optional_custom_headers)
+    jwks_client = PyJWKClient(
+        disco_doc_response.jwks_uri, headers=optional_custom_headers
+    )
     signing_key = jwks_client.get_signing_key_from_jwt(jwt)
 
     # TODO: clean up below
