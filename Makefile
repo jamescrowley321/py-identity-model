@@ -10,7 +10,7 @@ upload-dist:
 	TWINE_PASSWORD="${token}" \
 	twine upload --verbose dist/*
 
-.PHONY: test-upload-dist
+.PHONY: test-upload-dist`
 test-upload-dist:
 	TWINE_USERNAME="__token__" \
 	TWINE_PASSWORD="${token}" \

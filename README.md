@@ -2,7 +2,16 @@
 ![Build](https://github.com/jamescrowley321/py-identity-model/workflows/Build/badge.svg)
 ![License](https://img.shields.io/pypi/l/py-identity-model)
 
-OIDC helper library. This project is very limited in functionality, but it has been used in production for years as the foundation of Flask/FastAPI middleware implementations.
+OIDC/OAuth2.0 helper library for decoding JWTs and creating JWTs utilizing the `client_credentials` grant. This project is very limited in functionality, but it has been used in production for years as the foundation of Flask/FastAPI middleware implementations.
+
+The use case for the library in its current form is limited to the following
+* Discovery endpoint is utilized
+* JWKS endpoint is utilized
+* Authorization servers with multiple active keys
+
+While you can manually construct the validation configs required to manually bypass automated discovery, the library does not currently test those scenarios.
+
+For more information on the lower level configuration options for token validation, refer to the official [PyJWT Docs](https://pyjwt.readthedocs.io/en/stable/index.html)
 
 Does not currently support opaque tokens.
 

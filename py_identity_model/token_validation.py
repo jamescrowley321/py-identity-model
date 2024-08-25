@@ -3,8 +3,7 @@ from functools import lru_cache
 from typing import List, Optional, Callable
 
 import jwt as jwt_utils
-from jwt import PyJWKClient
-
+from jwt import PyJWK
 from .discovery import (
     get_discovery_document,
     DiscoveryDocumentRequest,
@@ -26,7 +25,7 @@ class TokenValidationConfig:
     claims_validator: Optional[Callable] = None
 
 
-def _get_public_key(jwt: str, keys: List[JsonWebKey]) -> JsonWebKey:
+def _get_public_key_from_jwk(jwt: str, keys: List[JsonWebKey]) -> JsonWebKey:
     # TODO: clean up flow to prevent multiple decodes
     headers = jwt_utils.get_unverified_header(jwt)
     filtered_keys = list(
@@ -76,37 +75,26 @@ def validate_token(
 ) -> dict:
     _validate_token_config(token_validation_config)
 
-    #  TODO: fix logic below and optmize
-    #  TODO: example with no disco
-    # if token_validation_config.perform_disco:
+    if token_validation_config.perform_disco:
+        disco_doc_response = _get_disco_response(disco_doc_address)
 
-    disco_doc_response = _get_disco_response(disco_doc_address)
+        if not disco_doc_response.is_successful:
+            raise PyIdentityModelException(disco_doc_response.error)
 
-    if not disco_doc_response.is_successful:
-        raise PyIdentityModelException(disco_doc_response.error)
+        jwks_response = _get_jwks_response(disco_doc_response.jwks_uri)
+        if not jwks_response.is_successful:
+            raise PyIdentityModelException(jwks_response.error)
 
-        # jwks_response = _get_jwks_response(disco_doc_response.jwks_uri)
-        # if not jwks_response.is_successful:
-        #     raise PyIdentityModelException(jwks_response.error)
-        #
-        # token_validation_config.key = _get_public_key(
-        #     jwt, jwks_response.keys
-        # ).as_dict()
-    # TODO: set custom headers
-    optional_custom_headers = {"User-agent": "custom-user-agent"}
-    jwks_client = PyJWKClient(
-        disco_doc_response.jwks_uri, headers=optional_custom_headers
-    )
-    signing_key = jwks_client.get_signing_key_from_jwt(jwt)
+        token_validation_config.key = _get_public_key_from_jwk(
+            jwt, jwks_response.keys
+        ).as_dict()
+        token_validation_config.algorithms = token_validation_config.key["alg"]
 
-    # TODO: clean up below
     decoded_token = jwt_utils.decode(
         jwt,
-        # token_validation_config.key,
-        signing_key.key,
+        PyJWK(token_validation_config.key, token_validation_config.algorithms),
         audience=token_validation_config.audience,
-        # algorithms=[token_validation_config.key["alg"]],
-        algorithms=["RS256"],
+        algorithms=token_validation_config.algorithms,
         issuer=token_validation_config.issuer,
         subject=token_validation_config.subject,
         options=token_validation_config.options,
