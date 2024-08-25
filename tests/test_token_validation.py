@@ -126,10 +126,10 @@ def test_cache_succeeds():
     assert cache_info
     assert cache_info[0] > 0
 
-    # cache_info = _get_jwks_response.cache_info()
-    # print(cache_info)
-    # assert cache_info
-    # assert cache_info[0] > 0
+    cache_info = _get_jwks_response.cache_info()
+    print(cache_info)
+    assert cache_info
+    assert cache_info[0] > 0
 
 
 def test_benchmark_validation():
