@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import List, Optional, Callable
 
-from jose import jwt as jwt_utils
-
+import jwt as jwt_utils
+from jwt import PyJWK
 from .discovery import (
     get_discovery_document,
     DiscoveryDocumentRequest,
@@ -25,9 +25,12 @@ class TokenValidationConfig:
     claims_validator: Optional[Callable] = None
 
 
-def _get_public_key(jwt: str, keys: List[JsonWebKey]) -> JsonWebKey:
-    headers = jwt_utils.get_unverified_headers(jwt)
-    filtered_keys = list(filter(lambda x: x.kid == headers["kid"], keys))
+def _get_public_key_from_jwk(jwt: str, keys: List[JsonWebKey]) -> JsonWebKey:
+    # TODO: clean up flow to prevent multiple decodes
+    headers = jwt_utils.get_unverified_header(jwt)
+    filtered_keys = list(
+        filter(lambda x: x.kid == headers.get("kid", None), keys)
+    )
     if not filtered_keys:
         raise PyIdentityModelException("No matching kid found")
 
@@ -82,13 +85,14 @@ def validate_token(
         if not jwks_response.is_successful:
             raise PyIdentityModelException(jwks_response.error)
 
-        token_validation_config.key = _get_public_key(
+        token_validation_config.key = _get_public_key_from_jwk(
             jwt, jwks_response.keys
         ).as_dict()
+        token_validation_config.algorithms = token_validation_config.key["alg"]
 
     decoded_token = jwt_utils.decode(
         jwt,
-        token_validation_config.key,
+        PyJWK(token_validation_config.key, token_validation_config.algorithms),
         audience=token_validation_config.audience,
         algorithms=token_validation_config.algorithms,
         issuer=token_validation_config.issuer,

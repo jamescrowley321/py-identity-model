@@ -1,7 +1,7 @@
 import datetime
 
 import pytest
-from jose import ExpiredSignatureError
+from jwt import ExpiredSignatureError
 
 from py_identity_model import (
     PyIdentityModelException,
