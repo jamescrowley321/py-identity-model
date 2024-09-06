@@ -31,4 +31,5 @@ setup:
 	pip install pipx
 	pipx install poetry
 	pipx inject poetry poetry-plugin-export
+	poetry install
 
