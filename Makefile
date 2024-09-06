@@ -30,6 +30,7 @@ setup:
 	python -m pip install --upgrade pip
 	pip install pipx
 	pipx install poetry
+	pip install pre-commit
 	pipx inject poetry poetry-plugin-export
 	poetry install
 
