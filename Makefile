@@ -1,8 +1,8 @@
 
 .PHONY: build-dist
 build-dist:
-	pip install setuptools
-	python setup.py sdist
+	poetry install
+	poetry build
 
 .PHONY: upload-dist
 upload-dist:
@@ -19,7 +19,7 @@ test-upload-dist:
 
 .PHONY: lint
 lint:
-	black --check py_identity_model
+	pre-commit run -a
 
 .PHONY: test
 test:

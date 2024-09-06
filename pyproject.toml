@@ -14,3 +14,26 @@ exclude = '''
   | dist
 )/
 '''
+[tool.poetry]
+name = "py-identity-model"
+version = "0.13.0"
+description = "OAuth2.0 and OpenID Connect Client Library"
+authors = ["jamescrowley321 <jamescrowley151@gmail.com>"]
+license = "Apache 2.0"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+PyJWT = "^2.9.0"
+requests = "^2.32.3"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.8.0"
+flake8 = "^7.1.1"
+pre-commit = "^3.8.0"
+python-dotenv = "^1.0.1"
+pytest = "^8.3.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
