@@ -19,11 +19,11 @@ test-upload-dist:
 
 .PHONY: lint
 lint:
-	pre-commit run -a
+	poetry run pre-commit run -a
 
 .PHONY: test
 test:
-	pytest tests
+	poetry run pytest tests
 
 .PHONY: setup
 setup:
