@@ -25,3 +25,10 @@ lint:
 test:
 	pytest tests
 
+.PHONY: setup
+setup:
+	python -m pip install --upgrade pip
+	pip install pipx
+	pipx install poetry
+	pipx inject poetry poetry-plugin-export
+
