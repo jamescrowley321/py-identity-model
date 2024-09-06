@@ -9,7 +9,7 @@ test_require = ["PyJWT", "requests", "pytest"]
 
 setup(
     name="py_identity_model",
-    version="0.12.0",
+    version="0.12.1",
     description="OAuth2.0 and OpenID Connect Client Library",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -25,7 +25,7 @@ setup(
     classifiers=[
         "Intended Audience :: Developers",
         "License :: OSI Approved :: Apache Software License",
-        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.12",
         "Operating System :: OS Independent",
     ],
     zip_safe=False,
