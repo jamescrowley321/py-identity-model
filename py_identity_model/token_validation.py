@@ -96,7 +96,6 @@ def validate_token(
         audience=token_validation_config.audience,
         algorithms=token_validation_config.algorithms,
         issuer=token_validation_config.issuer,
-        subject=token_validation_config.subject,
         options=token_validation_config.options,
     )
 

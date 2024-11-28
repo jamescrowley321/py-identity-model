@@ -1,7 +1,0 @@
-black
-flake8
-pre-commit
-python-dotenv
-twine
-upgrade-requirements
-pytest
