@@ -1,7 +1,14 @@
 from dataclasses import dataclass
+from enum import Enum
 from typing import List, Optional
 
 import requests
+
+
+class JsonWebAlgorithmsKeyTypes(Enum):
+    EllipticCurve = "EC"
+    RSA = "RSA"
+    Octet = "oct"
 
 
 @dataclass
@@ -12,7 +19,6 @@ class JwksRequest:
 @dataclass
 class JsonWebKey:
     kty: str
-    use: str
     kid: str
     n: str
     e: str
@@ -20,6 +26,23 @@ class JsonWebKey:
     x5c: List[str] = None
     issuer: Optional[str] = None
     alg: Optional[str] = None
+    crv: Optional[str] = None
+    d: Optional[str] = None
+    dp: Optional[str] = None
+    dq: Optional[str] = None
+    k: Optional[str] = None
+    key_ops: Optional[list[str]] = None
+    oth: Optional[list[str]] = None
+    p: Optional[list[str]] = None
+    q: Optional[list[str]] = None
+    qi: Optional[list[str]] = None
+    use: Optional[str] = None
+    x: Optional[list[str]] = None
+    x5ts256: Optional[str] = None
+    x5u: Optional[str] = None
+    y: Optional[str] = None
+
+    # TODO: key size and has private key
 
     def as_dict(self):
         return {
@@ -44,15 +67,15 @@ class JwksResponse:
 
 def jwks_from_dict(keys_dict: dict) -> JsonWebKey:
     return JsonWebKey(
-        kty=keys_dict.get("kty"),
-        use=keys_dict.get("use"),
         kid=keys_dict.get("kid"),
+        kty=keys_dict.get("kty"),
         x5c=keys_dict.get("x5c"),
         x5t=keys_dict.get("x5t"),
         n=keys_dict.get("n"),
         e=keys_dict.get("e"),
         issuer=keys_dict.get("issuer"),
         alg=keys_dict.get("alg"),
+        use=keys_dict.get("use"),
     )
 
 
