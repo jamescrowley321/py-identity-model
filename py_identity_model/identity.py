@@ -3,8 +3,9 @@ import enum
 from typing import Optional, List
 
 
-#TODO: real comments instead of AI generated ones
-#TODO: rename from lame Base class name
+# TODO: real comments instead of AI generated ones
+# TODO: rename from lame Base class name
+
 
 class IdentityBase(metaclass=abc.ABCMeta):
     @abc.abstractmethod
@@ -20,7 +21,7 @@ class IdentityBase(metaclass=abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def name(self)-> Optional[str]:
+    def name(self) -> Optional[str]:
         """Returns the name of the Identity"""
         raise NotImplementedError()
 
@@ -33,16 +34,17 @@ class PrincipalBase(metaclass=abc.ABCMeta):
         """Returns the identity"""
         raise NotImplementedError()
 
-
     @abc.abstractmethod
     def has_claim(self):
         """Check if a claim exists in the principal context"""
         raise NotImplementedError()
 
+
 class Claim:
     def __init__(self, claim_type: str, value: str):
         self.claim_type = claim_type
         self.value = value
+
 
 class ClaimType(enum.Enum):
     Name = "name"
@@ -51,10 +53,13 @@ class ClaimType(enum.Enum):
 
 class ClaimsIdentity(IdentityBase):
 
-    def __init__(self, claims: List[Claim],
-                 authentication_type: str = None,
-                 name_type_claim: str = ClaimType.Name,
-                 role_type_claim: str = ClaimType.Role.Role):
+    def __init__(
+        self,
+        claims: List[Claim],
+        authentication_type: str = None,
+        name_type_claim: str = ClaimType.Name,
+        role_type_claim: str = ClaimType.Role.Role,
+    ):
         self.claims = claims
         self.role_type_claim = role_type_claim
         self.name_type_claim = name_type_claim
@@ -67,7 +72,9 @@ class ClaimsIdentity(IdentityBase):
     @property
     def name(self) -> Optional[str]:
         # TODO: make this more robust
-        name_claim = list(filter(lambda claim: claim.name == ClaimType.Name, self.claims))
+        name_claim = list(
+            filter(lambda claim: claim.name == ClaimType.Name, self.claims)
+        )
         if name_claim and len(name_claim) > 0:
             return name_claim[0].value
         return None

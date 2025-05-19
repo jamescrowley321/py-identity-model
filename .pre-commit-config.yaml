@@ -3,7 +3,7 @@ repos:
     rev: 24.8.0
     hooks:
     - id: black
-      language_version: python3.12
+      language_version: python3.13
 -   repo: https://github.com/PyCQA/flake8
     rev: 7.1.1
     hooks:
@@ -17,6 +17,6 @@ repos:
         args: [ "-f", "requirements.txt" ]
         verbose: true
     - id: poetry-export
-      args: ["--with", "dev", "-f", "requirements.txt", "-o", "requirements.txt"]
+      args: ["--dev", "-f", "requirements.txt", "-o", "requirements.txt"]
       verbose: true
     -   id: poetry-install
