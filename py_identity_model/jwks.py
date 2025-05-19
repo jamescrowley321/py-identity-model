@@ -192,6 +192,7 @@ class JwksResponse:
     error: Optional[str] = None
 
 
+# TODO: add remaining props missing below
 def jwks_from_dict(keys_dict: dict) -> JsonWebKey:
     return JsonWebKey(
         kid=keys_dict.get("kid"),
