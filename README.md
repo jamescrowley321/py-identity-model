@@ -15,11 +15,17 @@ For more information on the lower level configuration options for token validati
 
 Does not currently support opaque tokens.
 
-Inspired By:
+This library inspired by [Duende.IdentityModel](https://github.com/DuendeSoftware/foss/tree/main/identity-model)
 
-* [IdentityModel](https://github.com/IdentityModel/IdentityModel)
-* [cognitojwt](https://github.com/borisrozumnuk/cognitojwt)
+From Duende.IdentityModel
+> It provides an object model to interact with the endpoints defined in the various OAuth and OpenId Connect specifications in the form of:
+> * types to represent the requests and responses
+> * extension methods to invoke requests
+> * constants defined in the specifications, such as standard scope, claim, and parameter names
+> * other convenience methods for performing common identity related operations
 
+
+This library aims to provide the same features in Python.
 ## Examples
 
 ### Discovery
@@ -64,7 +70,7 @@ print(jwks_response)
 
 Token validation validates the signature of a JWT against the values provided from an OIDC discovery document. The function will throw an exception if the token is expired or signature validation fails.
 
-Token validation is simply a wrapper on top of the [jose.jwt.decode](https://python-jose.readthedocs.io/en/latest/jwt/api.html#jose.jwt.decode). The configuration object is mapped to the input parameters of `jose.jwt.decode`. 
+Token validation utilizes [PyJWT](https://github.com/jpadilla/pyjwt) for work related to JWT validation. The configuration object is mapped to the input parameters of `jose.jwt.decode`. 
 
 ```python
 @dataclass
@@ -73,9 +79,10 @@ class TokenValidationConfig:
     key: Optional[dict] = None
     audience: Optional[str] = None
     algorithms: Optional[List[str]] = None
-    issuer: Optional[List[str]] = None
+    issuer: Optional[str] = None
     subject: Optional[str] = None
     options: Optional[dict] = None
+    claims_validator: Optional[Callable] = None
 ```
 
 
