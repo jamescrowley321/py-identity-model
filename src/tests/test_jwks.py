@@ -1,5 +1,3 @@
-import os
-
 from py_identity_model import JwksRequest, get_jwks
 from .test_utils import get_config
 

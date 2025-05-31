@@ -1,27 +1,27 @@
 
 .PHONY: build-dist
 build-dist:
-	poetry install
-	poetry build
+	uv pip install -r pyproject.toml
+	uv build
 
 .PHONY: upload-dist
 upload-dist:
-	poetry config pypi-token.pypi ${token}
+    export UV_PUBLISH_TOKEN=${token}
+	uv publish
 
 .PHONY: lint
 lint:
-	poetry run pre-commit run -a
+	uv run pre-commit run -a
 
 .PHONY: test
 test:
-	poetry run pytest tests
+	uv run pytest src/tests
 
 .PHONY: setup
 setup:
 	python -m pip install --upgrade pip
 	pip install pipx
-	pipx install poetry
+	pipx install uv
 	pip install pre-commit
-	pipx inject poetry poetry-plugin-export
-	poetry install
+	uv pip install -r pyproject.toml
 

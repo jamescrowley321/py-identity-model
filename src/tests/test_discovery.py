@@ -1,4 +1,7 @@
-from py_identity_model import DiscoveryDocumentRequest, get_discovery_document
+from py_identity_model import (
+    DiscoveryDocumentRequest,
+    get_discovery_document,
+)
 from .test_utils import get_config
 
 TEST_DISCO_ADDRESS = get_config()["TEST_DISCO_ADDRESS"]
