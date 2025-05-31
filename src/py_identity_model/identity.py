@@ -52,7 +52,6 @@ class ClaimType(enum.Enum):
 
 
 class ClaimsIdentity(IdentityBase):
-
     def __init__(
         self,
         claims: List[Claim],

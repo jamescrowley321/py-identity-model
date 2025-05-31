@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import List, Optional, Callable
 
-import jwt as jwt_utils
-from jwt import PyJWK
+from jwt import PyJWK, get_unverified_header, decode
+
 from .discovery import (
     get_discovery_document,
     DiscoveryDocumentRequest,
@@ -19,7 +19,7 @@ class TokenValidationConfig:
     key: Optional[dict] = None
     audience: Optional[str] = None
     algorithms: Optional[List[str]] = None
-    issuer: Optional[List[str]] = None
+    issuer: Optional[str] = None
     subject: Optional[str] = None
     options: Optional[dict] = None
     claims_validator: Optional[Callable] = None
@@ -27,10 +27,8 @@ class TokenValidationConfig:
 
 def _get_public_key_from_jwk(jwt: str, keys: List[JsonWebKey]) -> JsonWebKey:
     # TODO: clean up flow to prevent multiple decodes
-    headers = jwt_utils.get_unverified_header(jwt)
-    filtered_keys = list(
-        filter(lambda x: x.kid == headers.get("kid", None), keys)
-    )
+    headers = get_unverified_header(jwt)
+    filtered_keys = list(filter(lambda x: x.kid == headers.get("kid", None), keys))
     if not filtered_keys:
         raise PyIdentityModelException("No matching kid found")
 
@@ -47,10 +45,7 @@ def _validate_token_config(
     if token_validation_config.perform_disco:
         return True
 
-    if (
-        not token_validation_config.key
-        and not token_validation_config.algorithms
-    ):
+    if not token_validation_config.key and not token_validation_config.algorithms:
         raise PyIdentityModelException(
             "TokenValidationConfig.key and TokenValidationConfig.algorithms are required if perform_disco is False"
         )
@@ -58,9 +53,7 @@ def _validate_token_config(
 
 @lru_cache
 def _get_disco_response(disco_doc_address: str) -> DiscoveryDocumentResponse:
-    return get_discovery_document(
-        DiscoveryDocumentRequest(address=disco_doc_address)
-    )
+    return get_discovery_document(DiscoveryDocumentRequest(address=disco_doc_address))
 
 
 @lru_cache
@@ -90,14 +83,23 @@ def validate_token(
         ).as_dict()
         token_validation_config.algorithms = token_validation_config.key["alg"]
 
-    decoded_token = jwt_utils.decode(
-        jwt,
-        PyJWK(token_validation_config.key, token_validation_config.algorithms),
-        audience=token_validation_config.audience,
-        algorithms=token_validation_config.algorithms,
-        issuer=token_validation_config.issuer,
-        options=token_validation_config.options,
-    )
+        decoded_token = decode(
+            jwt,
+            PyJWK(token_validation_config.key, token_validation_config.algorithms),
+            audience=token_validation_config.audience,
+            algorithms=token_validation_config.algorithms,
+            issuer=disco_doc_response.issuer,
+            options=token_validation_config.options,
+        )
+    else:
+        decoded_token = decode(
+            jwt,
+            PyJWK(token_validation_config.key, token_validation_config.algorithms),
+            audience=token_validation_config.audience,
+            algorithms=token_validation_config.algorithms,
+            issuer=token_validation_config.issuer,
+            options=token_validation_config.options,
+        )
 
     if token_validation_config.claims_validator:
         token_validation_config.claims_validator(decoded_token)

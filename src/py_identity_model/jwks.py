@@ -113,9 +113,7 @@ class JsonWebKey:
         """Validate required parameters based on the key type"""
         if self.kty == "EC":
             if not all([self.crv, self.x, self.y]):
-                raise ValueError(
-                    "EC keys require 'crv', 'x', and 'y' parameters"
-                )
+                raise ValueError("EC keys require 'crv', 'x', and 'y' parameters")
         elif self.kty == "RSA":
             if not all([self.n, self.e]):
                 raise ValueError("RSA keys require 'n' and 'e' parameters")
@@ -220,7 +218,6 @@ def get_jwks(jwks_request: JwksRequest) -> JwksResponse:
                 f"{response.status_code}. Response Content: {response.content}",
             )
     except Exception as e:
-
         return JwksResponse(
             is_successful=False,
             error=f"Unhandled exception during JWKS request: {e}",

@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: 3.13
       - name: Install dependencies
-        run: make setup
+        run: make ci-setup
       - name: Lint
         run: make lint
       - name: Test
