@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - feature/move-to-uv
 
 permissions:
   contents: read
@@ -98,10 +97,3 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ steps.release.outputs.tag }}
-
-#      - name: Upload | Distribution Artifacts
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: distribution-artifacts
-#          path: dist
-#          if-no-files-found: error
