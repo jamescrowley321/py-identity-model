@@ -1,3 +1,4 @@
+$UV_PUBLISH_TOKEN=${token}
 .PHONY: build-dist
 build-dist:
 	uv pip install -r pyproject.toml
@@ -5,7 +6,6 @@ build-dist:
 
 .PHONY: upload-dist
 upload-dist:
-    export UV_PUBLISH_TOKEN=${token}
 	uv publish
 
 .PHONY: lint
@@ -16,11 +16,12 @@ lint:
 test:
 	uv run pytest src/tests
 
-.PHONY: setup
-setup:
+.PHONY: ci-setup
+ci-setup:
 	python -m pip install --upgrade pip
 	pip install pipx
 	pipx install uv
 	pip install pre-commit
 	uv pip install -r pyproject.toml
+
 
