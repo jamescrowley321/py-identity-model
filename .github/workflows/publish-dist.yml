@@ -23,5 +23,7 @@ jobs:
       - name: Build distribution 📦
         run: make build-dist
       - name: Publish distribution 📦 to PyPI
+        env:
+           UV_PUBLISH_TOKEN: ${{ secrets.pypi_token }}
         run: >
-          make upload-dist token=${{ secrets.pypi_token }}
+          make upload-dist

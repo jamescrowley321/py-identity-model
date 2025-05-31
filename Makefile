@@ -1,4 +1,3 @@
-$UV_PUBLISH_TOKEN=${token}
 .PHONY: build-dist
 build-dist:
 	uv pip install -r pyproject.toml
