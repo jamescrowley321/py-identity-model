@@ -38,9 +38,6 @@ version_toml = [
     "pyproject.toml:tool.poetry.version",
 ]
 commit_version_number = true
-version_variables = [
-    "src/__version__.py:VERSION",
-]
 
 [tool.semantic_release.branches.main]
 match = "main"
