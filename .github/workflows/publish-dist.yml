@@ -33,5 +33,5 @@ jobs:
            UV_PUBLISH_TOKEN: ${{ secrets.pypi_token }}
         run: |
           echo ${{ steps.vars.outputs.tag }}
-          sed -i -e "s/0.0.0/$RELEASE_VERSION/" pyproject.toml
+          sed -i -e "s/0.0.0/${{ steps.vars.outputs.tag }}/" pyproject.toml
           make upload-dist
