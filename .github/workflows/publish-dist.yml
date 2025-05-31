@@ -21,11 +21,16 @@ jobs:
           python-version: 3.12
       - name: Install dependencies
         run: make ci-setup
+      - name: Set tag version
+        id: vars
+        run: echo "tag=$(git describe --tags $(git rev-list --tags --max-count=1))" >> $GITHUB_OUTPUT
       - name: Build distribution 📦
-        run: make build-dist
+        run: |
+          echo ${{ steps.vars.outputs.tag }}
+          sed -i -e "s/0.0.0/${{ steps.vars.outputs.tag }}/" pyproject.toml
+          make build-dist
       - name: Publish distribution 📦 to PyPI
         env:
            UV_PUBLISH_TOKEN: ${{ secrets.pypi_token }}
-        run: >
-          sed -i -e 's/0.0.0/${GITHUB_REF#refs/*/}/' pyproject.toml
+        run: |
           make upload-dist
