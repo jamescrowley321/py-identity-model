@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: 3.12
       - name: Install dependencies
-        run: make setup
+        run: make ci-setup
       - name: Build distribution 📦
         run: make build-dist
       - name: Publish distribution 📦 to PyPI
