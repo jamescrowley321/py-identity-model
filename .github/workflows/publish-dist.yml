@@ -28,6 +28,6 @@ jobs:
       - name: Publish distribution 📦 to PyPI
         env:
            UV_PUBLISH_TOKEN: ${{ secrets.pypi_token }}
-        run: |
-          sed -i -e "s/0.0.0/${GITHUB_REF#refs/*/}/" pyproject.toml
+        run: >
+          sed -i -e 's/0.0.0/${GITHUB_REF#refs/*/}/' pyproject.toml
           make upload-dist
