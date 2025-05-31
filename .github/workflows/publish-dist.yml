@@ -25,11 +25,13 @@ jobs:
         run: make ci-setup
       - name: Build distribution 📦
         run: make build-dist
-      - name: Set tag variable
-        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - name: Set output
+        id: vars
+        run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
       - name: Publish distribution 📦 to PyPI
         env:
            UV_PUBLISH_TOKEN: ${{ secrets.pypi_token }}
-        run: >
+        run: |
+          echo ${{ steps.vars.outputs.tag }}
           sed -i -e "s/0.0.0/$RELEASE_VERSION/" pyproject.toml
           make upload-dist
