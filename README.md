@@ -35,12 +35,12 @@ Only a subset of fields is currently mapped.
 ```python
 import os
 
-from py_identity_model import DiscoveryDocumentRequest, get_discovery_document
+from src.py_identity_model import DiscoveryDocumentRequest, get_discovery_document
 
 DISCO_ADDRESS = os.environ["DISCO_ADDRESS"]
-    
+
 disco_doc_request = DiscoveryDocumentRequest(address=DISCO_ADDRESS)
-disco_doc_response = get_discovery_document(disco_doc_request)    
+disco_doc_response = get_discovery_document(disco_doc_request)
 print(disco_doc_response)
 ```
 
@@ -49,17 +49,17 @@ print(disco_doc_response)
 ```python
 import os
 
-from py_identity_model import (
-    DiscoveryDocumentRequest, 
+from src.py_identity_model import (
+    DiscoveryDocumentRequest,
     get_discovery_document,
-    JwksRequest, 
+    JwksRequest,
     get_jwks,
 )
 
 DISCO_ADDRESS = os.environ["DISCO_ADDRESS"]
-    
+
 disco_doc_request = DiscoveryDocumentRequest(address=DISCO_ADDRESS)
-disco_doc_response = get_discovery_document(disco_doc_request)  
+disco_doc_response = get_discovery_document(disco_doc_request)
 
 jwks_request = JwksRequest(address=disco_doc_response.jwks_uri)
 jwks_response = get_jwks(jwks_request)
@@ -85,42 +85,40 @@ class TokenValidationConfig:
     claims_validator: Optional[Callable] = None
 ```
 
-
-
 ```python
 import os
 
-from py_identity_model import PyIdentityModelException, validate_token
+from src.py_identity_model import PyIdentityModelException, validate_token
 
 DISCO_ADDRESS = os.environ["DISCO_ADDRESS"]
 
-token = get_token() # Get the token in the manner best suited to your application
+token = get_token()  # Get the token in the manner best suited to your application
 
 validation_options = {
     "verify_signature": True,
-     "verify_aud": True,
-     "verify_iat": True,
-     "verify_exp": True,
-     "verify_nbf": True,
-     "verify_iss": True,
-     "verify_sub": True,
-     "verify_jti": True,
-     "verify_at_hash": True,
-     "require_aud": False,
-     "require_iat": False,
-     "require_exp": False,
-     "require_nbf": False,
-     "require_iss": False,
-     "require_sub": False,
-     "require_jti": False,
-     "require_at_hash": False,
-     "leeway": 0,
+    "verify_aud": True,
+    "verify_iat": True,
+    "verify_exp": True,
+    "verify_nbf": True,
+    "verify_iss": True,
+    "verify_sub": True,
+    "verify_jti": True,
+    "verify_at_hash": True,
+    "require_aud": False,
+    "require_iat": False,
+    "require_exp": False,
+    "require_nbf": False,
+    "require_iss": False,
+    "require_sub": False,
+    "require_jti": False,
+    "require_at_hash": False,
+    "leeway": 0,
 }
 
 validation_config = TokenValidationConfig(
-     perform_disco=True,
-     audience=TEST_AUDIENCE,
-     options=validation_options
+    perform_disco=True,
+    audience=TEST_AUDIENCE,
+    options=validation_options
 )
 
 claims = validate_token(jwt=token, disco_doc_address=DISCO_ADDRESS)
@@ -136,7 +134,7 @@ Example:
 ```python
 import os
 
-from py_identity_model import (
+from src.py_identity_model import (
     ClientCredentialsTokenRequest,
     request_client_credentials_token,
     get_discovery_document,
@@ -153,7 +151,7 @@ disco_doc_response = get_discovery_document(
 )
 
 client_creds_req = ClientCredentialsTokenRequest(
-	client_id=CLIENT_ID,
+    client_id=CLIENT_ID,
     client_secret=CLIENT_SECRET,
     address=disco_doc_response.token_endpoint,
     scope=SCOPE,

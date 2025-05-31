@@ -34,9 +34,7 @@ def request_client_credentials_token(
     )
 
     if response.ok:
-        return ClientCredentialsTokenResponse(
-            is_successful=True, token=response.json()
-        )
+        return ClientCredentialsTokenResponse(is_successful=True, token=response.json())
     else:
         return ClientCredentialsTokenResponse(
             is_successful=False,

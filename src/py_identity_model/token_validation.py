@@ -28,9 +28,7 @@ class TokenValidationConfig:
 def _get_public_key_from_jwk(jwt: str, keys: List[JsonWebKey]) -> JsonWebKey:
     # TODO: clean up flow to prevent multiple decodes
     headers = get_unverified_header(jwt)
-    filtered_keys = list(
-        filter(lambda x: x.kid == headers.get("kid", None), keys)
-    )
+    filtered_keys = list(filter(lambda x: x.kid == headers.get("kid", None), keys))
     if not filtered_keys:
         raise PyIdentityModelException("No matching kid found")
 
@@ -47,10 +45,7 @@ def _validate_token_config(
     if token_validation_config.perform_disco:
         return True
 
-    if (
-        not token_validation_config.key
-        and not token_validation_config.algorithms
-    ):
+    if not token_validation_config.key and not token_validation_config.algorithms:
         raise PyIdentityModelException(
             "TokenValidationConfig.key and TokenValidationConfig.algorithms are required if perform_disco is False"
         )
@@ -58,9 +53,7 @@ def _validate_token_config(
 
 @lru_cache
 def _get_disco_response(disco_doc_address: str) -> DiscoveryDocumentResponse:
-    return get_discovery_document(
-        DiscoveryDocumentRequest(address=disco_doc_address)
-    )
+    return get_discovery_document(DiscoveryDocumentRequest(address=disco_doc_address))
 
 
 @lru_cache
@@ -92,9 +85,7 @@ def validate_token(
 
         decoded_token = decode(
             jwt,
-            PyJWK(
-                token_validation_config.key, token_validation_config.algorithms
-            ),
+            PyJWK(token_validation_config.key, token_validation_config.algorithms),
             audience=token_validation_config.audience,
             algorithms=token_validation_config.algorithms,
             issuer=disco_doc_response.issuer,
@@ -103,9 +94,7 @@ def validate_token(
     else:
         decoded_token = decode(
             jwt,
-            PyJWK(
-                token_validation_config.key, token_validation_config.algorithms
-            ),
+            PyJWK(token_validation_config.key, token_validation_config.algorithms),
             audience=token_validation_config.audience,
             algorithms=token_validation_config.algorithms,
             issuer=token_validation_config.issuer,

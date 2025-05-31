@@ -1,22 +1,15 @@
 repos:
--   repo: https://github.com/ambv/black
-    rev: 24.8.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+  # Ruff version.
+    rev: v0.11.12
     hooks:
-    - id: black
-      language_version: python3.13
--   repo: https://github.com/PyCQA/flake8
-    rev: 7.1.1
+      # Run the linter.
+      - id: ruff
+        args: [ --fix ]
+      # Run the formatter.
+      - id: ruff-format
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    # uv version.
+    rev: 0.7.9
     hooks:
-    -   id: flake8
--   repo: https://github.com/python-poetry/poetry
-    rev: 1.8.3  # add version here
-    hooks:
-    -   id: poetry-check
-    -   id: poetry-lock
-    -   id: poetry-export
-        args: [ "-f", "requirements.txt" ]
-        verbose: true
-    - id: poetry-export
-      args: ["--dev", "-f", "requirements.txt", "-o", "requirements.txt"]
-      verbose: true
-    -   id: poetry-install
+      - id: uv-export

@@ -2,8 +2,10 @@ name: Publish Distribution 📦
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+      - "[0-9]+.[0-9]+rc[0-9]+"
+      - "[0-9]+.[0-9]+[ab][0-9]+"
 
 permissions:
   contents: read
@@ -18,9 +20,12 @@ jobs:
         with:
           python-version: 3.12
       - name: Install dependencies
-        run: make setup
+        run: make ci-setup
       - name: Build distribution 📦
         run: make build-dist
       - name: Publish distribution 📦 to PyPI
+        env:
+           UV_PUBLISH_TOKEN: ${{ secrets.pypi_token }}
         run: >
-          make upload-dist token=${{ secrets.pypi_token }}
+          sed -i -e 's/0.0.0/${GITHUB_REF#refs/*/}/' pyproject.toml
+          make upload-dist

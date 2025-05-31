@@ -70,7 +70,6 @@ def get_jwks(jwks_request: JwksRequest) -> JwksResponse:
                 f"{response.status_code}. Response Content: {response.content}",
             )
     except Exception as e:
-
         return JwksResponse(
             is_successful=False,
             error=f"Unhandled exception during JWKS request: {e}",

@@ -11,9 +11,7 @@ class ValidationResult(Enum):
     IssDoesNotMatchIssuer = ("IssDoesNotMatchIssuer",)
     NoAuthWellKnownEndPoints = ("NoAuthWellKnownEndPoints",)
     IncorrectAud = ("IncorrectAud",)
-    IncorrectIdTokenClaimsAfterRefresh = (
-        "IncorrectIdTokenClaimsAfterRefresh",
-    )
+    IncorrectIdTokenClaimsAfterRefresh = ("IncorrectIdTokenClaimsAfterRefresh",)
     IncorrectAzp = ("IncorrectAzp",)
     TokenExpired = ("TokenExpired",)
     IncorrectAtHash = ("IncorrectAtHash",)
