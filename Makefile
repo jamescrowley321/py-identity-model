@@ -22,7 +22,7 @@ ci-setup:
 	pip install pipx
 	pipx install uv
 	uv venv
-	uv ip install pre-commit
+	uv pip install pre-commit
 	uv pip install -r pyproject.toml
 
 
