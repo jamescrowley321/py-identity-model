@@ -6,6 +6,8 @@ on:
       - "[0-9]+.[0-9]+.[0-9]+"
       - "[0-9]+.[0-9]+rc[0-9]+"
       - "[0-9]+.[0-9]+[ab][0-9]+"
+    branches:
+      - feature/move-to-uv
 
 permissions:
   contents: read
@@ -26,6 +28,6 @@ jobs:
       - name: Publish distribution 📦 to PyPI
         env:
            UV_PUBLISH_TOKEN: ${{ secrets.pypi_token }}
-        run: >
-          sed -i -e 's/0.0.0/${GITHUB_REF#refs/*/}/' pyproject.toml
+        run: |
+          sed -i -e "s/0.0.0/${GITHUB_REF#refs/*/}/" pyproject.toml
           make upload-dist
