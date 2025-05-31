@@ -10,9 +10,6 @@ on:
 permissions:
   contents: read
 
-permissions:
-  contents: read
-
 jobs:
   publish-to-pypi:
     runs-on: ubuntu-latest
