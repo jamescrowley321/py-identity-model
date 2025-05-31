@@ -16,8 +16,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "black>=24.8.0,<25",
-    "flake8>=7.1.1,<8",
     "pre-commit>=3.8.0,<4",
     "python-dotenv>=1.0.1,<2",
     "pytest>=8.3.2,<9",
