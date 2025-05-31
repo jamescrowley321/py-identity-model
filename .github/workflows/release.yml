@@ -10,8 +10,15 @@ permissions:
   contents: read
 
 jobs:
-  lint-and-test:
+  release:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-release-${{ github.ref_name }}
+      cancel-in-progress: false
+
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@v1
       - name: Set up Python
@@ -34,16 +41,6 @@ jobs:
           TEST_AUDIENCE: ${{ secrets.TEST_AUDIENCE }}
       - name: Build
         run: make build-dist
-  release:
-    runs-on: ubuntu-latest
-    concurrency:
-      group: ${{ github.workflow }}-release-${{ github.ref_name }}
-      cancel-in-progress: false
-
-    permissions:
-      contents: write
-
-    steps:
       - name: Setup | Checkout Repository on Release Branch
         uses: actions/checkout@v4
         with:
