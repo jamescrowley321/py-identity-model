@@ -171,16 +171,15 @@ class JsonWebKey:
         return urlsafe_b64decode(input_str + padding)
 
     def as_dict(self):
-        return {
-            "kty": self.kty,
-            "use": self.use,
-            "kid": self.kid,
-            "x5t": self.x5t,
-            "n": self.n,
-            "e": self.e,
-            "x5c": self.x5c,
-            "alg": self.alg,
-        }
+        """Convert the JWK to a dictionary with all available properties"""
+        result = {}
+
+        # Add all non-None properties to the dictionary
+        for key, value in self.__dict__.items():
+            if value is not None:
+                result[key] = value
+
+        return result
 
 
 @dataclass
@@ -190,17 +189,36 @@ class JwksResponse:
     error: Optional[str] = None
 
 
-# TODO: add remaining props missing below
 def jwks_from_dict(keys_dict: dict) -> JsonWebKey:
     return JsonWebKey(
-        kid=keys_dict.get("kid"),
+        # Required parameter
         kty=keys_dict.get("kty"),
+        # Optional parameters for all keys
+        use=keys_dict.get("use"),
+        key_ops=keys_dict.get("key_ops"),
+        alg=keys_dict.get("alg"),
+        kid=keys_dict.get("kid"),
+        # Optional JWK parameters
+        x5u=keys_dict.get("x5u"),
         x5c=keys_dict.get("x5c"),
         x5t=keys_dict.get("x5t"),
+        x5t_s256=keys_dict.get("x5t#S256"),
+        # Parameters for Elliptic Curve Keys
+        crv=keys_dict.get("crv"),
+        x=keys_dict.get("x"),
+        y=keys_dict.get("y"),
+        d=keys_dict.get("d"),
+        # Parameters for RSA Keys
         n=keys_dict.get("n"),
         e=keys_dict.get("e"),
-        alg=keys_dict.get("alg"),
-        use=keys_dict.get("use"),
+        p=keys_dict.get("p"),
+        q=keys_dict.get("q"),
+        dp=keys_dict.get("dp"),
+        dq=keys_dict.get("dq"),
+        qi=keys_dict.get("qi"),
+        oth=keys_dict.get("oth"),
+        # Parameters for Symmetric Keys
+        k=keys_dict.get("k"),
     )
 
 

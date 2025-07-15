@@ -13,7 +13,7 @@ lint:
 
 .PHONY: test
 test:
-	uv run pytest src/tests
+	uv run pytest src/tests -v
 
 .PHONY: ci-setup
 ci-setup:
@@ -21,7 +21,6 @@ ci-setup:
 	pip install pipx
 	pipx install uv
 	uv venv
-	uv pip install pre-commit
 	uv pip install -r pyproject.toml
 
 
