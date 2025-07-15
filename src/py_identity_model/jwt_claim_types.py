@@ -5,6 +5,7 @@ Commonly used claim types for JWT (JSON Web Tokens)
 import enum
 
 
+# TODO: correct issues with python conventions in files below
 class JwtClaimTypes(enum.Enum):
     """Commonly used claim types"""
 
