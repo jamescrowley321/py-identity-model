@@ -244,7 +244,7 @@ class JwksResponse:
 def jwks_from_dict(keys_dict: dict) -> JsonWebKey:
     return JsonWebKey(
         # Required parameter
-        kty=keys_dict.get("kty"),
+        kty=keys_dict.get("kty") or "",
         # Optional parameters for all keys
         use=keys_dict.get("use"),
         key_ops=keys_dict.get("key_ops"),

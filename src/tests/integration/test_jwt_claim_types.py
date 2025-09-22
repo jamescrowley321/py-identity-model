@@ -35,7 +35,7 @@ def test_jwt_types():
         JwtTypes.as_media_type("")
 
     with pytest.raises(ValueError):
-        JwtTypes.as_media_type(None)
+        JwtTypes.as_media_type(None)  # type: ignore
 
 
 def test_confirmation_methods():

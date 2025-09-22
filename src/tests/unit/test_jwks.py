@@ -79,7 +79,7 @@ class TestJsonWebKey:
         with pytest.raises(
             ValueError, match="The 'kty' \\(Key Type\\) parameter is required"
         ):
-            JsonWebKey(kty=None, use="sig")
+            JsonWebKey(kty=None, use="sig")  # type: ignore
 
     def test_json_web_key_validation_missing_rsa_params(self):
         with pytest.raises(ValueError, match="RSA keys require 'n' and 'e' parameters"):
@@ -278,6 +278,7 @@ class TestGetJwks:
         result = get_jwks(request)
 
         assert result.is_successful is True
+        assert result.keys is not None
         assert len(result.keys) == 2
         assert result.keys[0].kty == "RSA"
         assert result.keys[0].kid == "key1"
@@ -300,6 +301,7 @@ class TestGetJwks:
 
         assert result.is_successful is False
         assert result.keys is None
+        assert result.error is not None
         assert "404" in result.error
         assert "Not Found" in result.error
         mock_get.assert_called_once_with("https://example.com/jwks")
@@ -314,6 +316,7 @@ class TestGetJwks:
 
         assert result.is_successful is False
         assert result.keys is None
+        assert result.error is not None
         assert "Unhandled exception during JWKS request" in result.error
         assert "Network error" in result.error
         mock_get.assert_called_once_with("https://example.com/jwks")
@@ -331,5 +334,6 @@ class TestGetJwks:
 
         assert result.is_successful is False
         assert result.keys is None
+        assert result.error is not None
         assert "Unhandled exception during JWKS request" in result.error
         mock_get.assert_called_once_with("https://example.com/jwks")

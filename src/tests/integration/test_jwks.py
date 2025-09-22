@@ -8,6 +8,7 @@ def test_get_jwks_is_successful():
     jwks_request = JwksRequest(address=TEST_JWKS_ADDRESS)
     jwks_response = get_jwks(jwks_request)
     assert jwks_response.is_successful
+    assert jwks_response.keys is not None
     for key in jwks_response.keys:
         assert key.kty
         assert key.alg

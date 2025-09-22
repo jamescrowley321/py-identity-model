@@ -85,6 +85,7 @@ class TestGetDiscoveryDocument:
         result = get_discovery_document(request)
 
         assert result.is_successful is False
+        assert result.error is not None
         assert "404" in result.error
         assert "Not Found" in result.error
         mock_get.assert_called_once_with(
@@ -107,6 +108,7 @@ class TestGetDiscoveryDocument:
         result = get_discovery_document(request)
 
         assert result.is_successful is False
+        assert result.error is not None
         assert "Invalid content type" in result.error
         mock_get.assert_called_once_with(
             "https://example.com/.well-known/openid_configuration", timeout=30
@@ -131,6 +133,7 @@ class TestGetDiscoveryDocument:
         result = get_discovery_document(request)
 
         assert result.is_successful is False
+        assert result.error is not None
         assert "Missing required parameters" in result.error
         mock_get.assert_called_once_with(
             "https://example.com/.well-known/openid_configuration", timeout=30

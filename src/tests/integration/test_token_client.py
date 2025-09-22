@@ -18,6 +18,7 @@ def test_request_client_credentials_token_is_successful():
     disco_doc_response = get_discovery_document(
         DiscoveryDocumentRequest(address=TEST_DISCO_ADDRESS)
     )
+    assert disco_doc_response.token_endpoint is not None
 
     client_creds_req = ClientCredentialsTokenRequest(
         client_id=TEST_CLIENT_ID,
@@ -36,6 +37,7 @@ def test_request_client_credentials_token_fails():
     disco_doc_response = get_discovery_document(
         DiscoveryDocumentRequest(address=TEST_DISCO_ADDRESS)
     )
+    assert disco_doc_response.token_endpoint is not None
 
     client_creds_req = ClientCredentialsTokenRequest(
         client_id="bad_client_id",

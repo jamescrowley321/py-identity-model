@@ -108,7 +108,7 @@ def test_invalid_jwk():
 
     # Test None input
     with pytest.raises(ValueError):
-        JsonWebKey.from_json(None)
+        JsonWebKey.from_json(None)  # type: ignore
 
 
 def test_key_size_calculation(jwks_data):

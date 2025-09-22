@@ -55,8 +55,8 @@ class ClaimsIdentity(IdentityBase):
     def __init__(
         self,
         claims: List[Claim],
-        authentication_type: str = None,
-        name_type_claim: str = ClaimType.Name,
+        authentication_type: Optional[str] = None,
+        name_type_claim: str = ClaimType.Name.value,
         role_type_claim: str = ClaimType.Role.value,
     ):
         self.claims = claims

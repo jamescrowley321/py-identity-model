@@ -53,6 +53,7 @@ def _generate_token():
     disco_doc_response = get_discovery_document(
         DiscoveryDocumentRequest(address=TEST_DISCO_ADDRESS)
     )
+    assert disco_doc_response.token_endpoint is not None
     client_creds_req = ClientCredentialsTokenRequest(
         client_id=TEST_CLIENT_ID,
         client_secret=TEST_CLIENT_SECRET,
@@ -76,6 +77,7 @@ def test_token_validation_expired_token():
 
 def test_token_validation_succeeds():
     client_creds_response = _generate_token()
+    assert client_creds_response.token is not None
 
     validation_config = TokenValidationConfig(
         perform_disco=True, audience=TEST_AUDIENCE, options=DEFAULT_OPTIONS
@@ -94,6 +96,7 @@ def test_token_validation_succeeds():
 
 def test_token_validation_with_invalid_config_throws_exception():
     client_creds_response = _generate_token()
+    assert client_creds_response.token is not None
 
     validation_config = TokenValidationConfig(
         perform_disco=False, audience=TEST_AUDIENCE, options=DEFAULT_OPTIONS
@@ -109,6 +112,7 @@ def test_token_validation_with_invalid_config_throws_exception():
 
 def test_cache_succeeds():
     client_creds_response = _generate_token()
+    assert client_creds_response.token is not None
 
     validation_config = TokenValidationConfig(
         perform_disco=True, audience=TEST_AUDIENCE, options=DEFAULT_OPTIONS
@@ -134,6 +138,7 @@ def test_cache_succeeds():
 
 def test_benchmark_validation():
     client_creds_response = _generate_token()
+    assert client_creds_response.token is not None
     validation_config = TokenValidationConfig(
         perform_disco=True, audience=TEST_AUDIENCE, options=DEFAULT_OPTIONS
     )
@@ -152,6 +157,7 @@ def test_benchmark_validation():
 
 def test_claim_validation_function_succeeds():
     client_creds_response = _generate_token()
+    assert client_creds_response.token is not None
 
     def validate_claims(token: dict):
         # Do some token validation here
@@ -177,6 +183,7 @@ def test_claim_validation_function_succeeds():
 
 def test_claim_validation_function_fails():
     client_creds_response = _generate_token()
+    assert client_creds_response.token is not None
 
     def validate_claims(token: dict):
         raise PyIdentityModelException("Validation failed!")
