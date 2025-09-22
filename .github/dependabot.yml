@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    ignore:
+      # Ignore patch updates for stable packages
+      - dependency-name: "*"
+        update-types: ["version-update:semver-patch"]
