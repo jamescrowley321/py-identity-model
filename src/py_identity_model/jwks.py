@@ -114,12 +114,50 @@ class JsonWebKey:
         if self.kty == "EC":
             if not all([self.crv, self.x, self.y]):
                 raise ValueError("EC keys require 'crv', 'x', and 'y' parameters")
+            # Validate supported curves per RFC 7518
+            valid_curves = ["P-256", "P-384", "P-521", "secp256k1"]
+            if self.crv not in valid_curves:
+                raise ValueError(
+                    f"Unsupported curve: {self.crv}. Supported curves: {valid_curves}"
+                )
         elif self.kty == "RSA":
             if not all([self.n, self.e]):
                 raise ValueError("RSA keys require 'n' and 'e' parameters")
         elif self.kty == "oct":
-            if not self.k:
+            if self.k is None:
                 raise ValueError("Symmetric keys require 'k' parameter")
+
+        # Validate 'use' parameter values per RFC 7517 Section 4.2
+        if self.use is not None:
+            valid_use_values = ["sig", "enc"]
+            if self.use not in valid_use_values and not self.use.startswith("https://"):
+                raise ValueError(
+                    f"Invalid 'use' parameter: {self.use}. Must be 'sig', 'enc', or a URI"
+                )
+
+        # Validate 'key_ops' parameter values per RFC 7517 Section 4.3
+        if self.key_ops is not None:
+            valid_key_ops = [
+                "sign",
+                "verify",
+                "encrypt",
+                "decrypt",
+                "wrapKey",
+                "unwrapKey",
+                "deriveKey",
+                "deriveBits",
+            ]
+            for op in self.key_ops:
+                if op not in valid_key_ops:
+                    raise ValueError(
+                        f"Invalid key operation: {op}. Valid operations: {valid_key_ops}"
+                    )
+
+        # Validate mutual exclusivity of 'use' and 'key_ops' per RFC 7517 Section 4.3
+        if self.use is not None and self.key_ops is not None:
+            raise ValueError(
+                "The 'use' and 'key_ops' parameters are mutually exclusive"
+            )
 
     @classmethod
     def from_json(cls, json_str: str) -> "JsonWebKey":
@@ -129,7 +167,14 @@ class JsonWebKey:
 
         try:
             data = json.loads(json_str)
-            return cls(**{k.lower(): v for k, v in data.items()})
+            # Map JWK parameter names to Python field names
+            mapped_data = {}
+            for k, v in data.items():
+                if k == "x5t#S256":
+                    mapped_data["x5t_s256"] = v
+                else:
+                    mapped_data[k] = v
+            return cls(**mapped_data)
         except json.JSONDecodeError:
             raise ValueError("Invalid JSON format")
         except TypeError as e:
@@ -137,7 +182,14 @@ class JsonWebKey:
 
     def to_json(self) -> str:
         """Convert the JWK to a JSON string"""
-        data = {k: v for k, v in self.__dict__.items() if v is not None}
+        data = {}
+        for k, v in self.__dict__.items():
+            if v is not None:
+                # Map Python field names back to JWK parameter names
+                if k == "x5t_s256":
+                    data["x5t#S256"] = v
+                else:
+                    data[k] = v
         return json.dumps(data)
 
     @property

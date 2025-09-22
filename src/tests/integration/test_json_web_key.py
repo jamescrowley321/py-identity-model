@@ -6,7 +6,7 @@ from typing import Dict, List
 
 from py_identity_model import JsonWebKey
 from py_identity_model.jwks import jwks_from_dict, get_jwks, JwksRequest
-from tests.test_utils import get_config
+from .test_utils import get_config
 
 TEST_JWKS_ADDRESS = get_config()["TEST_JWKS_ADDRESS"]
 
@@ -167,7 +167,7 @@ def test_jwks_from_dict_comprehensive():
         "kty": "RSA",
         # Optional parameters for all keys
         "use": "sig",
-        "key_ops": ["verify"],
+        # Note: 'key_ops' is omitted as it's mutually exclusive with 'use' per RFC 7517
         "alg": "RS256",
         "kid": "test-key-id",
         # Optional JWK parameters
@@ -199,7 +199,7 @@ def test_jwks_from_dict_comprehensive():
     # Verify all fields are properly set
     assert jwk.kty == "RSA"
     assert jwk.use == "sig"
-    assert jwk.key_ops == ["verify"]
+    assert jwk.key_ops is None  # Not set due to mutual exclusivity with 'use'
     assert jwk.alg == "RS256"
     assert jwk.kid == "test-key-id"
     assert jwk.x5u == "https://example.com/cert"

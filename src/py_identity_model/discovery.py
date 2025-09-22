@@ -1,7 +1,92 @@
 from dataclasses import dataclass
 from typing import Optional, List
+from urllib.parse import urlparse
 
 import requests
+
+
+def _validate_issuer(issuer: str) -> None:
+    """Validate issuer format according to OpenID Connect Discovery 1.0 Section 3"""
+    if not issuer:
+        raise ValueError("Issuer parameter is required")
+
+    parsed = urlparse(issuer)
+    if parsed.scheme != "https":
+        raise ValueError("Issuer must use HTTPS scheme")
+
+    if parsed.query or parsed.fragment:
+        raise ValueError("Issuer must not contain query or fragment components")
+
+    if not parsed.netloc:
+        raise ValueError("Issuer must be a valid URL with host")
+
+
+def _validate_https_url(url: str, parameter_name: str) -> None:
+    """Validate that a URL is a proper HTTPS URL"""
+    if not url:
+        return  # Optional parameters can be None/empty
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ["https", "http"]:  # Allow http for development
+        raise ValueError(f"{parameter_name} must be a valid HTTP/HTTPS URL")
+
+    if not parsed.netloc:
+        raise ValueError(f"{parameter_name} must be an absolute URL with host")
+
+
+def _validate_required_parameters(response_data: dict) -> None:
+    """Validate required parameters per OpenID Connect Discovery 1.0 Section 3"""
+    required_params = [
+        "issuer",
+        "response_types_supported",
+        "subject_types_supported",
+        "id_token_signing_alg_values_supported",
+    ]
+
+    missing_params = []
+    for param in required_params:
+        if param not in response_data or response_data[param] is None:
+            missing_params.append(param)
+
+    if missing_params:
+        raise ValueError(f"Missing required parameters: {', '.join(missing_params)}")
+
+
+def _validate_parameter_values(response_data: dict) -> None:
+    """Validate parameter values according to OpenID Connect specifications"""
+    # Validate subject_types_supported values
+    if (
+        "subject_types_supported" in response_data
+        and response_data["subject_types_supported"]
+    ):
+        valid_subject_types = ["public", "pairwise"]
+        for subject_type in response_data["subject_types_supported"]:
+            if subject_type not in valid_subject_types:
+                raise ValueError(
+                    f"Invalid subject type: {subject_type}. Must be 'public' or 'pairwise'"
+                )
+
+    # Validate response_types_supported values
+    if (
+        "response_types_supported" in response_data
+        and response_data["response_types_supported"]
+    ):
+        valid_response_types = [
+            "code",
+            "id_token",
+            "token",
+            "code id_token",
+            "code token",
+            "id_token token",
+            "code id_token token",
+        ]
+        for response_type in response_data["response_types_supported"]:
+            if response_type not in valid_response_types:
+                # Allow custom response types that contain valid components
+                components = response_type.split()
+                valid_components = ["code", "id_token", "token"]
+                if not all(comp in valid_components for comp in components):
+                    raise ValueError(f"Invalid response type: {response_type}")
 
 
 @dataclass
@@ -70,10 +155,77 @@ class DiscoveryDocumentResponse:
 def get_discovery_document(
     disco_doc_req: DiscoveryDocumentRequest,
 ) -> DiscoveryDocumentResponse:
-    response = requests.get(disco_doc_req.address)
-    # TODO: raise for status and handle exceptions
-    if response.ok and "application/json" in response.headers.get("Content-Type", ""):
-        response_json = response.json()
+    try:
+        response = requests.get(disco_doc_req.address, timeout=30)
+
+        if not response.ok:
+            return DiscoveryDocumentResponse(
+                is_successful=False,
+                error=f"Discovery document request failed with status code: "
+                f"{response.status_code}. Response Content: {response.content}",
+            )
+
+        if "application/json" not in response.headers.get("Content-Type", ""):
+            return DiscoveryDocumentResponse(
+                is_successful=False,
+                error=f"Invalid content type. Expected application/json, got: "
+                f"{response.headers.get('Content-Type', 'unknown')}",
+            )
+
+        try:
+            response_json = response.json()
+        except ValueError as e:
+            return DiscoveryDocumentResponse(
+                is_successful=False,
+                error=f"Invalid JSON response: {str(e)}",
+            )
+
+        # Validate required parameters
+        try:
+            _validate_required_parameters(response_json)
+        except ValueError as e:
+            return DiscoveryDocumentResponse(
+                is_successful=False,
+                error=f"Missing required parameters: {str(e)}",
+            )
+
+        # Validate issuer format
+        try:
+            _validate_issuer(response_json.get("issuer", ""))
+        except ValueError as e:
+            return DiscoveryDocumentResponse(
+                is_successful=False,
+                error=f"Invalid issuer: {str(e)}",
+            )
+
+        # Validate parameter values
+        try:
+            _validate_parameter_values(response_json)
+        except ValueError as e:
+            return DiscoveryDocumentResponse(
+                is_successful=False,
+                error=f"Invalid parameter values: {str(e)}",
+            )
+
+        # Validate endpoint URLs
+        try:
+            _validate_https_url(response_json.get("jwks_uri"), "jwks_uri")
+            _validate_https_url(
+                response_json.get("authorization_endpoint"), "authorization_endpoint"
+            )
+            _validate_https_url(response_json.get("token_endpoint"), "token_endpoint")
+            _validate_https_url(
+                response_json.get("userinfo_endpoint"), "userinfo_endpoint"
+            )
+            _validate_https_url(
+                response_json.get("registration_endpoint"), "registration_endpoint"
+            )
+        except ValueError as e:
+            return DiscoveryDocumentResponse(
+                is_successful=False,
+                error=f"Invalid endpoint URL: {str(e)}",
+            )
+
         return DiscoveryDocumentResponse(
             # Core OpenID Connect endpoints
             issuer=response_json.get("issuer"),
@@ -148,11 +300,16 @@ def get_discovery_document(
             op_tos_uri=response_json.get("op_tos_uri"),
             is_successful=True,
         )
-    else:
+
+    except requests.exceptions.RequestException as e:
         return DiscoveryDocumentResponse(
             is_successful=False,
-            error=f"Discovery document request failed with status code: "
-            f"{response.status_code}. Response Content: {response.content}",
+            error=f"Network error during discovery document request: {str(e)}",
+        )
+    except Exception as e:
+        return DiscoveryDocumentResponse(
+            is_successful=False,
+            error=f"Unexpected error during discovery document request: {str(e)}",
         )
 
 

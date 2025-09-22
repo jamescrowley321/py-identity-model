@@ -20,6 +20,7 @@ dev = [
     "python-dotenv>=1.0.1,<2",
     "pytest>=8.3.2,<9",
     "ruff>=0.11.12",
+    "pyrefly>=0.34.0",
 ]
 
 [build-system]
@@ -35,7 +36,7 @@ major_on_zero = true
 tag_format = "{version}"
 build_command = "echo 1"
 version_toml = [
-    "pyproject.toml:tool.poetry.version",
+    "pyproject.toml:project.version",
 ]
 commit_version_number = true
 

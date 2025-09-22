@@ -57,7 +57,7 @@ class ClaimsIdentity(IdentityBase):
         claims: List[Claim],
         authentication_type: str = None,
         name_type_claim: str = ClaimType.Name,
-        role_type_claim: str = ClaimType.Role.Role,
+        role_type_claim: str = ClaimType.Role.value,
     ):
         self.claims = claims
         self.role_type_claim = role_type_claim
