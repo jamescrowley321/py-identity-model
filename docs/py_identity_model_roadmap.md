@@ -1,4 +1,4 @@
-# py-identity-model 6-Month Development Roadmap
+# py-identity-model Development Roadmap
 
 ## Project Overview
 **Goal**: Create a Python port of Duende.IdentityModel - a client library for interacting with OAuth 2.0 and OpenID Connect endpoints
@@ -18,7 +18,7 @@
 
 ---
 
-## Month 1: Foundation & Quality (Weeks 1-4)
+## Phase 1: Foundation & Quality
 ### Core Infrastructure
 - [ ] **Testing & Quality Enhancement**
   - ✅ Basic test suite (completed)
@@ -31,7 +31,7 @@
   - ✅ Basic README with usage examples (completed)
   - [ ] Set up proper Python packaging (pyproject.toml)
   - [ ] Publish to PyPI with proper versioning
-  - [ ] Add complete type hints throughout
+  - ✅ Add complete type hints throughout (completed)
   - [ ] Create comprehensive API documentation
 
 - [ ] **Code Structure Improvements**
@@ -49,7 +49,7 @@
 
 ---
 
-## Month 2: Core Protocol Support (Weeks 5-8)
+## Phase 2: Core Protocol Support
 ### Token Endpoint Operations
 - [ ] **Expand Token Endpoint Support**
   - ✅ Client credentials grant (completed)
@@ -82,12 +82,12 @@
 
 ---
 
-## Month 3: Discovery & Metadata (Weeks 9-12)
+## Phase 3: Discovery & Metadata
 ### Discovery Document Enhancement
 - [ ] **Extended Discovery Support**
   - ✅ Basic OpenID Connect discovery document parsing (completed)
   - ✅ JWKS endpoint discovery and retrieval (completed)
-  - [ ] OAuth 2.0 Authorization Server Metadata (RFC 8414)
+  - ✅ OAuth 2.0 Authorization Server Metadata (RFC 8414) (completed)
   - [ ] Caching mechanism for discovery documents
   - [ ] Fallback and retry logic
 
@@ -111,7 +111,7 @@
 
 ---
 
-## Month 4: Advanced Features (Weeks 13-16)
+## Phase 4: Advanced Features
 ### Advanced Protocol Support
 - [ ] **Token Introspection (RFC 7662)**
   - `TokenIntrospectionRequest/Response` classes
@@ -141,7 +141,7 @@
 
 ---
 
-## Month 5: Modern Features & Security (Weeks 17-20)
+## Phase 5: Modern Features & Security
 ### Security & Modern Standards
 - [ ] **DPoP (RFC 9449) Support**
   - DPoP proof creation
@@ -171,7 +171,7 @@
 
 ---
 
-## Month 6: Integration & Polish (Weeks 21-24)
+## Phase 6: Integration & Polish
 ### Framework Integration & Utilities
 - [ ] **HTTP Client Abstraction**
   - Support for httpx, requests, aiohttp
