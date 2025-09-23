@@ -10,6 +10,7 @@ from .discovery import (
     DiscoveryDocumentResponse,
 )
 from .exceptions import PyIdentityModelException
+from .identity import ClaimsPrincipal, ClaimsIdentity, Claim
 from .jwks import get_jwks, JwksRequest, JsonWebKey, JwksResponse
 
 
@@ -124,4 +125,37 @@ def validate_token(
     return decoded_token
 
 
-__all__ = ["validate_token", "TokenValidationConfig"]
+def to_principal(
+    token_claims: dict, authentication_type: str = "Bearer"
+) -> ClaimsPrincipal:
+    """
+    Converts a dictionary of token claims (output from validate_token)
+    into a ClaimsPrincipal object.
+
+    Args:
+        token_claims: Dictionary of claims returned from validate_token
+        authentication_type: The authentication type (defaults to "Bearer")
+
+    Returns:
+        ClaimsPrincipal object containing the claims from the token
+    """
+    claims = []
+
+    for claim_type, claim_value in token_claims.items():
+        # Handle different claim value types
+        if isinstance(claim_value, list):
+            # Multiple values for the same claim type
+            for value in claim_value:
+                claims.append(Claim(claim_type=claim_type, value=str(value)))
+        else:
+            # Single value claim
+            claims.append(Claim(claim_type=claim_type, value=str(claim_value)))
+
+    # Create a ClaimsIdentity with the claims
+    identity = ClaimsIdentity(claims=claims, authentication_type=authentication_type)
+
+    # Create and return the ClaimsPrincipal
+    return ClaimsPrincipal(identity=identity)
+
+
+__all__ = ["validate_token", "TokenValidationConfig", "to_principal"]
