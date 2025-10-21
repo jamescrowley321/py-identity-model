@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.1.0 (2025-10-21)
+
+### Chores
+
+- Updates deps and docs ([#80](https://github.com/jamescrowley321/py-identity-model/pull/80),
+  [`47c4ce2`](https://github.com/jamescrowley321/py-identity-model/commit/47c4ce2192316a6c1c7b3e2746c9ae22f1d69811))
+
+### Features
+
+- Put in some identity ([#82](https://github.com/jamescrowley321/py-identity-model/pull/82),
+  [`a61cb9b`](https://github.com/jamescrowley321/py-identity-model/commit/a61cb9b8fbe95671ac9e84677051f3af42601fc7))
+
+
 ## v1.0.0 (2025-05-31)
 
 
