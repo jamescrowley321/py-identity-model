@@ -22,6 +22,11 @@ dev = [
     "ruff>=0.11.12",
     "pyrefly>=0.34.0"
 ]
+docs = [
+    "mkdocs>=1.6.0,<2",
+    "mkdocs-material>=9.6.0,<10",
+    "mkdocs-awesome-pages-plugin>=2.10.0,<3"
+]
 
 [build-system]
 requires = ["uv_build>=0.6,<0.7"]
