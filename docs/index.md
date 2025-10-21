@@ -1,4 +1,5 @@
 # py-identity-model
+
 ![Build](https://github.com/jamescrowley321/py-identity-model/workflows/Build/badge.svg)
 ![License](https://img.shields.io/pypi/l/py-identity-model)
 
@@ -12,6 +13,7 @@ OIDC/OAuth2.0 helper library for decoding JWTs and creating JWTs utilizing the `
 * ✅ **Client Credentials Flow** - OAuth 2.0 client credentials grant support
 
 The library currently supports:
+
 * ✅ Discovery endpoint with full validation
 * ✅ JWKS endpoint with RFC 7517 compliance
 * ✅ JWT token validation with auto-discovery
@@ -25,16 +27,29 @@ For more information on token validation options, refer to the official [PyJWT D
 
 This library inspired by [Duende.IdentityModel](https://github.com/DuendeSoftware/foss/tree/main/identity-model)
 
-From Duende.IdentityModel
+From Duende.IdentityModel:
+
 > It provides an object model to interact with the endpoints defined in the various OAuth and OpenId Connect specifications in the form of:
 > * types to represent the requests and responses
 > * extension methods to invoke requests
 > * constants defined in the specifications, such as standard scope, claim, and parameter names
 > * other convenience methods for performing common identity related operations
 
-
 This library aims to provide the same features in Python.
-## Examples
+
+## Installation
+
+```bash
+pip install py-identity-model
+```
+
+Or with uv:
+
+```bash
+uv add py-identity-model
+```
+
+## Quick Start
 
 ### Discovery
 
@@ -192,26 +207,36 @@ else:
 
 ## Features Status
 
-### ✅ Completed
+### ✅ Completed Features
 * ✅ **Discovery Endpoint** - Fully compliant with OpenID Connect Discovery 1.0
 * ✅ **JWKS Endpoint** - Fully compliant with RFC 7517 (JSON Web Key)
 * ✅ **Token Validation** - JWT validation with auto-discovery and PyJWT integration
 * ✅ **Token Endpoint** - Client credentials grant type
+* ✅ **Token-to-Principal Conversion** - Convert JWTs to ClaimsPrincipal objects
 * ✅ **Protocol Constants** - OIDC and OAuth 2.0 constants
 * ✅ **Comprehensive Type Hints** - Full type safety throughout
 * ✅ **Error Handling** - Structured exceptions and validation
 
-### 🚧 Roadmap
-These are in no particular order of importance. I am working on this project to bring a library as capable as IdentityModel to the Python ecosystem and will most likely focus on the needful and most used features first.
+### 🚧 Upcoming Features
 * Token Introspection Endpoint (RFC 7662)
 * Token Revocation Endpoint (RFC 7009)
 * UserInfo Endpoint
 * Dynamic Client Registration (RFC 7591)
 * Device Authorization Endpoint
 * Additional grant types (authorization code, refresh token, device flow)
-* Example integrations with popular providers
-* Example middleware implementations for Flask and FastAPI
-* async Support
+* Async support
 * Opaque tokens support
 
-For detailed development plans, see the [project roadmap](docs/py_identity_model_roadmap.md).
+## Documentation
+
+* [Discovery Specification Compliance](docs/discovery_specification_compliance_assessment.md) - ✅ **100% Compliant**
+* [JWKS Specification Compliance](docs/jwks_specification_compliance_assessment.md) - ✅ **100% Compliant**
+* [Project Roadmap](docs/py_identity_model_roadmap.md)
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the Apache License 2.0 - see the LICENSE file for details.

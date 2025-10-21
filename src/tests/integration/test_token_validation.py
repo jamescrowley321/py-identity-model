@@ -19,13 +19,6 @@ from py_identity_model.token_validation import (
 from .test_utils import get_config
 
 # TODO: clean this up
-config = get_config()
-TEST_DISCO_ADDRESS = config["TEST_DISCO_ADDRESS"]
-TEST_EXPIRED_TOKEN = config["TEST_EXPIRED_TOKEN"]
-TEST_CLIENT_ID = config["TEST_CLIENT_ID"]
-TEST_CLIENT_SECRET = config["TEST_CLIENT_SECRET"]
-TEST_SCOPE = config["TEST_SCOPE"]
-TEST_AUDIENCE = config["TEST_AUDIENCE"]
 
 DEFAULT_OPTIONS = {
     "verify_signature": True,
@@ -49,41 +42,45 @@ DEFAULT_OPTIONS = {
 }
 
 
-def _generate_token():
+def _generate_token(config):
     disco_doc_response = get_discovery_document(
-        DiscoveryDocumentRequest(address=TEST_DISCO_ADDRESS)
+        DiscoveryDocumentRequest(address=config["TEST_DISCO_ADDRESS"])
     )
+    assert disco_doc_response.token_endpoint is not None
     client_creds_req = ClientCredentialsTokenRequest(
-        client_id=TEST_CLIENT_ID,
-        client_secret=TEST_CLIENT_SECRET,
+        client_id=config["TEST_CLIENT_ID"],
+        client_secret=config["TEST_CLIENT_SECRET"],
         address=disco_doc_response.token_endpoint,
-        scope=TEST_SCOPE,
+        scope=config["TEST_SCOPE"],
     )
     client_creds_response = request_client_credentials_token(client_creds_req)
     return client_creds_response
 
 
-def test_token_validation_expired_token():
+def test_token_validation_expired_token(env_file):
+    config = get_config(env_file)
     with pytest.raises(ExpiredSignatureError):
         validate_token(
-            jwt=TEST_EXPIRED_TOKEN,
-            disco_doc_address=TEST_DISCO_ADDRESS,
+            jwt=config["TEST_EXPIRED_TOKEN"],
+            disco_doc_address=config["TEST_DISCO_ADDRESS"],
             token_validation_config=TokenValidationConfig(
                 perform_disco=True, options=DEFAULT_OPTIONS
             ),
         )
 
 
-def test_token_validation_succeeds():
-    client_creds_response = _generate_token()
+def test_token_validation_succeeds(env_file):
+    config = get_config(env_file)
+    client_creds_response = _generate_token(config)
+    assert client_creds_response.token is not None
 
     validation_config = TokenValidationConfig(
-        perform_disco=True, audience=TEST_AUDIENCE, options=DEFAULT_OPTIONS
+        perform_disco=True, audience=config["TEST_AUDIENCE"], options=DEFAULT_OPTIONS
     )
 
     claims = validate_token(
         jwt=client_creds_response.token["access_token"],
-        disco_doc_address=TEST_DISCO_ADDRESS,
+        disco_doc_address=config["TEST_DISCO_ADDRESS"],
         token_validation_config=validation_config,
     )
     assert claims
@@ -92,32 +89,36 @@ def test_token_validation_succeeds():
     assert claims["exp"]
 
 
-def test_token_validation_with_invalid_config_throws_exception():
-    client_creds_response = _generate_token()
+def test_token_validation_with_invalid_config_throws_exception(env_file):
+    config = get_config(env_file)
+    client_creds_response = _generate_token(config)
+    assert client_creds_response.token is not None
 
     validation_config = TokenValidationConfig(
-        perform_disco=False, audience=TEST_AUDIENCE, options=DEFAULT_OPTIONS
+        perform_disco=False, audience=config["TEST_AUDIENCE"], options=DEFAULT_OPTIONS
     )
 
     with pytest.raises(PyIdentityModelException):
         validate_token(
             jwt=client_creds_response.token["access_token"],
-            disco_doc_address=TEST_DISCO_ADDRESS,
+            disco_doc_address=config["TEST_DISCO_ADDRESS"],
             token_validation_config=validation_config,
         )
 
 
-def test_cache_succeeds():
-    client_creds_response = _generate_token()
+def test_cache_succeeds(env_file):
+    config = get_config(env_file)
+    client_creds_response = _generate_token(config)
+    assert client_creds_response.token is not None
 
     validation_config = TokenValidationConfig(
-        perform_disco=True, audience=TEST_AUDIENCE, options=DEFAULT_OPTIONS
+        perform_disco=True, audience=config["TEST_AUDIENCE"], options=DEFAULT_OPTIONS
     )
 
     for i in range(0, 5):
         validate_token(
             jwt=client_creds_response.token["access_token"],
-            disco_doc_address=TEST_DISCO_ADDRESS,
+            disco_doc_address=config["TEST_DISCO_ADDRESS"],
             token_validation_config=validation_config,
         )
 
@@ -132,17 +133,19 @@ def test_cache_succeeds():
     assert cache_info[0] > 0
 
 
-def test_benchmark_validation():
-    client_creds_response = _generate_token()
+def test_benchmark_validation(env_file):
+    config = get_config(env_file)
+    client_creds_response = _generate_token(config)
+    assert client_creds_response.token is not None
     validation_config = TokenValidationConfig(
-        perform_disco=True, audience=TEST_AUDIENCE, options=DEFAULT_OPTIONS
+        perform_disco=True, audience=config["TEST_AUDIENCE"], options=DEFAULT_OPTIONS
     )
     start_time = datetime.datetime.now()
 
     for i in range(0, 100):
         validate_token(
             jwt=client_creds_response.token["access_token"],
-            disco_doc_address=TEST_DISCO_ADDRESS,
+            disco_doc_address=config["TEST_DISCO_ADDRESS"],
             token_validation_config=validation_config,
         )
     elapsed_time = datetime.datetime.now() - start_time
@@ -150,8 +153,10 @@ def test_benchmark_validation():
     assert elapsed_time.total_seconds() < 1
 
 
-def test_claim_validation_function_succeeds():
-    client_creds_response = _generate_token()
+def test_claim_validation_function_succeeds(env_file):
+    config = get_config(env_file)
+    client_creds_response = _generate_token(config)
+    assert client_creds_response.token is not None
 
     def validate_claims(token: dict):
         # Do some token validation here
@@ -160,14 +165,14 @@ def test_claim_validation_function_succeeds():
 
     validation_config = TokenValidationConfig(
         perform_disco=True,
-        audience=TEST_AUDIENCE,
+        audience=config["TEST_AUDIENCE"],
         options=DEFAULT_OPTIONS,
         claims_validator=validate_claims,
     )
 
     decoded_token = validate_token(
         jwt=client_creds_response.token["access_token"],
-        disco_doc_address=TEST_DISCO_ADDRESS,
+        disco_doc_address=config["TEST_DISCO_ADDRESS"],
         token_validation_config=validation_config,
     )
 
@@ -175,15 +180,17 @@ def test_claim_validation_function_succeeds():
     assert decoded_token["iss"]
 
 
-def test_claim_validation_function_fails():
-    client_creds_response = _generate_token()
+def test_claim_validation_function_fails(env_file):
+    config = get_config(env_file)
+    client_creds_response = _generate_token(config)
+    assert client_creds_response.token is not None
 
     def validate_claims(token: dict):
         raise PyIdentityModelException("Validation failed!")
 
     validation_config = TokenValidationConfig(
         perform_disco=True,
-        audience=TEST_AUDIENCE,
+        audience=config["TEST_AUDIENCE"],
         options=DEFAULT_OPTIONS,
         claims_validator=validate_claims,
     )
@@ -191,6 +198,6 @@ def test_claim_validation_function_fails():
     with pytest.raises(PyIdentityModelException):
         validate_token(
             jwt=client_creds_response.token["access_token"],
-            disco_doc_address=TEST_DISCO_ADDRESS,
+            disco_doc_address=config["TEST_DISCO_ADDRESS"],
             token_validation_config=validation_config,
         )

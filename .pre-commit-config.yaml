@@ -1,15 +1,19 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
   # Ruff version.
-    rev: v0.11.12
+    rev: v0.14.1
     hooks:
       # Run the linter.
       - id: ruff
         args: [ --fix ]
       # Run the formatter.
       - id: ruff-format
-  - repo: https://github.com/astral-sh/uv-pre-commit
-    # uv version.
-    rev: 0.7.9
+  - repo: local
     hooks:
-      - id: uv-export
+      - id: pyrefly-typecheck
+        name: pyrefly check
+        entry: uv run pyrefly check
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false
+        require_serial: true
