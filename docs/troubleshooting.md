@@ -293,16 +293,10 @@ find . -type f -name '*.pyc' -delete
 **Solution**:
 ```python
 # py-identity-model includes full type hints
-# Make sure you're using a recent version of your type checker
+# Make sure you're using a recent version of mypy/pyright
 
-# This project uses pyrefly for type checking
-# If you're using pyrefly:
-uv add --group dev pyrefly
-
-# If using mypy or pyright, they should work as well:
+# If using mypy:
 pip install --upgrade mypy
-# or
-pip install --upgrade pyright
 
 # If still having issues, you can ignore type checking for the module:
 # type: ignore
