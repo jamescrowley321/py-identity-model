@@ -58,11 +58,16 @@ extra:
 
 nav:
   - Home: index.md
+  - Getting Started: getting-started.md
+  - Guides:
+      - Troubleshooting: troubleshooting.md
+      - FAQ: faq.md
   - Specifications:
       - Discovery Compliance: discovery_specification_compliance_assessment.md
       - JWKS Compliance: jwks_specification_compliance_assessment.md
   - Roadmap: py_identity_model_roadmap.md
-  - Integration Tests: integration-tests.md
+  - Testing:
+      - Integration Tests: integration-tests.md
   - Examples:
       - Identity Server: identity-server-example.md
   - Changelog: changelog.md
