@@ -31,6 +31,7 @@ docker compose -f docker-compose.test.yml up
 
 - `CERT_HOSTNAME` - The hostname for the certificate (default: `identityserver`)
 - `CERT_DAYS` - Certificate validity period in days (default: `365`)
+- `CERT_PASSWORD` - Password for the PFX file (default: `password`, recommended: set via `.env` file)
 
 ### Certificate Reuse
 
@@ -49,7 +50,7 @@ All files are created in `/certs` (mounted as a Docker volume):
 - `ca-key.pem` - CA private key (keep secure)
 - `aspnetapp.crt` - Server certificate
 - `aspnetapp.key` - Server private key
-- `aspnetapp.pfx` - PFX bundle for ASP.NET Core (password: `password`)
+- `aspnetapp.pfx` - PFX bundle for ASP.NET Core (password: configurable via `CERT_PASSWORD`)
 
 ## Security Notes
 

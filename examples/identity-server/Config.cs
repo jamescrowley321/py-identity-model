@@ -4,6 +4,13 @@ namespace IdentityServerHost
 {
     public static class Config
     {
+        // Read secrets from environment variables with fallback defaults for development
+        private static string GetClientSecret() =>
+            Environment.GetEnvironmentVariable("CLIENT_SECRET") ?? "py-identity-model-secret";
+
+        private static string GetTestClientSecret() =>
+            Environment.GetEnvironmentVariable("TEST_CLIENT_SECRET") ?? "test-secret";
+
         public static IEnumerable<IdentityResource> IdentityResources =>
             new IdentityResource[]
             {
@@ -32,7 +39,7 @@ namespace IdentityServerHost
                 new Client
                 {
                     ClientId = "py-identity-model-client",
-                    ClientSecrets = { new Secret("py-identity-model-secret".Sha256()) },
+                    ClientSecrets = { new Secret(GetClientSecret().Sha256()) },
                     
                     AllowedGrantTypes = GrantTypes.ClientCredentials,
                     AllowedScopes = { "py-identity-model" },
@@ -46,7 +53,7 @@ namespace IdentityServerHost
                 new Client
                 {
                     ClientId = "py-identity-model-test",
-                    ClientSecrets = { new Secret("test-secret".Sha256()) },
+                    ClientSecrets = { new Secret(GetTestClientSecret().Sha256()) },
                     
                     AllowedGrantTypes = GrantTypes.Code,
                     AllowedScopes = { "openid", "profile", "py-identity-model" },

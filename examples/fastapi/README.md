@@ -37,7 +37,23 @@ The workspace is configured in the root `pyproject.toml` and includes:
 - The main `py-identity-model` library
 - The FastAPI example with its dependencies (fastapi, uvicorn)
 
-### 2. Run with Docker Compose
+### 2. Configuration (Optional)
+
+The examples use environment variables for sensitive configuration. Default values are provided, but you can customize them:
+
+```bash
+# Copy the example environment file
+cp examples/.env.example examples/.env
+
+# Edit .env with your preferred values
+# - CERT_PASSWORD: Password for certificate files (default: SuperSecurePassword123!)
+# - CLIENT_SECRET: OAuth client secret (default: py-identity-model-secret)
+# - TEST_CLIENT_SECRET: Test client secret (default: test-secret)
+```
+
+**Note:** The `.env` file is optional. If not provided, secure defaults will be used. Never commit `.env` files with actual secrets to version control.
+
+### 3. Run with Docker Compose
 
 The easiest way to run the complete example is using Docker Compose, which includes:
 - Automatic certificate generation
@@ -79,7 +95,7 @@ DISABLE_SSL_VERIFICATION=true
 ```
 This is useful for local development outside Docker, but the proper certificate approach is strongly preferred.
 
-### 3. Generate a Test Token
+### 4. Generate a Test Token
 
 ```bash
 # From the project root

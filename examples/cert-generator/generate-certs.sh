@@ -4,6 +4,7 @@ set -e
 CERT_DIR="/certs"
 HOSTNAME="${CERT_HOSTNAME:-identityserver}"
 DAYS="${CERT_DAYS:-365}"
+CERT_PASSWORD="${CERT_PASSWORD:-password}"
 
 echo "Generating self-signed certificates for $HOSTNAME..."
 
@@ -49,7 +50,7 @@ openssl pkcs12 -export \
     -inkey "$CERT_DIR/aspnetapp.key" \
     -in "$CERT_DIR/aspnetapp.crt" \
     -certfile "$CERT_DIR/ca-cert.crt" \
-    -password pass:password
+    -password "pass:${CERT_PASSWORD}"
 
 # Set appropriate permissions
 chmod 644 "$CERT_DIR"/*.crt "$CERT_DIR"/*.pfx
