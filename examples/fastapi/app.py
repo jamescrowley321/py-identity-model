@@ -27,9 +27,13 @@ from dependencies import (
 )
 
 
-# Configuration
-DISCOVERY_URL = "https://localhost:5001/.well-known/openid-configuration"
-AUDIENCE = "py-identity-model"
+# Configuration - can be overridden by environment variables
+import os
+
+DISCOVERY_URL = os.getenv(
+    "DISCOVERY_URL", "https://localhost:5001/.well-known/openid-configuration"
+)
+AUDIENCE = os.getenv("AUDIENCE", "py-identity-model")
 
 # Create FastAPI app
 app = FastAPI(

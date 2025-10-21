@@ -30,5 +30,7 @@ jobs:
           TEST_SCOPE: ${{ secrets.TEST_SCOPE }}
           TEST_EXPIRED_TOKEN: ${{ secrets.TEST_EXPIRED_TOKEN }}
           TEST_AUDIENCE: ${{ secrets.TEST_AUDIENCE }}
+      - name: Example Integration Tests
+        run: make test-examples
       - name: Build
         run: make build-dist

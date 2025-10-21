@@ -1,6 +1,7 @@
 # FastAPI OAuth2/OIDC Authentication Example
 
-This example demonstrates how to integrate `py-identity-model` with FastAPI to implement OAuth2/OIDC authentication and authorization.
+This example demonstrates how to integrate `py-identity-model` with FastAPI to implement OAuth2/OIDC authentication and
+authorization.
 
 ## Features
 
@@ -32,6 +33,7 @@ uv sync
 ```
 
 The workspace is configured in the root `pyproject.toml` and includes:
+
 - The main `py-identity-model` library
 - The FastAPI example with its dependencies (fastapi, uvicorn)
 
@@ -94,12 +96,19 @@ curl -H "Authorization: Bearer <your-token>" http://localhost:8000/api/profile
 
 ```
 examples/fastapi/
-├── app.py                 # Main FastAPI application
-├── middleware.py          # Token validation middleware
-├── dependencies.py        # FastAPI dependencies for auth
-├── token_refresh.py       # Token refresh utilities
-├── pyproject.toml         # Package configuration and dependencies
-└── README.md             # This file
+├── app.py                     # Main FastAPI application
+├── middleware.py              # Token validation middleware
+├── dependencies.py            # FastAPI dependencies for auth
+├── token_refresh.py           # Token refresh utilities
+├── test_integration.py        # Integration tests
+├── pyproject.toml             # Package configuration and dependencies
+├── Dockerfile                 # Docker image for FastAPI app
+├── Dockerfile.test            # Docker image for test runner
+└── README.md                  # This file
+
+examples/                      # Shared testing infrastructure
+├── docker-compose.test.yml    # Docker Compose for all examples
+└── run-tests.sh               # Test runner script
 ```
 
 ## Usage Guide
@@ -131,12 +140,14 @@ from fastapi import Depends
 from py_identity_model.identity import ClaimsPrincipal
 from dependencies import get_current_user, get_claims
 
+
 @app.get("/api/me")
 async def get_me(user: ClaimsPrincipal = Depends(get_current_user)):
     return {
         "name": user.identity.name,
         "authenticated": user.identity.is_authenticated,
     }
+
 
 @app.get("/api/claims")
 async def get_all_claims(claims: dict = Depends(get_claims)):
@@ -153,12 +164,15 @@ from dependencies import get_claim_value, get_claim_values
 # Get a single claim value
 get_user_id = get_claim_value("sub")
 
+
 @app.get("/api/profile")
 async def get_profile(user_id: str = Depends(get_user_id)):
     return {"user_id": user_id}
 
+
 # Get multiple values of the same claim (e.g., roles)
 get_roles = get_claim_values("role")
+
 
 @app.get("/api/roles")
 async def get_user_roles(roles: list = Depends(get_roles)):
@@ -175,9 +189,11 @@ from dependencies import require_scope
 require_read = require_scope("api.read")
 require_write = require_scope("api.write")
 
+
 @app.get("/api/data", dependencies=[Depends(require_read)])
 async def get_data():
     return {"data": "sensitive information"}
+
 
 @app.post("/api/data", dependencies=[Depends(require_write)])
 async def create_data(name: str):
@@ -192,6 +208,7 @@ Protect endpoints based on specific claims:
 from dependencies import require_claim
 
 require_admin = require_claim("role", "admin")
+
 
 @app.delete("/api/users/{user_id}", dependencies=[Depends(require_admin)])
 async def delete_user(user_id: str):
@@ -251,6 +268,7 @@ def validate_custom_claims(claims: dict):
     if claims["custom_claim"] != "expected_value":
         raise Exception("Invalid custom claim value")
 
+
 app.add_middleware(
     TokenValidationMiddleware,
     discovery_url=DISCOVERY_URL,
@@ -263,24 +281,24 @@ app.add_middleware(
 
 ### Public Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Root endpoint with API information |
-| `/health` | GET | Health check endpoint |
-| `/docs` | GET | Interactive API documentation |
+| Endpoint  | Method | Description                        |
+|-----------|--------|------------------------------------|
+| `/`       | GET    | Root endpoint with API information |
+| `/health` | GET    | Health check endpoint              |
+| `/docs`   | GET    | Interactive API documentation      |
 
 ### Protected Endpoints
 
-| Endpoint | Method | Description | Requirements |
-|----------|--------|-------------|--------------|
-| `/api/me` | GET | Get current user info | Valid token |
-| `/api/claims` | GET | Get all token claims | Valid token |
-| `/api/token-info` | GET | Get token metadata | Valid token |
-| `/api/profile` | GET | Get user profile | Valid token |
-| `/api/data` | GET | Get data | Scope: `py-identity-model` |
-| `/api/data` | POST | Create data | Scope: `py-identity-model.write` |
-| `/api/admin/users/:id` | DELETE | Delete user | Role: `admin` |
-| `/api/admin/stats` | GET | Get admin stats | Role: `admin` |
+| Endpoint               | Method | Description           | Requirements                     |
+|------------------------|--------|-----------------------|----------------------------------|
+| `/api/me`              | GET    | Get current user info | Valid token                      |
+| `/api/claims`          | GET    | Get all token claims  | Valid token                      |
+| `/api/token-info`      | GET    | Get token metadata    | Valid token                      |
+| `/api/profile`         | GET    | Get user profile      | Valid token                      |
+| `/api/data`            | GET    | Get data              | Scope: `py-identity-model`       |
+| `/api/data`            | POST   | Create data           | Scope: `py-identity-model.write` |
+| `/api/admin/users/:id` | DELETE | Delete user           | Role: `admin`                    |
+| `/api/admin/stats`     | GET    | Get admin stats       | Role: `admin`                    |
 
 ## Error Handling
 
@@ -375,6 +393,81 @@ app.add_middleware(
 5. **Secure configuration** - Store secrets in environment variables, not code
 6. **Error handling** - Provide clear error messages without exposing sensitive information
 7. **Logging** - Log authentication failures for security monitoring
+
+a## Testing
+
+### Integration Tests
+
+The example includes comprehensive integration tests that verify the OAuth/OIDC authentication flow works correctly.
+
+#### Running Tests with Docker
+
+The easiest way to run tests is using the included Docker Compose setup:
+
+```bash
+# From the examples directory (not examples/fastapi)
+cd examples
+./run-tests.sh
+```
+
+This script will:
+
+1. Build Docker images for Identity Server, FastAPI app, and test runner
+2. Start all services
+3. Wait for services to be healthy
+4. Run integration tests
+5. Clean up containers
+
+The Docker Compose setup is located at `examples/docker-compose.test.yml` to support
+multiple examples in the future.
+
+#### What the Tests Cover
+
+The integration tests verify:
+
+- ✅ Public endpoints work without authentication
+- ✅ Protected endpoints reject requests without tokens
+- ✅ Protected endpoints reject invalid tokens
+- ✅ Protected endpoints accept valid tokens
+- ✅ User claims are correctly extracted
+- ✅ Scope-based authorization works
+- ✅ Claim-based authorization works
+- ✅ Token validation against real identity server
+
+#### Manual Testing
+
+You can also run the services manually for development:
+
+```bash
+# From the examples directory
+cd examples
+
+# Start services
+docker-compose -f docker-compose.test.yml up -d identityserver fastapi-app
+
+# Run tests manually
+docker-compose -f docker-compose.test.yml run --rm test-runner
+
+# Or run tests from your local machine
+cd fastapi
+uv sync --all-packages
+uv run python test_integration.py
+
+# Clean up
+cd ..
+docker-compose -f docker-compose.test.yml down -v
+```
+
+#### Test Configuration
+
+Tests can be configured via environment variables:
+
+- `DISCOVERY_URL`: Identity server discovery endpoint (default: https://localhost:5001/.well-known/openid-configuration)
+- `FASTAPI_URL`: FastAPI application URL (default: http://localhost:8000)
+- `CLIENT_ID`: OAuth client ID (default: py-identity-model-client)
+- `CLIENT_SECRET`: OAuth client secret (default: py-identity-model-secret)
+- `AUDIENCE`: Expected token audience (default: py-identity-model)
+- `SCOPE`: OAuth scope to request (default: py-identity-model)
 
 ## Troubleshooting
 

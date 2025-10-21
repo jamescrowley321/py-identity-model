@@ -186,13 +186,23 @@ git push origin feature/your-feature-name
 - `chore/` - Maintenance tasks (e.g., `chore/update-dependencies`)
 
 ### 3. Before Committing
-**CRITICAL: Always run pre-commit hooks before committing.**
+**CRITICAL: Always run pre-commit hooks AND tests before committing.**
 
 Pre-commit hooks will run automatically on `git commit`, but you should run them manually first to catch issues early:
 ```bash
+# Run these commands before EVERY commit
 make lint  # Format and lint code (runs pre-commit)
-make test  # Run all tests
+make test  # Run unit tests
+
+# If you modified examples, also run:
+make test-examples  # Run example integration tests (requires Docker)
 ```
+
+**Required checks before committing:**
+1. ✅ Pre-commit hooks pass (`make lint`)
+2. ✅ Unit tests pass (`make test`)
+3. ✅ Integration tests pass if you modified examples (`make test-examples`)
+4. ✅ All modified files are staged
 
 If pre-commit hooks fail during commit:
 1. Review the errors shown by the hooks

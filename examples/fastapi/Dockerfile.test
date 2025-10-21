@@ -1,0 +1,28 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install uv
+RUN pip install --no-cache-dir uv
+
+# Copy workspace files
+COPY pyproject.toml /workspace/pyproject.toml
+COPY uv.lock /workspace/uv.lock
+COPY README.md /workspace/README.md
+COPY src /workspace/src
+COPY examples/fastapi /workspace/examples/fastapi
+
+# Set workspace root
+WORKDIR /workspace
+
+# Install dependencies using workspace
+RUN uv sync --all-packages
+
+# Add requests for testing
+RUN uv pip install requests urllib3
+
+# Switch to example directory
+WORKDIR /workspace/examples/fastapi
+
+# Run the integration tests
+CMD ["uv", "run", "python", "test_integration.py"]

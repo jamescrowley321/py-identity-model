@@ -35,6 +35,14 @@ test-integration-ory:
 generate-token:
 	uv run python examples/generate_token.py
 
+.PHONY: test-examples
+test-examples:
+	@echo "Running example integration tests..."
+	cd examples && ./run-tests.sh
+
+.PHONY: test-all
+test-all: test test-examples
+
 .PHONY: ci-setup
 ci-setup:
 	python -m pip install --upgrade pip
