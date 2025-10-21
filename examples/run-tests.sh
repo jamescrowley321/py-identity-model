@@ -9,22 +9,28 @@ echo ""
 # Change to the examples directory
 cd "$(dirname "$0")"
 
-# Check if docker-compose is available
-if ! command -v docker-compose &> /dev/null; then
-    echo "❌ docker-compose is not installed"
+# Check if docker compose is available (try modern command first, then legacy)
+if command -v docker &> /dev/null && docker compose version &> /dev/null; then
+    DOCKER_COMPOSE="docker compose"
+elif command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+else
+    echo "❌ Neither 'docker compose' nor 'docker-compose' is available"
     exit 1
 fi
 
+echo "Using: $DOCKER_COMPOSE"
+
 # Clean up any existing containers
 echo "🧹 Cleaning up existing containers..."
-docker-compose -f docker-compose.test.yml down -v 2>/dev/null || true
+$DOCKER_COMPOSE -f docker-compose.test.yml down -v 2>/dev/null || true
 
 # Build and start services
 echo "🏗️  Building Docker images..."
-docker-compose -f docker-compose.test.yml build
+$DOCKER_COMPOSE -f docker-compose.test.yml build
 
 echo "🚀 Starting services..."
-docker-compose -f docker-compose.test.yml up -d identityserver fastapi-app
+$DOCKER_COMPOSE -f docker-compose.test.yml up -d identityserver fastapi-app
 
 # Wait for services to be ready
 echo "⏳ Waiting 30 seconds for services to start..."
@@ -33,7 +39,7 @@ echo "✅ Services should be ready"
 
 # Run tests
 echo "🧪 Running integration tests..."
-docker-compose -f docker-compose.test.yml run --rm test-runner
+$DOCKER_COMPOSE -f docker-compose.test.yml run --rm test-runner
 
 # Capture exit code
 TEST_EXIT_CODE=$?
@@ -45,16 +51,16 @@ if [ $TEST_EXIT_CODE -ne 0 ]; then
     echo "========================================="
     echo ""
     echo "Identity Server logs:"
-    docker-compose -f docker-compose.test.yml logs identityserver
+    $DOCKER_COMPOSE -f docker-compose.test.yml logs identityserver
     echo ""
     echo "FastAPI App logs:"
-    docker-compose -f docker-compose.test.yml logs fastapi-app
+    $DOCKER_COMPOSE -f docker-compose.test.yml logs fastapi-app
 fi
 
 # Clean up
 echo ""
 echo "🧹 Cleaning up..."
-docker-compose -f docker-compose.test.yml down -v
+$DOCKER_COMPOSE -f docker-compose.test.yml down -v
 
 # Exit with test exit code
 if [ $TEST_EXIT_CODE -eq 0 ]; then
