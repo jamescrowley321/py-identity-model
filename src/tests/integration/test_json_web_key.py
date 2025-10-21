@@ -8,20 +8,19 @@ from py_identity_model import JsonWebKey
 from py_identity_model.jwks import jwks_from_dict, get_jwks, JwksRequest
 from .test_utils import get_config
 
-TEST_JWKS_ADDRESS = get_config()["TEST_JWKS_ADDRESS"]
 
-
-def fetch_jwks() -> List[Dict]:
+def fetch_jwks(jwks_address: str) -> List[Dict]:
     """Fetch JWKS from the provided URL"""
-    response = requests.get(TEST_JWKS_ADDRESS)
+    response = requests.get(jwks_address)
     response.raise_for_status()
     return response.json()["keys"]
 
 
 @pytest.fixture
-def jwks_data():
+def jwks_data(env_file):
     """Pytest fixture to provide JWKS data for tests"""
-    return fetch_jwks()
+    config = get_config(env_file)
+    return fetch_jwks(config["TEST_JWKS_ADDRESS"])
 
 
 def test_jwk_deserialization(jwks_data):
@@ -304,9 +303,10 @@ def test_jwks_from_dict_error_handling():
         jwks_from_dict({"kty": "oct"})
 
 
-def test_get_jwks_success():
+def test_get_jwks_success(env_file):
     """Test get_jwks with successful request"""
-    jwks_request = JwksRequest(address=TEST_JWKS_ADDRESS)
+    config = get_config(env_file)
+    jwks_request = JwksRequest(address=config["TEST_JWKS_ADDRESS"])
     jwks_response = get_jwks(jwks_request)
 
     # Verify successful response
