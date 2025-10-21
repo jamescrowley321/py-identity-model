@@ -93,8 +93,9 @@ uv run pre-commit run -a
 
 ### Code Formatting and Linting
 - **Ruff**: Used for linting and formatting
-- Configuration is in `pyproject.toml`
-- All code must pass linting before commit
+- **pyrefly**: Used for type checking
+- Configuration is in `pyproject.toml` and `.pre-commit-config.yaml`
+- All code must pass pre-commit hooks before commit
 
 ### Testing Requirements
 - **pytest**: Test framework
@@ -178,11 +179,24 @@ git push origin feature/your-feature-name
 - `chore/` - Maintenance tasks (e.g., `chore/update-dependencies`)
 
 ### 3. Before Committing
-Always run these commands before committing:
+**CRITICAL: Always run pre-commit hooks before committing.**
+
+Pre-commit hooks will run automatically on `git commit`, but you should run them manually first to catch issues early:
 ```bash
-make lint  # Format and lint code
+make lint  # Format and lint code (runs pre-commit)
 make test  # Run all tests
 ```
+
+If pre-commit hooks fail during commit:
+1. Review the errors shown by the hooks
+2. Fix any issues identified
+3. Stage the auto-fixed files if any were modified by hooks
+4. Commit again
+
+The pre-commit hooks run:
+- **ruff**: Linting with auto-fix
+- **ruff-format**: Code formatting
+- **pyrefly**: Type checking (excludes examples/)
 
 ## Project Structure Guidelines
 
