@@ -20,7 +20,7 @@ dev = [
     "python-dotenv>=1.0.1,<2",
     "pytest>=8.3.2,<9",
     "ruff>=0.11.12",
-    "pyrefly>=0.34.0",
+    "pyrefly>=0.34.0"
 ]
 
 [build-system]
@@ -83,3 +83,9 @@ ignore_token_for_push = false
 [tool.semantic_release.publish]
 dist_glob_patterns = ["dist/*"]
 upload_to_vcs_release = true
+
+[tool.flake8]
+ignore = ["E203", "E266", "E501", "W503", "F403", "F401"]
+max-line-length = 79
+max-complexity = 18
+select = ["B", "C", "E", "F", "W", "T4", "B9"]

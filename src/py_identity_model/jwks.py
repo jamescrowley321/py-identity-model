@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from enum import Enum
 from typing import List, Optional, Dict
 
@@ -167,17 +167,43 @@ class JsonWebKey:
 
         try:
             data = json.loads(json_str)
+
+            # Validate that the parsed JSON is a dictionary
+            if not isinstance(data, dict):
+                raise ValueError(
+                    "Invalid JWK format: JSON must be an object, not a "
+                    + type(data).__name__
+                )
+
+            # Dynamically get valid field names from the JsonWebKey dataclass
+            valid_fields = {field.name for field in fields(cls)}
+
             # Map JWK parameter names to Python field names
-            mapped_data = {}
+            from typing import Any
+
+            mapped_data: Dict[str, Any] = {}
             for k, v in data.items():
                 if k == "x5t#S256":
                     mapped_data["x5t_s256"] = v
+                elif k == "key_ops" and isinstance(v, str):
+                    # Ensure key_ops is a list
+                    mapped_data[k] = [v]
+                elif k == "x5c" and isinstance(v, str):
+                    # Ensure x5c is a list
+                    mapped_data[k] = [v]
+                elif k == "oth" and isinstance(v, str):
+                    # Ensure oth is a list (though a string oth is unusual)
+                    mapped_data[k] = [{"r": v}]  # Convert to expected dict format
                 else:
                     mapped_data[k] = v
-            return cls(**mapped_data)
+
+            # Filter to only include valid fields
+            filtered_data = {k: v for k, v in mapped_data.items() if k in valid_fields}
+
+            return cls(**filtered_data)
         except json.JSONDecodeError:
             raise ValueError("Invalid JSON format")
-        except TypeError as e:
+        except (TypeError, AttributeError) as e:
             raise ValueError(f"Invalid JWK format: {str(e)}")
 
     def to_json(self) -> str:
