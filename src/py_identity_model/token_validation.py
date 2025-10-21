@@ -27,7 +27,6 @@ class TokenValidationConfig:
 
 
 def _get_public_key_from_jwk(jwt: str, keys: List[JsonWebKey]) -> JsonWebKey:
-    # TODO: clean up flow to prevent multiple decodes
     headers = get_unverified_header(jwt)
     filtered_keys = list(
         filter(lambda x: x.kid == headers.get("kid", None), keys)
@@ -44,9 +43,18 @@ def _get_public_key_from_jwk(jwt: str, keys: List[JsonWebKey]) -> JsonWebKey:
 
 def _validate_token_config(
     token_validation_config: TokenValidationConfig,
-) -> bool:
+) -> None:
+    """
+    Validate token validation configuration.
+
+    Args:
+        token_validation_config: Configuration to validate
+
+    Raises:
+        PyIdentityModelException: If configuration is invalid
+    """
     if token_validation_config.perform_disco:
-        return True
+        return
 
     if (
         not token_validation_config.key
@@ -55,8 +63,6 @@ def _validate_token_config(
         raise PyIdentityModelException(
             "TokenValidationConfig.key and TokenValidationConfig.algorithms are required if perform_disco is False"
         )
-
-    return True
 
 
 @lru_cache

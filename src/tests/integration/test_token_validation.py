@@ -19,42 +19,28 @@ from py_identity_model.token_validation import (
 
 from .test_utils import get_config
 
-# TODO: clean this up
-
+# Token validation options - only override defaults where needed
 DEFAULT_OPTIONS = {
-    "verify_signature": True,
-    "verify_aud": False,
-    "verify_iat": True,
-    "verify_exp": True,
-    "verify_nbf": True,
-    "verify_iss": True,
-    "verify_sub": True,
-    "verify_jti": True,
-    "verify_at_hash": True,
+    "verify_aud": False,  # Audience validation disabled for these tests
     "require_aud": False,
-    "require_iat": False,
-    "require_exp": False,
-    "require_nbf": False,
-    "require_iss": False,
-    "require_sub": False,
-    "require_jti": False,
-    "require_at_hash": False,
-    "leeway": 0,
 }
 
 
 def _generate_token(config):
+    """Helper to generate a client credentials token for testing."""
     disco_doc_response = get_discovery_document(
         DiscoveryDocumentRequest(address=config["TEST_DISCO_ADDRESS"])
     )
     assert disco_doc_response.token_endpoint is not None
-    client_creds_req = ClientCredentialsTokenRequest(
-        client_id=config["TEST_CLIENT_ID"],
-        client_secret=config["TEST_CLIENT_SECRET"],
-        address=disco_doc_response.token_endpoint,
-        scope=config["TEST_SCOPE"],
+
+    client_creds_response = request_client_credentials_token(
+        ClientCredentialsTokenRequest(
+            client_id=config["TEST_CLIENT_ID"],
+            client_secret=config["TEST_CLIENT_SECRET"],
+            address=disco_doc_response.token_endpoint,
+            scope=config["TEST_SCOPE"],
+        )
     )
-    client_creds_response = request_client_credentials_token(client_creds_req)
     return client_creds_response
 
 
@@ -122,7 +108,7 @@ def test_cache_succeeds(env_file):
         options=DEFAULT_OPTIONS,
     )
 
-    for _ in range(0, 5):
+    for _ in range(5):
         validate_token(
             jwt=client_creds_response.token["access_token"],
             disco_doc_address=config["TEST_DISCO_ADDRESS"],
@@ -151,7 +137,7 @@ def test_benchmark_validation(env_file):
     )
     start_time = datetime.datetime.now()
 
-    for _ in range(0, 100):
+    for _ in range(100):
         validate_token(
             jwt=client_creds_response.token["access_token"],
             disco_doc_address=config["TEST_DISCO_ADDRESS"],

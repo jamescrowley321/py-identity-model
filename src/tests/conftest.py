@@ -25,6 +25,9 @@ def pytest_configure(config):
     env_file = config.getoption("--env-file")
     if env_file:
         config._env_file = env_file
+    else:
+        # Default to .env if no env file specified
+        config._env_file = ".env"
 
 
 @pytest.fixture(scope="session")

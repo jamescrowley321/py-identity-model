@@ -34,4 +34,4 @@ if (!app.Environment.IsDevelopment())
 
 app.UseIdentityServer();
 
-app.Run();
+await app.RunAsync();

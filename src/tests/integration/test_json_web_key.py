@@ -39,10 +39,7 @@ def test_jwk_deserialization(jwks_data):
         for key, value in jwk_dict.items():
             attr_name = key.lower()
             assert hasattr(jwk, attr_name)
-            if isinstance(value, list):
-                assert getattr(jwk, attr_name) == value
-            else:
-                assert getattr(jwk, attr_name) == value
+            assert getattr(jwk, attr_name) == value
 
 
 def test_jwk_serialization(jwks_data):
