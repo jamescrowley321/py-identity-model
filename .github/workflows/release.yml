@@ -28,8 +28,10 @@ jobs:
         run: make ci-setup
       - name: Lint
         run: make lint
-      - name: Test
-        run: make test
+      - name: Unit Tests
+        run: make test-unit
+      - name: Integration Tests (ORY)
+        run: make test-integration-ory
         env:
           TEST_DISCO_ADDRESS: ${{ secrets.TEST_DISCO_ADDRESS }}
           TEST_JWKS_ADDRESS: ${{ secrets.TEST_JWKS_ADDRESS }}

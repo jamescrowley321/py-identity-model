@@ -131,4 +131,7 @@ dmypy.json
 # PyCharm
 .idea
 
-.env
+*.env*
+*.crt
+*.key
+*.pfx
