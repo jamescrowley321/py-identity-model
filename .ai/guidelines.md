@@ -141,9 +141,16 @@ uv run pre-commit install
 ```
 
 ### 2. Feature Development
+
+**IMPORTANT: Always create a new branch for any changes. Never commit directly to main.**
+
 ```bash
-# Create feature branch
+# ALWAYS create a feature branch before making changes
 git checkout -b feature/your-feature-name
+# or for fixes:
+git checkout -b fix/bug-description
+# or for docs:
+git checkout -b docs/documentation-update
 
 # Make changes
 # ... edit code ...
@@ -161,6 +168,14 @@ git commit -m "feat: add new feature"
 # Push changes
 git push origin feature/your-feature-name
 ```
+
+### Branch Naming Conventions
+- `feat/` - New features (e.g., `feat/add-token-introspection`)
+- `fix/` - Bug fixes (e.g., `fix/token-validation-bug`)
+- `docs/` - Documentation changes (e.g., `docs/update-readme`)
+- `refactor/` - Code refactoring (e.g., `refactor/base-classes`)
+- `test/` - Test improvements (e.g., `test/add-integration-tests`)
+- `chore/` - Maintenance tasks (e.g., `chore/update-dependencies`)
 
 ### 3. Before Committing
 Always run these commands before committing:
