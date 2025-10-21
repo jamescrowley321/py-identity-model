@@ -5,11 +5,13 @@
 ### What is py-identity-model?
 
 py-identity-model is a Python library for OAuth 2.0 and OpenID Connect operations. It helps you:
+
 - Discover identity provider endpoints
 - Request and validate JWT tokens
 - Implement secure authentication in Python applications
 
-The library is inspired by [Duende.IdentityModel](https://github.com/DuendeSoftware/foss/tree/main/identity-model) for .NET.
+The library is inspired by [Duende.IdentityModel](https://github.com/DuendeSoftware/foss/tree/main/identity-model) for
+.NET.
 
 ### What Python versions are supported?
 
@@ -17,23 +19,27 @@ py-identity-model requires Python 3.12 or higher.
 
 ### Is py-identity-model production-ready?
 
-Yes! The library has been used in production Flask and FastAPI applications for years. The core features (discovery, JWKS, token validation, client credentials) are stable and well-tested.
+Yes! The library has been used in production Flask and FastAPI applications for years. The core features (discovery,
+JWKS, token validation, client credentials) are stable and well-tested.
 
 ### What's the difference between OAuth 2.0 and OpenID Connect?
 
 - **OAuth 2.0**: Authorization framework for granting access to resources
 - **OpenID Connect (OIDC)**: Authentication layer built on top of OAuth 2.0
 
-OIDC adds standardized ways to authenticate users and retrieve user information, while OAuth 2.0 focuses on authorization (what you can access).
+OIDC adds standardized ways to authenticate users and retrieve user information, while OAuth 2.0 focuses on
+authorization (what you can access).
 
 ## Features and Capabilities
 
 ### What OAuth flows are supported?
 
 Currently supported:
+
 - ✅ Client Credentials Grant
 
 Coming soon (see [roadmap](py_identity_model_roadmap.md)):
+
 - Authorization Code Flow with PKCE
 - Refresh Token Grant
 - Device Authorization Grant
@@ -45,11 +51,13 @@ No, only JWT (JSON Web Token) tokens are currently supported. Opaque token suppo
 
 ### Can I use this with async/await?
 
-Not yet. Async support is planned for v0.5.0. See [issue #51](https://github.com/jamescrowley321/py-identity-model/issues/51).
+Not yet. Async support is planned for v0.5.0.
+See [issue #51](https://github.com/jamescrowley321/py-identity-model/issues/51).
 
 ### What identity providers are supported?
 
 py-identity-model works with any OAuth 2.0 / OpenID Connect compliant provider, including:
+
 - Auth0
 - Okta
 - Azure AD (Microsoft Entra ID)
@@ -61,7 +69,8 @@ py-identity-model works with any OAuth 2.0 / OpenID Connect compliant provider, 
 
 ### Does it support token refresh?
 
-Not yet. Refresh token support is planned for v0.2.0. See [issue #19](https://github.com/jamescrowley321/py-identity-model/issues/19).
+Not yet. Refresh token support is planned for v0.2.0.
+See [issue #19](https://github.com/jamescrowley321/py-identity-model/issues/19).
 
 ## Usage Questions
 
@@ -114,7 +123,8 @@ if token_response.is_successful:
 
 ### Should I cache discovery documents and JWKS?
 
-py-identity-model handles caching internally, but for high-performance applications, you can cache these at the application level:
+py-identity-model handles caching internally, but for high-performance applications, you can cache these at the
+application level:
 
 ```python
 # Fetch once at startup
@@ -131,6 +141,7 @@ Tokens expire for security reasons. Request a new token when needed:
 
 ```python
 import time
+
 
 def get_valid_token():
     global cached_token, token_expiry
@@ -154,6 +165,7 @@ Yes! py-identity-model works great with both. See the [Examples](../examples/) d
 from functools import wraps
 from flask import request, jsonify
 
+
 def require_token(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -164,6 +176,7 @@ def require_token(f):
             return f(*args, **kwargs)
         except PyIdentityModelException:
             return jsonify({'error': 'Unauthorized'}), 401
+
     return decorated
 ```
 
@@ -174,6 +187,7 @@ def require_token(f):
 For development: Yes, using `.env` files is acceptable.
 
 For production: Use a secrets management solution like:
+
 - AWS Secrets Manager
 - Azure Key Vault
 - HashiCorp Vault
@@ -187,11 +201,11 @@ For production, enable these validations:
 
 ```python
 options = {
-    "verify_signature": True,   # Always verify signature
-    "verify_aud": True,          # Verify audience
-    "verify_exp": True,          # Check expiration
-    "verify_iss": True,          # Verify issuer
-    "verify_nbf": True,          # Check not-before time
+    "verify_signature": True,  # Always verify signature
+    "verify_aud": True,  # Verify audience
+    "verify_exp": True,  # Check expiration
+    "verify_iss": True,  # Verify issuer
+    "verify_nbf": True,  # Check not-before time
 }
 ```
 
@@ -202,6 +216,7 @@ options = {
 ### How often do signing keys change?
 
 It varies by provider, but typically:
+
 - Keys are rotated every few months
 - Multiple keys are active simultaneously
 - Old keys remain valid during rotation period
@@ -212,7 +227,8 @@ py-identity-model automatically handles key rotation by fetching the current JWK
 
 ### Can I use this with Django?
 
-Yes, though examples currently focus on Flask and FastAPI. The validation functions work the same way in Django views or middleware.
+Yes, though examples currently focus on Flask and FastAPI. The validation functions work the same way in Django views or
+middleware.
 
 ### Does it work with API Gateway?
 
@@ -245,7 +261,8 @@ make test-integration
 
 ### Where can I find examples?
 
-Check the [examples directory](https://github.com/jamescrowley321/py-identity-model/tree/main/examples) in the repository.
+Check the [examples directory](https://github.com/jamescrowley321/py-identity-model/tree/main/examples) in the
+repository.
 
 ### Is there API documentation?
 
@@ -256,6 +273,7 @@ Yes! See the [API Documentation](index.md) for detailed information on all class
 ### Why am I getting "Signature verification failed"?
 
 Common causes:
+
 1. Token is from a different issuer than expected
 2. Token has been tampered with
 3. JWKS endpoint is not accessible
@@ -266,6 +284,7 @@ See the [Troubleshooting Guide](troubleshooting.md#signature-verification-failed
 ### Why is token validation slow?
 
 Discovery documents and JWKS are cached automatically. If it's still slow:
+
 - Fetch discovery/JWKS once at startup and reuse
 - Check network latency to identity provider
 - Consider using a local cache for claims
@@ -273,6 +292,7 @@ Discovery documents and JWKS are cached automatically. If it's still slow:
 ### My discovery document returns 404
 
 Verify your discovery URL:
+
 - Most providers: `https://domain/.well-known/openid-configuration`
 - Check provider documentation for exact URL
 - Test the URL in a browser first
@@ -294,6 +314,7 @@ See the [project roadmap](py_identity_model_roadmap.md) for detailed plans. High
 ### Can I request a feature?
 
 Yes! Open an issue on [GitHub](https://github.com/jamescrowley321/py-identity-model/issues) describing:
+
 - What you want to do
 - Why it's useful
 - Any relevant specifications (RFCs)
@@ -301,6 +322,7 @@ Yes! Open an issue on [GitHub](https://github.com/jamescrowley321/py-identity-mo
 ### How can I help?
 
 Contributions are welcome! See [CONTRIBUTING.md](../CONTRIBUTING.md) for:
+
 - Setting up your development environment
 - Coding standards and conventions
 - How to submit pull requests
