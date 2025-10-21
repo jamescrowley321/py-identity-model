@@ -60,10 +60,10 @@ extra:
 nav:
   - Home: index.md
   - Specifications:
-      - Discovery Compliance: docs/discovery_specification_compliance_assessment.md
-      - JWKS Compliance: docs/jwks_specification_compliance_assessment.md
-  - Roadmap: docs/py_identity_model_roadmap.md
-  - Integration Tests: src/tests/integration/README.md
+      - Discovery Compliance: discovery_specification_compliance_assessment.md
+      - JWKS Compliance: jwks_specification_compliance_assessment.md
+  - Roadmap: py_identity_model_roadmap.md
+  - Integration Tests: integration-tests.md
   - Examples:
-      - Identity Server: examples/identity-server/README.md
-  - Changelog: CHANGELOG.md
+      - Identity Server: identity-server-example.md
+  - Changelog: changelog.md
