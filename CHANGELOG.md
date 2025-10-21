@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v1.1.1 (2025-10-21)
+
+### Bug Fixes
+
+- **docs**: Remove awesome-pages plugin to fix navigation
+  ([`95904d7`](https://github.com/jamescrowley321/py-identity-model/commit/95904d750959ad8c4151134c8bef3103fc3b3fc3))
+
+### Documentation
+
+- Add CONTRIBUTING.md and fix documentation
+  ([#98](https://github.com/jamescrowley321/py-identity-model/pull/98),
+  [`68b266d`](https://github.com/jamescrowley321/py-identity-model/commit/68b266d4f93b8605a9acdc1a5b8958e6c66a52a3))
+
+
 ## v1.1.0 (2025-10-21)
 
 ### Chores
