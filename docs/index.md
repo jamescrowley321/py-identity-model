@@ -229,9 +229,9 @@ else:
 
 ## Documentation
 
-* [Discovery Specification Compliance](docs/discovery_specification_compliance_assessment.md) - ✅ **100% Compliant**
-* [JWKS Specification Compliance](docs/jwks_specification_compliance_assessment.md) - ✅ **100% Compliant**
-* [Project Roadmap](docs/py_identity_model_roadmap.md)
+* [Discovery Specification Compliance](discovery_specification_compliance_assessment.md) - ✅ **100% Compliant**
+* [JWKS Specification Compliance](jwks_specification_compliance_assessment.md) - ✅ **100% Compliant**
+* [Project Roadmap](py_identity_model_roadmap.md)
 
 ## Contributing
 
