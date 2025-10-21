@@ -37,22 +37,47 @@ The workspace is configured in the root `pyproject.toml` and includes:
 - The main `py-identity-model` library
 - The FastAPI example with its dependencies (fastapi, uvicorn)
 
-### 2. Start the Identity Server
+### 2. Run with Docker Compose
 
-The example is configured to work with the local IdentityServer:
-
-```bash
-# From the project root
-cd examples/identity-server
-docker-compose -f docker-compose.e2e.yml up -d
-```
-
-Make sure SSL certificates are trusted:
+The easiest way to run the complete example is using Docker Compose, which includes:
+- Automatic certificate generation
+- Identity Server with HTTPS
+- FastAPI application with proper SSL/TLS configuration
+- Integration tests
 
 ```bash
-cd examples/identity-server
-./generate-certs.sh
+# From the examples directory
+docker compose -f docker-compose.test.yml up --build
+
+# To run tests and exit
+docker compose -f docker-compose.test.yml up --build --exit-code-from test-runner
 ```
+
+The certificate generator will automatically:
+- Generate a self-signed CA certificate
+- Create server certificates signed by the CA
+- Configure all containers to trust the CA
+- Store certificates in a shared Docker volume
+
+**Note:** Certificates are stored in a Docker volume named `examples_shared-certs` and persist between runs. To regenerate certificates:
+
+```bash
+docker volume rm examples_shared-certs
+docker compose -f docker-compose.test.yml up --build
+```
+
+#### SSL/TLS Configuration
+
+The Docker setup uses proper SSL/TLS certificates with CA trust:
+- The `cert-generator` service creates a CA and server certificates
+- All containers mount the CA certificate and update their trust stores
+- Python's `requests` library uses `REQUESTS_CA_BUNDLE` to trust the CA
+
+**Fallback for Development:** If you need to disable SSL verification (not recommended), you can set:
+```bash
+DISABLE_SSL_VERIFICATION=true
+```
+This is useful for local development outside Docker, but the proper certificate approach is strongly preferred.
 
 ### 3. Generate a Test Token
 

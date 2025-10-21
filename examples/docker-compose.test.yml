@@ -1,4 +1,18 @@
 services:
+  # Certificate generator - runs once to create shared certificates
+  cert-generator:
+    build:
+      context: ./cert-generator
+      dockerfile: Dockerfile
+    container_name: examples-cert-generator
+    environment:
+      - CERT_HOSTNAME=identityserver
+      - CERT_DAYS=365
+    volumes:
+      - shared-certs:/certs
+    networks:
+      - examples-test-network
+
   # Identity Server for authentication
   identityserver:
     build:
@@ -16,15 +30,19 @@ services:
     volumes:
       - ./identity-server/Config.cs:/app/Config.cs:ro
       - ./identity-server/appsettings.json:/app/appsettings.json:ro
-      - ./identity-server/certs:/https:ro
+      - shared-certs:/https:ro
+      - shared-certs:/usr/local/share/ca-certificates/dev:ro
     networks:
       - examples-test-network
+    depends_on:
+      cert-generator:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -k -f http://localhost:80/.well-known/openid-configuration || exit 1"]
-      interval: 10s
+      interval: 5s
       timeout: 10s
-      retries: 10
-      start_period: 40s
+      retries: 20
+      start_period: 60s
 
   # FastAPI application
   fastapi-app:
@@ -38,11 +56,16 @@ services:
       - DISCOVERY_URL=https://identityserver:443/.well-known/openid-configuration
       - AUDIENCE=py-identity-model
       - PYTHONUNBUFFERED=1
-      - DISABLE_SSL_VERIFICATION=true
+      - REQUESTS_CA_BUNDLE=/usr/local/share/ca-certificates/dev/ca-cert.crt
+    volumes:
+      - shared-certs:/usr/local/share/ca-certificates/dev:ro
     networks:
       - examples-test-network
     depends_on:
-      - identityserver
+      cert-generator:
+        condition: service_completed_successfully
+      identityserver:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -63,12 +86,23 @@ services:
       - CLIENT_SECRET=py-identity-model-secret
       - AUDIENCE=py-identity-model
       - SCOPE=py-identity-model
+      - REQUESTS_CA_BUNDLE=/usr/local/share/ca-certificates/dev/ca-cert.crt
+    volumes:
+      - shared-certs:/usr/local/share/ca-certificates/dev:ro
     networks:
       - examples-test-network
     depends_on:
-      - identityserver
-      - fastapi-app
+      cert-generator:
+        condition: service_completed_successfully
+      identityserver:
+        condition: service_healthy
+      fastapi-app:
+        condition: service_healthy
 
 networks:
   examples-test-network:
     driver: bridge
+
+volumes:
+  shared-certs:
+    driver: local

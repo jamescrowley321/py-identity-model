@@ -26,9 +26,15 @@ def get_access_token() -> Optional[str]:
     """Get an access token from the identity server using client credentials."""
     print(f"🔍 Getting discovery document from {DISCOVERY_URL}")
 
-    # Disable SSL verification for local testing
+    # Use CA bundle if available, otherwise disable SSL verification for local testing
     session = requests.Session()
-    session.verify = False
+    ca_bundle = os.getenv("REQUESTS_CA_BUNDLE")
+    if ca_bundle:
+        print(f"🔐 Using CA bundle: {ca_bundle}")
+        session.verify = ca_bundle
+    else:
+        print("⚠️  No CA bundle found, disabling SSL verification")
+        session.verify = False
 
     try:
         disco_response = session.get(DISCOVERY_URL, timeout=10)
@@ -71,14 +77,20 @@ def get_access_token() -> Optional[str]:
 def wait_for_service(url: str, max_attempts: int = 30) -> bool:
     """Wait for a service to become available."""
     print(f"⏳ Waiting for service at {url}")
+
+    # Use CA bundle if available
+    ca_bundle = os.getenv("REQUESTS_CA_BUNDLE")
+    verify = ca_bundle if ca_bundle else False
+
     for attempt in range(max_attempts):
         try:
-            response = requests.get(url, timeout=5, verify=False)
+            response = requests.get(url, timeout=5, verify=verify)
             if response.status_code < 500:
                 print(f"✅ Service available at {url}")
                 return True
-        except requests.exceptions.RequestException:
-            pass
+        except requests.exceptions.RequestException as e:
+            if attempt == 0 or attempt % 10 == 0:
+                print(f"  Attempt {attempt + 1}/{max_attempts}: {e}")
 
         if attempt < max_attempts - 1:
             time.sleep(2)
@@ -239,6 +251,24 @@ def run_tests():
     print("=" * 60)
     print("FastAPI OAuth/OIDC Integration Tests")
     print("=" * 60)
+
+    # Print environment info
+    print("\n📋 Environment Configuration:")
+    print(f"  DISCOVERY_URL: {DISCOVERY_URL}")
+    print(f"  FASTAPI_URL: {FASTAPI_URL}")
+    print(
+        f"  REQUESTS_CA_BUNDLE: {os.getenv('REQUESTS_CA_BUNDLE', 'Not set')}"
+    )
+
+    # Check if CA bundle exists
+    ca_bundle = os.getenv("REQUESTS_CA_BUNDLE")
+    if ca_bundle:
+        import pathlib
+
+        if pathlib.Path(ca_bundle).exists():
+            print("  ✅ CA bundle file exists")
+        else:
+            print(f"  ⚠️  CA bundle file not found at {ca_bundle}")
 
     # Disable SSL warnings for local testing
     import urllib3

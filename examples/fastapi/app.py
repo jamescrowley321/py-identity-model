@@ -20,7 +20,8 @@ from fastapi import (  # type: ignore[attr-defined]
 )
 from fastapi.responses import JSONResponse  # type: ignore[attr-defined]
 
-# Disable SSL warnings for self-signed certificates in test environment
+# Fallback: Disable SSL warnings for self-signed certificates in test environment
+# This should only be used when REQUESTS_CA_BUNDLE is not set (non-Docker environments)
 if os.getenv("DISABLE_SSL_VERIFICATION", "false").lower() == "true":
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     # Monkey-patch requests to disable SSL verification for testing
@@ -47,9 +48,6 @@ if os.getenv("DISABLE_SSL_VERIFICATION", "false").lower() == "true":
 
     requests.get = patched_get
     requests.post = patched_post
-
-# Configuration - can be overridden by environment variables
-import os
 
 from dependencies import (
     get_claims,
