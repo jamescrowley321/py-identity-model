@@ -5,16 +5,22 @@ This module provides middleware components for validating Bearer tokens
 in FastAPI applications using py-identity-model.
 """
 
-from typing import Optional, Callable
-from fastapi import Request, HTTPException, status
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
+from typing import Callable, Optional
 
+from starlette.middleware.base import (
+    BaseHTTPMiddleware,  # type: ignore[attr-defined]
+)
+from starlette.responses import (  # type: ignore[attr-defined]
+    JSONResponse,
+    Response,
+)
+
+from fastapi import Request, status  # type: ignore[attr-defined]
 from py_identity_model import (
-    validate_token,
+    PyIdentityModelException,
     TokenValidationConfig,
     to_principal,
-    PyIdentityModelException,
+    validate_token,
 )
 
 
@@ -44,7 +50,11 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.discovery_url = discovery_url
         self.audience = audience
-        self.excluded_paths = excluded_paths or ["/docs", "/openapi.json", "/health"]
+        self.excluded_paths = excluded_paths or [
+            "/docs",
+            "/openapi.json",
+            "/health",
+        ]
         self.custom_claims_validator = custom_claims_validator
 
     async def dispatch(self, request: Request, call_next) -> Response:
@@ -58,18 +68,20 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
         authorization: Optional[str] = request.headers.get("Authorization")
 
         if not authorization:
-            raise HTTPException(
+            return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing Authorization header",
+                content={"detail": "Missing Authorization header"},
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
         # Parse Bearer token
         parts = authorization.split()
         if len(parts) != 2 or parts[0].lower() != "bearer":
-            raise HTTPException(
+            return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid Authorization header format. Expected: Bearer <token>",
+                content={
+                    "detail": "Invalid Authorization header format. Expected: Bearer <token>"
+                },
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
@@ -96,15 +108,15 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
             request.state.token = token
 
         except PyIdentityModelException as e:
-            raise HTTPException(
+            return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Token validation failed: {str(e)}",
+                content={"detail": f"Token validation failed: {str(e)}"},
                 headers={"WWW-Authenticate": "Bearer"},
             )
         except Exception as e:
-            raise HTTPException(
+            return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Token validation error: {str(e)}",
+                content={"detail": f"Token validation error: {str(e)}"},
                 headers={"WWW-Authenticate": "Bearer"},
             )
 

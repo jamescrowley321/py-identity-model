@@ -4,18 +4,19 @@ import pytest
 from jwt import ExpiredSignatureError
 
 from py_identity_model import (
-    PyIdentityModelException,
-    validate_token,
-    get_discovery_document,
-    DiscoveryDocumentRequest,
     ClientCredentialsTokenRequest,
-    request_client_credentials_token,
+    DiscoveryDocumentRequest,
+    PyIdentityModelException,
     TokenValidationConfig,
+    get_discovery_document,
+    request_client_credentials_token,
+    validate_token,
 )
 from py_identity_model.token_validation import (
     _get_disco_response,
     _get_jwks_response,
 )
+
 from .test_utils import get_config
 
 # TODO: clean this up
@@ -75,7 +76,9 @@ def test_token_validation_succeeds(env_file):
     assert client_creds_response.token is not None
 
     validation_config = TokenValidationConfig(
-        perform_disco=True, audience=config["TEST_AUDIENCE"], options=DEFAULT_OPTIONS
+        perform_disco=True,
+        audience=config["TEST_AUDIENCE"],
+        options=DEFAULT_OPTIONS,
     )
 
     claims = validate_token(
@@ -95,7 +98,9 @@ def test_token_validation_with_invalid_config_throws_exception(env_file):
     assert client_creds_response.token is not None
 
     validation_config = TokenValidationConfig(
-        perform_disco=False, audience=config["TEST_AUDIENCE"], options=DEFAULT_OPTIONS
+        perform_disco=False,
+        audience=config["TEST_AUDIENCE"],
+        options=DEFAULT_OPTIONS,
     )
 
     with pytest.raises(PyIdentityModelException):
@@ -112,10 +117,12 @@ def test_cache_succeeds(env_file):
     assert client_creds_response.token is not None
 
     validation_config = TokenValidationConfig(
-        perform_disco=True, audience=config["TEST_AUDIENCE"], options=DEFAULT_OPTIONS
+        perform_disco=True,
+        audience=config["TEST_AUDIENCE"],
+        options=DEFAULT_OPTIONS,
     )
 
-    for i in range(0, 5):
+    for _ in range(0, 5):
         validate_token(
             jwt=client_creds_response.token["access_token"],
             disco_doc_address=config["TEST_DISCO_ADDRESS"],
@@ -138,11 +145,13 @@ def test_benchmark_validation(env_file):
     client_creds_response = _generate_token(config)
     assert client_creds_response.token is not None
     validation_config = TokenValidationConfig(
-        perform_disco=True, audience=config["TEST_AUDIENCE"], options=DEFAULT_OPTIONS
+        perform_disco=True,
+        audience=config["TEST_AUDIENCE"],
+        options=DEFAULT_OPTIONS,
     )
     start_time = datetime.datetime.now()
 
-    for i in range(0, 100):
+    for _ in range(0, 100):
         validate_token(
             jwt=client_creds_response.token["access_token"],
             disco_doc_address=config["TEST_DISCO_ADDRESS"],

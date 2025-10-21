@@ -6,15 +6,16 @@ in FastAPI applications using py-identity-model.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+import requests
 
 from py_identity_model import (
-    get_discovery_document,
     DiscoveryDocumentRequest,
     PyIdentityModelException,
+    get_discovery_document,
 )
-import requests
 
 
 @dataclass

@@ -1,12 +1,14 @@
-import pytest
 import json
 from unittest.mock import Mock, patch
+
+import pytest
+
 from py_identity_model.jwks import (
-    JwksRequest,
-    JwksResponse,
+    JsonWebAlgorithmsKeyTypes,
     JsonWebKey,
     JsonWebKeyParameterNames,
-    JsonWebAlgorithmsKeyTypes,
+    JwksRequest,
+    JwksResponse,
     get_jwks,
     jwks_from_dict,
 )
@@ -51,7 +53,12 @@ class TestJsonWebAlgorithmsKeyTypes:
 class TestJsonWebKey:
     def test_json_web_key_creation_rsa(self):
         key = JsonWebKey(
-            kty="RSA", use="sig", alg="RS256", kid="key1", n="example_n", e="AQAB"
+            kty="RSA",
+            use="sig",
+            alg="RS256",
+            kid="key1",
+            n="example_n",
+            e="AQAB",
         )
         assert key.kty == "RSA"
         assert key.use == "sig"
@@ -82,7 +89,9 @@ class TestJsonWebKey:
             JsonWebKey(kty=None, use="sig")  # type: ignore
 
     def test_json_web_key_validation_missing_rsa_params(self):
-        with pytest.raises(ValueError, match="RSA keys require 'n' and 'e' parameters"):
+        with pytest.raises(
+            ValueError, match="RSA keys require 'n' and 'e' parameters"
+        ):
             JsonWebKey(kty="RSA", use="sig")
 
     def test_json_web_key_from_json_valid(self):
@@ -105,7 +114,8 @@ class TestJsonWebKey:
         """Test that JSON missing required 'kty' field raises ValueError"""
         json_str = '{"use": "sig", "alg": "RS256"}'
         with pytest.raises(
-            ValueError, match="Invalid JWK format.*missing.*required.*argument.*'kty'"
+            ValueError,
+            match="Invalid JWK format.*missing.*required.*argument.*'kty'",
         ):
             JsonWebKey.from_json(json_str)
 
@@ -121,14 +131,17 @@ class TestJsonWebKey:
         """Test that empty JSON object raises ValueError"""
         json_str = "{}"
         with pytest.raises(
-            ValueError, match="Invalid JWK format.*missing.*required.*argument.*'kty'"
+            ValueError,
+            match="Invalid JWK format.*missing.*required.*argument.*'kty'",
         ):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_rsa_missing_required_params(self):
         """Test that RSA key without n and e parameters raises ValueError"""
         json_str = '{"kty": "RSA", "use": "sig"}'
-        with pytest.raises(ValueError, match="RSA keys require 'n' and 'e' parameters"):
+        with pytest.raises(
+            ValueError, match="RSA keys require 'n' and 'e' parameters"
+        ):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_ec_missing_required_params(self):
@@ -142,20 +155,22 @@ class TestJsonWebKey:
     def test_json_web_key_from_json_oct_missing_k(self):
         """Test that symmetric key without k parameter raises ValueError"""
         json_str = '{"kty": "oct", "use": "enc"}'
-        with pytest.raises(ValueError, match="Symmetric keys require 'k' parameter"):
+        with pytest.raises(
+            ValueError, match="Symmetric keys require 'k' parameter"
+        ):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_invalid_use_value(self):
         """Test that invalid 'use' parameter value raises ValueError"""
-        json_str = '{"kty": "RSA", "n": "example_n", "e": "AQAB", "use": "invalid"}'
+        json_str = (
+            '{"kty": "RSA", "n": "example_n", "e": "AQAB", "use": "invalid"}'
+        )
         with pytest.raises(ValueError, match="Invalid 'use' parameter"):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_invalid_key_ops(self):
         """Test that invalid key_ops values raise ValueError"""
-        json_str = (
-            '{"kty": "RSA", "n": "example_n", "e": "AQAB", "key_ops": ["invalid_op"]}'
-        )
+        json_str = '{"kty": "RSA", "n": "example_n", "e": "AQAB", "key_ops": ["invalid_op"]}'
         with pytest.raises(ValueError, match="Invalid key operation"):
             JsonWebKey.from_json(json_str)
 
@@ -170,9 +185,7 @@ class TestJsonWebKey:
 
     def test_json_web_key_from_json_invalid_ec_curve(self):
         """Test that EC key with unsupported curve raises ValueError"""
-        json_str = (
-            '{"kty": "EC", "crv": "invalid-curve", "x": "example_x", "y": "example_y"}'
-        )
+        json_str = '{"kty": "EC", "crv": "invalid-curve", "x": "example_x", "y": "example_y"}'
         with pytest.raises(ValueError, match="Unsupported curve"):
             JsonWebKey.from_json(json_str)
 
@@ -214,15 +227,15 @@ class TestJsonWebKey:
 
     def test_json_web_key_from_json_with_x5t_s256(self):
         """Test that x5t#S256 field is correctly mapped to x5t_s256"""
-        json_str = (
-            '{"kty": "RSA", "n": "example_n", "e": "AQAB", "x5t#S256": "thumbprint"}'
-        )
+        json_str = '{"kty": "RSA", "n": "example_n", "e": "AQAB", "x5t#S256": "thumbprint"}'
         key = JsonWebKey.from_json(json_str)
         assert key.x5t_s256 == "thumbprint"
 
     def test_json_web_key_from_json_key_ops_as_string(self):
         """Test that key_ops provided as string is converted to list"""
-        json_str = '{"kty": "RSA", "n": "example_n", "e": "AQAB", "key_ops": "sign"}'
+        json_str = (
+            '{"kty": "RSA", "n": "example_n", "e": "AQAB", "key_ops": "sign"}'
+        )
         key = JsonWebKey.from_json(json_str)
         assert key.key_ops == ["sign"]
 
@@ -234,9 +247,7 @@ class TestJsonWebKey:
 
     def test_json_web_key_from_json_unexpected_field_types(self):
         """Test that unexpected field types that can't be unpacked raise ValueError"""
-        json_str = (
-            '{"kty": "RSA", "n": "example_n", "e": "AQAB", "kid": {"nested": "object"}}'
-        )
+        json_str = '{"kty": "RSA", "n": "example_n", "e": "AQAB", "kid": {"nested": "object"}}'
         # This should work as kid will be set to a dict, which __init__ will accept but may not be ideal
         # The from_json doesn't explicitly validate field types, it relies on __init__ validation
         key = JsonWebKey.from_json(json_str)
@@ -276,7 +287,9 @@ class TestJsonWebKey:
 
     def test_json_web_key_from_json_with_additional_fields_oct(self):
         """Test that symmetric key with additional unknown fields doesn't fail"""
-        json_str = '{"kty": "oct", "k": "example_k", "metadata": {"info": "test"}}'
+        json_str = (
+            '{"kty": "oct", "k": "example_k", "metadata": {"info": "test"}}'
+        )
         key = JsonWebKey.from_json(json_str)
         assert key.kty == "oct"
         assert key.k == "example_k"
@@ -313,7 +326,9 @@ class TestJsonWebKey:
         assert not hasattr(key, "extra5")
         assert not hasattr(key, "extra6")
 
-    def test_json_web_key_from_json_with_additional_fields_and_valid_optional(self):
+    def test_json_web_key_from_json_with_additional_fields_and_valid_optional(
+        self,
+    ):
         """Test that additional fields are filtered out while valid optional fields are kept"""
         json_str = '{"kty": "RSA", "n": "example_n", "e": "AQAB", "x5t": "thumbprint", "unknown": "value"}'
         key = JsonWebKey.from_json(json_str)
@@ -325,7 +340,12 @@ class TestJsonWebKey:
 
     def test_json_web_key_to_json(self):
         key = JsonWebKey(
-            kty="RSA", use="sig", alg="RS256", kid="key1", n="example_n", e="AQAB"
+            kty="RSA",
+            use="sig",
+            alg="RS256",
+            kid="key1",
+            n="example_n",
+            e="AQAB",
         )
         json_str = key.to_json()
         parsed = json.loads(json_str)
@@ -402,7 +422,12 @@ class TestJsonWebKey:
 
     def test_json_web_key_as_dict(self):
         key = JsonWebKey(
-            kty="RSA", use="sig", alg="RS256", kid="key1", n="example_n", e="AQAB"
+            kty="RSA",
+            use="sig",
+            alg="RS256",
+            kid="key1",
+            n="example_n",
+            e="AQAB",
         )
         result = key.as_dict()
         assert result["kty"] == "RSA"
@@ -414,7 +439,12 @@ class TestJsonWebKey:
 
     def test_json_web_key_as_dict_excludes_none(self):
         key = JsonWebKey(
-            kty="EC", crv="P-256", x="example_x", y="example_y", use="sig", alg=None
+            kty="EC",
+            crv="P-256",
+            x="example_x",
+            y="example_y",
+            use="sig",
+            alg=None,
         )
         result = key.as_dict()
         assert "alg" not in result
@@ -548,7 +578,9 @@ class TestGetJwks:
         # Mock response that raises JSON decode error
         mock_response = Mock()
         mock_response.ok = True
-        mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
+        mock_response.json.side_effect = json.JSONDecodeError(
+            "Invalid JSON", "", 0
+        )
         mock_get.return_value = mock_response
 
         request = JwksRequest(address="https://example.com/jwks")

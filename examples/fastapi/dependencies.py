@@ -5,8 +5,14 @@ These dependencies can be used in FastAPI route handlers to access
 validated token information and user claims.
 """
 
-from typing import Optional, List
-from fastapi import Request, Depends, HTTPException, status
+from typing import Callable, Dict, List, Optional
+
+from fastapi import (  # type: ignore[attr-defined]
+    Depends,
+    HTTPException,
+    Request,
+    status,
+)
 from py_identity_model.identity import ClaimsPrincipal
 
 
@@ -103,7 +109,7 @@ def get_token(request: Request) -> str:
     return request.state.token
 
 
-def get_claim_value(claim_type: str) -> callable:
+def get_claim_value(claim_type: str) -> Callable[..., Optional[str]]:
     """
     Factory function to create a dependency that extracts a specific claim value.
 
@@ -124,7 +130,11 @@ def get_claim_value(claim_type: str) -> callable:
         ```
     """
 
-    def _get_claim(user: ClaimsPrincipal = Depends(get_current_user)) -> Optional[str]:
+    def _get_claim(
+        user: ClaimsPrincipal = Depends(get_current_user),
+    ) -> Optional[str]:
+        if user.identity is None:
+            return None
         claim = user.identity.find_first(claim_type)
         if claim:
             return claim.value
@@ -133,7 +143,7 @@ def get_claim_value(claim_type: str) -> callable:
     return _get_claim
 
 
-def get_claim_values(claim_type: str) -> callable:
+def get_claim_values(claim_type: str) -> Callable[..., List[str]]:
     """
     Factory function to create a dependency that extracts all values for a specific claim type.
 
@@ -156,14 +166,20 @@ def get_claim_values(claim_type: str) -> callable:
         ```
     """
 
-    def _get_claims(user: ClaimsPrincipal = Depends(get_current_user)) -> List[str]:
+    def _get_claims(
+        user: ClaimsPrincipal = Depends(get_current_user),
+    ) -> List[str]:
+        if user.identity is None:
+            return []
         claims = user.identity.find_all(claim_type)
         return [claim.value for claim in claims]
 
     return _get_claims
 
 
-def require_claim(claim_type: str, claim_value: Optional[str] = None) -> callable:
+def require_claim(
+    claim_type: str, claim_value: Optional[str] = None
+) -> Callable[..., None]:
     """
     Factory function to create a dependency that requires a specific claim.
 
@@ -194,19 +210,16 @@ def require_claim(claim_type: str, claim_value: Optional[str] = None) -> callabl
         ```
     """
 
-    def _check_claim(user: ClaimsPrincipal = Depends(get_current_user)) -> None:
-        if claim_value is None:
-            # Just check if the claim exists
-            if not user.identity.has_claim(lambda c: c.claim_type == claim_type):
+    def _check_claim(
+        user: ClaimsPrincipal = Depends(get_current_user),
+    ) -> None:
+        if not user.has_claim(claim_type, claim_value):
+            if claim_value is None:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Required claim '{claim_type}' not found",
                 )
-        else:
-            # Check if the claim has the specific value
-            if not user.identity.has_claim(
-                lambda c: c.claim_type == claim_type and c.value == claim_value
-            ):
+            else:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Required claim '{claim_type}' with value '{claim_value}' not found",
@@ -215,7 +228,7 @@ def require_claim(claim_type: str, claim_value: Optional[str] = None) -> callabl
     return _check_claim
 
 
-def require_scope(scope: str) -> callable:
+def require_scope(scope: str) -> Callable[..., None]:
     """
     Factory function to create a dependency that requires a specific OAuth scope.
 

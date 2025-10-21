@@ -8,27 +8,59 @@ This example shows how to use py-identity-model with FastAPI to:
 - Enforce authorization based on claims and scopes
 """
 
-from typing import List
-from fastapi import FastAPI, Depends, HTTPException
-from fastapi.responses import JSONResponse
+import os
+
+import urllib3
 import uvicorn
 
-from py_identity_model.identity import ClaimsPrincipal
-
-from middleware import TokenValidationMiddleware
-from dependencies import (
-    get_current_user,
-    get_claims,
-    get_token,
-    get_claim_value,
-    get_claim_values,
-    require_claim,
-    require_scope,
+from fastapi import (  # type: ignore[attr-defined]
+    Depends,
+    FastAPI,
+    HTTPException,
 )
+from fastapi.responses import JSONResponse  # type: ignore[attr-defined]
 
+# Disable SSL warnings for self-signed certificates in test environment
+if os.getenv("DISABLE_SSL_VERIFICATION", "false").lower() == "true":
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    # Monkey-patch requests to disable SSL verification for testing
+    import requests
+
+    original_request = requests.Session.request
+
+    def patched_request(self, method, url, **kwargs):
+        kwargs.setdefault("verify", False)
+        return original_request(self, method, url, **kwargs)
+
+    requests.Session.request = patched_request  # type: ignore[method-assign]
+    # Also patch requests.get and requests.post directly
+    _original_get = requests.get
+    _original_post = requests.post
+
+    def patched_get(*args, **kwargs):
+        kwargs.setdefault("verify", False)
+        return _original_get(*args, **kwargs)
+
+    def patched_post(*args, **kwargs):
+        kwargs.setdefault("verify", False)
+        return _original_post(*args, **kwargs)
+
+    requests.get = patched_get
+    requests.post = patched_post
 
 # Configuration - can be overridden by environment variables
 import os
+
+from dependencies import (
+    get_claims,
+    get_current_user,
+    get_token,
+    require_claim,
+    require_scope,
+)
+from middleware import TokenValidationMiddleware
+
+from py_identity_model.identity import ClaimsPrincipal
 
 DISCOVERY_URL = os.getenv(
     "DISCOVERY_URL", "https://localhost:5001/.well-known/openid-configuration"
@@ -70,17 +102,22 @@ async def health():
 
 # Protected routes (authentication required)
 @app.get("/api/me", tags=["protected"])
-async def get_current_user_info(user: ClaimsPrincipal = Depends(get_current_user)):
+async def get_current_user_info(
+    user: ClaimsPrincipal = Depends(get_current_user),
+):
     """
     Get information about the currently authenticated user.
 
     Returns the user's claims principal information.
     """
+    identity = user.identity
+    if identity is None:
+        raise HTTPException(status_code=401, detail="No identity found")
     return {
-        "authenticated": user.identity.is_authenticated,
-        "authentication_type": user.identity.authentication_type,
-        "name": user.identity.name,
-        "claims_count": len(user.identity.claims),
+        "authenticated": bool(identity.is_authenticated),
+        "authentication_type": identity.authentication_type,
+        "name": identity.name,
+        "claims_count": len(identity.claims),
     }
 
 
@@ -108,26 +145,28 @@ async def get_token_info(token: str = Depends(get_token)):
 
 
 # Routes using specific claim extraction
-get_user_id = get_claim_value("sub")
-get_user_email = get_claim_value("email")
-get_user_roles = get_claim_values("role")
-
-
 @app.get("/api/profile", tags=["protected"])
 async def get_profile(
-    user_id: str = Depends(get_user_id),
-    email: str = Depends(get_user_email),
-    roles: List[str] = Depends(get_user_roles),
+    user: ClaimsPrincipal = Depends(get_current_user),
 ):
     """
     Get the user's profile information from specific claims.
 
-    Demonstrates extracting individual claims using dependency injection.
+    Demonstrates extracting individual claims using the ClaimsPrincipal.
     """
+    # Extract claims directly from the user principal
+    user_id_claim = user.find_first("sub") or user.find_first("client_id")
+    email_claim = user.find_first("email")
+    role_claims = user.find_all("role")
+
+    user_id = user_id_claim.value if user_id_claim else "Not provided"
+    email = email_claim.value if email_claim else "Not provided"
+    roles = [claim.value for claim in role_claims] if role_claims else []
+
     return {
         "user_id": user_id,
-        "email": email or "Not provided",
-        "roles": roles if roles else [],
+        "email": email,
+        "roles": roles,
     }
 
 
@@ -136,7 +175,9 @@ require_read_scope = require_scope("py-identity-model")
 require_write_scope = require_scope("py-identity-model.write")
 
 
-@app.get("/api/data", tags=["protected"], dependencies=[Depends(require_read_scope)])
+@app.get(
+    "/api/data", tags=["protected"], dependencies=[Depends(require_read_scope)]
+)
 async def get_data():
     """
     Get data (requires 'py-identity-model' scope).
@@ -152,7 +193,11 @@ async def get_data():
     }
 
 
-@app.post("/api/data", tags=["protected"], dependencies=[Depends(require_write_scope)])
+@app.post(
+    "/api/data",
+    tags=["protected"],
+    dependencies=[Depends(require_write_scope)],
+)
 async def create_data(name: str):
     """
     Create data (requires 'py-identity-model.write' scope).
@@ -186,7 +231,11 @@ async def delete_user(user_id: str):
     }
 
 
-@app.get("/api/admin/stats", tags=["admin"], dependencies=[Depends(require_admin_role)])
+@app.get(
+    "/api/admin/stats",
+    tags=["admin"],
+    dependencies=[Depends(require_admin_role)],
+)
 async def get_admin_stats():
     """
     Get admin statistics (requires 'admin' role).
@@ -221,6 +270,8 @@ if __name__ == "__main__":
     print("\n💡 To get a token, run: python ../generate_token.py")
     print("\n📚 API documentation: http://localhost:8000/docs")
     print("\n🔐 Example request:")
-    print('   curl -H "Authorization: Bearer <token>" http://localhost:8000/api/me')
+    print(
+        '   curl -H "Authorization: Bearer <token>" http://localhost:8000/api/me'
+    )
 
     uvicorn.run(app, host="0.0.0.0", port=8000)

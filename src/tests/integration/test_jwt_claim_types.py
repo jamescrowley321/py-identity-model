@@ -3,10 +3,11 @@ Tests for the JwtClaimTypes class
 """
 
 import pytest
+
 from py_identity_model.jwt_claim_types import (
+    ConfirmationMethods,
     JwtClaimTypes,
     JwtTypes,
-    ConfirmationMethods,
 )
 
 

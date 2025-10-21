@@ -1,11 +1,12 @@
 import json
+from typing import Dict, List
 
 import pytest
 import requests
-from typing import Dict, List
 
 from py_identity_model import JsonWebKey
-from py_identity_model.jwks import jwks_from_dict, get_jwks, JwksRequest
+from py_identity_model.jwks import JwksRequest, get_jwks, jwks_from_dict
+
 from .test_utils import get_config
 
 
@@ -234,7 +235,12 @@ def test_jwks_from_dict_minimal():
     assert rsa_jwk.alg is None
 
     # Test with minimal EC JWK
-    minimal_ec_dict = {"kty": "EC", "crv": "P-256", "x": "x-coord", "y": "y-coord"}
+    minimal_ec_dict = {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "x-coord",
+        "y": "y-coord",
+    }
     ec_jwk = jwks_from_dict(minimal_ec_dict)
 
     assert ec_jwk.kty == "EC"
@@ -289,7 +295,9 @@ def test_jwks_from_dict_error_handling():
         jwks_from_dict({"kty": None})
 
     # Test with invalid RSA key (missing required parameters)
-    with pytest.raises(ValueError, match="RSA keys require 'n' and 'e' parameters"):
+    with pytest.raises(
+        ValueError, match="RSA keys require 'n' and 'e' parameters"
+    ):
         jwks_from_dict({"kty": "RSA"})
 
     # Test with invalid EC key (missing required parameters)
@@ -299,7 +307,9 @@ def test_jwks_from_dict_error_handling():
         jwks_from_dict({"kty": "EC"})
 
     # Test with invalid symmetric key (missing required parameter)
-    with pytest.raises(ValueError, match="Symmetric keys require 'k' parameter"):
+    with pytest.raises(
+        ValueError, match="Symmetric keys require 'k' parameter"
+    ):
         jwks_from_dict({"kty": "oct"})
 
 

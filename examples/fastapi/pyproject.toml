@@ -9,6 +9,7 @@ dependencies = [
     "py-identity-model",
     "fastapi>=0.100.0",
     "uvicorn[standard]>=0.23.0",
+    "types-requests",
 ]
 
 [tool.uv.sources]

@@ -7,8 +7,9 @@ an identity server and properly validates tokens.
 
 import os
 import time
-import requests
 from typing import Optional
+
+import requests
 
 # Configuration from environment
 DISCOVERY_URL = os.getenv(
@@ -92,14 +93,18 @@ def test_public_endpoints():
 
     # Test root endpoint
     response = requests.get(f"{FASTAPI_URL}/")
-    assert response.status_code == 200, f"Root endpoint failed: {response.text}"
+    assert response.status_code == 200, (
+        f"Root endpoint failed: {response.text}"
+    )
     data = response.json()
     assert "message" in data
     print("✅ Root endpoint works")
 
     # Test health endpoint
     response = requests.get(f"{FASTAPI_URL}/health")
-    assert response.status_code == 200, f"Health endpoint failed: {response.text}"
+    assert response.status_code == 200, (
+        f"Health endpoint failed: {response.text}"
+    )
     data = response.json()
     assert data["status"] == "healthy"
     print("✅ Health endpoint works")
@@ -147,8 +152,12 @@ def test_protected_endpoints_with_valid_token(token: str):
     response = requests.get(f"{FASTAPI_URL}/api/me", headers=headers)
     assert response.status_code == 200, f"/api/me failed: {response.text}"
     data = response.json()
-    assert data["authenticated"] is True
-    assert data["authentication_type"] == "Bearer"
+    assert data["authenticated"] is True, (
+        f"Expected authenticated=True, got {data.get('authenticated')}"
+    )
+    assert data["authentication_type"] == "Bearer", (
+        f"Expected authentication_type='Bearer', got {data.get('authentication_type')}"
+    )
     print("✅ /api/me works with valid token")
 
     # Test /api/claims
@@ -161,7 +170,9 @@ def test_protected_endpoints_with_valid_token(token: str):
 
     # Test /api/token-info
     response = requests.get(f"{FASTAPI_URL}/api/token-info", headers=headers)
-    assert response.status_code == 200, f"/api/token-info failed: {response.text}"
+    assert response.status_code == 200, (
+        f"/api/token-info failed: {response.text}"
+    )
     data = response.json()
     assert "token_length" in data
     assert data["token_length"] > 0
@@ -211,8 +222,12 @@ def test_admin_endpoints_without_role(token: str):
         f"{FASTAPI_URL}/api/admin/users/123",
         headers=headers,
     )
-    assert response.status_code == 403, "Expected 403 for missing admin role"
-    print("✅ Admin delete endpoint correctly rejects token without admin role")
+    assert response.status_code == 403, (
+        f"Expected 403 for missing admin role, got {response.status_code}: {response.text}"
+    )
+    print(
+        "✅ Admin delete endpoint correctly rejects token without admin role"
+    )
 
     response = requests.get(f"{FASTAPI_URL}/api/admin/stats", headers=headers)
     assert response.status_code == 403, "Expected 403 for missing admin role"
@@ -261,6 +276,9 @@ def run_tests():
 
     except AssertionError as e:
         print(f"\n❌ Test failed: {e}")
+        import traceback
+
+        traceback.print_exc()
         return 1
     except Exception as e:
         print(f"\n❌ Unexpected error: {e}")

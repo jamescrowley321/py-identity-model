@@ -17,6 +17,15 @@ namespace IdentityServerHost
                 new ApiScope("py-identity-model", "Python Identity Model API"),
             };
 
+        public static IEnumerable<ApiResource> ApiResources =>
+            new ApiResource[]
+            {
+                new ApiResource("py-identity-model", "Python Identity Model API")
+                {
+                    Scopes = { "py-identity-model" }
+                },
+            };
+
         public static IEnumerable<Client> Clients =>
             new Client[]
             {

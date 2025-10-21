@@ -38,6 +38,7 @@ services:
       - DISCOVERY_URL=https://identityserver:443/.well-known/openid-configuration
       - AUDIENCE=py-identity-model
       - PYTHONUNBUFFERED=1
+      - DISABLE_SSL_VERIFICATION=true
     networks:
       - examples-test-network
     depends_on:

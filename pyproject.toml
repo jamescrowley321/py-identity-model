@@ -6,7 +6,7 @@ name = "py-identity-model"
 version = "1.1.0"
 description = "OAuth2.0 and OpenID Connect Client Library"
 authors = [{ name = "jamescrowley321", email = "jamescrowley151@gmail.com" }]
-requires-python = "~=3.12"
+requires-python = ">=3.12"
 readme = "README.md"
 classifiers = [
     "License :: OSI Approved :: Apache Software License",
@@ -92,8 +92,16 @@ ignore_token_for_push = false
 dist_glob_patterns = ["dist/*"]
 upload_to_vcs_release = true
 
-[tool.flake8]
-ignore = ["E203", "E266", "E501", "W503", "F403", "F401"]
-max-line-length = 79
+[tool.ruff]
+line-length = 79
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["B", "C", "E", "F", "W", "I"]
+ignore = ["E203", "E266", "E501", "F403", "F401", "B008"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["py_identity_model"]
+
+[tool.ruff.lint.mccabe]
 max-complexity = 18
-select = ["B", "C", "E", "F", "W", "T4", "B9"]

@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass, fields
 from enum import Enum
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional
 
 import requests
 
@@ -113,7 +113,9 @@ class JsonWebKey:
         """Validate required parameters based on the key type"""
         if self.kty == "EC":
             if not all([self.crv, self.x, self.y]):
-                raise ValueError("EC keys require 'crv', 'x', and 'y' parameters")
+                raise ValueError(
+                    "EC keys require 'crv', 'x', and 'y' parameters"
+                )
             # Validate supported curves per RFC 7518
             valid_curves = ["P-256", "P-384", "P-521", "secp256k1"]
             if self.crv not in valid_curves:
@@ -130,7 +132,9 @@ class JsonWebKey:
         # Validate 'use' parameter values per RFC 7517 Section 4.2
         if self.use is not None:
             valid_use_values = ["sig", "enc"]
-            if self.use not in valid_use_values and not self.use.startswith("https://"):
+            if self.use not in valid_use_values and not self.use.startswith(
+                "https://"
+            ):
                 raise ValueError(
                     f"Invalid 'use' parameter: {self.use}. Must be 'sig', 'enc', or a URI"
                 )
@@ -193,18 +197,22 @@ class JsonWebKey:
                     mapped_data[k] = [v]
                 elif k == "oth" and isinstance(v, str):
                     # Ensure oth is a list (though a string oth is unusual)
-                    mapped_data[k] = [{"r": v}]  # Convert to expected dict format
+                    mapped_data[k] = [
+                        {"r": v}
+                    ]  # Convert to expected dict format
                 else:
                     mapped_data[k] = v
 
             # Filter to only include valid fields
-            filtered_data = {k: v for k, v in mapped_data.items() if k in valid_fields}
+            filtered_data = {
+                k: v for k, v in mapped_data.items() if k in valid_fields
+            }
 
             return cls(**filtered_data)
-        except json.JSONDecodeError:
-            raise ValueError("Invalid JSON format")
+        except json.JSONDecodeError as e:
+            raise ValueError("Invalid JSON format") from e
         except (TypeError, AttributeError) as e:
-            raise ValueError(f"Invalid JWK format: {str(e)}")
+            raise ValueError(f"Invalid JWK format: {str(e)}") from e
 
     def to_json(self) -> str:
         """Convert the JWK to a JSON string"""

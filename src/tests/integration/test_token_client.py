@@ -1,9 +1,10 @@
 from py_identity_model import (
     ClientCredentialsTokenRequest,
-    request_client_credentials_token,
-    get_discovery_document,
     DiscoveryDocumentRequest,
+    get_discovery_document,
+    request_client_credentials_token,
 )
+
 from .test_utils import get_config
 
 
