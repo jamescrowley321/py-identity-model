@@ -7,7 +7,7 @@ in FastAPI applications using py-identity-model.
 
 from dataclasses import dataclass
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from py_identity_model import (
     get_discovery_document,
@@ -219,7 +219,9 @@ class TokenManager:
         self._refresh_token = refresh_token
 
         if expires_in:
-            self._expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            self._expires_at = datetime.now(timezone.utc) + timedelta(
+                seconds=expires_in
+            )
         else:
             self._expires_at = None
 
@@ -234,7 +236,7 @@ class TokenManager:
             return False
 
         # Consider token expired if it will expire within refresh_before_seconds
-        return datetime.utcnow() >= (
+        return datetime.now(timezone.utc) >= (
             self._expires_at - timedelta(seconds=self.refresh_before_seconds)
         )
 
@@ -270,6 +272,12 @@ class TokenManager:
         if not response.is_successful:
             raise PyIdentityModelException(
                 f"Token refresh failed: {response.error_description}"
+            )
+
+        # Ensure we have an access token
+        if not response.access_token:
+            raise PyIdentityModelException(
+                "Token refresh succeeded but no access token returned"
             )
 
         # Update stored tokens
