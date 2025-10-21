@@ -1,6 +1,6 @@
 .PHONY: build-dist
 build-dist:
-	uv pip install -r pyproject.toml
+	uv sync
 	uv build
 
 .PHONY: upload-dist
@@ -41,6 +41,6 @@ ci-setup:
 	pip install pipx
 	pipx install uv
 	uv venv
-	uv pip install -r pyproject.toml
+	uv sync --all-packages
 
 

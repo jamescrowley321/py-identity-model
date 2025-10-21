@@ -1,3 +1,6 @@
+[tool.uv.workspace]
+members = [".", "examples/fastapi"]
+
 [project]
 name = "py-identity-model"
 version = "1.1.0"

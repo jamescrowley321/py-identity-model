@@ -19,11 +19,14 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Create virtual environment
 uv venv
 
-# Install project dependencies
-uv pip install -r pyproject.toml
+# Install all workspace dependencies (main library + examples)
+uv sync --all-packages
 
-# Install development dependencies
-uv pip install -r pyproject.toml --group dev
+# This will install:
+# - Main py-identity-model library
+# - Development dependencies (pytest, ruff, pyrefly, etc.)
+# - Documentation dependencies (mkdocs, etc.)
+# - Example dependencies (FastAPI example)
 ```
 
 #### Adding Dependencies
@@ -137,9 +140,13 @@ cd py-identity-model
 make ci-setup
 # or manually:
 uv venv
-uv pip install -r pyproject.toml
+uv sync --all-packages
 uv run pre-commit install
 ```
+
+**Note**: This project uses uv workspaces. The workspace includes:
+- Root package: `py-identity-model` (main library)
+- Examples: `examples/fastapi` (FastAPI example with its own dependencies)
 
 ### 2. Feature Development
 
@@ -278,14 +285,31 @@ git commit -m "docs: update API documentation"
 ## Dependencies
 
 ### Adding New Dependencies
-1. Check if dependency is necessary
-2. Use specific version ranges: `"package>=1.0.0,<2"`
-3. Add to appropriate section in `pyproject.toml`
-4. Update `uv.lock`: `uv lock`
+
+#### For the main library:
+```bash
+# Production dependency
+uv add "package>=1.0.0,<2"
+
+# Development dependency
+uv add --group dev "package>=1.0.0"
+```
+
+#### For examples (e.g., FastAPI):
+```bash
+# Add to the example's pyproject.toml
+cd examples/fastapi
+# Edit pyproject.toml to add the dependency
+# Then sync from root:
+cd ../..
+uv sync --all-packages
+```
 
 ### Dependency Groups
-- **Production**: Core runtime dependencies
-- **dev**: Development tools (testing, linting, etc.)
+- **Production**: Core runtime dependencies (main library)
+- **dev**: Development tools (testing, linting, type checking)
+- **docs**: Documentation generation tools
+- **Workspace members**: Each example has its own dependencies
 
 ## Troubleshooting
 

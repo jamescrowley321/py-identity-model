@@ -22,19 +22,18 @@ This example demonstrates how to integrate `py-identity-model` with FastAPI to i
 
 ### 1. Install Dependencies
 
-```bash
-# From the examples/fastapi directory
-pip install -r requirements.txt
-```
-
-Or if you're using the project's development environment:
+This example uses uv workspaces for dependency management:
 
 ```bash
 # From the project root
-pip install -e .
-cd examples/fastapi
-pip install -r requirements.txt
+uv sync
+
+# This will install both the main library and the FastAPI example dependencies
 ```
+
+The workspace is configured in the root `pyproject.toml` and includes:
+- The main `py-identity-model` library
+- The FastAPI example with its dependencies (fastapi, uvicorn)
 
 ### 2. Start the Identity Server
 
@@ -99,7 +98,7 @@ examples/fastapi/
 ├── middleware.py          # Token validation middleware
 ├── dependencies.py        # FastAPI dependencies for auth
 ├── token_refresh.py       # Token refresh utilities
-├── requirements.txt       # Python dependencies
+├── pyproject.toml         # Package configuration and dependencies
 └── README.md             # This file
 ```
 
