@@ -11,4 +11,6 @@ else
     echo "⚠️  No custom CA certificate found"
 fi
 
-exec uv run uvicorn app:app --host 0.0.0.0 --port 8000
+# Drop privileges and run as appuser
+echo "🔐 Dropping privileges to appuser..."
+exec gosu appuser uv run uvicorn app:app --host 0.0.0.0 --port 8000

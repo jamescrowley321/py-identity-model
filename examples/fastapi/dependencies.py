@@ -15,6 +15,9 @@ from fastapi import (  # type: ignore[attr-defined]
 )
 from py_identity_model.identity import ClaimsPrincipal
 
+# Error message constants
+_NOT_AUTHENTICATED_MSG = "Not authenticated"
+
 
 def get_current_user(request: Request) -> ClaimsPrincipal:
     """
@@ -42,7 +45,7 @@ def get_current_user(request: Request) -> ClaimsPrincipal:
     if not hasattr(request.state, "user"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
+            detail=_NOT_AUTHENTICATED_MSG,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -72,7 +75,7 @@ def get_claims(request: Request) -> dict:
     if not hasattr(request.state, "claims"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
+            detail=_NOT_AUTHENTICATED_MSG,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -102,7 +105,7 @@ def get_token(request: Request) -> str:
     if not hasattr(request.state, "token"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
+            detail=_NOT_AUTHENTICATED_MSG,
             headers={"WWW-Authenticate": "Bearer"},
         )
 

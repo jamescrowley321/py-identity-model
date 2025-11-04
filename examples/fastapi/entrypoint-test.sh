@@ -13,4 +13,6 @@ else
     ls -la /usr/local/share/ca-certificates/ || true
 fi
 
-exec uv run python test_integration.py
+# Drop privileges and run as appuser
+echo "🔐 Dropping privileges to appuser..."
+exec gosu appuser uv run python test_integration.py
