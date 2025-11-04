@@ -47,7 +47,7 @@ $DOCKER_COMPOSE -f docker-compose.test.yml run --rm test-runner
 TEST_EXIT_CODE=$?
 
 # Show logs if tests failed
-if [ $TEST_EXIT_CODE -ne 0 ]; then
+if [[ $TEST_EXIT_CODE -ne 0 ]]; then
     echo ""
     echo "❌ Tests failed! Showing service logs:"
     echo "$SEPARATOR"
@@ -65,7 +65,7 @@ echo "🧹 Cleaning up..."
 $DOCKER_COMPOSE -f docker-compose.test.yml down -v
 
 # Exit with test exit code
-if [ $TEST_EXIT_CODE -eq 0 ]; then
+if [[ $TEST_EXIT_CODE -eq 0 ]]; then
     echo ""
     echo "$SEPARATOR"
     echo "✅ All tests passed!"

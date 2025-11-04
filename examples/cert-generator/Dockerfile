@@ -1,11 +1,9 @@
 FROM alpine:3.19
 
-# Install OpenSSL and setup certificate directory
+# Install OpenSSL, setup certificate directory, and create non-root user
 RUN apk add --no-cache openssl && \
-    mkdir -p /certs
-
-# Create non-root user
-RUN adduser -D -u 1000 certuser && \
+    mkdir -p /certs && \
+    adduser -D -u 1000 certuser && \
     chown -R certuser:certuser /certs
 
 # Copy the certificate generation script
