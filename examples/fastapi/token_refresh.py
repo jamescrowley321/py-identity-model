@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-import requests
+import httpx
 
 from py_identity_model import (
     DiscoveryDocumentRequest,
@@ -42,7 +42,7 @@ class RefreshTokenResponse:
     error_description: Optional[str] = None
 
 
-def refresh_access_token(
+async def refresh_access_token(
     discovery_url: str, request: RefreshTokenRequest
 ) -> RefreshTokenResponse:
     """
@@ -63,7 +63,7 @@ def refresh_access_token(
             client_secret="my-client-secret"
         )
 
-        response = refresh_access_token(
+        response = await refresh_access_token(
             "https://auth.example.com/.well-known/openid-configuration",
             refresh_request
         )
@@ -109,11 +109,12 @@ def refresh_access_token(
             data["scope"] = request.scope
 
         # Make token request
-        response = requests.post(
-            token_endpoint,
-            data=data,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                token_endpoint,
+                data=data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
 
         if response.status_code != 200:
             error_data = response.json() if response.text else {}
@@ -261,7 +262,7 @@ class TokenManager:
                 "Token expired and no refresh token available"
             )
 
-        response = refresh_access_token(
+        response = await refresh_access_token(
             self.discovery_url,
             RefreshTokenRequest(
                 refresh_token=self._refresh_token,

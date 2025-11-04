@@ -25,4 +25,9 @@ COPY --from=publish /app/publish .
 COPY startup.sh /app/startup.sh
 RUN chmod +x /app/startup.sh
 
+# Create non-root user and switch to it
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+USER appuser
+
 ENTRYPOINT ["/app/startup.sh"]

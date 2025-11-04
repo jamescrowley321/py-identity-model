@@ -11,4 +11,10 @@
     <PackageReference Include="Duende.IdentityServer.AspNetIdentity" Version="7.0.8" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="identityserver-config.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

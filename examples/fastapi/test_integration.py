@@ -317,10 +317,13 @@ def run_tests():
         print("=" * 60)
         return 0
 
-    except (AssertionError, Exception) as e:
-        print(
-            f"\n❌ {'Test failed' if isinstance(e, AssertionError) else 'Unexpected error'}: {e}"
+    except Exception as e:
+        error_type = (
+            "Test failed"
+            if isinstance(e, AssertionError)
+            else "Unexpected error"
         )
+        print(f"\n❌ {error_type}: {e}")
         import traceback
 
         traceback.print_exc()

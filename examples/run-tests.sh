@@ -1,9 +1,11 @@
 #!/bin/bash
 set -e
 
-echo "========================================"
+readonly SEPARATOR="================================================"
+
+echo "$SEPARATOR"
 echo "Examples - Integration Tests"
-echo "========================================"
+echo "$SEPARATOR"
 echo ""
 
 # Change to the examples directory
@@ -48,7 +50,7 @@ TEST_EXIT_CODE=$?
 if [ $TEST_EXIT_CODE -ne 0 ]; then
     echo ""
     echo "❌ Tests failed! Showing service logs:"
-    echo "========================================="
+    echo "$SEPARATOR"
     echo ""
     echo "Identity Server logs:"
     $DOCKER_COMPOSE -f docker-compose.test.yml logs identityserver
@@ -65,14 +67,14 @@ $DOCKER_COMPOSE -f docker-compose.test.yml down -v
 # Exit with test exit code
 if [ $TEST_EXIT_CODE -eq 0 ]; then
     echo ""
-    echo "================================================"
+    echo "$SEPARATOR"
     echo "✅ All tests passed!"
-    echo "================================================"
+    echo "$SEPARATOR"
 else
     echo ""
-    echo "================================================"
+    echo "$SEPARATOR"
     echo "❌ Tests failed!"
-    echo "================================================"
+    echo "$SEPARATOR"
 fi
 
 exit $TEST_EXIT_CODE
