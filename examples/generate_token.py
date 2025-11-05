@@ -45,11 +45,11 @@ def main():
         print(f"❌ Failed to get discovery document: {disco_response.error}")
         print("\n💡 Make sure the local identity server is running:")
         print(
-            "      cd examples && docker compose -f docker-compose.test.yml up identityserver -d"
+            "      cd examples && docker compose -f docker-compose.test.yml up identityserver -d",
         )
         print("\n   Or use the full test setup:")
         print(
-            "      cd examples && docker compose -f docker-compose.test.yml up --build"
+            "      cd examples && docker compose -f docker-compose.test.yml up --build",
         )
         return 1
 
@@ -103,7 +103,7 @@ def main():
     print("   ")
     print("   # Use with curl:")
     print(
-        f'   curl -H "Authorization: {token_type} {access_token}" https://your-api.com/endpoint'
+        f'   curl -H "Authorization: {token_type} {access_token}" https://your-api.com/endpoint',
     )
 
     return 0

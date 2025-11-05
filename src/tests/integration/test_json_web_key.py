@@ -1,16 +1,16 @@
 import json
-from typing import Dict, List
 
 import pytest
 import requests
 
 from py_identity_model import JsonWebKey
+from py_identity_model.exceptions import ConfigurationException
 from py_identity_model.jwks import JwksRequest, get_jwks, jwks_from_dict
 
 from .test_utils import get_config
 
 
-def fetch_jwks(jwks_address: str) -> List[Dict]:
+def fetch_jwks(jwks_address: str) -> list[dict]:
     """Fetch JWKS from the provided URL"""
     response = requests.get(jwks_address)
     response.raise_for_status()
@@ -92,19 +92,19 @@ def test_jwk_validation(jwks_data):
 def test_invalid_jwk():
     """Test that invalid JWK data is handled correctly"""
     # Test missing required kty
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigurationException):
         JsonWebKey.from_json('{"kid": "test"}')
 
     # Test invalid JSON
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigurationException):
         JsonWebKey.from_json("{invalid json}")
 
     # Test empty JSON
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigurationException):
         JsonWebKey.from_json("")
 
     # Test None input
-    with pytest.raises(ValueError):
+    with pytest.raises(ConfigurationException):
         JsonWebKey.from_json(None)  # type: ignore
 
 
@@ -281,31 +281,36 @@ def test_jwks_from_dict_error_handling():
     """Test jwks_from_dict error handling"""
     # Test with empty dictionary (should fail validation in JsonWebKey.__post_init__)
     with pytest.raises(
-        ValueError, match="The 'kty' \\(Key Type\\) parameter is required"
+        ConfigurationException,
+        match="The 'kty' \\(Key Type\\) parameter is required",
     ):
         jwks_from_dict({})
 
     # Test with None kty
     with pytest.raises(
-        ValueError, match="The 'kty' \\(Key Type\\) parameter is required"
+        ConfigurationException,
+        match="The 'kty' \\(Key Type\\) parameter is required",
     ):
         jwks_from_dict({"kty": None})
 
     # Test with invalid RSA key (missing required parameters)
     with pytest.raises(
-        ValueError, match="RSA keys require 'n' and 'e' parameters"
+        ConfigurationException,
+        match="RSA keys require 'n' and 'e' parameters",
     ):
         jwks_from_dict({"kty": "RSA"})
 
     # Test with invalid EC key (missing required parameters)
     with pytest.raises(
-        ValueError, match="EC keys require 'crv', 'x', and 'y' parameters"
+        ConfigurationException,
+        match="EC keys require 'crv', 'x', and 'y' parameters",
     ):
         jwks_from_dict({"kty": "EC"})
 
     # Test with invalid symmetric key (missing required parameter)
     with pytest.raises(
-        ValueError, match="Symmetric keys require 'k' parameter"
+        ConfigurationException,
+        match="Symmetric keys require 'k' parameter",
     ):
         jwks_from_dict({"kty": "oct"})
 
@@ -332,7 +337,7 @@ def test_get_jwks_failure():
     """Test get_jwks with failed request"""
     # Test with invalid URL
     jwks_request = JwksRequest(
-        address="https://invalid-url-that-does-not-exist.com/jwks"
+        address="https://invalid-url-that-does-not-exist.com/jwks",
     )
     jwks_response = get_jwks(jwks_request)
 
@@ -357,5 +362,5 @@ def test_get_jwks_network_error():
 
     assert jwks_response.is_successful is False
     assert jwks_response.error is not None
-    assert "Unhandled exception during JWKS request" in jwks_response.error
+    assert "Network error during JWKS request" in jwks_response.error
     assert jwks_response.keys is None

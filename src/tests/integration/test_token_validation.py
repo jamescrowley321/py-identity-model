@@ -1,7 +1,6 @@
 import datetime
 
 import pytest
-from jwt import ExpiredSignatureError
 
 from py_identity_model import (
     ClientCredentialsTokenRequest,
@@ -12,12 +11,18 @@ from py_identity_model import (
     request_client_credentials_token,
     validate_token,
 )
+from py_identity_model.exceptions import (
+    ConfigurationException,
+    TokenExpiredException,
+    TokenValidationException,
+)
 from py_identity_model.token_validation import (
     _get_disco_response,
     _get_jwks_response,
 )
 
 from .test_utils import get_config
+
 
 # Token validation options - only override defaults where needed
 DEFAULT_OPTIONS = {
@@ -29,29 +34,29 @@ DEFAULT_OPTIONS = {
 def _generate_token(config):
     """Helper to generate a client credentials token for testing."""
     disco_doc_response = get_discovery_document(
-        DiscoveryDocumentRequest(address=config["TEST_DISCO_ADDRESS"])
+        DiscoveryDocumentRequest(address=config["TEST_DISCO_ADDRESS"]),
     )
     assert disco_doc_response.token_endpoint is not None
 
-    client_creds_response = request_client_credentials_token(
+    return request_client_credentials_token(
         ClientCredentialsTokenRequest(
             client_id=config["TEST_CLIENT_ID"],
             client_secret=config["TEST_CLIENT_SECRET"],
             address=disco_doc_response.token_endpoint,
             scope=config["TEST_SCOPE"],
-        )
+        ),
     )
-    return client_creds_response
 
 
 def test_token_validation_expired_token(env_file):
     config = get_config(env_file)
-    with pytest.raises(ExpiredSignatureError):
+    with pytest.raises(TokenExpiredException):
         validate_token(
             jwt=config["TEST_EXPIRED_TOKEN"],
             disco_doc_address=config["TEST_DISCO_ADDRESS"],
             token_validation_config=TokenValidationConfig(
-                perform_disco=True, options=DEFAULT_OPTIONS
+                perform_disco=True,
+                options=DEFAULT_OPTIONS,
             ),
         )
 
@@ -89,7 +94,7 @@ def test_token_validation_with_invalid_config_throws_exception(env_file):
         options=DEFAULT_OPTIONS,
     )
 
-    with pytest.raises(PyIdentityModelException):
+    with pytest.raises(ConfigurationException):
         validate_token(
             jwt=client_creds_response.token["access_token"],
             disco_doc_address=config["TEST_DISCO_ADDRESS"],
@@ -135,7 +140,7 @@ def test_benchmark_validation(env_file):
         audience=config["TEST_AUDIENCE"],
         options=DEFAULT_OPTIONS,
     )
-    start_time = datetime.datetime.now()
+    start_time = datetime.datetime.now(tz=datetime.UTC)
 
     for _ in range(100):
         validate_token(
@@ -143,7 +148,7 @@ def test_benchmark_validation(env_file):
             disco_doc_address=config["TEST_DISCO_ADDRESS"],
             token_validation_config=validation_config,
         )
-    elapsed_time = datetime.datetime.now() - start_time
+    elapsed_time = datetime.datetime.now(tz=datetime.UTC) - start_time
     print(elapsed_time)
     assert elapsed_time.total_seconds() < 1
 
@@ -190,7 +195,7 @@ def test_claim_validation_function_fails(env_file):
         claims_validator=validate_claims,
     )
 
-    with pytest.raises(PyIdentityModelException):
+    with pytest.raises(TokenValidationException):
         validate_token(
             jwt=client_creds_response.token["access_token"],
             disco_doc_address=config["TEST_DISCO_ADDRESS"],

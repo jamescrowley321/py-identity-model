@@ -1,9 +1,12 @@
-import json
 from dataclasses import dataclass, fields
 from enum import Enum
-from typing import Dict, List, Optional
+import json
 
 import requests
+
+from .exceptions import ConfigurationException
+from .logging_config import logger
+from .logging_utils import redact_url
 
 
 class JsonWebKeyParameterNames(Enum):
@@ -71,64 +74,72 @@ class JsonWebKey:
     kty: str
 
     # Optional parameters for all keys
-    use: Optional[str] = None
-    key_ops: Optional[List[str]] = None
-    alg: Optional[str] = None
-    kid: Optional[str] = None
+    use: str | None = None
+    key_ops: list[str] | None = None
+    alg: str | None = None
+    kid: str | None = None
 
     # Optional JWK parameters
-    x5u: Optional[str] = None
-    x5c: Optional[List[str]] = None
-    x5t: Optional[str] = None
-    x5t_s256: Optional[str] = None
+    x5u: str | None = None
+    x5c: list[str] | None = None
+    x5t: str | None = None
+    x5t_s256: str | None = None
 
     # Parameters for Elliptic Curve Keys
-    crv: Optional[str] = None
-    x: Optional[str] = None
-    y: Optional[str] = None
-    d: Optional[str] = None  # Private key
+    crv: str | None = None
+    x: str | None = None
+    y: str | None = None
+    d: str | None = None  # Private key
 
     # Parameters for RSA Keys
-    n: Optional[str] = None  # Modulus
-    e: Optional[str] = None  # Exponent
+    n: str | None = None  # Modulus
+    e: str | None = None  # Exponent
     # RSA Private key parameters
-    p: Optional[str] = None
-    q: Optional[str] = None
-    dp: Optional[str] = None
-    dq: Optional[str] = None
-    qi: Optional[str] = None
-    oth: Optional[List[Dict[str, str]]] = None
+    p: str | None = None
+    q: str | None = None
+    dp: str | None = None
+    dq: str | None = None
+    qi: str | None = None
+    oth: list[dict[str, str]] | None = None
 
     # Parameters for Symmetric Keys
-    k: Optional[str] = None
+    k: str | None = None
 
     def __post_init__(self):
         """Validate the JWK after initialization"""
         if not self.kty:
-            raise ValueError("The 'kty' (Key Type) parameter is required")
+            raise ConfigurationException(
+                "The 'kty' (Key Type) parameter is required",
+            )
 
         self._validate_key_parameters()
 
     def _validate_ec_key(self):
         """Validate EC key parameters per RFC 7518"""
         if not all([self.crv, self.x, self.y]):
-            raise ValueError("EC keys require 'crv', 'x', and 'y' parameters")
+            raise ConfigurationException(
+                "EC keys require 'crv', 'x', and 'y' parameters",
+            )
 
         valid_curves = ["P-256", "P-384", "P-521", "secp256k1"]
         if self.crv not in valid_curves:
-            raise ValueError(
-                f"Unsupported curve: {self.crv}. Supported curves: {valid_curves}"
+            raise ConfigurationException(
+                f"Unsupported curve: {self.crv}. Supported curves: {valid_curves}",
             )
 
     def _validate_rsa_key(self):
         """Validate RSA key parameters"""
         if not all([self.n, self.e]):
-            raise ValueError("RSA keys require 'n' and 'e' parameters")
+            raise ConfigurationException(
+                "RSA keys require 'n' and 'e' parameters",
+            )
 
     def _validate_symmetric_key(self):
         """Validate symmetric key parameters"""
         if self.k is None:
-            raise ValueError("Symmetric keys require 'k' parameter")
+            raise ConfigurationException(
+                "Symmetric keys require 'k' parameter",
+            )
 
     def _validate_use_parameter(self):
         """Validate 'use' parameter per RFC 7517 Section 4.2"""
@@ -137,10 +148,10 @@ class JsonWebKey:
 
         valid_use_values = ["sig", "enc"]
         if self.use not in valid_use_values and not self.use.startswith(
-            "https://"
+            "https://",
         ):
-            raise ValueError(
-                f"Invalid 'use' parameter: {self.use}. Must be 'sig', 'enc', or a URI"
+            raise ConfigurationException(
+                f"Invalid 'use' parameter: {self.use}. Must be 'sig', 'enc', or a URI",
             )
 
     def _validate_key_ops_parameter(self):
@@ -160,8 +171,8 @@ class JsonWebKey:
         ]
         for op in self.key_ops:
             if op not in valid_key_ops:
-                raise ValueError(
-                    f"Invalid key operation: {op}. Valid operations: {valid_key_ops}"
+                raise ConfigurationException(
+                    f"Invalid key operation: {op}. Valid operations: {valid_key_ops}",
                 )
 
     def _validate_key_parameters(self):
@@ -180,24 +191,24 @@ class JsonWebKey:
 
         # Validate mutual exclusivity per RFC 7517 Section 4.3
         if self.use is not None and self.key_ops is not None:
-            raise ValueError(
-                "The 'use' and 'key_ops' parameters are mutually exclusive"
+            raise ConfigurationException(
+                "The 'use' and 'key_ops' parameters are mutually exclusive",
             )
 
     @classmethod
     def from_json(cls, json_str: str) -> "JsonWebKey":
         """Create a JWK from a JSON string"""
         if not json_str or not json_str.strip():
-            raise ValueError("JSON string cannot be empty")
+            raise ConfigurationException("JSON string cannot be empty")
 
         try:
             data = json.loads(json_str)
 
             # Validate that the parsed JSON is a dictionary
             if not isinstance(data, dict):
-                raise ValueError(
+                raise ConfigurationException(
                     "Invalid JWK format: JSON must be an object, not a "
-                    + type(data).__name__
+                    + type(data).__name__,
                 )
 
             # Dynamically get valid field names from the JsonWebKey dataclass
@@ -206,7 +217,7 @@ class JsonWebKey:
             # Map JWK parameter names to Python field names
             from typing import Any
 
-            mapped_data: Dict[str, Any] = {}
+            mapped_data: dict[str, Any] = {}
             for k, v in data.items():
                 if k == "x5t#S256":
                     mapped_data["x5t_s256"] = v
@@ -219,7 +230,7 @@ class JsonWebKey:
                 elif k == "oth" and isinstance(v, str):
                     # Ensure oth is a list (though a string oth is unusual)
                     mapped_data[k] = [
-                        {"r": v}
+                        {"r": v},
                     ]  # Convert to expected dict format
                 else:
                     mapped_data[k] = v
@@ -231,9 +242,11 @@ class JsonWebKey:
 
             return cls(**filtered_data)
         except json.JSONDecodeError as e:
-            raise ValueError("Invalid JSON format") from e
+            raise ConfigurationException("Invalid JSON format") from e
         except (TypeError, AttributeError) as e:
-            raise ValueError(f"Invalid JWK format: {str(e)}") from e
+            raise ConfigurationException(
+                f"Invalid JWK format: {e!s}",
+            ) from e
 
     def to_json(self) -> str:
         """Convert the JWK to a JSON string"""
@@ -252,7 +265,7 @@ class JsonWebKey:
         """Check if the key contains private key parts"""
         if self.kty == "RSA":
             return all([self.d, self.p, self.q, self.dp, self.dq, self.qi])
-        elif self.kty == "EC":
+        if self.kty == "EC":
             return self.d is not None
         return False
 
@@ -261,14 +274,14 @@ class JsonWebKey:
         """Calculate the key size in bits"""
         if self.kty == "RSA":
             return len(self._decode_base64url(self.n)) * 8 if self.n else 0
-        elif self.kty == "EC":
+        if self.kty == "EC":
             return len(self._decode_base64url(self.x)) * 8 if self.x else 0
-        elif self.kty == "oct":
+        if self.kty == "oct":
             return len(self._decode_base64url(self.k)) * 8 if self.k else 0
         return 0
 
     @staticmethod
-    def _decode_base64url(input_str: Optional[str]) -> bytes:
+    def _decode_base64url(input_str: str | None) -> bytes:
         """Decode a base64url-encoded string"""
         if not input_str:
             return b""
@@ -279,21 +292,19 @@ class JsonWebKey:
 
     def as_dict(self):
         """Convert the JWK to a dictionary with all available properties"""
-        result = {}
-
         # Add all non-None properties to the dictionary
-        for key, value in self.__dict__.items():
-            if value is not None:
-                result[key] = value
-
-        return result
+        return {
+            key: value
+            for key, value in self.__dict__.items()
+            if value is not None
+        }
 
 
 @dataclass
 class JwksResponse:
     is_successful: bool
-    keys: Optional[List[JsonWebKey]] = None
-    error: Optional[str] = None
+    keys: list[JsonWebKey] | None = None
+    error: str | None = None
 
 
 def jwks_from_dict(keys_dict: dict) -> JsonWebKey:
@@ -330,29 +341,48 @@ def jwks_from_dict(keys_dict: dict) -> JsonWebKey:
 
 
 def get_jwks(jwks_request: JwksRequest) -> JwksResponse:
+    logger.info(f"Fetching JWKS from {redact_url(jwks_request.address)}")
     try:
         response = requests.get(jwks_request.address)
+        logger.debug(f"JWKS request status code: {response.status_code}")
+
         if response.ok:
             response_json = response.json()
             keys = [jwks_from_dict(key) for key in response_json["keys"]]
-            return JwksResponse(is_successful=True, keys=keys)
-        else:
-            return JwksResponse(
-                is_successful=False,
-                error=f"JSON web keys request failed with status code: "
-                f"{response.status_code}. Response Content: {response.content}",
+            logger.info(f"JWKS fetched successfully, found {len(keys)} keys")
+            logger.debug(
+                f"Key IDs: {[k.kid for k in keys if k.kid is not None]}",
             )
-    except Exception as e:
+            return JwksResponse(is_successful=True, keys=keys)
+        error_msg = (
+            f"JSON web keys request failed with status code: "
+            f"{response.status_code}. Response Content: {response.content}"
+        )
+        logger.error(error_msg)
         return JwksResponse(
             is_successful=False,
-            error=f"Unhandled exception during JWKS request: {e}",
+            error=error_msg,
+        )
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Network error during JWKS request: {e!s}"
+        logger.error(error_msg, exc_info=True)
+        return JwksResponse(
+            is_successful=False,
+            error=error_msg,
+        )
+    except Exception as e:
+        error_msg = f"Unhandled exception during JWKS request: {e!s}"
+        logger.error(error_msg, exc_info=True)
+        return JwksResponse(
+            is_successful=False,
+            error=error_msg,
         )
 
 
 __all__ = [
+    "JsonWebKey",
+    "JsonWebKeyParameterNames",
     "JwksRequest",
     "JwksResponse",
-    "JsonWebKey",
     "get_jwks",
-    "JsonWebKeyParameterNames",
 ]

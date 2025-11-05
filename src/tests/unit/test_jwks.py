@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from py_identity_model.exceptions import ConfigurationException
 from py_identity_model.jwks import (
     JsonWebAlgorithmsKeyTypes,
     JsonWebKey,
@@ -84,13 +85,15 @@ class TestJsonWebKey:
 
     def test_json_web_key_validation_missing_kty(self):
         with pytest.raises(
-            ValueError, match="The 'kty' \\(Key Type\\) parameter is required"
+            ConfigurationException,
+            match="The 'kty' \\(Key Type\\) parameter is required",
         ):
             JsonWebKey(kty=None, use="sig")  # type: ignore
 
     def test_json_web_key_validation_missing_rsa_params(self):
         with pytest.raises(
-            ValueError, match="RSA keys require 'n' and 'e' parameters"
+            ConfigurationException,
+            match="RSA keys require 'n' and 'e' parameters",
         ):
             JsonWebKey(kty="RSA", use="sig")
 
@@ -103,60 +106,70 @@ class TestJsonWebKey:
         assert key.kid == "key1"
 
     def test_json_web_key_from_json_empty(self):
-        with pytest.raises(ValueError, match="JSON string cannot be empty"):
+        with pytest.raises(
+            ConfigurationException,
+            match="JSON string cannot be empty",
+        ):
             JsonWebKey.from_json("")
 
     def test_json_web_key_from_json_invalid_json(self):
-        with pytest.raises(ValueError, match="Invalid JSON format"):
+        with pytest.raises(
+            ConfigurationException,
+            match="Invalid JSON format",
+        ):
             JsonWebKey.from_json("invalid json")
 
     def test_json_web_key_from_json_missing_kty(self):
-        """Test that JSON missing required 'kty' field raises ValueError"""
+        """Test that JSON missing required 'kty' field raises ConfigurationException"""
         json_str = '{"use": "sig", "alg": "RS256"}'
         with pytest.raises(
-            ValueError,
-            match="Invalid JWK format.*missing.*required.*argument.*'kty'",
+            ConfigurationException,
+            match=r"Invalid JWK format.*missing.*required.*argument.*'kty'",
         ):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_null_kty(self):
-        """Test that JSON with null kty value raises ValueError"""
+        """Test that JSON with null kty value raises ConfigurationException"""
         json_str = '{"kty": null, "use": "sig"}'
         with pytest.raises(
-            ValueError, match="The 'kty' \\(Key Type\\) parameter is required"
+            ConfigurationException,
+            match=r"The 'kty' \(Key Type\) parameter is required",
         ):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_empty_object(self):
-        """Test that empty JSON object raises ValueError"""
+        """Test that empty JSON object raises ConfigurationException"""
         json_str = "{}"
         with pytest.raises(
-            ValueError,
-            match="Invalid JWK format.*missing.*required.*argument.*'kty'",
+            ConfigurationException,
+            match=r"Invalid JWK format.*missing.*required.*argument.*'kty'",
         ):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_rsa_missing_required_params(self):
-        """Test that RSA key without n and e parameters raises ValueError"""
+        """Test that RSA key without n and e parameters raises ConfigurationException"""
         json_str = '{"kty": "RSA", "use": "sig"}'
         with pytest.raises(
-            ValueError, match="RSA keys require 'n' and 'e' parameters"
+            ConfigurationException,
+            match="RSA keys require 'n' and 'e' parameters",
         ):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_ec_missing_required_params(self):
-        """Test that EC key without required parameters raises ValueError"""
+        """Test that EC key without required parameters raises ConfigurationException"""
         json_str = '{"kty": "EC", "use": "sig", "crv": "P-256"}'
         with pytest.raises(
-            ValueError, match="EC keys require 'crv', 'x', and 'y' parameters"
+            ConfigurationException,
+            match="EC keys require 'crv', 'x', and 'y' parameters",
         ):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_oct_missing_k(self):
-        """Test that symmetric key without k parameter raises ValueError"""
+        """Test that symmetric key without k parameter raises ConfigurationException"""
         json_str = '{"kty": "oct", "use": "enc"}'
         with pytest.raises(
-            ValueError, match="Symmetric keys require 'k' parameter"
+            ConfigurationException,
+            match="Symmetric keys require 'k' parameter",
         ):
             JsonWebKey.from_json(json_str)
 
@@ -165,20 +178,26 @@ class TestJsonWebKey:
         json_str = (
             '{"kty": "RSA", "n": "example_n", "e": "AQAB", "use": "invalid"}'
         )
-        with pytest.raises(ValueError, match="Invalid 'use' parameter"):
+        with pytest.raises(
+            ConfigurationException,
+            match="Invalid 'use' parameter",
+        ):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_invalid_key_ops(self):
         """Test that invalid key_ops values raise ValueError"""
         json_str = '{"kty": "RSA", "n": "example_n", "e": "AQAB", "key_ops": ["invalid_op"]}'
-        with pytest.raises(ValueError, match="Invalid key operation"):
+        with pytest.raises(
+            ConfigurationException,
+            match="Invalid key operation",
+        ):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_mutually_exclusive_use_and_key_ops(self):
-        """Test that having both 'use' and 'key_ops' raises ValueError"""
+        """Test that having both 'use' and 'key_ops' raises ConfigurationException"""
         json_str = '{"kty": "RSA", "n": "example_n", "e": "AQAB", "use": "sig", "key_ops": ["sign"]}'
         with pytest.raises(
-            ValueError,
+            ConfigurationException,
             match="The 'use' and 'key_ops' parameters are mutually exclusive",
         ):
             JsonWebKey.from_json(json_str)
@@ -186,43 +205,46 @@ class TestJsonWebKey:
     def test_json_web_key_from_json_invalid_ec_curve(self):
         """Test that EC key with unsupported curve raises ValueError"""
         json_str = '{"kty": "EC", "crv": "invalid-curve", "x": "example_x", "y": "example_y"}'
-        with pytest.raises(ValueError, match="Unsupported curve"):
+        with pytest.raises(ConfigurationException, match="Unsupported curve"):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_json_array_instead_of_object(self):
         """Test that JSON array instead of object raises ValueError"""
         json_str = '[{"kty": "RSA"}]'
-        with pytest.raises(ValueError, match="Invalid JWK format"):
+        with pytest.raises(ConfigurationException, match="Invalid JWK format"):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_string_instead_of_object(self):
         """Test that JSON string instead of object raises ValueError"""
         json_str = '"just a string"'
-        with pytest.raises(ValueError, match="Invalid JWK format"):
+        with pytest.raises(ConfigurationException, match="Invalid JWK format"):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_number_instead_of_object(self):
         """Test that JSON number instead of object raises ValueError"""
         json_str = "42"
-        with pytest.raises(ValueError, match="Invalid JWK format"):
+        with pytest.raises(ConfigurationException, match="Invalid JWK format"):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_boolean_instead_of_object(self):
         """Test that JSON boolean instead of object raises ValueError"""
         json_str = "true"
-        with pytest.raises(ValueError, match="Invalid JWK format"):
+        with pytest.raises(ConfigurationException, match="Invalid JWK format"):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_null(self):
         """Test that JSON null raises ValueError"""
         json_str = "null"
-        with pytest.raises(ValueError, match="Invalid JWK format"):
+        with pytest.raises(ConfigurationException, match="Invalid JWK format"):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_whitespace_only(self):
         """Test that whitespace-only string raises ValueError"""
         json_str = "   \n\t  "
-        with pytest.raises(ValueError, match="JSON string cannot be empty"):
+        with pytest.raises(
+            ConfigurationException,
+            match="JSON string cannot be empty",
+        ):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_with_x5t_s256(self):
@@ -256,13 +278,19 @@ class TestJsonWebKey:
     def test_json_web_key_from_json_invalid_json_trailing_comma(self):
         """Test that invalid JSON with trailing comma raises ValueError"""
         json_str = '{"kty": "RSA", "n": "example_n",}'
-        with pytest.raises(ValueError, match="Invalid JSON format"):
+        with pytest.raises(
+            ConfigurationException,
+            match="Invalid JSON format",
+        ):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_invalid_json_single_quotes(self):
         """Test that invalid JSON with single quotes raises ValueError"""
         json_str = "{'kty': 'RSA', 'n': 'example_n'}"
-        with pytest.raises(ValueError, match="Invalid JSON format"):
+        with pytest.raises(
+            ConfigurationException,
+            match="Invalid JSON format",
+        ):
             JsonWebKey.from_json(json_str)
 
     def test_json_web_key_from_json_with_additional_fields_rsa(self):
@@ -378,7 +406,11 @@ class TestJsonWebKey:
 
     def test_json_web_key_has_private_key_ec_true(self):
         key = JsonWebKey(
-            kty="EC", crv="P-256", x="example_x", y="example_y", d="private_d"
+            kty="EC",
+            crv="P-256",
+            x="example_x",
+            y="example_y",
+            d="private_d",
         )
         assert key.has_private_key is True
 
@@ -522,7 +554,7 @@ class TestGetJwks:
                     "x": "example_x",
                     "y": "example_y",
                 },
-            ]
+            ],
         }
         mock_get.return_value = mock_response
 
@@ -579,7 +611,9 @@ class TestGetJwks:
         mock_response = Mock()
         mock_response.ok = True
         mock_response.json.side_effect = json.JSONDecodeError(
-            "Invalid JSON", "", 0
+            "Invalid JSON",
+            "",
+            0,
         )
         mock_get.return_value = mock_response
 

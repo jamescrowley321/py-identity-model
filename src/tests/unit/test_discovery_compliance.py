@@ -11,6 +11,10 @@ from py_identity_model.discovery import (
     _validate_required_parameters,
     get_discovery_document,
 )
+from py_identity_model.exceptions import (
+    ConfigurationException,
+    DiscoveryException,
+)
 
 
 class TestDiscoveryValidationFunctions:
@@ -35,27 +39,35 @@ class TestDiscoveryValidationFunctions:
             "ws://example.com",
         ]
         for issuer in invalid_issuers:
-            with pytest.raises(ValueError, match="must use HTTPS scheme"):
+            with pytest.raises(
+                ConfigurationException,
+                match="must use HTTPS scheme",
+            ):
                 _validate_issuer(issuer)
 
     def test_validate_issuer_with_query_fragment(self):
         """Test that issuers with query or fragment components fail validation"""
         with pytest.raises(
-            ValueError, match="must not contain query or fragment"
+            ConfigurationException,
+            match="must not contain query or fragment",
         ):
             _validate_issuer("https://example.com?query=param")
 
         with pytest.raises(
-            ValueError, match="must not contain query or fragment"
+            ConfigurationException,
+            match="must not contain query or fragment",
         ):
             _validate_issuer("https://example.com#fragment")
 
     def test_validate_issuer_empty_or_invalid(self):
         """Test that empty or invalid issuers fail validation"""
-        with pytest.raises(ValueError, match="required"):
+        with pytest.raises(ConfigurationException, match="required"):
             _validate_issuer("")
 
-        with pytest.raises(ValueError, match="valid URL with host"):
+        with pytest.raises(
+            ConfigurationException,
+            match="valid URL with host",
+        ):
             _validate_issuer("https://")
 
     def test_validate_https_url_valid_urls(self):
@@ -83,7 +95,8 @@ class TestDiscoveryValidationFunctions:
         ]
         for url in invalid_urls:
             with pytest.raises(
-                ValueError, match="must be a valid HTTP/HTTPS URL"
+                ConfigurationException,
+                match="must be a valid HTTP/HTTPS URL",
             ):
                 _validate_https_url(url, "test_param")
 
@@ -101,18 +114,22 @@ class TestDiscoveryValidationFunctions:
         """Test that validation fails when required parameters are missing"""
         # Missing issuer
         with pytest.raises(
-            ValueError, match="Missing required parameters.*issuer"
+            DiscoveryException,
+            match=r"Missing required parameters.*issuer",
         ):
             _validate_required_parameters(
                 {
                     "response_types_supported": ["code"],
                     "subject_types_supported": ["public"],
                     "id_token_signing_alg_values_supported": ["RS256"],
-                }
+                },
             )
 
         # Missing multiple parameters
-        with pytest.raises(ValueError, match="Missing required parameters"):
+        with pytest.raises(
+            DiscoveryException,
+            match="Missing required parameters",
+        ):
             _validate_required_parameters({"issuer": "https://example.com"})
 
     def test_validate_parameter_values_valid_subject_types(self):
@@ -130,13 +147,13 @@ class TestDiscoveryValidationFunctions:
     def test_validate_parameter_values_invalid_subject_types(self):
         """Test that invalid subject types fail validation"""
         with pytest.raises(
-            ValueError,
-            match="Invalid subject type.*Must be 'public' or 'pairwise'",
+            DiscoveryException,
+            match=r"Invalid subject type.*Must be 'public' or 'pairwise'",
         ):
             _validate_parameter_values(
                 {
                     "subject_types_supported": ["invalid_type"],
-                }
+                },
             )
 
     def test_validate_parameter_values_valid_response_types(self):
@@ -151,16 +168,16 @@ class TestDiscoveryValidationFunctions:
             _validate_parameter_values(
                 {
                     "response_types_supported": response_types,
-                }
+                },
             )  # Should not raise
 
     def test_validate_parameter_values_invalid_response_types(self):
         """Test that invalid response types fail validation"""
-        with pytest.raises(ValueError, match="Invalid response type"):
+        with pytest.raises(DiscoveryException, match="Invalid response type"):
             _validate_parameter_values(
                 {
                     "response_types_supported": ["invalid_response_type"],
-                }
+                },
             )
 
 
@@ -181,7 +198,7 @@ class TestDiscoveryComplianceIntegration:
         mock_get.return_value = mock_response
 
         request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration"
+            address="https://example.com/.well-known/openid_configuration",
         )
         result = get_discovery_document(request)
 
@@ -205,7 +222,7 @@ class TestDiscoveryComplianceIntegration:
         mock_get.return_value = mock_response
 
         request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration"
+            address="https://example.com/.well-known/openid_configuration",
         )
         result = get_discovery_document(request)
 
@@ -229,7 +246,7 @@ class TestDiscoveryComplianceIntegration:
         mock_get.return_value = mock_response
 
         request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration"
+            address="https://example.com/.well-known/openid_configuration",
         )
         result = get_discovery_document(request)
 
@@ -253,7 +270,7 @@ class TestDiscoveryComplianceIntegration:
         mock_get.return_value = mock_response
 
         request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration"
+            address="https://example.com/.well-known/openid_configuration",
         )
         result = get_discovery_document(request)
 
@@ -265,11 +282,11 @@ class TestDiscoveryComplianceIntegration:
     def test_discovery_handles_network_errors(self, mock_get):
         """Test that discovery document handles network errors properly"""
         mock_get.side_effect = requests.exceptions.ConnectionError(
-            "Network error"
+            "Network error",
         )
 
         request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration"
+            address="https://example.com/.well-known/openid_configuration",
         )
         result = get_discovery_document(request)
 
@@ -289,7 +306,7 @@ class TestDiscoveryComplianceIntegration:
         mock_get.return_value = mock_response
 
         request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration"
+            address="https://example.com/.well-known/openid_configuration",
         )
         result = get_discovery_document(request)
 
@@ -306,7 +323,7 @@ class TestDiscoveryComplianceIntegration:
         mock_get.return_value = mock_response
 
         request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration"
+            address="https://example.com/.well-known/openid_configuration",
         )
         result = get_discovery_document(request)
 
@@ -332,7 +349,7 @@ class TestDiscoveryComplianceIntegration:
         mock_get.return_value = mock_response
 
         request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration"
+            address="https://example.com/.well-known/openid_configuration",
         )
         result = get_discovery_document(request)
 

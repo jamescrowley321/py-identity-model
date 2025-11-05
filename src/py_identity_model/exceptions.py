@@ -7,13 +7,11 @@ that can occur during OAuth 2.0 and OpenID Connect operations.
 
 from __future__ import annotations
 
-from typing import Optional
-
 
 class PyIdentityModelException(Exception):
     """Base exception for all py-identity-model errors."""
 
-    def __init__(self, message: str, details: Optional[dict] = None):
+    def __init__(self, message: str, details: dict | None = None):
         """
         Initialize a PyIdentityModelException.
 
@@ -29,8 +27,6 @@ class PyIdentityModelException(Exception):
 class ValidationException(PyIdentityModelException):
     """Raised when validation fails."""
 
-    pass
-
 
 class TokenValidationException(ValidationException):
     """Raised when token validation fails."""
@@ -38,8 +34,8 @@ class TokenValidationException(ValidationException):
     def __init__(
         self,
         message: str,
-        token_part: Optional[str] = None,
-        details: Optional[dict] = None,
+        token_part: str | None = None,
+        details: dict | None = None,
     ):
         """
         Initialize a TokenValidationException.
@@ -57,28 +53,28 @@ class TokenValidationException(ValidationException):
 class SignatureVerificationException(TokenValidationException):
     """Raised when token signature verification fails."""
 
-    def __init__(self, message: str, details: Optional[dict] = None):
+    def __init__(self, message: str, details: dict | None = None):
         super().__init__(message, token_part="signature", details=details)
 
 
 class TokenExpiredException(TokenValidationException):
     """Raised when token has expired."""
 
-    def __init__(self, message: str, details: Optional[dict] = None):
+    def __init__(self, message: str, details: dict | None = None):
         super().__init__(message, token_part="payload", details=details)
 
 
 class InvalidAudienceException(TokenValidationException):
     """Raised when audience validation fails."""
 
-    def __init__(self, message: str, details: Optional[dict] = None):
+    def __init__(self, message: str, details: dict | None = None):
         super().__init__(message, token_part="payload", details=details)
 
 
 class InvalidIssuerException(TokenValidationException):
     """Raised when issuer validation fails."""
 
-    def __init__(self, message: str, details: Optional[dict] = None):
+    def __init__(self, message: str, details: dict | None = None):
         super().__init__(message, token_part="payload", details=details)
 
 
@@ -88,9 +84,9 @@ class NetworkException(PyIdentityModelException):
     def __init__(
         self,
         message: str,
-        url: Optional[str] = None,
-        status_code: Optional[int] = None,
-        details: Optional[dict] = None,
+        url: str | None = None,
+        status_code: int | None = None,
+        details: dict | None = None,
     ):
         """
         Initialize a NetworkException.
@@ -109,38 +105,30 @@ class NetworkException(PyIdentityModelException):
 class DiscoveryException(NetworkException):
     """Raised when discovery document cannot be fetched or parsed."""
 
-    pass
-
 
 class JwksException(NetworkException):
     """Raised when JWKS cannot be fetched or parsed."""
-
-    pass
 
 
 class TokenRequestException(NetworkException):
     """Raised when token request fails."""
 
-    pass
-
 
 class ConfigurationException(PyIdentityModelException):
     """Raised when configuration is invalid or incomplete."""
 
-    pass
-
 
 __all__ = [
-    "PyIdentityModelException",
-    "ValidationException",
-    "TokenValidationException",
-    "SignatureVerificationException",
-    "TokenExpiredException",
+    "ConfigurationException",
+    "DiscoveryException",
     "InvalidAudienceException",
     "InvalidIssuerException",
-    "NetworkException",
-    "DiscoveryException",
     "JwksException",
+    "NetworkException",
+    "PyIdentityModelException",
+    "SignatureVerificationException",
+    "TokenExpiredException",
     "TokenRequestException",
-    "ConfigurationException",
+    "TokenValidationException",
+    "ValidationException",
 ]

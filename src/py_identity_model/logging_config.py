@@ -8,7 +8,7 @@ allowing users to enable debug logging and customize the log output.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+
 
 # Library logger - uses NullHandler by default (no output)
 logger = logging.getLogger("py_identity_model")
@@ -17,8 +17,8 @@ logger.addHandler(logging.NullHandler())
 
 def configure_logging(
     level: int = logging.WARNING,
-    format: Optional[str] = None,
-    handler: Optional[logging.Handler] = None,
+    log_format: str | None = None,
+    handler: logging.Handler | None = None,
 ) -> None:
     """
     Configure logging for py-identity-model.
@@ -29,7 +29,7 @@ def configure_logging(
     Args:
         level: Logging level (e.g., logging.DEBUG, logging.INFO).
                Defaults to logging.WARNING.
-        format: Log format string. Defaults to a standard format with timestamp.
+        log_format: Log format string. Defaults to a standard format with timestamp.
         handler: Custom handler (defaults to StreamHandler if not provided).
 
     Example:
@@ -40,13 +40,13 @@ def configure_logging(
         >>> # Or use standard Python logging
         >>> logging.basicConfig(level=logging.DEBUG)
     """
-    if format is None:
-        format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    if log_format is None:
+        log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
     if handler is None:
         handler = logging.StreamHandler()
 
-    handler.setFormatter(logging.Formatter(format))
+    handler.setFormatter(logging.Formatter(log_format))
 
     # Remove any existing handlers to avoid duplicates
     logger.handlers.clear()
@@ -54,4 +54,4 @@ def configure_logging(
     logger.setLevel(level)
 
 
-__all__ = ["logger", "configure_logging"]
+__all__ = ["configure_logging", "logger"]

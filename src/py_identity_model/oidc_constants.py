@@ -318,15 +318,22 @@ class TokenTypeIdentifiers(Enum):
 
 
 class AuthenticationSchemes(Enum):
-    """OpenID Connect authentication schemes."""
+    """OAuth 2.0 authentication schemes for Authorization header (RFC 6750, RFC 9449)."""
 
-    AUTHORIZATION_HEADER_BEARER = "Bearer"
-    AUTHORIZATION_HEADER_DPOP = "DPoP"
-    FORM_POST_BEARER = "access_token"
-    QUERY_STRING_BEARER = "access_token"
-    AUTHORIZATION_HEADER_POP = "PoP"
-    FORM_POST_POP = "pop_access_token"
-    QUERY_STRING_POP = "pop_access_token"
+    BEARER = "Bearer"
+    DPOP = "DPoP"
+    POP = "PoP"
+
+
+class TokenParameterNames(Enum):
+    """Parameter names for passing tokens in different contexts (RFC 6750)."""
+
+    # Bearer tokens
+    ACCESS_TOKEN = "access_token"  # Form body and query string parameter
+    # PoP tokens
+    POP_ACCESS_TOKEN = (
+        "pop_access_token"  # Form body and query string parameter
+    )
 
 
 class GrantTypes(Enum):

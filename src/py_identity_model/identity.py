@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import abc
 import enum
-from typing import List, Optional
 
 
 class Claim:
@@ -27,8 +26,8 @@ class Claim:
         claim_type: str,
         value: str,
         value_type: str = "http://www.w3.org/2001/XMLSchema#string",
-        issuer: Optional[str] = None,
-        original_issuer: Optional[str] = None,
+        issuer: str | None = None,
+        original_issuer: str | None = None,
     ):
         """
         Initialize a new Claim instance.
@@ -109,11 +108,11 @@ class Identity(metaclass=abc.ABCMeta):
         Returns:
             bool: True if the identity is authenticated, False otherwise.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @property
     @abc.abstractmethod
-    def authentication_type(self) -> Optional[str]:
+    def authentication_type(self) -> str | None:
         """
         Gets the type of authentication used.
 
@@ -121,32 +120,32 @@ class Identity(metaclass=abc.ABCMeta):
             Optional[str]: The authentication type (e.g., "Bearer", "Basic"),
                           or None if not authenticated.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @property
     @abc.abstractmethod
-    def name(self) -> Optional[str]:
+    def name(self) -> str | None:
         """
         Gets the name of the current identity.
 
         Returns:
             Optional[str]: The identity name, or None if not available.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @property
     @abc.abstractmethod
-    def claims(self) -> List[Claim]:
+    def claims(self) -> list[Claim]:
         """
         Gets the claims associated with this identity.
 
         Returns:
             List[Claim]: The claims for this identity.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @abc.abstractmethod
-    def find_first(self, claim_type: str) -> Optional[Claim]:
+    def find_first(self, claim_type: str) -> Claim | None:
         """
         Find the first claim of the specified type.
 
@@ -156,10 +155,10 @@ class Identity(metaclass=abc.ABCMeta):
         Returns:
             Optional[Claim]: The first matching claim, or None if not found.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @abc.abstractmethod
-    def find_all(self, claim_type: str) -> List[Claim]:
+    def find_all(self, claim_type: str) -> list[Claim]:
         """
         Find all claims of the specified type.
 
@@ -169,7 +168,7 @@ class Identity(metaclass=abc.ABCMeta):
         Returns:
             List[Claim]: All matching claims.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 class Principal(metaclass=abc.ABCMeta):
@@ -183,14 +182,14 @@ class Principal(metaclass=abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def identity(self) -> Optional[Identity]:
+    def identity(self) -> Identity | None:
         """
         Gets the identity of the current principal.
 
         Returns:
             Optional[Identity]: The identity associated with the principal.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @abc.abstractmethod
     def is_in_role(self, role: str) -> bool:
@@ -203,10 +202,10 @@ class Principal(metaclass=abc.ABCMeta):
         Returns:
             bool: True if the principal is in the specified role, False otherwise.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @abc.abstractmethod
-    def has_claim(self, claim_type: str, value: Optional[str] = None) -> bool:
+    def has_claim(self, claim_type: str, value: str | None = None) -> bool:
         """
         Determines whether the principal has a claim with the specified type and value.
 
@@ -217,7 +216,7 @@ class Principal(metaclass=abc.ABCMeta):
         Returns:
             bool: True if a matching claim exists, False otherwise.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 class ClaimsIdentity(Identity):
@@ -235,8 +234,8 @@ class ClaimsIdentity(Identity):
 
     def __init__(
         self,
-        claims: List[Claim],
-        authentication_type: Optional[str] = None,
+        claims: list[Claim],
+        authentication_type: str | None = None,
         name_type_claim: str = ClaimType.Name.value,
         role_type_claim: str = ClaimType.Role.value,
     ):
@@ -255,15 +254,15 @@ class ClaimsIdentity(Identity):
         self._authentication_type = authentication_type
 
     @property
-    def claims(self) -> List[Claim]:
+    def claims(self) -> list[Claim]:
         return self._claims
 
     @property
-    def authentication_type(self) -> Optional[str]:
+    def authentication_type(self) -> str | None:
         return self._authentication_type
 
     @property
-    def name(self) -> Optional[str]:
+    def name(self) -> str | None:
         """
         Gets the name of the identity from the name claim.
 
@@ -284,7 +283,7 @@ class ClaimsIdentity(Identity):
     def is_authenticated(self) -> bool:
         return self._authentication_type is not None
 
-    def find_first(self, claim_type: str) -> Optional[Claim]:
+    def find_first(self, claim_type: str) -> Claim | None:
         """
         Find the first claim of the specified type.
 
@@ -299,7 +298,7 @@ class ClaimsIdentity(Identity):
             None,
         )
 
-    def find_all(self, claim_type: str) -> List[Claim]:
+    def find_all(self, claim_type: str) -> list[Claim]:
         """
         Find all claims of the specified type.
 
@@ -328,8 +327,8 @@ class ClaimsPrincipal(Principal):
 
     def __init__(
         self,
-        identity: Optional[Identity] = None,
-        claims: Optional[List[Claim]] = None,
+        identity: Identity | None = None,
+        claims: list[Claim] | None = None,
     ):
         """
         Initialize a new ClaimsPrincipal instance.
@@ -346,11 +345,11 @@ class ClaimsPrincipal(Principal):
             self._claims.extend(identity.claims)
 
     @property
-    def identity(self) -> Optional[Identity]:
+    def identity(self) -> Identity | None:
         return self._identity
 
     @property
-    def claims(self) -> List[Claim]:
+    def claims(self) -> list[Claim]:
         """
         Gets all claims for this principal.
 
@@ -370,7 +369,7 @@ class ClaimsPrincipal(Principal):
         if isinstance(identity, ClaimsIdentity):
             self._claims.extend(identity.claims)
 
-    def has_claim(self, claim_type: str, value: Optional[str] = None) -> bool:
+    def has_claim(self, claim_type: str, value: str | None = None) -> bool:
         """
         Check if a claim exists in the principal context.
 
@@ -399,7 +398,7 @@ class ClaimsPrincipal(Principal):
         """
         return self.has_claim(ClaimType.Role.value, role)
 
-    def find_first(self, claim_type: str) -> Optional[Claim]:
+    def find_first(self, claim_type: str) -> Claim | None:
         """
         Find the first claim of the specified type.
 
@@ -418,7 +417,7 @@ class ClaimsPrincipal(Principal):
             None,
         )
 
-    def find_all(self, claim_type: str) -> List[Claim]:
+    def find_all(self, claim_type: str) -> list[Claim]:
         """
         Find all claims of the specified type.
 
