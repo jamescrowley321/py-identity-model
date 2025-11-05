@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass, fields
 from enum import Enum
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional
 
 import requests
 
@@ -109,51 +109,76 @@ class JsonWebKey:
 
         self._validate_key_parameters()
 
+    def _validate_ec_key(self):
+        """Validate EC key parameters per RFC 7518"""
+        if not all([self.crv, self.x, self.y]):
+            raise ValueError("EC keys require 'crv', 'x', and 'y' parameters")
+
+        valid_curves = ["P-256", "P-384", "P-521", "secp256k1"]
+        if self.crv not in valid_curves:
+            raise ValueError(
+                f"Unsupported curve: {self.crv}. Supported curves: {valid_curves}"
+            )
+
+    def _validate_rsa_key(self):
+        """Validate RSA key parameters"""
+        if not all([self.n, self.e]):
+            raise ValueError("RSA keys require 'n' and 'e' parameters")
+
+    def _validate_symmetric_key(self):
+        """Validate symmetric key parameters"""
+        if self.k is None:
+            raise ValueError("Symmetric keys require 'k' parameter")
+
+    def _validate_use_parameter(self):
+        """Validate 'use' parameter per RFC 7517 Section 4.2"""
+        if self.use is None:
+            return
+
+        valid_use_values = ["sig", "enc"]
+        if self.use not in valid_use_values and not self.use.startswith(
+            "https://"
+        ):
+            raise ValueError(
+                f"Invalid 'use' parameter: {self.use}. Must be 'sig', 'enc', or a URI"
+            )
+
+    def _validate_key_ops_parameter(self):
+        """Validate 'key_ops' parameter per RFC 7517 Section 4.3"""
+        if self.key_ops is None:
+            return
+
+        valid_key_ops = [
+            "sign",
+            "verify",
+            "encrypt",
+            "decrypt",
+            "wrapKey",
+            "unwrapKey",
+            "deriveKey",
+            "deriveBits",
+        ]
+        for op in self.key_ops:
+            if op not in valid_key_ops:
+                raise ValueError(
+                    f"Invalid key operation: {op}. Valid operations: {valid_key_ops}"
+                )
+
     def _validate_key_parameters(self):
         """Validate required parameters based on the key type"""
+        # Validate key type specific parameters
         if self.kty == "EC":
-            if not all([self.crv, self.x, self.y]):
-                raise ValueError("EC keys require 'crv', 'x', and 'y' parameters")
-            # Validate supported curves per RFC 7518
-            valid_curves = ["P-256", "P-384", "P-521", "secp256k1"]
-            if self.crv not in valid_curves:
-                raise ValueError(
-                    f"Unsupported curve: {self.crv}. Supported curves: {valid_curves}"
-                )
+            self._validate_ec_key()
         elif self.kty == "RSA":
-            if not all([self.n, self.e]):
-                raise ValueError("RSA keys require 'n' and 'e' parameters")
+            self._validate_rsa_key()
         elif self.kty == "oct":
-            if self.k is None:
-                raise ValueError("Symmetric keys require 'k' parameter")
+            self._validate_symmetric_key()
 
-        # Validate 'use' parameter values per RFC 7517 Section 4.2
-        if self.use is not None:
-            valid_use_values = ["sig", "enc"]
-            if self.use not in valid_use_values and not self.use.startswith("https://"):
-                raise ValueError(
-                    f"Invalid 'use' parameter: {self.use}. Must be 'sig', 'enc', or a URI"
-                )
+        # Validate 'use' and 'key_ops' parameters
+        self._validate_use_parameter()
+        self._validate_key_ops_parameter()
 
-        # Validate 'key_ops' parameter values per RFC 7517 Section 4.3
-        if self.key_ops is not None:
-            valid_key_ops = [
-                "sign",
-                "verify",
-                "encrypt",
-                "decrypt",
-                "wrapKey",
-                "unwrapKey",
-                "deriveKey",
-                "deriveBits",
-            ]
-            for op in self.key_ops:
-                if op not in valid_key_ops:
-                    raise ValueError(
-                        f"Invalid key operation: {op}. Valid operations: {valid_key_ops}"
-                    )
-
-        # Validate mutual exclusivity of 'use' and 'key_ops' per RFC 7517 Section 4.3
+        # Validate mutual exclusivity per RFC 7517 Section 4.3
         if self.use is not None and self.key_ops is not None:
             raise ValueError(
                 "The 'use' and 'key_ops' parameters are mutually exclusive"
@@ -193,18 +218,22 @@ class JsonWebKey:
                     mapped_data[k] = [v]
                 elif k == "oth" and isinstance(v, str):
                     # Ensure oth is a list (though a string oth is unusual)
-                    mapped_data[k] = [{"r": v}]  # Convert to expected dict format
+                    mapped_data[k] = [
+                        {"r": v}
+                    ]  # Convert to expected dict format
                 else:
                     mapped_data[k] = v
 
             # Filter to only include valid fields
-            filtered_data = {k: v for k, v in mapped_data.items() if k in valid_fields}
+            filtered_data = {
+                k: v for k, v in mapped_data.items() if k in valid_fields
+            }
 
             return cls(**filtered_data)
-        except json.JSONDecodeError:
-            raise ValueError("Invalid JSON format")
+        except json.JSONDecodeError as e:
+            raise ValueError("Invalid JSON format") from e
         except (TypeError, AttributeError) as e:
-            raise ValueError(f"Invalid JWK format: {str(e)}")
+            raise ValueError(f"Invalid JWK format: {str(e)}") from e
 
     def to_json(self) -> str:
         """Convert the JWK to a JSON string"""

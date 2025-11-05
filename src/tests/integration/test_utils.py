@@ -17,11 +17,11 @@ def set_env_file(env_file_path: Optional[str]) -> None:
     global _current_env_file
     _current_env_file = env_file_path
 
-    if env_file_path:
-        # Load the specified env file
+    if env_file_path and os.path.isfile(env_file_path):
+        # Load the specified env file only if it exists
         load_dotenv(env_file_path, override=True)
-    else:
-        # Load default .env file
+    elif os.path.isfile(".env"):
+        # Load default .env file only if it exists
         load_dotenv()
 
 
@@ -41,11 +41,11 @@ def get_config(env_file: Optional[str] = None) -> dict:
         set_env_file(env_file)
 
     return {
-        "TEST_DISCO_ADDRESS": os.environ["TEST_DISCO_ADDRESS"],
-        "TEST_JWKS_ADDRESS": os.environ["TEST_JWKS_ADDRESS"],
-        "TEST_CLIENT_ID": os.environ["TEST_CLIENT_ID"],
-        "TEST_CLIENT_SECRET": os.environ["TEST_CLIENT_SECRET"],
-        "TEST_SCOPE": os.environ["TEST_SCOPE"],
-        "TEST_EXPIRED_TOKEN": os.environ["TEST_EXPIRED_TOKEN"],
-        "TEST_AUDIENCE": os.environ["TEST_AUDIENCE"],
+        "TEST_DISCO_ADDRESS": os.environ.get("TEST_DISCO_ADDRESS", ""),
+        "TEST_JWKS_ADDRESS": os.environ.get("TEST_JWKS_ADDRESS", ""),
+        "TEST_CLIENT_ID": os.environ.get("TEST_CLIENT_ID", ""),
+        "TEST_CLIENT_SECRET": os.environ.get("TEST_CLIENT_SECRET", ""),
+        "TEST_SCOPE": os.environ.get("TEST_SCOPE", ""),
+        "TEST_EXPIRED_TOKEN": os.environ.get("TEST_EXPIRED_TOKEN", ""),
+        "TEST_AUDIENCE": os.environ.get("TEST_AUDIENCE", ""),
     }

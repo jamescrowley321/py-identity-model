@@ -1,0 +1,24 @@
+{
+  "ApiScope": {
+    "Name": "py-identity-model",
+    "DisplayName": "Python Identity Model API"
+  },
+  "Clients": [
+    {
+      "ClientId": "py-identity-model-client",
+      "AllowedGrantTypes": ["client_credentials"],
+      "AllowedScopes": ["py-identity-model"],
+      "RequireClientSecret": true,
+      "AllowOfflineAccess": true,
+      "AccessTokenLifetime": 3600
+    },
+    {
+      "ClientId": "py-identity-model-test",
+      "AllowedGrantTypes": ["authorization_code"],
+      "AllowedScopes": ["openid", "profile", "py-identity-model"],
+      "RedirectUris": ["https://localhost:5002/signin-oidc"],
+      "PostLogoutRedirectUris": ["https://localhost:5002/signout-callback-oidc"],
+      "AccessTokenLifetime": 3600
+    }
+  ]
+}

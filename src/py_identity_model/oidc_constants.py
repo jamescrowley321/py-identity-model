@@ -254,7 +254,9 @@ class ClientMetadata(Enum):
     SCOPE = "scope"
     POST_LOGOUT_REDIRECT_URIS = "post_logout_redirect_uris"
     FRONT_CHANNEL_LOGOUT_URI = "frontchannel_logout_uri"
-    FRONT_CHANNEL_LOGOUT_SESSION_REQUIRED = "frontchannel_logout_session_required"
+    FRONT_CHANNEL_LOGOUT_SESSION_REQUIRED = (
+        "frontchannel_logout_session_required"
+    )
     BACKCHANNEL_LOGOUT_URI = "backchannel_logout_uri"
     BACKCHANNEL_LOGOUT_SESSION_REQUIRED = "backchannel_logout_session_required"
     SOFTWARE_ID = "software_id"
@@ -262,15 +264,21 @@ class ClientMetadata(Enum):
     SOFTWARE_VERSION = "software_version"
     SUBJECT_TYPE = "subject_type"
     TOKEN_ENDPOINT_AUTHENTICATION_METHOD = "token_endpoint_auth_method"
-    TOKEN_ENDPOINT_AUTHENTICATION_SIGNING_ALGORITHM = "token_endpoint_auth_signing_alg"
+    TOKEN_ENDPOINT_AUTHENTICATION_SIGNING_ALGORITHM = (
+        "token_endpoint_auth_signing_alg"
+    )
     DEFAULT_MAX_AGE = "default_max_age"
     REQUIRE_AUTHENTICATION_TIME = "require_auth_time"
     DEFAULT_ACR_VALUES = "default_acr_values"
     INITIATE_LOGIN_URI = "initiate_login_uri"
     REQUEST_URIS = "request_uris"
     IDENTITY_TOKEN_SIGNED_RESPONSE_ALGORITHM = "id_token_signed_response_alg"
-    IDENTITY_TOKEN_ENCRYPTED_RESPONSE_ALGORITHM = "id_token_encrypted_response_alg"
-    IDENTITY_TOKEN_ENCRYPTED_RESPONSE_ENCRYPTION = "id_token_encrypted_response_enc"
+    IDENTITY_TOKEN_ENCRYPTED_RESPONSE_ALGORITHM = (
+        "id_token_encrypted_response_alg"
+    )
+    IDENTITY_TOKEN_ENCRYPTED_RESPONSE_ENCRYPTION = (
+        "id_token_encrypted_response_enc"
+    )
     USERINFO_SIGNED_RESPONSE_ALGORITHM = "userinfo_signed_response_alg"
     USER_INFO_ENCRYPTED_RESPONSE_ALGORITHM = "userinfo_encrypted_response_alg"
     USERINFO_ENCRYPTED_RESPONSE_ENCRYPTION = "userinfo_encrypted_response_enc"
@@ -279,9 +287,15 @@ class ClientMetadata(Enum):
     REQUEST_OBJECT_ENCRYPTION_ENCRYPTION = "request_object_encryption_enc"
     REQUIRE_SIGNED_REQUEST_OBJECT = "require_signed_request_object"
     ALWAYS_USE_DPOP_BOUND_ACCESS_TOKENS = "dpop_bound_access_tokens"
-    INTROSPECTION_SIGNED_RESPONSE_ALGORITHM = "introspection_signed_response_alg"
-    INTROSPECTION_ENCRYPTED_RESPONSE_ALGORITHM = "introspection_encrypted_response_alg"
-    INTROSPECTION_ENCRYPTED_RESPONSE_ENCRYPTION = "introspection_encrypted_response_enc"
+    INTROSPECTION_SIGNED_RESPONSE_ALGORITHM = (
+        "introspection_signed_response_alg"
+    )
+    INTROSPECTION_ENCRYPTED_RESPONSE_ALGORITHM = (
+        "introspection_encrypted_response_alg"
+    )
+    INTROSPECTION_ENCRYPTED_RESPONSE_ENCRYPTION = (
+        "introspection_encrypted_response_enc"
+    )
 
 
 class TokenTypes(Enum):
@@ -474,12 +488,18 @@ class Discovery(Enum):
     CHECK_SESSION_IFRAME = "check_session_iframe"
     REGISTRATION_ENDPOINT = "registration_endpoint"
     MTLS_ENDPOINT_ALIASES = "mtls_endpoint_aliases"
-    PUSHED_AUTHORIZATION_REQUEST_ENDPOINT = "pushed_authorization_request_endpoint"
+    PUSHED_AUTHORIZATION_REQUEST_ENDPOINT = (
+        "pushed_authorization_request_endpoint"
+    )
     # common capabilities
     FRONT_CHANNEL_LOGOUT_SUPPORTED = "frontchannel_logout_supported"
-    FRONT_CHANNEL_LOGOUT_SESSION_SUPPORTED = "frontchannel_logout_session_supported"
+    FRONT_CHANNEL_LOGOUT_SESSION_SUPPORTED = (
+        "frontchannel_logout_session_supported"
+    )
     BACK_CHANNEL_LOGOUT_SUPPORTED = "backchannel_logout_supported"
-    BACK_CHANNEL_LOGOUT_SESSION_SUPPORTED = "backchannel_logout_session_supported"
+    BACK_CHANNEL_LOGOUT_SESSION_SUPPORTED = (
+        "backchannel_logout_session_supported"
+    )
     GRANT_TYPES_SUPPORTED = "grant_types_supported"
     CODE_CHALLENGE_METHODS_SUPPORTED = "code_challenge_methods_supported"
     SCOPES_SUPPORTED = "scopes_supported"
@@ -502,7 +522,9 @@ class Discovery(Enum):
     ID_TOKEN_ENCRYPTION_ENC_VALUES_SUPPORTED = (
         "id_token_encryption_enc_values_supported"
     )
-    ID_TOKEN_SIGNING_ALGORITHMS_SUPPORTED = "id_token_signing_alg_values_supported"
+    ID_TOKEN_SIGNING_ALGORITHMS_SUPPORTED = (
+        "id_token_signing_alg_values_supported"
+    )
     OP_POLICY_URI = "op_policy_uri"
     OP_TOS_URI = "op_tos_uri"
     REQUEST_OBJECT_ENCRYPTION_ALGORITHMS_SUPPORTED = (
@@ -528,7 +550,9 @@ class Discovery(Enum):
     USER_INFO_ENCRYPTION_ENC_VALUES_SUPPORTED = (
         "userinfo_encryption_enc_values_supported"
     )
-    USER_INFO_SIGNING_ALGORITHMS_SUPPORTED = "userinfo_signing_alg_values_supported"
+    USER_INFO_SIGNING_ALGORITHMS_SUPPORTED = (
+        "userinfo_signing_alg_values_supported"
+    )
     TLS_CLIENT_CERTIFICATE_BOUND_ACCESS_TOKENS = (
         "tls_client_certificate_bound_access_tokens"
     )
@@ -559,7 +583,9 @@ class Discovery(Enum):
     # DPoP
     DPOP_SIGNING_ALGORITHMS_SUPPORTED = "dpop_signing_alg_values_supported"
     # PAR
-    REQUIRE_PUSHED_AUTHORIZATION_REQUESTS = "require_pushed_authorization_requests"
+    REQUIRE_PUSHED_AUTHORIZATION_REQUESTS = (
+        "require_pushed_authorization_requests"
+    )
 
 
 class BackchannelTokenDeliveryModes(Enum):

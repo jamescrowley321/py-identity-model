@@ -1,5 +1,6 @@
-import pytest
 from typing import Optional
+
+import pytest
 
 
 def pytest_addoption(parser):
@@ -16,12 +17,17 @@ def pytest_configure(config):
     """Configure pytest based on command line options."""
     # Add custom markers for test categorization
     config.addinivalue_line("markers", "unit: mark test as a unit test")
-    config.addinivalue_line("markers", "integration: mark test as an integration test")
+    config.addinivalue_line(
+        "markers", "integration: mark test as an integration test"
+    )
 
     # Store env file option in config for access by other modules
     env_file = config.getoption("--env-file")
     if env_file:
         config._env_file = env_file
+    else:
+        # Default to .env if no env file specified
+        config._env_file = ".env"
 
 
 @pytest.fixture(scope="session")

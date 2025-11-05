@@ -1,6 +1,11 @@
 """Test module to verify the identity model implementation"""
 
-from py_identity_model.identity import Claim, ClaimType, ClaimsIdentity, ClaimsPrincipal
+from py_identity_model.identity import (
+    Claim,
+    ClaimsIdentity,
+    ClaimsPrincipal,
+    ClaimType,
+)
 
 
 class TestClaim:

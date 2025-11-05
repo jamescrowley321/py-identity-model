@@ -19,6 +19,7 @@ builder.Services.AddIdentityServer(options =>
     })
     .AddInMemoryIdentityResources(Config.IdentityResources)
     .AddInMemoryApiScopes(Config.ApiScopes)
+    .AddInMemoryApiResources(Config.ApiResources)
     .AddInMemoryClients(Config.Clients)
     .AddDeveloperSigningCredential(); // For development only
 
@@ -33,4 +34,4 @@ if (!app.Environment.IsDevelopment())
 
 app.UseIdentityServer();
 
-app.Run();
+await app.RunAsync();

@@ -1,4 +1,5 @@
 from unittest.mock import Mock, patch
+
 from py_identity_model.discovery import (
     DiscoveryDocumentRequest,
     DiscoveryDocumentResponse,

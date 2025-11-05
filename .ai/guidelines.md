@@ -19,11 +19,14 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Create virtual environment
 uv venv
 
-# Install project dependencies
-uv pip install -r pyproject.toml
+# Install all workspace dependencies (main library + examples)
+uv sync --all-packages
 
-# Install development dependencies
-uv pip install -r pyproject.toml --group dev
+# This will install:
+# - Main py-identity-model library
+# - Development dependencies (pytest, ruff, pyrefly, etc.)
+# - Documentation dependencies (mkdocs, etc.)
+# - Example dependencies (FastAPI example)
 ```
 
 #### Adding Dependencies
@@ -93,8 +96,9 @@ uv run pre-commit run -a
 
 ### Code Formatting and Linting
 - **Ruff**: Used for linting and formatting
-- Configuration is in `pyproject.toml`
-- All code must pass linting before commit
+- **pyrefly**: Used for type checking
+- Configuration is in `pyproject.toml` and `.pre-commit-config.yaml`
+- All code must pass pre-commit hooks before commit
 
 ### Testing Requirements
 - **pytest**: Test framework
@@ -136,9 +140,13 @@ cd py-identity-model
 make ci-setup
 # or manually:
 uv venv
-uv pip install -r pyproject.toml
+uv sync --all-packages
 uv run pre-commit install
 ```
+
+**Note**: This project uses uv workspaces. The workspace includes:
+- Root package: `py-identity-model` (main library)
+- Examples: `examples/fastapi` (FastAPI example with its own dependencies)
 
 ### 2. Feature Development
 
@@ -178,11 +186,34 @@ git push origin feature/your-feature-name
 - `chore/` - Maintenance tasks (e.g., `chore/update-dependencies`)
 
 ### 3. Before Committing
-Always run these commands before committing:
+**CRITICAL: Always run pre-commit hooks AND tests before committing.**
+
+Pre-commit hooks will run automatically on `git commit`, but you should run them manually first to catch issues early:
 ```bash
-make lint  # Format and lint code
-make test  # Run all tests
+# Run these commands before EVERY commit
+make lint  # Format and lint code (runs pre-commit)
+make test  # Run unit tests
+
+# If you modified examples, also run:
+make test-examples  # Run example integration tests (requires Docker)
 ```
+
+**Required checks before committing:**
+1. ✅ Pre-commit hooks pass (`make lint`)
+2. ✅ Unit tests pass (`make test`)
+3. ✅ Integration tests pass if you modified examples (`make test-examples`)
+4. ✅ All modified files are staged
+
+If pre-commit hooks fail during commit:
+1. Review the errors shown by the hooks
+2. Fix any issues identified
+3. Stage the auto-fixed files if any were modified by hooks
+4. Commit again
+
+The pre-commit hooks run:
+- **ruff**: Linting with auto-fix
+- **ruff-format**: Code formatting
+- **pyrefly**: Type checking (excludes examples/)
 
 ## Project Structure Guidelines
 
@@ -264,14 +295,31 @@ git commit -m "docs: update API documentation"
 ## Dependencies
 
 ### Adding New Dependencies
-1. Check if dependency is necessary
-2. Use specific version ranges: `"package>=1.0.0,<2"`
-3. Add to appropriate section in `pyproject.toml`
-4. Update `uv.lock`: `uv lock`
+
+#### For the main library:
+```bash
+# Production dependency
+uv add "package>=1.0.0,<2"
+
+# Development dependency
+uv add --group dev "package>=1.0.0"
+```
+
+#### For examples (e.g., FastAPI):
+```bash
+# Add to the example's pyproject.toml
+cd examples/fastapi
+# Edit pyproject.toml to add the dependency
+# Then sync from root:
+cd ../..
+uv sync --all-packages
+```
 
 ### Dependency Groups
-- **Production**: Core runtime dependencies
-- **dev**: Development tools (testing, linting, etc.)
+- **Production**: Core runtime dependencies (main library)
+- **dev**: Development tools (testing, linting, type checking)
+- **docs**: Documentation generation tools
+- **Workspace members**: Each example has its own dependencies
 
 ## Troubleshooting
 

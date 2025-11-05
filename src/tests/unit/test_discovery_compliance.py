@@ -1,13 +1,15 @@
+from unittest.mock import Mock, patch
+
 import pytest
 import requests
-from unittest.mock import Mock, patch
+
 from py_identity_model.discovery import (
     DiscoveryDocumentRequest,
-    get_discovery_document,
-    _validate_issuer,
     _validate_https_url,
-    _validate_required_parameters,
+    _validate_issuer,
     _validate_parameter_values,
+    _validate_required_parameters,
+    get_discovery_document,
 )
 
 
@@ -38,10 +40,14 @@ class TestDiscoveryValidationFunctions:
 
     def test_validate_issuer_with_query_fragment(self):
         """Test that issuers with query or fragment components fail validation"""
-        with pytest.raises(ValueError, match="must not contain query or fragment"):
+        with pytest.raises(
+            ValueError, match="must not contain query or fragment"
+        ):
             _validate_issuer("https://example.com?query=param")
 
-        with pytest.raises(ValueError, match="must not contain query or fragment"):
+        with pytest.raises(
+            ValueError, match="must not contain query or fragment"
+        ):
             _validate_issuer("https://example.com#fragment")
 
     def test_validate_issuer_empty_or_invalid(self):
@@ -76,7 +82,9 @@ class TestDiscoveryValidationFunctions:
             "ws://example.com",
         ]
         for url in invalid_urls:
-            with pytest.raises(ValueError, match="must be a valid HTTP/HTTPS URL"):
+            with pytest.raises(
+                ValueError, match="must be a valid HTTP/HTTPS URL"
+            ):
                 _validate_https_url(url, "test_param")
 
     def test_validate_required_parameters_all_present(self):
@@ -92,7 +100,9 @@ class TestDiscoveryValidationFunctions:
     def test_validate_required_parameters_missing(self):
         """Test that validation fails when required parameters are missing"""
         # Missing issuer
-        with pytest.raises(ValueError, match="Missing required parameters.*issuer"):
+        with pytest.raises(
+            ValueError, match="Missing required parameters.*issuer"
+        ):
             _validate_required_parameters(
                 {
                     "response_types_supported": ["code"],
@@ -120,7 +130,8 @@ class TestDiscoveryValidationFunctions:
     def test_validate_parameter_values_invalid_subject_types(self):
         """Test that invalid subject types fail validation"""
         with pytest.raises(
-            ValueError, match="Invalid subject type.*Must be 'public' or 'pairwise'"
+            ValueError,
+            match="Invalid subject type.*Must be 'public' or 'pairwise'",
         ):
             _validate_parameter_values(
                 {
@@ -253,7 +264,9 @@ class TestDiscoveryComplianceIntegration:
     @patch("py_identity_model.discovery.requests.get")
     def test_discovery_handles_network_errors(self, mock_get):
         """Test that discovery document handles network errors properly"""
-        mock_get.side_effect = requests.exceptions.ConnectionError("Network error")
+        mock_get.side_effect = requests.exceptions.ConnectionError(
+            "Network error"
+        )
 
         request = DiscoveryDocumentRequest(
             address="https://example.com/.well-known/openid_configuration"
@@ -262,7 +275,9 @@ class TestDiscoveryComplianceIntegration:
 
         assert result.is_successful is False
         assert result.error is not None
-        assert "Network error during discovery document request" in result.error
+        assert (
+            "Network error during discovery document request" in result.error
+        )
 
     @patch("py_identity_model.discovery.requests.get")
     def test_discovery_handles_invalid_json(self, mock_get):
@@ -326,4 +341,7 @@ class TestDiscoveryComplianceIntegration:
         assert result.jwks_uri == "https://example.com/jwks"
         assert result.response_types_supported == ["code", "id_token"]
         assert result.subject_types_supported == ["public"]
-        assert result.id_token_signing_alg_values_supported == ["RS256", "HS256"]
+        assert result.id_token_signing_alg_values_supported == [
+            "RS256",
+            "HS256",
+        ]

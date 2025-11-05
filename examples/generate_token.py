@@ -9,16 +9,16 @@ Usage:
     python examples/generate_token.py
 
 Requirements:
-    - Local identity server must be running (docker-compose -f examples/identity-server/docker-compose.e2e.yml up -d)
-    - SSL certificates must be installed as trusted (run examples/identity-server/generate-certs.sh)
+    - Local identity server must be running (cd examples && docker compose -f docker-compose.test.yml up identityserver -d)
+    - Certificates are automatically generated and trusted in Docker
 """
 
 import sys
 
 from py_identity_model import (
+    ClientCredentialsTokenRequest,
     DiscoveryDocumentRequest,
     get_discovery_document,
-    ClientCredentialsTokenRequest,
     request_client_credentials_token,
 )
 
@@ -27,7 +27,9 @@ def main():
     """Generate a token from the local identity server."""
 
     # Local identity server configuration
-    discovery_address = "https://localhost:5001/.well-known/openid-configuration"
+    discovery_address = (
+        "https://localhost:5001/.well-known/openid-configuration"
+    )
     client_id = "py-identity-model-client"
     client_secret = "py-identity-model-secret"
     scope = "py-identity-model"
@@ -41,13 +43,14 @@ def main():
 
     if not disco_response.is_successful:
         print(f"❌ Failed to get discovery document: {disco_response.error}")
-        print("\n💡 Make sure:")
-        print("   1. Local identity server is running:")
+        print("\n💡 Make sure the local identity server is running:")
         print(
-            "      cd examples/identity-server && docker-compose -f docker-compose.e2e.yml up -d"
+            "      cd examples && docker compose -f docker-compose.test.yml up identityserver -d"
         )
-        print("   2. SSL certificate is installed as trusted:")
-        print("      cd examples/identity-server && ./generate-certs.sh")
+        print("\n   Or use the full test setup:")
+        print(
+            "      cd examples && docker compose -f docker-compose.test.yml up --build"
+        )
         return 1
 
     print("✅ Discovery successful!")

@@ -2,6 +2,7 @@ from py_identity_model import (
     DiscoveryDocumentRequest,
     get_discovery_document,
 )
+
 from .test_utils import get_config
 
 

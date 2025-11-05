@@ -1,17 +1,17 @@
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import List, Optional, Callable
+from typing import Callable, List, Optional
 
-from jwt import PyJWK, get_unverified_header, decode
+from jwt import PyJWK, decode, get_unverified_header
 
 from .discovery import (
-    get_discovery_document,
     DiscoveryDocumentRequest,
     DiscoveryDocumentResponse,
+    get_discovery_document,
 )
 from .exceptions import PyIdentityModelException
-from .identity import ClaimsPrincipal, ClaimsIdentity, Claim
-from .jwks import get_jwks, JwksRequest, JsonWebKey, JwksResponse
+from .identity import Claim, ClaimsIdentity, ClaimsPrincipal
+from .jwks import JsonWebKey, JwksRequest, JwksResponse, get_jwks
 
 
 @dataclass
@@ -27,9 +27,10 @@ class TokenValidationConfig:
 
 
 def _get_public_key_from_jwk(jwt: str, keys: List[JsonWebKey]) -> JsonWebKey:
-    # TODO: clean up flow to prevent multiple decodes
     headers = get_unverified_header(jwt)
-    filtered_keys = list(filter(lambda x: x.kid == headers.get("kid", None), keys))
+    filtered_keys = list(
+        filter(lambda x: x.kid == headers.get("kid", None), keys)
+    )
     if not filtered_keys:
         raise PyIdentityModelException("No matching kid found")
 
@@ -42,21 +43,33 @@ def _get_public_key_from_jwk(jwt: str, keys: List[JsonWebKey]) -> JsonWebKey:
 
 def _validate_token_config(
     token_validation_config: TokenValidationConfig,
-) -> bool:
-    if token_validation_config.perform_disco:
-        return True
+) -> None:
+    """
+    Validate token validation configuration.
 
-    if not token_validation_config.key and not token_validation_config.algorithms:
+    Args:
+        token_validation_config: Configuration to validate
+
+    Raises:
+        PyIdentityModelException: If configuration is invalid
+    """
+    if token_validation_config.perform_disco:
+        return
+
+    if (
+        not token_validation_config.key
+        and not token_validation_config.algorithms
+    ):
         raise PyIdentityModelException(
             "TokenValidationConfig.key and TokenValidationConfig.algorithms are required if perform_disco is False"
         )
 
-    return True
-
 
 @lru_cache
 def _get_disco_response(disco_doc_address: str) -> DiscoveryDocumentResponse:
-    return get_discovery_document(DiscoveryDocumentRequest(address=disco_doc_address))
+    return get_discovery_document(
+        DiscoveryDocumentRequest(address=disco_doc_address)
+    )
 
 
 @lru_cache
@@ -82,16 +95,22 @@ def validate_token(
             raise PyIdentityModelException(jwks_response.error)
 
         if not jwks_response.keys:
-            raise PyIdentityModelException("No keys available in JWKS response")
+            raise PyIdentityModelException(
+                "No keys available in JWKS response"
+            )
 
         token_validation_config.key = _get_public_key_from_jwk(
             jwt, jwks_response.keys
         ).as_dict()
-        token_validation_config.algorithms = [token_validation_config.key["alg"]]
+        token_validation_config.algorithms = [
+            token_validation_config.key["alg"]
+        ]
 
         decoded_token = decode(
             jwt,
-            PyJWK(token_validation_config.key, token_validation_config.key["alg"]),
+            PyJWK(
+                token_validation_config.key, token_validation_config.key["alg"]
+            ),
             audience=token_validation_config.audience,
             algorithms=token_validation_config.algorithms,
             issuer=disco_doc_response.issuer,
@@ -99,7 +118,9 @@ def validate_token(
         )
     else:
         if not token_validation_config.key:
-            raise PyIdentityModelException("TokenValidationConfig.key is required")
+            raise PyIdentityModelException(
+                "TokenValidationConfig.key is required"
+            )
         if not token_validation_config.algorithms:
             raise PyIdentityModelException(
                 "TokenValidationConfig.algorithms is required"
@@ -152,7 +173,9 @@ def to_principal(
             claims.append(Claim(claim_type=claim_type, value=str(claim_value)))
 
     # Create a ClaimsIdentity with the claims
-    identity = ClaimsIdentity(claims=claims, authentication_type=authentication_type)
+    identity = ClaimsIdentity(
+        claims=claims, authentication_type=authentication_type
+    )
 
     # Create and return the ClaimsPrincipal
     return ClaimsPrincipal(identity=identity)

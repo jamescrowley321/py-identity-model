@@ -1,6 +1,6 @@
 .PHONY: build-dist
 build-dist:
-	uv pip install -r pyproject.toml
+	uv sync
 	uv build
 
 .PHONY: upload-dist
@@ -35,12 +35,20 @@ test-integration-ory:
 generate-token:
 	uv run python examples/generate_token.py
 
+.PHONY: test-examples
+test-examples:
+	@echo "Running example integration tests..."
+	cd examples && ./run-tests.sh
+
+.PHONY: test-all
+test-all: test test-examples
+
 .PHONY: ci-setup
 ci-setup:
 	python -m pip install --upgrade pip
 	pip install pipx
 	pipx install uv
 	uv venv
-	uv pip install -r pyproject.toml
+	uv sync --all-packages
 
 

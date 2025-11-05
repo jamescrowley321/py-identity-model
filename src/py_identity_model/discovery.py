@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import List, Optional
 from urllib.parse import urlparse
 
 import requests
@@ -15,7 +15,9 @@ def _validate_issuer(issuer: str) -> None:
         raise ValueError("Issuer must use HTTPS scheme")
 
     if parsed.query or parsed.fragment:
-        raise ValueError("Issuer must not contain query or fragment components")
+        raise ValueError(
+            "Issuer must not contain query or fragment components"
+        )
 
     if not parsed.netloc:
         raise ValueError("Issuer must be a valid URL with host")
@@ -49,7 +51,9 @@ def _validate_required_parameters(response_data: dict) -> None:
             missing_params.append(param)
 
     if missing_params:
-        raise ValueError(f"Missing required parameters: {', '.join(missing_params)}")
+        raise ValueError(
+            f"Missing required parameters: {', '.join(missing_params)}"
+        )
 
 
 def _validate_parameter_values(response_data: dict) -> None:
@@ -128,7 +132,9 @@ class DiscoveryDocumentResponse:
 
     # Token endpoint authentication
     token_endpoint_auth_methods_supported: Optional[List[str]] = None
-    token_endpoint_auth_signing_alg_values_supported: Optional[List[str]] = None
+    token_endpoint_auth_signing_alg_values_supported: Optional[List[str]] = (
+        None
+    )
 
     # Display and UI
     display_values_supported: Optional[List[str]] = None
@@ -211,14 +217,18 @@ def get_discovery_document(
         try:
             _validate_https_url(response_json.get("jwks_uri"), "jwks_uri")
             _validate_https_url(
-                response_json.get("authorization_endpoint"), "authorization_endpoint"
+                response_json.get("authorization_endpoint"),
+                "authorization_endpoint",
             )
-            _validate_https_url(response_json.get("token_endpoint"), "token_endpoint")
+            _validate_https_url(
+                response_json.get("token_endpoint"), "token_endpoint"
+            )
             _validate_https_url(
                 response_json.get("userinfo_endpoint"), "userinfo_endpoint"
             )
             _validate_https_url(
-                response_json.get("registration_endpoint"), "registration_endpoint"
+                response_json.get("registration_endpoint"),
+                "registration_endpoint",
             )
         except ValueError as e:
             return DiscoveryDocumentResponse(
@@ -233,8 +243,12 @@ def get_discovery_document(
             authorization_endpoint=response_json.get("authorization_endpoint"),
             token_endpoint=response_json.get("token_endpoint"),
             # Required properties from OpenID Connect Discovery 1.0 specification
-            response_types_supported=response_json.get("response_types_supported"),
-            subject_types_supported=response_json.get("subject_types_supported"),
+            response_types_supported=response_json.get(
+                "response_types_supported"
+            ),
+            subject_types_supported=response_json.get(
+                "subject_types_supported"
+            ),
             id_token_signing_alg_values_supported=response_json.get(
                 "id_token_signing_alg_values_supported"
             ),
@@ -242,7 +256,9 @@ def get_discovery_document(
             userinfo_endpoint=response_json.get("userinfo_endpoint"),
             registration_endpoint=response_json.get("registration_endpoint"),
             scopes_supported=response_json.get("scopes_supported"),
-            response_modes_supported=response_json.get("response_modes_supported"),
+            response_modes_supported=response_json.get(
+                "response_modes_supported"
+            ),
             grant_types_supported=response_json.get("grant_types_supported"),
             acr_values_supported=response_json.get("acr_values_supported"),
             # Cryptographic algorithm support
@@ -278,13 +294,19 @@ def get_discovery_document(
                 "token_endpoint_auth_signing_alg_values_supported"
             ),
             # Display and UI
-            display_values_supported=response_json.get("display_values_supported"),
+            display_values_supported=response_json.get(
+                "display_values_supported"
+            ),
             claim_types_supported=response_json.get("claim_types_supported"),
             claims_supported=response_json.get("claims_supported"),
-            claims_locales_supported=response_json.get("claims_locales_supported"),
+            claims_locales_supported=response_json.get(
+                "claims_locales_supported"
+            ),
             ui_locales_supported=response_json.get("ui_locales_supported"),
             # Feature support flags
-            claims_parameter_supported=response_json.get("claims_parameter_supported"),
+            claims_parameter_supported=response_json.get(
+                "claims_parameter_supported"
+            ),
             request_parameter_supported=response_json.get(
                 "request_parameter_supported"
             ),

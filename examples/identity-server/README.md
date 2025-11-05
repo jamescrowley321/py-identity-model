@@ -1,43 +1,42 @@
 # IdentityServer Example for E2E Testing
 
-This directory contains a Docker Compose setup for running Duende IdentityServer for end-to-end testing with the py-identity-model library.
+This directory contains the configuration for running Duende IdentityServer for end-to-end testing with the py-identity-model library.
 
 ## Files
 
-- `docker-compose.e2e.yml` - Docker Compose configuration for IdentityServer
 - `Dockerfile` - Docker build configuration for custom IdentityServer image
+- `startup.sh` - Startup script that waits for certificates before launching
 - `IdentityServer.csproj` - .NET project file with Duende IdentityServer dependencies
 - `Program.cs` - IdentityServer application bootstrap code
-- `Config.cs` - IdentityServer client and scope configuration
+- `Config.cs` - IdentityServer client and scope configuration (reads secrets from environment)
 - `appsettings.json` - IdentityServer application settings
 
 ## Usage
 
-### SSL Certificate Setup
-
-Before starting IdentityServer, generate SSL certificates for HTTPS:
+**Recommended:** Use the complete test setup from the `examples/` directory which includes automatic certificate generation:
 
 ```bash
-cd examples/identity-server
-./generate-certs.sh
+# From project root
+cd examples
+docker compose -f docker-compose.test.yml up --build
 ```
 
-This creates self-signed certificates in the `certs/` directory for local development.
+This automatically:
+- Generates SSL certificates
+- Starts the Identity Server
+- Configures the FastAPI example
+- Runs integration tests
 
-### Start IdentityServer
+### Running Identity Server Standalone
 
-From the project root directory:
+If you only need the Identity Server:
 
 ```bash
-cd examples/identity-server
-docker-compose -f docker-compose.e2e.yml up -d
+cd examples
+docker compose -f docker-compose.test.yml up identityserver -d
 ```
 
-### Stop IdentityServer
-
-```bash
-docker-compose -f docker-compose.e2e.yml down
-```
+**Note:** Certificates are automatically generated and managed via the `cert-generator` service.
 
 ## Configuration
 
@@ -55,14 +54,16 @@ Two test clients are configured:
 
 1. **py-identity-model-client** (Client Credentials)
    - Client ID: `py-identity-model-client`
-   - Client Secret: `py-identity-model-secret`
+   - Client Secret: Configured via `CLIENT_SECRET` environment variable (default: `py-identity-model-secret`)
    - Scopes: `py-identity-model`
 
 2. **py-identity-model-test** (Authorization Code)
    - Client ID: `py-identity-model-test`
-   - Client Secret: `test-secret`
+   - Client Secret: Configured via `TEST_CLIENT_SECRET` environment variable (default: `test-secret`)
    - Scopes: `openid`, `profile`, `py-identity-model`
    - Redirect URI: `https://localhost:5002/signin-oidc`
+
+**Security:** Client secrets are read from environment variables. See `examples/.env.example` for configuration options.
 
 ## Health Check
 

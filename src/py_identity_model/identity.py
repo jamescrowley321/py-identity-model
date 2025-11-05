@@ -1,6 +1,6 @@
 import abc
 import enum
-from typing import Optional, List
+from typing import List, Optional
 
 
 class Identity(metaclass=abc.ABCMeta):
@@ -42,6 +42,43 @@ class Identity(metaclass=abc.ABCMeta):
 
         Returns:
             Optional[str]: The identity name, or None if not available.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abc.abstractmethod
+    def claims(self) -> List["Claim"]:
+        """
+        Gets the claims associated with this identity.
+
+        Returns:
+            List[Claim]: The claims for this identity.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def find_first(self, claim_type: str) -> Optional["Claim"]:
+        """
+        Find the first claim of the specified type.
+
+        Args:
+            claim_type: The type of claim to find.
+
+        Returns:
+            Optional[Claim]: The first matching claim, or None if not found.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def find_all(self, claim_type: str) -> List["Claim"]:
+        """
+        Find all claims of the specified type.
+
+        Args:
+            claim_type: The type of claims to find.
+
+        Returns:
+            List[Claim]: All matching claims.
         """
         raise NotImplementedError()
 
@@ -151,15 +188,27 @@ class ClaimType(enum.Enum):
         "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
     )
     Role = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
-    Email = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
-    GivenName = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
+    Email = (
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+    )
+    GivenName = (
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
+    )
     Surname = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"
-    DateOfBirth = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/dateofbirth"
+    DateOfBirth = (
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/dateofbirth"
+    )
     Country = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/country"
     Gender = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/gender"
-    HomePhone = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/homephone"
-    MobilePhone = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/mobilephone"
-    PostalCode = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/postalcode"
+    HomePhone = (
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/homephone"
+    )
+    MobilePhone = (
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/mobilephone"
+    )
+    PostalCode = (
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/postalcode"
+    )
     StateOrProvince = (
         "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/stateorprovince"
     )
@@ -198,10 +247,14 @@ class ClaimsIdentity(Identity):
             name_type_claim: The claim type for the identity name.
             role_type_claim: The claim type for roles.
         """
-        self.claims = claims
+        self._claims = claims
         self.role_type_claim = role_type_claim
         self.name_type_claim = name_type_claim
         self._authentication_type = authentication_type
+
+    @property
+    def claims(self) -> List[Claim]:
+        return self._claims
 
     @property
     def authentication_type(self) -> Optional[str]:
@@ -219,7 +272,7 @@ class ClaimsIdentity(Identity):
         name_claim = next(
             (
                 claim
-                for claim in self.claims
+                for claim in self._claims
                 if claim.claim_type == self.name_type_claim
             ),
             None,
@@ -228,6 +281,35 @@ class ClaimsIdentity(Identity):
 
     def is_authenticated(self) -> bool:
         return self._authentication_type is not None
+
+    def find_first(self, claim_type: str) -> Optional[Claim]:
+        """
+        Find the first claim of the specified type.
+
+        Args:
+            claim_type: The type of claim to find.
+
+        Returns:
+            Optional[Claim]: The first matching claim, or None if not found.
+        """
+        return next(
+            (claim for claim in self.claims if claim.claim_type == claim_type),
+            None,
+        )
+
+    def find_all(self, claim_type: str) -> List[Claim]:
+        """
+        Find all claims of the specified type.
+
+        Args:
+            claim_type: The type of claims to find.
+
+        Returns:
+            List[Claim]: All matching claims.
+        """
+        return [
+            claim for claim in self.claims if claim.claim_type == claim_type
+        ]
 
 
 class ClaimsPrincipal(Principal):
@@ -298,7 +380,8 @@ class ClaimsPrincipal(Principal):
             bool: True if a matching claim exists, False otherwise.
         """
         return any(
-            claim.claim_type == claim_type and (value is None or claim.value == value)
+            claim.claim_type == claim_type
+            and (value is None or claim.value == value)
             for claim in self._claims
         )
 
@@ -325,7 +408,12 @@ class ClaimsPrincipal(Principal):
             Optional[Claim]: The first matching claim, or None if not found.
         """
         return next(
-            (claim for claim in self._claims if claim.claim_type == claim_type), None
+            (
+                claim
+                for claim in self._claims
+                if claim.claim_type == claim_type
+            ),
+            None,
         )
 
     def find_all(self, claim_type: str) -> List[Claim]:
@@ -338,4 +426,6 @@ class ClaimsPrincipal(Principal):
         Returns:
             List[Claim]: All matching claims.
         """
-        return [claim for claim in self._claims if claim.claim_type == claim_type]
+        return [
+            claim for claim in self._claims if claim.claim_type == claim_type
+        ]

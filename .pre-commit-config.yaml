@@ -12,7 +12,7 @@ repos:
     hooks:
       - id: pyrefly-typecheck
         name: pyrefly check
-        entry: uv run pyrefly check
+        entry: bash -c 'uv run pyrefly check src/'
         language: system
         types_or: [python, pyi]
         pass_filenames: false
