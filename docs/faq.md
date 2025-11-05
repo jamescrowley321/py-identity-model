@@ -146,7 +146,7 @@ def get_valid_token():
 
 ### Can I use this with Flask or FastAPI?
 
-Yes! py-identity-model works great with both. See the [Examples](../examples/) directory for middleware implementations.
+Yes! py-identity-model works great with both. See the [Examples](https://github.com/jamescrowley321/py-identity-model/tree/main/examples) directory for middleware implementations.
 
 ### How do I validate tokens in a decorator?
 
@@ -228,7 +228,7 @@ Current workaround: Create separate validation configs for each issuer.
 
 ### How do I contribute?
 
-See the [CONTRIBUTING.md](../CONTRIBUTING.md) guide for detailed instructions.
+See the [Contributing Guide](contributing.md) for detailed instructions.
 
 ### How do I run tests?
 
@@ -300,7 +300,7 @@ Yes! Open an issue on [GitHub](https://github.com/jamescrowley321/py-identity-mo
 
 ### How can I help?
 
-Contributions are welcome! See [CONTRIBUTING.md](../CONTRIBUTING.md) for:
+Contributions are welcome! See the [Contributing Guide](contributing.md) for:
 - Setting up your development environment
 - Coding standards and conventions
 - How to submit pull requests

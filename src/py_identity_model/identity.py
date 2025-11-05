@@ -1,134 +1,8 @@
+from __future__ import annotations
+
 import abc
 import enum
 from typing import List, Optional
-
-
-class Identity(metaclass=abc.ABCMeta):
-    """
-    Abstract base class defining the interface for identity objects.
-
-    Equivalent to .NET's IIdentity interface. Represents the identity
-    of a user, including authentication status, authentication method,
-    and identity name.
-    """
-
-    @abc.abstractmethod
-    def is_authenticated(self) -> bool:
-        """
-        Indicates whether the identity has been authenticated.
-
-        Returns:
-            bool: True if the identity is authenticated, False otherwise.
-        """
-        raise NotImplementedError()
-
-    @property
-    @abc.abstractmethod
-    def authentication_type(self) -> Optional[str]:
-        """
-        Gets the type of authentication used.
-
-        Returns:
-            Optional[str]: The authentication type (e.g., "Bearer", "Basic"),
-                          or None if not authenticated.
-        """
-        raise NotImplementedError()
-
-    @property
-    @abc.abstractmethod
-    def name(self) -> Optional[str]:
-        """
-        Gets the name of the current identity.
-
-        Returns:
-            Optional[str]: The identity name, or None if not available.
-        """
-        raise NotImplementedError()
-
-    @property
-    @abc.abstractmethod
-    def claims(self) -> List["Claim"]:
-        """
-        Gets the claims associated with this identity.
-
-        Returns:
-            List[Claim]: The claims for this identity.
-        """
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def find_first(self, claim_type: str) -> Optional["Claim"]:
-        """
-        Find the first claim of the specified type.
-
-        Args:
-            claim_type: The type of claim to find.
-
-        Returns:
-            Optional[Claim]: The first matching claim, or None if not found.
-        """
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def find_all(self, claim_type: str) -> List["Claim"]:
-        """
-        Find all claims of the specified type.
-
-        Args:
-            claim_type: The type of claims to find.
-
-        Returns:
-            List[Claim]: All matching claims.
-        """
-        raise NotImplementedError()
-
-
-class Principal(metaclass=abc.ABCMeta):
-    """
-    Abstract base class defining the interface for principal objects.
-
-    Equivalent to .NET's IPrincipal interface. Represents the security
-    context under which code is running, including the user identity
-    and roles.
-    """
-
-    @property
-    @abc.abstractmethod
-    def identity(self) -> Optional[Identity]:
-        """
-        Gets the identity of the current principal.
-
-        Returns:
-            Optional[Identity]: The identity associated with the principal.
-        """
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def is_in_role(self, role: str) -> bool:
-        """
-        Determines whether the current principal belongs to the specified role.
-
-        Args:
-            role: The role name to check.
-
-        Returns:
-            bool: True if the principal is in the specified role, False otherwise.
-        """
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def has_claim(self, claim_type: str, value: Optional[str] = None) -> bool:
-        """
-        Determines whether the principal has a claim with the specified type and value.
-
-        Args:
-            claim_type: The type of claim to search for.
-            value: Optional value the claim must have. If None, checks only for claim type.
-
-        Returns:
-            bool: True if a matching claim exists, False otherwise.
-        """
-        raise NotImplementedError()
 
 
 class Claim:
@@ -216,6 +90,134 @@ class ClaimType(enum.Enum):
         "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/streetaddress"
     )
     Webpage = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/webpage"
+
+
+class Identity(metaclass=abc.ABCMeta):
+    """
+    Abstract base class defining the interface for identity objects.
+
+    Equivalent to .NET's IIdentity interface. Represents the identity
+    of a user, including authentication status, authentication method,
+    and identity name.
+    """
+
+    @abc.abstractmethod
+    def is_authenticated(self) -> bool:
+        """
+        Indicates whether the identity has been authenticated.
+
+        Returns:
+            bool: True if the identity is authenticated, False otherwise.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abc.abstractmethod
+    def authentication_type(self) -> Optional[str]:
+        """
+        Gets the type of authentication used.
+
+        Returns:
+            Optional[str]: The authentication type (e.g., "Bearer", "Basic"),
+                          or None if not authenticated.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abc.abstractmethod
+    def name(self) -> Optional[str]:
+        """
+        Gets the name of the current identity.
+
+        Returns:
+            Optional[str]: The identity name, or None if not available.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abc.abstractmethod
+    def claims(self) -> List[Claim]:
+        """
+        Gets the claims associated with this identity.
+
+        Returns:
+            List[Claim]: The claims for this identity.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def find_first(self, claim_type: str) -> Optional[Claim]:
+        """
+        Find the first claim of the specified type.
+
+        Args:
+            claim_type: The type of claim to find.
+
+        Returns:
+            Optional[Claim]: The first matching claim, or None if not found.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def find_all(self, claim_type: str) -> List[Claim]:
+        """
+        Find all claims of the specified type.
+
+        Args:
+            claim_type: The type of claims to find.
+
+        Returns:
+            List[Claim]: All matching claims.
+        """
+        raise NotImplementedError()
+
+
+class Principal(metaclass=abc.ABCMeta):
+    """
+    Abstract base class defining the interface for principal objects.
+
+    Equivalent to .NET's IPrincipal interface. Represents the security
+    context under which code is running, including the user identity
+    and roles.
+    """
+
+    @property
+    @abc.abstractmethod
+    def identity(self) -> Optional[Identity]:
+        """
+        Gets the identity of the current principal.
+
+        Returns:
+            Optional[Identity]: The identity associated with the principal.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def is_in_role(self, role: str) -> bool:
+        """
+        Determines whether the current principal belongs to the specified role.
+
+        Args:
+            role: The role name to check.
+
+        Returns:
+            bool: True if the principal is in the specified role, False otherwise.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def has_claim(self, claim_type: str, value: Optional[str] = None) -> bool:
+        """
+        Determines whether the principal has a claim with the specified type and value.
+
+        Args:
+            claim_type: The type of claim to search for.
+            value: Optional value the claim must have. If None, checks only for claim type.
+
+        Returns:
+            bool: True if a matching claim exists, False otherwise.
+        """
+        raise NotImplementedError()
 
 
 class ClaimsIdentity(Identity):

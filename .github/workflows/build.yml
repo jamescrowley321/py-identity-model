@@ -1,12 +1,12 @@
 name: Build
 
-on: [push]
+on: [ push ]
 
 permissions:
   contents: read
 
 jobs:
-  lint-and-test:
+  build-lint-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1

@@ -199,7 +199,7 @@ def protected_route():
 ## Next Steps
 
 - Read the [API Documentation](index.md) for detailed information on all classes and functions
-- Check out [Examples](../examples/) for complete working examples
+- Check out [Examples](https://github.com/jamescrowley321/py-identity-model/tree/main/examples) for complete working examples
 - Review [Integration Tests](integration-tests.md) to see how to test against real identity providers
 - Learn about [OAuth 2.0 and OpenID Connect specifications](https://oauth.net/2/)
 

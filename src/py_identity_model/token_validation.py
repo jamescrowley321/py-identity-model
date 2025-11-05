@@ -88,11 +88,15 @@ def validate_token(
         disco_doc_response = _get_disco_response(disco_doc_address)
 
         if not disco_doc_response.is_successful:
-            raise PyIdentityModelException(disco_doc_response.error)
+            raise PyIdentityModelException(
+                disco_doc_response.error or "Discovery document request failed"
+            )
 
         jwks_response = _get_jwks_response(disco_doc_response.jwks_uri)
         if not jwks_response.is_successful:
-            raise PyIdentityModelException(jwks_response.error)
+            raise PyIdentityModelException(
+                jwks_response.error or "JWKS request failed"
+            )
 
         if not jwks_response.keys:
             raise PyIdentityModelException(
