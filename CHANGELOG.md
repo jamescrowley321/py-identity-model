@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v1.2.0 (2025-11-08)
+
+### Documentation
+
+- Consolidate documentation into mkdocs instead of Wiki
+  ([#99](https://github.com/jamescrowley321/py-identity-model/pull/99),
+  [`71f5fcb`](https://github.com/jamescrowley321/py-identity-model/commit/71f5fcb9616c173be26864689bf4e3ba0351c52e))
+
+### Features
+
+- Add comprehensive logging and exception handling
+  ([#107](https://github.com/jamescrowley321/py-identity-model/pull/107),
+  [`98f88d6`](https://github.com/jamescrowley321/py-identity-model/commit/98f88d6c9def9f6bff9f7d8625acf258395a2275))
+
+
 ## v1.1.1 (2025-10-21)
 
 ### Bug Fixes
