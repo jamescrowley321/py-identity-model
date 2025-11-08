@@ -6,8 +6,7 @@ in FastAPI applications using py-identity-model.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
@@ -24,8 +23,8 @@ class RefreshTokenRequest:
 
     refresh_token: str
     client_id: str
-    client_secret: Optional[str] = None
-    scope: Optional[str] = None
+    client_secret: str | None = None
+    scope: str | None = None
 
 
 @dataclass
@@ -33,17 +32,18 @@ class RefreshTokenResponse:
     """Response from a token refresh request."""
 
     is_successful: bool
-    access_token: Optional[str] = None
-    refresh_token: Optional[str] = None
-    expires_in: Optional[int] = None
-    token_type: Optional[str] = None
-    scope: Optional[str] = None
-    error: Optional[str] = None
-    error_description: Optional[str] = None
+    access_token: str | None = None
+    refresh_token: str | None = None
+    expires_in: int | None = None
+    token_type: str | None = None
+    scope: str | None = None
+    error: str | None = None
+    error_description: str | None = None
 
 
 async def refresh_access_token(
-    discovery_url: str, request: RefreshTokenRequest
+    discovery_url: str,
+    request: RefreshTokenRequest,
 ) -> RefreshTokenResponse:
     """
     Refresh an access token using a refresh token.
@@ -60,12 +60,12 @@ async def refresh_access_token(
         refresh_request = RefreshTokenRequest(
             refresh_token="existing_refresh_token",
             client_id="my-client-id",
-            client_secret="my-client-secret"
+            client_secret="my-client-secret",
         )
 
         response = await refresh_access_token(
             "https://auth.example.com/.well-known/openid-configuration",
-            refresh_request
+            refresh_request,
         )
 
         if response.is_successful:
@@ -122,7 +122,8 @@ async def refresh_access_token(
                 is_successful=False,
                 error=error_data.get("error", "token_request_failed"),
                 error_description=error_data.get(
-                    "error_description", f"HTTP {response.status_code}"
+                    "error_description",
+                    f"HTTP {response.status_code}",
                 ),
             )
 
@@ -163,14 +164,14 @@ class TokenManager:
         manager = TokenManager(
             discovery_url="https://auth.example.com/.well-known/openid-configuration",
             client_id="my-client-id",
-            client_secret="my-client-secret"
+            client_secret="my-client-secret",
         )
 
         # Set initial tokens
         manager.set_tokens(
             access_token="initial_access_token",
             refresh_token="initial_refresh_token",
-            expires_in=3600
+            expires_in=3600,
         )
 
         # Get current access token (will auto-refresh if expired)
@@ -182,7 +183,7 @@ class TokenManager:
         self,
         discovery_url: str,
         client_id: str,
-        client_secret: Optional[str] = None,
+        client_secret: str | None = None,
         refresh_before_seconds: int = 300,
     ):
         """
@@ -199,15 +200,15 @@ class TokenManager:
         self.client_secret = client_secret
         self.refresh_before_seconds = refresh_before_seconds
 
-        self._access_token: Optional[str] = None
-        self._refresh_token: Optional[str] = None
-        self._expires_at: Optional[datetime] = None
+        self._access_token: str | None = None
+        self._refresh_token: str | None = None
+        self._expires_at: datetime | None = None
 
     def set_tokens(
         self,
         access_token: str,
-        refresh_token: Optional[str] = None,
-        expires_in: Optional[int] = None,
+        refresh_token: str | None = None,
+        expires_in: int | None = None,
     ) -> None:
         """
         Set the current tokens.
@@ -221,8 +222,8 @@ class TokenManager:
         self._refresh_token = refresh_token
 
         if expires_in:
-            self._expires_at = datetime.now(timezone.utc) + timedelta(
-                seconds=expires_in
+            self._expires_at = datetime.now(UTC) + timedelta(
+                seconds=expires_in,
             )
         else:
             self._expires_at = None
@@ -238,11 +239,11 @@ class TokenManager:
             return False
 
         # Consider token expired if it will expire within refresh_before_seconds
-        return datetime.now(timezone.utc) >= (
+        return datetime.now(UTC) >= (
             self._expires_at - timedelta(seconds=self.refresh_before_seconds)
         )
 
-    async def get_access_token(self) -> Optional[str]:
+    async def get_access_token(self) -> str | None:
         """
         Get the current access token, refreshing if necessary.
 
@@ -259,7 +260,7 @@ class TokenManager:
         # Token is expired or about to expire, attempt refresh
         if not self._refresh_token:
             raise PyIdentityModelException(
-                "Token expired and no refresh token available"
+                "Token expired and no refresh token available",
             )
 
         response = await refresh_access_token(
@@ -273,13 +274,13 @@ class TokenManager:
 
         if not response.is_successful:
             raise PyIdentityModelException(
-                f"Token refresh failed: {response.error_description}"
+                f"Token refresh failed: {response.error_description}",
             )
 
         # Ensure we have an access token
         if not response.access_token:
             raise PyIdentityModelException(
-                "Token refresh succeeded but no access token returned"
+                "Token refresh succeeded but no access token returned",
             )
 
         # Update stored tokens
@@ -292,11 +293,11 @@ class TokenManager:
         return self._access_token
 
     @property
-    def access_token(self) -> Optional[str]:
+    def access_token(self) -> str | None:
         """Get the current access token without refreshing."""
         return self._access_token
 
     @property
-    def refresh_token(self) -> Optional[str]:
+    def refresh_token(self) -> str | None:
         """Get the current refresh token."""
         return self._refresh_token

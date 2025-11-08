@@ -55,7 +55,7 @@ class TestGetDiscoveryDocument:
         mock_get.return_value = mock_response
 
         request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration"
+            address="https://example.com/.well-known/openid_configuration",
         )
         result = get_discovery_document(request)
 
@@ -68,7 +68,8 @@ class TestGetDiscoveryDocument:
         assert result.subject_types_supported == ["public"]
         assert result.id_token_signing_alg_values_supported == ["RS256"]
         mock_get.assert_called_once_with(
-            "https://example.com/.well-known/openid_configuration", timeout=30
+            "https://example.com/.well-known/openid_configuration",
+            timeout=30,
         )
 
     @patch("py_identity_model.discovery.requests.get")
@@ -81,7 +82,7 @@ class TestGetDiscoveryDocument:
         mock_get.return_value = mock_response
 
         request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration"
+            address="https://example.com/.well-known/openid_configuration",
         )
         result = get_discovery_document(request)
 
@@ -90,7 +91,8 @@ class TestGetDiscoveryDocument:
         assert "404" in result.error
         assert "Not Found" in result.error
         mock_get.assert_called_once_with(
-            "https://example.com/.well-known/openid_configuration", timeout=30
+            "https://example.com/.well-known/openid_configuration",
+            timeout=30,
         )
 
     @patch("py_identity_model.discovery.requests.get")
@@ -104,7 +106,7 @@ class TestGetDiscoveryDocument:
         mock_get.return_value = mock_response
 
         request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration"
+            address="https://example.com/.well-known/openid_configuration",
         )
         result = get_discovery_document(request)
 
@@ -112,7 +114,8 @@ class TestGetDiscoveryDocument:
         assert result.error is not None
         assert "Invalid content type" in result.error
         mock_get.assert_called_once_with(
-            "https://example.com/.well-known/openid_configuration", timeout=30
+            "https://example.com/.well-known/openid_configuration",
+            timeout=30,
         )
 
     @patch("py_identity_model.discovery.requests.get")
@@ -129,7 +132,7 @@ class TestGetDiscoveryDocument:
         mock_get.return_value = mock_response
 
         request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration"
+            address="https://example.com/.well-known/openid_configuration",
         )
         result = get_discovery_document(request)
 
@@ -137,5 +140,6 @@ class TestGetDiscoveryDocument:
         assert result.error is not None
         assert "Missing required parameters" in result.error
         mock_get.assert_called_once_with(
-            "https://example.com/.well-known/openid_configuration", timeout=30
+            "https://example.com/.well-known/openid_configuration",
+            timeout=30,
         )

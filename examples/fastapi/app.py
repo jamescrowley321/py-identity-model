@@ -20,6 +20,7 @@ from fastapi import (  # type: ignore[attr-defined]
 )
 from fastapi.responses import JSONResponse  # type: ignore[attr-defined]
 
+
 # Fallback: Disable SSL warnings for self-signed certificates in test environment
 # This should only be used when REQUESTS_CA_BUNDLE is not set (non-Docker environments)
 if os.getenv("DISABLE_SSL_VERIFICATION", "false").lower() == "true":
@@ -60,8 +61,10 @@ from middleware import TokenValidationMiddleware
 
 from py_identity_model.identity import ClaimsPrincipal
 
+
 DISCOVERY_URL = os.getenv(
-    "DISCOVERY_URL", "https://localhost:5001/.well-known/openid-configuration"
+    "DISCOVERY_URL",
+    "https://localhost:5001/.well-known/openid-configuration",
 )
 AUDIENCE = os.getenv("AUDIENCE", "py-identity-model")
 
@@ -174,7 +177,9 @@ require_write_scope = require_scope("py-identity-model.write")
 
 
 @app.get(
-    "/api/data", tags=["protected"], dependencies=[Depends(require_read_scope)]
+    "/api/data",
+    tags=["protected"],
+    dependencies=[Depends(require_read_scope)],
 )
 async def get_data():
     """
@@ -187,7 +192,7 @@ async def get_data():
             {"id": 1, "name": "Item 1"},
             {"id": 2, "name": "Item 2"},
             {"id": 3, "name": "Item 3"},
-        ]
+        ],
     }
 
 
@@ -269,7 +274,7 @@ if __name__ == "__main__":
     print("\n📚 API documentation: http://localhost:8000/docs")
     print("\n🔐 Example request:")
     print(
-        '   curl -H "Authorization: Bearer <token>" http://localhost:8000/api/me'
+        '   curl -H "Authorization: Bearer <token>" http://localhost:8000/api/me',
     )
 
     uvicorn.run(app, host="0.0.0.0", port=8000)

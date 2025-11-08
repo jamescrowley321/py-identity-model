@@ -1,5 +1,3 @@
-from typing import Optional
-
 import pytest
 
 
@@ -18,7 +16,8 @@ def pytest_configure(config):
     # Add custom markers for test categorization
     config.addinivalue_line("markers", "unit: mark test as a unit test")
     config.addinivalue_line(
-        "markers", "integration: mark test as an integration test"
+        "markers",
+        "integration: mark test as an integration test",
     )
 
     # Store env file option in config for access by other modules
@@ -31,7 +30,7 @@ def pytest_configure(config):
 
 
 @pytest.fixture(scope="session")
-def env_file(request) -> Optional[str]:
+def env_file(request) -> str | None:
     """Fixture to provide the env file path to tests."""
     return getattr(request.config, "_env_file", None)
 
@@ -54,5 +53,5 @@ def setup_test_environment():
     """Setup test environment before running tests."""
     # This fixture runs automatically for all tests
     # Can be used for global setup/teardown if needed
-    yield
+    return
     # Cleanup code can go here if needed

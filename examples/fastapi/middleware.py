@@ -5,7 +5,7 @@ This module provides middleware components for validating Bearer tokens
 in FastAPI applications using py-identity-model.
 """
 
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from starlette.middleware.base import (
     BaseHTTPMiddleware,  # type: ignore[attr-defined]
@@ -43,9 +43,9 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
         self,
         app,
         discovery_url: str,
-        audience: Optional[str] = None,
-        excluded_paths: Optional[list[str]] = None,
-        custom_claims_validator: Optional[Callable] = None,
+        audience: str | None = None,
+        excluded_paths: list[str] | None = None,
+        custom_claims_validator: Callable | None = None,
     ):
         super().__init__(app)
         self.discovery_url = discovery_url
@@ -65,7 +65,7 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Extract token from Authorization header
-        authorization: Optional[str] = request.headers.get("Authorization")
+        authorization: str | None = request.headers.get("Authorization")
 
         if not authorization:
             return JSONResponse(
@@ -80,7 +80,7 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={
-                    "detail": "Invalid Authorization header format. Expected: Bearer <token>"
+                    "detail": "Invalid Authorization header format. Expected: Bearer <token>",
                 },
                 headers={"WWW-Authenticate": "Bearer"},
             )
@@ -110,16 +110,15 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
         except PyIdentityModelException as e:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": f"Token validation failed: {str(e)}"},
+                content={"detail": f"Token validation failed: {e!s}"},
                 headers={"WWW-Authenticate": "Bearer"},
             )
         except Exception as e:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": f"Token validation error: {str(e)}"},
+                content={"detail": f"Token validation error: {e!s}"},
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
         # Continue processing the request
-        response = await call_next(request)
-        return response
+        return await call_next(request)

@@ -62,6 +62,7 @@ nav:
   - Guides:
       - Troubleshooting: troubleshooting.md
       - FAQ: faq.md
+      - Contributing: contributing.md
   - Specifications:
       - Discovery Compliance: discovery_specification_compliance_assessment.md
       - JWKS Compliance: jwks_specification_compliance_assessment.md

@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 from .validation_result import ValidationResult
 
@@ -10,4 +9,4 @@ class StateValidationResult:
     id_token: str = ""
     auth_response_is_valid: bool = False
     state: ValidationResult = ValidationResult.NotSet
-    decoded_id_token: Optional[dict] = None
+    decoded_id_token: dict | None = None

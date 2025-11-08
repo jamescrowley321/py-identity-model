@@ -5,7 +5,7 @@ These dependencies can be used in FastAPI route handlers to access
 validated token information and user claims.
 """
 
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
 
 from fastapi import (  # type: ignore[attr-defined]
     Depends,
@@ -14,6 +14,7 @@ from fastapi import (  # type: ignore[attr-defined]
     status,
 )
 from py_identity_model.identity import ClaimsPrincipal
+
 
 # Error message constants
 _NOT_AUTHENTICATED_MSG = "Not authenticated"
@@ -38,7 +39,9 @@ def get_current_user(request: Request) -> ClaimsPrincipal:
     Example:
         ```python
         @app.get("/profile")
-        async def get_profile(user: ClaimsPrincipal = Depends(get_current_user)):
+        async def get_profile(
+            user: ClaimsPrincipal = Depends(get_current_user),
+        ):
             return {"user_id": user.identity.name}
         ```
     """
@@ -112,7 +115,7 @@ def get_token(request: Request) -> str:
     return request.state.token
 
 
-def get_claim_value(claim_type: str) -> Callable[..., Optional[str]]:
+def get_claim_value(claim_type: str) -> Callable[..., str | None]:
     """
     Factory function to create a dependency that extracts a specific claim value.
 
@@ -127,6 +130,7 @@ def get_claim_value(claim_type: str) -> Callable[..., Optional[str]]:
         # Create a dependency for the 'sub' claim
         get_user_id = get_claim_value("sub")
 
+
         @app.get("/user-data")
         async def get_user_data(user_id: str = Depends(get_user_id)):
             return {"user_id": user_id}
@@ -135,7 +139,7 @@ def get_claim_value(claim_type: str) -> Callable[..., Optional[str]]:
 
     def _get_claim(
         user: ClaimsPrincipal = Depends(get_current_user),
-    ) -> Optional[str]:
+    ) -> str | None:
         if user.identity is None:
             return None
         claim = user.identity.find_first(claim_type)
@@ -146,7 +150,7 @@ def get_claim_value(claim_type: str) -> Callable[..., Optional[str]]:
     return _get_claim
 
 
-def get_claim_values(claim_type: str) -> Callable[..., List[str]]:
+def get_claim_values(claim_type: str) -> Callable[..., list[str]]:
     """
     Factory function to create a dependency that extracts all values for a specific claim type.
 
@@ -163,6 +167,7 @@ def get_claim_values(claim_type: str) -> Callable[..., List[str]]:
         # Create a dependency for the 'role' claim
         get_user_roles = get_claim_values("role")
 
+
         @app.get("/roles")
         async def get_roles(roles: List[str] = Depends(get_user_roles)):
             return {"roles": roles}
@@ -171,7 +176,7 @@ def get_claim_values(claim_type: str) -> Callable[..., List[str]]:
 
     def _get_claims(
         user: ClaimsPrincipal = Depends(get_current_user),
-    ) -> List[str]:
+    ) -> list[str]:
         if user.identity is None:
             return []
         claims = user.identity.find_all(claim_type)
@@ -181,7 +186,8 @@ def get_claim_values(claim_type: str) -> Callable[..., List[str]]:
 
 
 def require_claim(
-    claim_type: str, claim_value: Optional[str] = None
+    claim_type: str,
+    claim_value: str | None = None,
 ) -> Callable[..., None]:
     """
     Factory function to create a dependency that requires a specific claim.
@@ -203,11 +209,9 @@ def require_claim(
         # Require that the user has a 'role' claim with value 'admin'
         require_admin = require_claim("role", "admin")
 
+
         @app.delete("/users/{user_id}")
-        async def delete_user(
-            user_id: str,
-            _: None = Depends(require_admin)
-        ):
+        async def delete_user(user_id: str, _: None = Depends(require_admin)):
             # Only users with admin role can access this
             return {"message": f"User {user_id} deleted"}
         ```
@@ -222,11 +226,10 @@ def require_claim(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Required claim '{claim_type}' not found",
                 )
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Required claim '{claim_type}' with value '{claim_value}' not found",
-                )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Required claim '{claim_type}' with value '{claim_value}' not found",
+            )
 
     return _check_claim
 
@@ -247,6 +250,7 @@ def require_scope(scope: str) -> Callable[..., None]:
     Example:
         ```python
         require_read_scope = require_scope("api.read")
+
 
         @app.get("/data")
         async def get_data(_: None = Depends(require_read_scope)):

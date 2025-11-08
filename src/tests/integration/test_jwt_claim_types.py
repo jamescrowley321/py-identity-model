@@ -32,10 +32,10 @@ def test_jwt_types():
     assert JwtTypes.as_media_type("at+jwt") == "application/at+jwt"
 
     # Test error handling
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="value cannot be None or whitespace"):
         JwtTypes.as_media_type("")
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="value cannot be None or whitespace"):
         JwtTypes.as_media_type(None)  # type: ignore
 
 

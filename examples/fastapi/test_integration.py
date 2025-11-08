@@ -7,7 +7,6 @@ an identity server and properly validates tokens.
 
 import os
 import time
-from typing import Optional
 
 import requests
 
@@ -18,9 +17,11 @@ from py_identity_model import (
     request_client_credentials_token,
 )
 
+
 # Configuration from environment
 DISCOVERY_URL = os.getenv(
-    "DISCOVERY_URL", "https://localhost:5001/.well-known/openid-configuration"
+    "DISCOVERY_URL",
+    "https://localhost:5001/.well-known/openid-configuration",
 )
 FASTAPI_URL = os.getenv("FASTAPI_URL", "http://localhost:8000")
 CLIENT_ID = os.getenv("CLIENT_ID", "py-identity-model-client")
@@ -35,7 +36,10 @@ def _get_ssl_verify() -> bool | str:
 
 
 def _make_request(
-    method: str, endpoint: str, headers: dict | None = None, **kwargs
+    method: str,
+    endpoint: str,
+    headers: dict | None = None,
+    **kwargs,
 ) -> requests.Response:
     """Helper to make HTTP requests to the FastAPI service."""
     url = f"{FASTAPI_URL}{endpoint}"
@@ -47,7 +51,7 @@ def _create_auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def get_access_token() -> Optional[str]:
+def get_access_token() -> str | None:
     """Get an access token from the identity server using client credentials."""
     print(f"🔍 Getting discovery document from {DISCOVERY_URL}")
 
@@ -87,9 +91,8 @@ def get_access_token() -> Optional[str]:
         if access_token:
             print("✅ Successfully obtained access token")
             return access_token
-        else:
-            print("❌ No access token in response")
-            return None
+        print("❌ No access token in response")
+        return None
 
     except Exception as e:
         print(f"❌ Error getting access token: {e}")
@@ -232,7 +235,10 @@ def test_scope_based_authorization(token: str):
 
     # Test endpoint requiring write scope (should fail with default token)
     response = _make_request(
-        "POST", "/api/data", headers=headers, params={"name": "Test Item"}
+        "POST",
+        "/api/data",
+        headers=headers,
+        params={"name": "Test Item"},
     )
     # This should fail because the token doesn't have write scope
     assert response.status_code == 403, "Expected 403 for missing write scope"
@@ -251,7 +257,7 @@ def test_admin_endpoints_without_role(token: str):
         f"Expected 403 for missing admin role, got {response.status_code}: {response.text}"
     )
     print(
-        "✅ Admin delete endpoint correctly rejects token without admin role"
+        "✅ Admin delete endpoint correctly rejects token without admin role",
     )
 
     response = _make_request("GET", "/api/admin/stats", headers=headers)
@@ -270,7 +276,7 @@ def run_tests():
     print(f"  DISCOVERY_URL: {DISCOVERY_URL}")
     print(f"  FASTAPI_URL: {FASTAPI_URL}")
     print(
-        f"  REQUESTS_CA_BUNDLE: {os.getenv('REQUESTS_CA_BUNDLE', 'Not set')}"
+        f"  REQUESTS_CA_BUNDLE: {os.getenv('REQUESTS_CA_BUNDLE', 'Not set')}",
     )
 
     # Check if CA bundle exists
@@ -331,5 +337,7 @@ def run_tests():
 
 
 if __name__ == "__main__":
+    import sys
+
     exit_code = run_tests()
-    exit(exit_code)
+    sys.exit(exit_code)
