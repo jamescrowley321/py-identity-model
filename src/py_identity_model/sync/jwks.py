@@ -14,9 +14,20 @@ from ..core.models import (
     JwksResponse,
 )
 from ..core.parsers import jwks_from_dict
-from ..http_client import get_http_client
+from ..http_client import get_http_client, retry_on_rate_limit
 from ..logging_config import logger
 from ..logging_utils import redact_url
+
+
+@retry_on_rate_limit()
+def _fetch_jwks(client: httpx.Client, url: str) -> httpx.Response:
+    """
+    Fetch JWKS with retry logic.
+
+    Automatically retries on 429 (rate limiting) and 5xx errors with
+    exponential backoff. Configuration is read from environment variables.
+    """
+    return client.get(url)
 
 
 def get_jwks(jwks_request: JwksRequest) -> JwksResponse:
@@ -32,7 +43,7 @@ def get_jwks(jwks_request: JwksRequest) -> JwksResponse:
     logger.info(f"Fetching JWKS from {redact_url(jwks_request.address)}")
     try:
         client = get_http_client()
-        response = client.get(jwks_request.address)
+        response = _fetch_jwks(client, jwks_request.address)
         logger.debug(f"JWKS request status code: {response.status_code}")
 
         if response.is_success:

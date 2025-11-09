@@ -14,9 +14,22 @@ from ..core.validators import (
     validate_required_parameters,
 )
 from ..exceptions import ConfigurationException, DiscoveryException
-from ..http_client import get_http_client
+from ..http_client import get_http_client, retry_on_rate_limit
 from ..logging_config import logger
 from ..logging_utils import redact_url
+
+
+@retry_on_rate_limit()
+def _fetch_discovery_document(
+    client: httpx.Client, url: str
+) -> httpx.Response:
+    """
+    Fetch discovery document with retry logic.
+
+    Automatically retries on 429 (rate limiting) and 5xx errors with
+    exponential backoff. Configuration is read from environment variables.
+    """
+    return client.get(url)
 
 
 def get_discovery_document(
@@ -36,7 +49,7 @@ def get_discovery_document(
     )
     try:
         client = get_http_client()
-        response = client.get(disco_doc_req.address)
+        response = _fetch_discovery_document(client, disco_doc_req.address)
         logger.debug(f"Discovery request status code: {response.status_code}")
 
         if not response.is_success:
