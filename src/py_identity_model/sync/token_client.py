@@ -12,6 +12,7 @@ from ..core.models import (
 )
 from ..logging_config import logger
 from ..logging_utils import redact_url
+from ..ssl_config import get_ssl_verify
 
 
 def request_client_credentials_token(
@@ -42,6 +43,7 @@ def request_client_credentials_token(
             headers=headers,
             auth=(request.client_id, request.client_secret),
             timeout=30.0,
+            verify=get_ssl_verify(),
         )
 
         logger.debug(f"Token request status code: {response.status_code}")

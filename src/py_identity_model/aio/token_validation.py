@@ -34,7 +34,11 @@ from .jwks import get_jwks
 async def _get_disco_response(
     disco_doc_address: str,
 ) -> DiscoveryDocumentResponse:
-    """Cached async discovery document fetching."""
+    """
+    Cached async discovery document fetching.
+
+    Cache can be cleared using _get_disco_response.cache_clear() if needed.
+    """
     return await get_discovery_document(
         DiscoveryDocumentRequest(address=disco_doc_address),
     )
@@ -42,7 +46,11 @@ async def _get_disco_response(
 
 @alru_cache
 async def _get_jwks_response(jwks_uri: str) -> JwksResponse:
-    """Cached async JWKS fetching."""
+    """
+    Cached async JWKS fetching.
+
+    Cache can be cleared using _get_jwks_response.cache_clear() if needed.
+    """
     return await get_jwks(JwksRequest(address=jwks_uri))
 
 

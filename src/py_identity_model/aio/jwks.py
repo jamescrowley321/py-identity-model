@@ -16,6 +16,7 @@ from ..core.models import (
 from ..core.parsers import jwks_from_dict
 from ..logging_config import logger
 from ..logging_utils import redact_url
+from ..ssl_config import get_ssl_verify
 
 
 async def get_jwks(jwks_request: JwksRequest) -> JwksResponse:
@@ -30,7 +31,9 @@ async def get_jwks(jwks_request: JwksRequest) -> JwksResponse:
     """
     logger.info(f"Fetching JWKS from {redact_url(jwks_request.address)}")
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(
+            timeout=30.0, verify=get_ssl_verify()
+        ) as client:
             response = await client.get(jwks_request.address)
         logger.debug(f"JWKS request status code: {response.status_code}")
 

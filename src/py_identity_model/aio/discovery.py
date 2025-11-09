@@ -16,6 +16,7 @@ from ..core.validators import (
 from ..exceptions import ConfigurationException, DiscoveryException
 from ..logging_config import logger
 from ..logging_utils import redact_url
+from ..ssl_config import get_ssl_verify
 
 
 async def get_discovery_document(
@@ -34,7 +35,9 @@ async def get_discovery_document(
         f"Fetching discovery document from {redact_url(disco_doc_req.address)}",
     )
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(
+            timeout=30.0, verify=get_ssl_verify()
+        ) as client:
             response = await client.get(disco_doc_req.address)
         logger.debug(f"Discovery request status code: {response.status_code}")
 
