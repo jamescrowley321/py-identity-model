@@ -20,7 +20,7 @@ from .exceptions import (
 )
 
 # Identity models (shared)
-from .identity import Claim, ClaimsIdentity, ClaimsPrincipal
+from .identity import Claim, ClaimsIdentity, ClaimsPrincipal, to_principal
 from .sync import (
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
@@ -74,5 +74,6 @@ __all__ = [
     "get_jwks",
     "jwks_from_dict",
     "request_client_credentials_token",
+    "to_principal",
     "validate_token",
 ]
