@@ -507,6 +507,60 @@ class MyClass:
 my_obj = await MyClass.create()
 ```
 
+### SSL Certificate Configuration
+
+**Note:** py-identity-model v1.2.0+ uses `httpx` instead of `requests` for HTTP operations. This change affects SSL certificate configuration.
+
+#### Environment Variables
+
+The library supports the following SSL certificate environment variables (in priority order):
+
+1. **`SSL_CERT_FILE`** - httpx native variable (highest priority)
+2. **`CURL_CA_BUNDLE`** - also respected by httpx
+3. **`REQUESTS_CA_BUNDLE`** - legacy requests library variable (for backward compatibility)
+
+**Backward Compatibility:** If you're migrating from an older version that used `requests`, your existing `REQUESTS_CA_BUNDLE` environment variable will continue to work. The library automatically sets `SSL_CERT_FILE` to the value of `REQUESTS_CA_BUNDLE` if `SSL_CERT_FILE` is not already set.
+
+#### Example
+
+```bash
+# Option 1: Use SSL_CERT_FILE (recommended for new deployments)
+export SSL_CERT_FILE=/path/to/ca-bundle.crt
+
+# Option 2: Use REQUESTS_CA_BUNDLE (backward compatibility)
+export REQUESTS_CA_BUNDLE=/path/to/ca-bundle.crt
+
+# Option 3: Use CURL_CA_BUNDLE
+export CURL_CA_BUNDLE=/path/to/ca-bundle.crt
+```
+
+```python
+# The library will automatically use the appropriate certificate
+from py_identity_model.aio import get_discovery_document
+from py_identity_model import DiscoveryDocumentRequest
+
+async def main():
+    request = DiscoveryDocumentRequest(address="https://your-identity-server.com/.well-known/openid-configuration")
+    response = await get_discovery_document(request)
+    # SSL certificates will be used automatically
+```
+
+#### Docker Configuration
+
+When running in Docker, ensure SSL environment variables are passed to the container:
+
+```yaml
+# docker-compose.yml
+services:
+  app:
+    environment:
+      - SSL_CERT_FILE=/path/to/ca-cert.crt
+      # OR for backward compatibility:
+      - REQUESTS_CA_BUNDLE=/path/to/ca-cert.crt
+    volumes:
+      - ./certs:/path/to:ro
+```
+
 ## Testing
 
 ### Testing Async Code

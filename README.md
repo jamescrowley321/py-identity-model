@@ -18,6 +18,24 @@ uv add py-identity-model
 
 **Requirements:** Python 3.12 or higher
 
+### SSL Certificate Configuration
+
+If you're working with custom SSL certificates (e.g., in corporate environments or with self-signed certificates), the library supports the following environment variables:
+
+- **`SSL_CERT_FILE`** - Recommended for new setups (httpx native)
+- **`CURL_CA_BUNDLE`** - Alternative option (also supported by httpx)
+- **`REQUESTS_CA_BUNDLE`** - Legacy support for backward compatibility
+
+```bash
+export SSL_CERT_FILE=/path/to/ca-bundle.crt
+# OR
+export REQUESTS_CA_BUNDLE=/path/to/ca-bundle.crt
+```
+
+**Note:** For backward compatibility, if you're upgrading from an older version that used `requests`, your existing `REQUESTS_CA_BUNDLE` environment variable will continue to work automatically.
+
+See the [Migration Guide](docs/migration-guide.md#ssl-certificate-configuration) for more details.
+
 ## Compliance Status
 
 * ✅ **OpenID Connect Discovery 1.0** - Fully compliant with specification requirements

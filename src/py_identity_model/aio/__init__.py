@@ -19,6 +19,8 @@ Example:
     ```
 """
 
+# Initialize SSL compatibility for backward compatibility with requests library
+from .. import ssl_config  # noqa: F401
 from .discovery import (
     DiscoveryDocumentRequest,
     DiscoveryDocumentResponse,

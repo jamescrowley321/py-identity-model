@@ -3,6 +3,9 @@
 Provides both synchronous and asynchronous APIs for OpenID Connect operations.
 """
 
+# Initialize SSL compatibility for backward compatibility with requests library
+from . import ssl_config  # noqa: F401
+
 # Backward compatible sync exports (default)
 from .exceptions import (
     ConfigurationException,
