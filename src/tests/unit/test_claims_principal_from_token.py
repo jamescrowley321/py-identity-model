@@ -1,5 +1,8 @@
-from py_identity_model.identity import ClaimsIdentity, ClaimsPrincipal
-from py_identity_model.token_validation import to_principal
+from py_identity_model.identity import (
+    ClaimsIdentity,
+    ClaimsPrincipal,
+    to_principal,
+)
 
 
 def test_create_claims_principal_from_simple_token():

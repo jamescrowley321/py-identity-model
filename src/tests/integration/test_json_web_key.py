@@ -1,7 +1,7 @@
 import json
 
+import httpx
 import pytest
-import requests
 
 from py_identity_model import JsonWebKey
 from py_identity_model.exceptions import ConfigurationException
@@ -12,7 +12,7 @@ from .test_utils import get_config
 
 def fetch_jwks(jwks_address: str) -> list[dict]:
     """Fetch JWKS from the provided URL"""
-    response = requests.get(jwks_address)
+    response = httpx.get(jwks_address)
     response.raise_for_status()
     return response.json()["keys"]
 

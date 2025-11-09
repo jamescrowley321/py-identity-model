@@ -37,6 +37,41 @@ For more information on token validation options, refer to the official [PyJWT D
 
 **Note**: Does not currently support opaque tokens.
 
+## Async/Await Support ⚡
+
+**NEW in v1.2.0**: Full async/await support for all client operations!
+
+py-identity-model now provides **both synchronous and asynchronous APIs**:
+
+- **Synchronous API** (default import): Traditional blocking I/O - perfect for scripts, CLIs, Flask, Django
+- **Asynchronous API** (`from py_identity_model.aio import ...`): Non-blocking I/O - perfect for FastAPI, Starlette, high-concurrency apps
+
+```python
+# Sync (default) - works as before
+from py_identity_model import get_discovery_document
+
+response = get_discovery_document(request)
+
+# Async (new!) - for async frameworks
+from py_identity_model.aio import get_discovery_document
+
+response = await get_discovery_document(request)
+```
+
+**When to use async:**
+- ✅ Async web frameworks (FastAPI, Starlette, aiohttp)
+- ✅ High-concurrency applications
+- ✅ Concurrent I/O operations
+- ✅ Applications already using asyncio
+
+**When to use sync:**
+- ✅ Scripts and CLIs
+- ✅ Traditional web frameworks (Flask, Django)
+- ✅ Simple applications
+- ✅ Blocking I/O is acceptable
+
+See [examples/async_examples.py](examples/async_examples.py) for complete async examples!
+
 This library inspired by [Duende.IdentityModel](https://github.com/DuendeSoftware/foss/tree/main/identity-model)
 
 From Duende.IdentityModel
@@ -233,6 +268,8 @@ else:
 * ✅ **Protocol Constants** - OIDC and OAuth 2.0 constants
 * ✅ **Comprehensive Type Hints** - Full type safety throughout
 * ✅ **Error Handling** - Structured exceptions and validation
+* ✅ **Async/Await Support** - Full async API via `py_identity_model.aio` module (v1.2.0)
+* ✅ **Modular Architecture** - Clean separation between HTTP layer and business logic (v1.2.0)
 
 ### 🚧 Upcoming Features
 * Token Introspection Endpoint (RFC 7662)
@@ -241,7 +278,6 @@ else:
 * Dynamic Client Registration (RFC 7591)
 * Device Authorization Endpoint
 * Additional grant types (authorization code, refresh token, device flow)
-* Async support
 * Opaque tokens support
 
 For detailed development plans, see the [Project Roadmap](docs/py_identity_model_roadmap.md).

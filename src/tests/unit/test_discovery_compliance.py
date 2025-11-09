@@ -1,14 +1,21 @@
-from unittest.mock import Mock, patch
-
+import httpx
 import pytest
-import requests
+import respx
 
+from py_identity_model.core.validators import (
+    validate_https_url as _validate_https_url,
+)
+from py_identity_model.core.validators import (
+    validate_issuer as _validate_issuer,
+)
+from py_identity_model.core.validators import (
+    validate_parameter_values as _validate_parameter_values,
+)
+from py_identity_model.core.validators import (
+    validate_required_parameters as _validate_required_parameters,
+)
 from py_identity_model.discovery import (
     DiscoveryDocumentRequest,
-    _validate_https_url,
-    _validate_issuer,
-    _validate_parameter_values,
-    _validate_required_parameters,
     get_discovery_document,
 )
 from py_identity_model.exceptions import (
@@ -184,110 +191,113 @@ class TestDiscoveryValidationFunctions:
 class TestDiscoveryComplianceIntegration:
     """Test the integrated compliance validation in get_discovery_document"""
 
-    @patch("py_identity_model.discovery.requests.get")
-    def test_discovery_validates_required_parameters(self, mock_get):
+    @respx.mock
+    def test_discovery_validates_required_parameters(self):
         """Test that discovery document validation catches missing required parameters"""
-        mock_response = Mock()
-        mock_response.ok = True
-        mock_response.headers = {"Content-Type": "application/json"}
-        mock_response.json.return_value = {
-            "issuer": "https://example.com",
-            "jwks_uri": "https://example.com/jwks",
-            # Missing required parameters
-        }
-        mock_get.return_value = mock_response
-
-        request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration",
+        url = "https://example.com/.well-known/openid_configuration"
+        respx.get(url).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "issuer": "https://example.com",
+                    "jwks_uri": "https://example.com/jwks",
+                    # Missing required parameters
+                },
+                headers={"Content-Type": "application/json"},
+            )
         )
+
+        request = DiscoveryDocumentRequest(address=url)
         result = get_discovery_document(request)
 
         assert result.is_successful is False
         assert result.error is not None
         assert "Missing required parameters" in result.error
 
-    @patch("py_identity_model.discovery.requests.get")
-    def test_discovery_validates_issuer_format(self, mock_get):
+    @respx.mock
+    def test_discovery_validates_issuer_format(self):
         """Test that discovery document validation catches invalid issuer format"""
-        mock_response = Mock()
-        mock_response.ok = True
-        mock_response.headers = {"Content-Type": "application/json"}
-        mock_response.json.return_value = {
-            "issuer": "http://example.com?query=param",  # Invalid issuer
-            "jwks_uri": "https://example.com/jwks",
-            "response_types_supported": ["code"],
-            "subject_types_supported": ["public"],
-            "id_token_signing_alg_values_supported": ["RS256"],
-        }
-        mock_get.return_value = mock_response
-
-        request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration",
+        url = "https://example.com/.well-known/openid_configuration"
+        respx.get(url).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "issuer": "http://example.com?query=param",  # Invalid issuer
+                    "jwks_uri": "https://example.com/jwks",
+                    "response_types_supported": ["code"],
+                    "subject_types_supported": ["public"],
+                    "id_token_signing_alg_values_supported": ["RS256"],
+                },
+                headers={"Content-Type": "application/json"},
+            )
         )
+
+        request = DiscoveryDocumentRequest(address=url)
         result = get_discovery_document(request)
 
         assert result.is_successful is False
         assert result.error is not None
         assert "Invalid issuer" in result.error
 
-    @patch("py_identity_model.discovery.requests.get")
-    def test_discovery_validates_parameter_values(self, mock_get):
+    @respx.mock
+    def test_discovery_validates_parameter_values(self):
         """Test that discovery document validation catches invalid parameter values"""
-        mock_response = Mock()
-        mock_response.ok = True
-        mock_response.headers = {"Content-Type": "application/json"}
-        mock_response.json.return_value = {
-            "issuer": "https://example.com",
-            "jwks_uri": "https://example.com/jwks",
-            "response_types_supported": ["code"],
-            "subject_types_supported": ["invalid_subject_type"],  # Invalid
-            "id_token_signing_alg_values_supported": ["RS256"],
-        }
-        mock_get.return_value = mock_response
-
-        request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration",
+        url = "https://example.com/.well-known/openid_configuration"
+        respx.get(url).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "issuer": "https://example.com",
+                    "jwks_uri": "https://example.com/jwks",
+                    "response_types_supported": ["code"],
+                    "subject_types_supported": [
+                        "invalid_subject_type"
+                    ],  # Invalid
+                    "id_token_signing_alg_values_supported": ["RS256"],
+                },
+                headers={"Content-Type": "application/json"},
+            )
         )
+
+        request = DiscoveryDocumentRequest(address=url)
         result = get_discovery_document(request)
 
         assert result.is_successful is False
         assert result.error is not None
         assert "Invalid parameter values" in result.error
 
-    @patch("py_identity_model.discovery.requests.get")
-    def test_discovery_validates_endpoint_urls(self, mock_get):
+    @respx.mock
+    def test_discovery_validates_endpoint_urls(self):
         """Test that discovery document validation catches invalid endpoint URLs"""
-        mock_response = Mock()
-        mock_response.ok = True
-        mock_response.headers = {"Content-Type": "application/json"}
-        mock_response.json.return_value = {
-            "issuer": "https://example.com",
-            "jwks_uri": "not-a-valid-url",  # Invalid URL
-            "response_types_supported": ["code"],
-            "subject_types_supported": ["public"],
-            "id_token_signing_alg_values_supported": ["RS256"],
-        }
-        mock_get.return_value = mock_response
-
-        request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration",
+        url = "https://example.com/.well-known/openid_configuration"
+        respx.get(url).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "issuer": "https://example.com",
+                    "jwks_uri": "not-a-valid-url",  # Invalid URL
+                    "response_types_supported": ["code"],
+                    "subject_types_supported": ["public"],
+                    "id_token_signing_alg_values_supported": ["RS256"],
+                },
+                headers={"Content-Type": "application/json"},
+            )
         )
+
+        request = DiscoveryDocumentRequest(address=url)
         result = get_discovery_document(request)
 
         assert result.is_successful is False
         assert result.error is not None
         assert "Invalid endpoint URL" in result.error
 
-    @patch("py_identity_model.discovery.requests.get")
-    def test_discovery_handles_network_errors(self, mock_get):
+    @respx.mock
+    def test_discovery_handles_network_errors(self):
         """Test that discovery document handles network errors properly"""
-        mock_get.side_effect = requests.exceptions.ConnectionError(
-            "Network error",
-        )
+        url = "https://example.com/.well-known/openid_configuration"
+        respx.get(url).mock(side_effect=httpx.ConnectError("Network error"))
 
-        request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration",
-        )
+        request = DiscoveryDocumentRequest(address=url)
         result = get_discovery_document(request)
 
         assert result.is_successful is False
@@ -296,61 +306,67 @@ class TestDiscoveryComplianceIntegration:
             "Network error during discovery document request" in result.error
         )
 
-    @patch("py_identity_model.discovery.requests.get")
-    def test_discovery_handles_invalid_json(self, mock_get):
+    @respx.mock
+    def test_discovery_handles_invalid_json(self):
         """Test that discovery document handles invalid JSON responses"""
-        mock_response = Mock()
-        mock_response.ok = True
-        mock_response.headers = {"Content-Type": "application/json"}
-        mock_response.json.side_effect = ValueError("Invalid JSON")
-        mock_get.return_value = mock_response
-
-        request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration",
+        url = "https://example.com/.well-known/openid_configuration"
+        respx.get(url).mock(
+            return_value=httpx.Response(
+                200,
+                content=b"not valid json{",
+                headers={"Content-Type": "application/json"},
+            )
         )
+
+        request = DiscoveryDocumentRequest(address=url)
         result = get_discovery_document(request)
 
         assert result.is_successful is False
         assert result.error is not None
         assert "Invalid JSON response" in result.error
 
-    @patch("py_identity_model.discovery.requests.get")
-    def test_discovery_validates_content_type(self, mock_get):
+    @respx.mock
+    def test_discovery_validates_content_type(self):
         """Test that discovery document validates content type"""
-        mock_response = Mock()
-        mock_response.ok = True
-        mock_response.headers = {"Content-Type": "text/html"}
-        mock_get.return_value = mock_response
-
-        request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration",
+        url = "https://example.com/.well-known/openid_configuration"
+        respx.get(url).mock(
+            return_value=httpx.Response(
+                200,
+                headers={"Content-Type": "text/html"},
+            )
         )
+
+        request = DiscoveryDocumentRequest(address=url)
         result = get_discovery_document(request)
 
         assert result.is_successful is False
         assert result.error is not None
         assert "Invalid content type" in result.error
 
-    @patch("py_identity_model.discovery.requests.get")
-    def test_discovery_success_with_valid_data(self, mock_get):
+    @respx.mock
+    def test_discovery_success_with_valid_data(self):
         """Test that discovery document succeeds with valid, compliant data"""
-        mock_response = Mock()
-        mock_response.ok = True
-        mock_response.headers = {"Content-Type": "application/json"}
-        mock_response.json.return_value = {
-            "issuer": "https://example.com",
-            "jwks_uri": "https://example.com/jwks",
-            "authorization_endpoint": "https://example.com/auth",
-            "token_endpoint": "https://example.com/token",
-            "response_types_supported": ["code", "id_token"],
-            "subject_types_supported": ["public"],
-            "id_token_signing_alg_values_supported": ["RS256", "HS256"],
-        }
-        mock_get.return_value = mock_response
-
-        request = DiscoveryDocumentRequest(
-            address="https://example.com/.well-known/openid_configuration",
+        url = "https://example.com/.well-known/openid_configuration"
+        respx.get(url).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "issuer": "https://example.com",
+                    "jwks_uri": "https://example.com/jwks",
+                    "authorization_endpoint": "https://example.com/auth",
+                    "token_endpoint": "https://example.com/token",
+                    "response_types_supported": ["code", "id_token"],
+                    "subject_types_supported": ["public"],
+                    "id_token_signing_alg_values_supported": [
+                        "RS256",
+                        "HS256",
+                    ],
+                },
+                headers={"Content-Type": "application/json"},
+            )
         )
+
+        request = DiscoveryDocumentRequest(address=url)
         result = get_discovery_document(request)
 
         assert result.is_successful is True

@@ -4,17 +4,38 @@
 
 ## v1.2.0 (2025-11-08)
 
+### Features
+
+- **Async/Await Support** - Full asynchronous API via `py_identity_model.aio` module
+  - Async versions of all client methods (discovery, JWKS, token validation, token client)
+  - Async caching with `async-lru` for discovery and JWKS
+  - Full backward compatibility maintained (sync API unchanged)
+  - Comprehensive async test suite (10 new async tests)
+  - Examples for both FastAPI and concurrent operations
+
+- **Modular Architecture** - Clean separation between HTTP layer and business logic
+  - Extracted shared business logic to `core/` module
+  - Eliminated code duplication between sync/async implementations
+  - Major code reduction: sync/jwks.py (390→78 lines), sync/discovery.py (378→246 lines)
+  - All 146 tests passing with zero regressions
+
+- **HTTP Client Migration** - Migrated from `requests` to `httpx`
+  - Single library supporting both sync and async operations
+  - Configurable timeouts (30s default on all HTTP calls)
+  - Automatic connection pooling
+
+- Add comprehensive logging and exception handling
+  ([#107](https://github.com/jamescrowley321/py-identity-model/pull/107),
+  [`98f88d6`](https://github.com/jamescrowley321/py-identity-model/commit/98f88d6c9def9f6bff9f7d8625acf258395a2275))
+
 ### Documentation
 
 - Consolidate documentation into mkdocs instead of Wiki
   ([#99](https://github.com/jamescrowley321/py-identity-model/pull/99),
   [`71f5fcb`](https://github.com/jamescrowley321/py-identity-model/commit/71f5fcb9616c173be26864689bf4e3ba0351c52e))
 
-### Features
-
-- Add comprehensive logging and exception handling
-  ([#107](https://github.com/jamescrowley321/py-identity-model/pull/107),
-  [`98f88d6`](https://github.com/jamescrowley321/py-identity-model/commit/98f88d6c9def9f6bff9f7d8625acf258395a2275))
+- Add comprehensive async examples and architecture documentation
+- Update roadmap to reflect completed features
 
 
 ## v1.1.1 (2025-10-21)

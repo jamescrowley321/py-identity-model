@@ -16,7 +16,7 @@ from py_identity_model.exceptions import (
     TokenExpiredException,
     TokenValidationException,
 )
-from py_identity_model.token_validation import (
+from py_identity_model.sync.token_validation import (
     _get_disco_response,
     _get_jwks_response,
 )

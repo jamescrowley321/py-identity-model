@@ -16,7 +16,9 @@
 - ✅ **Protocol Constants**: OIDC and OAuth 2.0 constants (`OidcConstants`, `JwtClaimTypes`)
 - ✅ **Exception Handling**: `PyIdentityModelException`
 - ✅ **Comprehensive Type Hints**: Full type safety throughout the codebase
-- ✅ **Testing Infrastructure**: Test suite already implemented
+- ✅ **Async/Await Support**: Full async API via `py_identity_model.aio` module (v1.2.0)
+- ✅ **HTTP Client**: httpx-based client supporting both sync and async operations
+- ✅ **Testing Infrastructure**: 146+ tests including async test suite
 - ✅ **Production Usage**: Used in production Flask/FastAPI middleware for years
 
 ---
@@ -180,16 +182,28 @@
 
 ## Phase 6: Integration & Polish
 ### Framework Integration & Utilities
-- [ ] **HTTP Client Abstraction**
-  - Support for httpx, requests, aiohttp
-  - Configurable timeouts and retries
-  - Connection pooling optimization
-  - Custom headers and authentication
+- [x] **HTTP Client Abstraction** - ✅ **COMPLETED v1.2.0**
+  - ✅ Migrated to httpx for both sync and async (replaced requests)
+  - ✅ Configurable timeouts (30s default on all HTTP calls)
+  - ✅ Connection pooling via httpx (automatic)
+  - ✅ Custom headers support via httpx Client
+  - 📋 **Future**: Expose connection pool configuration options
 
-- [ ] **Async Support**
-  - Async versions of all client methods
-  - Async-compatible response models
-  - Performance optimization for async workflows
+- [x] **Async Support** - ✅ **COMPLETED v1.2.0**
+  - ✅ Async versions of all client methods (`py_identity_model.aio` module)
+  - ✅ Async-compatible response models (shared dataclasses)
+  - ✅ Performance optimization for async workflows with httpx.AsyncClient
+  - ✅ Async caching with `async-lru` for discovery and JWKS
+  - ✅ Full backward compatibility maintained (sync API unchanged)
+  - ✅ Comprehensive async test suite (10 new async tests)
+  - ✅ Examples for both FastAPI and concurrent operations
+
+- [x] **Modular Architecture** - ✅ **COMPLETED v1.2.0**
+  - ✅ Extracted shared business logic to `core/` module
+  - ✅ Eliminated code duplication between sync/async implementations
+  - ✅ Clean separation: HTTP layer (sync/aio) vs business logic (core)
+  - ✅ All 146 tests passing with no regressions
+  - ✅ Reduced codebase size by eliminating duplication (sync/jwks.py: 390→78 lines)
 
 - [ ] **Integration Helpers**
   - Flask integration utilities
@@ -208,6 +222,35 @@
 - ✅ Framework integration examples
 - ✅ Production-ready v1.0.0 release
 - ✅ Comprehensive documentation
+
+---
+
+## Phase 7: Code Quality & Refactoring
+### Eliminate Code Duplication - ✅ **COMPLETED v1.2.0**
+- [x] **Extract Common Abstractions** - ✅ **COMPLETED**
+  - ✅ Create `core/` module for shared business logic
+  - ✅ Move shared dataclasses to `core/models.py` (444 lines)
+  - ✅ Extract validation functions to `core/validators.py` (138 lines)
+  - ✅ Extract parsing logic to `core/parsers.py` (103 lines)
+  - ✅ Create `core/jwt_helpers.py` for JWT operations (98 lines)
+
+- [x] **Refactor HTTP Layers** - ✅ **COMPLETED**
+  - ✅ Simplify `sync/` modules to focus on HTTP operations only
+  - ✅ Simplify `aio/` modules to mirror sync structure
+  - ✅ Ensure both call shared validators and parsers from `core/`
+  - ✅ Major code reduction: sync/jwks.py (390→78 lines), sync/discovery.py (378→246 lines)
+
+- [x] **Maintain Test Coverage** - ✅ **COMPLETED**
+  - ✅ All 146 tests passing (103 unit + 33 integration + 10 async)
+  - [ ] Add dedicated unit tests for new core modules (future work)
+  - ✅ Zero regressions in integration tests
+  - [ ] Target ≥90% coverage for unit tests (future work)
+
+### Deliverables
+- ✅ Reduced code duplication between sync/async implementations
+- ✅ Cleaner separation between HTTP layer and business logic
+- ✅ Improved maintainability and testability
+- [ ] Test coverage ≥90% (deferred to future release)
 
 ---
 
@@ -339,10 +382,15 @@
 ---
 
 ## Success Metrics
-- **Feature Parity**: 80%+ of Duende.IdentityModel features
-- **Code Quality**: 95%+ test coverage, full type hints
-- **Performance**: <50ms for typical operations
-- **Adoption**: 500+ PyPI downloads, active community
+- **Feature Parity**: 80%+ of Duende.IdentityModel features (currently ~30%)
+- **Code Quality**: ✅ Full type hints, 146+ tests passing, async support complete
+  - 📋 **Next**: ≥90% test coverage (Phase 7)
+- **Async/Await**: ✅ Complete (v1.2.0) - Both sync and async APIs available
+- **Performance**: <50ms for typical operations (with caching: <1ms)
+- **Adoption**: Active development, production usage in Flask/FastAPI middleware
+- **Standards Compliance**:
+  - ✅ 100% OpenID Connect Discovery 1.0 compliant
+  - ✅ 100% RFC 7517 (JWKS) compliant
 
 ## Technical Priorities
 1. **Correctness**: Strict adherence to OAuth/OIDC specifications

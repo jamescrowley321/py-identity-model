@@ -13,8 +13,9 @@ classifiers = [
 ]
 dependencies = [
     "PyJWT>=2.9.0,<3",
-    "requests>=2.32.3,<3",
+    "httpx>=0.28.1,<1",
     "cryptography>=45.0.2,<46",
+    "async-lru>=2.0.4,<3",
 ]
 
 [dependency-groups]
@@ -22,6 +23,9 @@ dev = [
     "pre-commit>=3.8.0,<4",
     "python-dotenv>=1.0.1,<2",
     "pytest>=8.3.2,<9",
+    "pytest-asyncio>=0.24.0",
+    "respx>=0.21.0",
+    "pytest-timeout>=2.3.1",
     "ruff>=0.11.12",
     "pyrefly>=0.34.0"
 ]
@@ -205,6 +209,9 @@ markers = [
     "unit: marks tests as unit tests",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
+# Async test configuration
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 # Filter warnings
 filterwarnings = [
     "error", # treat warnings as errors
