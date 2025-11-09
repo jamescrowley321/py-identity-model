@@ -10,9 +10,26 @@ from ..core.models import (
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
 )
-from ..http_client import get_http_client
+from ..http_client import get_http_client, retry_on_rate_limit
 from ..logging_config import logger
 from ..logging_utils import redact_url
+
+
+@retry_on_rate_limit()
+def _request_token(
+    client: httpx.Client,
+    url: str,
+    data: dict,
+    headers: dict,
+    auth: tuple[str, str],
+) -> httpx.Response:
+    """
+    Request token with retry logic.
+
+    Automatically retries on 429 (rate limiting) and 5xx errors with
+    exponential backoff. Configuration is read from environment variables.
+    """
+    return client.post(url, data=data, headers=headers, auth=auth)
 
 
 def request_client_credentials_token(
@@ -38,11 +55,12 @@ def request_client_credentials_token(
 
     try:
         client = get_http_client()
-        response = client.post(
+        response = _request_token(
+            client,
             request.address,
-            data=params,
-            headers=headers,
-            auth=(request.client_id, request.client_secret),
+            params,
+            headers,
+            (request.client_id, request.client_secret),
         )
 
         logger.debug(f"Token request status code: {response.status_code}")
