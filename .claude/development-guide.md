@@ -162,12 +162,17 @@ git checkout -b docs/documentation-update
 # Make code changes
 # ... edit code ...
 
-# REQUIRED: Run tests before committing
-make test-unit              # Fast unit tests
-make test-integration-ory   # Integration tests
+# During development: run unit tests for fast feedback
+make test-unit              # Fast unit tests (~15s)
 make lint                   # Pre-commit hooks
 
-# If all pass, commit
+# REQUIRED before pushing: run ALL tests
+make test                   # All unit and integration tests
+make test-integration-ory   # Ory integration tests
+make test-examples          # Docker example tests
+make lint                   # Pre-commit hooks
+
+# If ALL tests pass, commit and push
 git add .
 git commit -m "feat: add new feature"
 git push origin feat/your-feature-name
@@ -265,29 +270,50 @@ py-identity-model/
 
 ## Common Workflows
 
-### Before Every Commit
+### Before Every Push to Repository
 
-**CRITICAL: Always run before committing:**
+**CRITICAL: Always run ALL of these commands before pushing to the repository:**
 
 ```bash
-# 1. Run unit tests (required)
-make test-unit
+# 1. Run all tests (required)
+make test
 
-# 2. Run pre-commit hooks (required)
-make lint
-
-# 3. Run integration tests (required)
+# 2. Run integration tests (required)
 make test-integration-ory
 
-# 4. If you modified examples (optional)
+# 3. Run example tests (required)
 make test-examples
+
+# 4. Run pre-commit hooks (required)
+make lint
 ```
 
-**Required Checklist:**
-- ✅ Unit tests pass (`make test-unit`)
-- ✅ Pre-commit hooks pass (`make lint`)
+**Why Each Test Matters:**
+- `make test` - Runs all 176 unit and integration tests with coverage reporting
+- `make test-integration-ory` - Validates against real Ory identity provider
+- `make test-examples` - Ensures Docker-based examples work correctly
+- `make lint` - Runs ruff linting, formatting, and pyrefly type checking
+
+**Required Checklist Before Push:**
+- ✅ All tests pass (`make test`)
 - ✅ Integration tests pass (`make test-integration-ory`)
+- ✅ Example tests pass (`make test-examples`)
+- ✅ Pre-commit hooks pass (`make lint`)
 - ✅ All modified files are staged
+- ✅ Commit message follows Angular format
+
+**During Active Development (Fast Feedback):**
+```bash
+# Quick iteration during coding
+make test-unit  # ~15 seconds, 143 unit tests
+make lint       # Run before each commit
+```
+
+**Before Pushing:**
+```bash
+# Complete validation before push
+make test && make test-integration-ory && make test-examples && make lint
+```
 
 ### If Tests Fail
 
@@ -342,22 +368,25 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ## Never Skip
 
 **NEVER:**
-- Commit without running full test suite
+- Push without running `make test && make test-integration-ory && make test-examples && make lint`
+- Commit without running tests
 - Skip pre-commit hooks (`--no-verify`)
 - Merge PR with failing tests
 - Ignore SSL/certificate configuration
 - Assume code is thread-safe without verification
 - Commit directly to main
+- Push code with test failures
 
 **ALWAYS:**
 - Create feature branches
-- Run all required tests before commit
-- Ensure pre-commit passes
+- Run all required tests before pushing: `make test && make test-integration-ory && make test-examples`
+- Ensure pre-commit passes: `make lint`
 - Maintain backward compatibility
 - Document breaking changes
 - Test thread safety for shared state
 - Use `uv` for package management
 - Use `make` or `uv run` for commands
+- Verify all tests pass locally before pushing to remote
 
 ---
 
@@ -369,8 +398,11 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Setup
 make ci-setup
 
-# Development cycle (run before every commit)
-make test-unit && make test-integration-ory && make lint
+# Complete validation (run before every push)
+make test && make test-integration-ory && make test-examples && make lint
+
+# Fast development cycle (during coding)
+make test-unit && make lint
 
 # Add dependency
 uv add "package-name>=1.0.0"
