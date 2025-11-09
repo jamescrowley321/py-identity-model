@@ -14,9 +14,9 @@ from ..core.validators import (
     validate_required_parameters,
 )
 from ..exceptions import ConfigurationException, DiscoveryException
+from ..http_client import get_http_client
 from ..logging_config import logger
 from ..logging_utils import redact_url
-from ..ssl_config import get_ssl_verify
 
 
 def get_discovery_document(
@@ -35,9 +35,8 @@ def get_discovery_document(
         f"Fetching discovery document from {redact_url(disco_doc_req.address)}",
     )
     try:
-        response = httpx.get(
-            disco_doc_req.address, timeout=30.0, verify=get_ssl_verify()
-        )
+        client = get_http_client()
+        response = client.get(disco_doc_req.address)
         logger.debug(f"Discovery request status code: {response.status_code}")
 
         if not response.is_success:
