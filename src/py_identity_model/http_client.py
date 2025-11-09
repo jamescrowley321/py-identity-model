@@ -316,7 +316,7 @@ def get_async_http_client() -> httpx.AsyncClient:
             return _async_http_client
 
         # Create client with retry logic for thread safety
-        max_attempts = 3
+        max_attempts = 5
         last_error = None
 
         for attempt in range(max_attempts):
@@ -328,13 +328,17 @@ def get_async_http_client() -> httpx.AsyncClient:
                     follow_redirects=True,
                 )
                 return _async_http_client
-            except (FileNotFoundError, OSError) as e:
+            except OSError as e:
                 # These errors can occur when multiple threads try to
                 # initialize asyncio components simultaneously
                 last_error = e
                 if attempt < max_attempts - 1:
-                    # Small delay before retry
-                    time.sleep(0.01 * (attempt + 1))
+                    # Exponential backoff with jitter
+                    import random
+
+                    # ruff: noqa: S311
+                    delay = (0.01 * (2**attempt)) + (random.random() * 0.01)
+                    time.sleep(delay)
                 continue
 
         # If all retries failed, raise the last error

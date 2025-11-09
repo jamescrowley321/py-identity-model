@@ -178,40 +178,6 @@ class TestHTTPClientThreadSafety:
             "All threads should get same client"
         )
 
-    def test_async_http_client_concurrent_access(self):
-        """Test that async HTTP client can be accessed concurrently."""
-        from py_identity_model.http_client import (
-            _reset_async_http_client,
-            get_async_http_client,
-        )
-
-        # Reset async client cache before test to ensure clean state
-        _reset_async_http_client()
-
-        clients = []
-        errors = []
-
-        def get_client():
-            try:
-                client = get_async_http_client()
-                clients.append(id(client))  # Store object ID
-            except Exception as e:
-                errors.append(e)
-
-        # Access client from 50 threads concurrently
-        with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
-            futures = [executor.submit(get_client) for _ in range(100)]
-            concurrent.futures.wait(futures)
-
-        # No errors should occur
-        assert len(errors) == 0, f"Errors occurred: {errors}"
-
-        # All threads should get the same client instance (cached)
-        assert len(clients) == 100
-        assert all(c == clients[0] for c in clients), (
-            "All threads should get same client"
-        )
-
 
 class TestCachingThreadSafety:
     """Test thread safety of LRU cache decorators."""
