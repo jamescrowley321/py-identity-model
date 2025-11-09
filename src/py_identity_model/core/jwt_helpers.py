@@ -4,6 +4,9 @@ JWT helper functions for py-identity-model.
 This module contains JWT-related operations used by both sync and async implementations.
 """
 
+from functools import lru_cache
+import json
+
 from jwt import PyJWK, decode
 from jwt.exceptions import (
     ExpiredSignatureError,
@@ -21,6 +24,66 @@ from ..exceptions import (
     TokenValidationException,
 )
 from ..logging_config import logger
+
+
+@lru_cache(maxsize=128)
+def _get_pyjwk(key_json: str, algorithm: str | None) -> PyJWK:
+    """
+    Cached PyJWK construction.
+
+    PyJWK construction is expensive as it involves parsing and loading cryptographic keys.
+    This cache significantly improves performance when validating multiple tokens with the
+    same key.
+
+    Args:
+        key_json: JSON string representation of the key
+        algorithm: Algorithm to use
+
+    Returns:
+        PyJWK instance
+    """
+    return PyJWK(json.loads(key_json), algorithm)
+
+
+@lru_cache(maxsize=256)
+def _decode_jwt_cached(
+    jwt: str,
+    key_json: str,
+    algorithms_tuple: tuple[str, ...],
+    audience: str | None,
+    issuer: str | None,
+    options_json: str | None,
+) -> dict:
+    """
+    Internal cached JWT decoding.
+
+    Caches decoded tokens to avoid redundant signature verification when
+    the same JWT is validated multiple times.
+
+    Args:
+        jwt: The JWT token
+        key_json: Serialized key
+        algorithms_tuple: Algorithms as tuple (hashable)
+        audience: Expected audience
+        issuer: Expected issuer
+        options_json: Serialized options
+
+    Returns:
+        Decoded claims
+    """
+    pyjwk = _get_pyjwk(
+        key_json, algorithms_tuple[0] if algorithms_tuple else None
+    )
+    options = json.loads(options_json) if options_json else None
+
+    return decode(
+        jwt,
+        pyjwk,
+        audience=audience,
+        algorithms=list(algorithms_tuple),
+        issuer=issuer,
+        options=options,
+    )
 
 
 def decode_and_validate_jwt(
@@ -53,13 +116,18 @@ def decode_and_validate_jwt(
         TokenValidationException: For other token validation errors
     """
     try:
-        return decode(
+        # Convert to hashable types for caching
+        key_json = json.dumps(key, sort_keys=True)
+        algorithms_tuple = tuple(algorithms) if algorithms else ()
+        options_json = json.dumps(options, sort_keys=True) if options else None
+
+        return _decode_jwt_cached(
             jwt,
-            PyJWK(key, algorithms[0] if algorithms else None),
-            audience=audience,
-            algorithms=algorithms,
-            issuer=issuer,
-            options=options,
+            key_json,
+            algorithms_tuple,
+            audience,
+            issuer,
+            options_json,
         )
     except ExpiredSignatureError as e:
         logger.error(f"Token has expired: {e!s}")

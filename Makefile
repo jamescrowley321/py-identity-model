@@ -19,10 +19,6 @@ test:
 test-unit:
 	uv run pytest src/tests -m unit -v -n auto
 
-.PHONY: test-integration
-test-integration:
-	uv run pytest src/tests -m integration -v -n auto
-
 .PHONY: test-integration-local
 test-integration-local:
 	uv run pytest src/tests -m integration --env-file=.env.local -v -n auto

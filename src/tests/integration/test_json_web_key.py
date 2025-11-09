@@ -1,6 +1,5 @@
 import json
 
-import httpx
 import pytest
 
 from py_identity_model import JsonWebKey
@@ -10,18 +9,11 @@ from py_identity_model.jwks import JwksRequest, get_jwks, jwks_from_dict
 from .test_utils import get_config
 
 
-def fetch_jwks(jwks_address: str) -> list[dict]:
-    """Fetch JWKS from the provided URL"""
-    response = httpx.get(jwks_address)
-    response.raise_for_status()
-    return response.json()["keys"]
-
-
 @pytest.fixture
-def jwks_data(env_file):
+def jwks_data(jwks_response):
     """Pytest fixture to provide JWKS data for tests"""
-    config = get_config(env_file)
-    return fetch_jwks(config["TEST_JWKS_ADDRESS"])
+    # Convert JsonWebKey objects to dictionaries
+    return [jwk.as_dict() for jwk in jwks_response.keys]
 
 
 def test_jwk_deserialization(jwks_data):

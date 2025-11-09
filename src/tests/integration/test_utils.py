@@ -23,7 +23,20 @@ def set_env_file(env_file_path: str | None) -> None:
         load_dotenv(env_file_path, override=True)
     elif Path(".env").is_file():
         # Load default .env file only if it exists
-        load_dotenv()
+        # Don't load .env.local - it's for local IdentityServer testing only
+        load_dotenv(".env", override=True)
+
+    # Clear SSL certificate environment variables for external service testing
+    # These are set for local IdentityServer testing and should not be used
+    # when testing against external services like Ory
+    os.environ.pop("SSL_CERT_FILE", None)
+    os.environ.pop("REQUESTS_CA_BUNDLE", None)
+    os.environ.pop("CURL_CA_BUNDLE", None)
+
+    # Clear the SSL verify cache to pick up the environment changes
+    from py_identity_model.ssl_config import get_ssl_verify
+
+    get_ssl_verify.cache_clear()
 
 
 def get_config(env_file: str | None = None) -> dict:

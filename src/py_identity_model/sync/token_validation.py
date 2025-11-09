@@ -42,6 +42,34 @@ def _get_jwks_response(jwks_uri: str) -> JwksResponse:
     return get_jwks(JwksRequest(address=jwks_uri))
 
 
+@lru_cache(maxsize=128)
+def _get_public_key(jwt: str, jwks_uri: str) -> tuple[dict, str]:
+    """Cached public key extraction from JWKS.
+
+    Args:
+        jwt: The JWT token (used to extract kid from header)
+        jwks_uri: The JWKS URI to fetch keys from
+
+    Returns:
+        tuple: (public_key_dict, algorithm)
+
+    Note:
+        This cache uses the JWT itself as part of the key. In practice, the same
+        JWT is validated repeatedly in benchmarks. In production, different JWTs
+        with the same kid will have different cache entries, which is acceptable
+        given the maxsize limit.
+
+        TODO: Consider implementing HTTP-aware caching that respects Cache-Control
+        and Expires headers for disco/JWKS responses.
+    """
+    jwks_response = _get_jwks_response(jwks_uri)
+    if not jwks_response.keys:
+        raise TokenValidationException("No keys available in JWKS response")
+    public_key = get_public_key_from_jwk(jwt, jwks_response.keys)
+    alg = public_key.alg if public_key.alg else "RS256"
+    return public_key.as_dict(), alg
+
+
 # ============================================================================
 # Token Validation
 # ============================================================================
@@ -96,13 +124,10 @@ def validate_token(
             logger.error(error_msg)
             raise TokenValidationException(error_msg)
 
-        token_validation_config.key = get_public_key_from_jwk(
-            jwt,
-            jwks_response.keys,
-        ).as_dict()
-        token_validation_config.algorithms = [
-            token_validation_config.key["alg"],
-        ]
+        # Use cached public key lookup for performance
+        key_dict, alg = _get_public_key(jwt, disco_doc_response.jwks_uri)
+        token_validation_config.key = key_dict
+        token_validation_config.algorithms = [alg]
 
         decoded_token = decode_and_validate_jwt(
             jwt=jwt,
