@@ -737,7 +737,7 @@ wheels = [
 
 [[package]]
 name = "py-identity-model"
-version = "1.2.0"
+version = "0.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "async-lru" },
@@ -748,6 +748,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "filelock" },
     { name = "pre-commit" },
     { name = "pyrefly" },
     { name = "pytest" },
@@ -776,6 +777,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "filelock", specifier = ">=3.16.1,<4" },
     { name = "pre-commit", specifier = ">=3.8.0,<4" },
     { name = "pyrefly", specifier = ">=0.34.0" },
     { name = "pytest", specifier = ">=8.3.2,<9" },

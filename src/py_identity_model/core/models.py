@@ -415,6 +415,35 @@ class ClientCredentialsTokenResponse:
 
 @dataclass
 class TokenValidationConfig:
+    """
+    Configuration for JWT token validation.
+
+    Attributes:
+        perform_disco: Whether to perform discovery to fetch JWKS and issuer
+        key: Public key for JWT verification (dict with 'kty', 'n', 'e' for RSA)
+        audience: Expected audience claim(s) in the token
+        algorithms: List of allowed signing algorithms (e.g., ['RS256'])
+        issuer: Expected issuer claim in the token
+        subject: Expected subject claim in the token
+        options: Additional PyJWT decode options (e.g., {'verify_exp': False})
+        claims_validator: Optional callable for custom claims validation.
+                         Can be sync: Callable[[dict], None]
+                         or async: Callable[[dict], Awaitable[None]] (in async context)
+                         Should raise an exception if validation fails.
+                         The decoded token claims dict is passed as the only argument.
+
+    Example:
+        >>> def validate_custom_claims(claims: dict) -> None:
+        ...     if claims.get("role") != "admin":
+        ...         raise ValueError("User is not an admin")
+        >>>
+        >>> config = TokenValidationConfig(
+        ...     perform_disco=True,
+        ...     audience="my-api",
+        ...     claims_validator=validate_custom_claims,
+        ... )
+    """
+
     perform_disco: bool
     key: dict | None = None
     audience: str | None = None

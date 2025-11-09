@@ -27,16 +27,27 @@ def set_env_file(env_file_path: str | None) -> None:
         load_dotenv(".env", override=True)
 
     # Clear SSL certificate environment variables for external service testing
-    # These are set for local IdentityServer testing and should not be used
-    # when testing against external services like Ory
+    # These may be set in .env.local for local IdentityServer testing but should
+    # not be used when testing against external services like Ory.
+    #
+    # We clear them BEFORE clearing caches to ensure get_ssl_verify() returns
+    # the correct value (True for system certificates) on next call.
     os.environ.pop("SSL_CERT_FILE", None)
     os.environ.pop("REQUESTS_CA_BUNDLE", None)
     os.environ.pop("CURL_CA_BUNDLE", None)
 
-    # Clear the SSL verify cache to pick up the environment changes
+    # Clear all SSL and HTTP client caches to pick up environment changes.
+    # This is safe in parallel execution because each worker has its own process
+    # and environment, and this only runs once per session during fixture initialization.
+    from py_identity_model.http_client import (
+        get_async_http_client,
+        get_http_client,
+    )
     from py_identity_model.ssl_config import get_ssl_verify
 
     get_ssl_verify.cache_clear()
+    get_http_client.cache_clear()
+    get_async_http_client.cache_clear()
 
 
 def get_config(env_file: str | None = None) -> dict:

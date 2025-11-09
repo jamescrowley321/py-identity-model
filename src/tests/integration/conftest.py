@@ -1,5 +1,6 @@
 """Shared fixtures for integration tests with caching and retry logic."""
 
+from filelock import FileLock
 import httpx
 import pytest
 from tenacity import (
@@ -37,13 +38,20 @@ def retry_on_rate_limit():
 
 
 @pytest.fixture(scope="session")
-def test_config(env_file):
+def test_config(env_file, tmp_path_factory):
     """
     Session-scoped fixture providing test configuration.
 
-    This is loaded once per test session and shared across all workers.
+    Uses file lock to ensure thread-safe initialization across
+    pytest-xdist workers during parallel execution.
     """
-    return get_config(env_file)
+    # Create a lock file in the temp directory shared across workers
+    root_tmp_dir = tmp_path_factory.getbasetemp().parent
+    lock_file = root_tmp_dir / "test_config.lock"
+
+    # Use file lock to prevent race conditions during parallel execution
+    with FileLock(str(lock_file)):
+        return get_config(env_file)
 
 
 @pytest.fixture(scope="session")

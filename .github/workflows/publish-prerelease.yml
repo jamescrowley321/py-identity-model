@@ -1,0 +1,77 @@
+name: Publish Pre-release to TestPyPI 🧪
+
+on:
+  push:
+    tags:
+      # Match pre-release tags: 2.0.0-rc.1, 2.0.0-alpha.1, 2.0.0-beta.1
+      - "[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+-alpha.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+-beta.[0-9]+"
+
+permissions:
+  contents: read
+
+jobs:
+  publish-to-testpypi:
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/py-identity-model
+
+    permissions:
+      id-token: write  # Required for trusted publishing
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.13
+
+      - name: Install dependencies
+        run: make ci-setup
+
+      - name: Set tag version
+        id: vars
+        run: echo "tag=$(git describe --tags $(git rev-list --tags --max-count=1))" >> $GITHUB_OUTPUT
+
+      - name: Display version
+        run: echo "Publishing version ${{ steps.vars.outputs.tag }} to TestPyPI"
+
+      - name: Build distribution 📦
+        run: |
+          echo ${{ steps.vars.outputs.tag }}
+          sed -i -e "s/0.0.0/${{ steps.vars.outputs.tag }}/" pyproject.toml
+          make build-dist
+
+      - name: Publish distribution 📦 to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          skip-existing: true
+
+      - name: Create GitHub Pre-release
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: true
+          files: dist/*
+          body: |
+            ## Pre-release ${{ steps.vars.outputs.tag }}
+
+            This is a pre-release version for testing purposes.
+
+            ### Installation for Testing
+
+            ```bash
+            # Install from TestPyPI
+            pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ py-identity-model==${{ steps.vars.outputs.tag }}
+
+            # Or with uv
+            uv pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ py-identity-model==${{ steps.vars.outputs.tag }}
+            ```
+
+            ⚠️ **This is a pre-release version.** Do not use in production.
+
+            For production use, install from PyPI: `pip install py-identity-model`

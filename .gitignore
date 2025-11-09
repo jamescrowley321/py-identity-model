@@ -136,3 +136,6 @@ dmypy.json
 *.key
 *.pfx
 .secrets.baseline
+
+# Claude Code MCP configuration (may contain tokens)
+.claude/mcp.json

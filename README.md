@@ -90,6 +90,42 @@ response = await get_discovery_document(request)
 
 See [examples/async_examples.py](examples/async_examples.py) for complete async examples!
 
+## Thread Safety 🔒
+
+**py-identity-model is fully thread-safe** and can be used in multi-threaded and multi-worker environments:
+
+- ✅ **Thread-safe caching**: All caching uses thread-safe `functools.lru_cache` and `async_lru.alru_cache`
+- ✅ **Connection pooling**: HTTP clients use persistent connection pools (shared per process, isolated per worker)
+- ✅ **No shared mutable state**: HTTP clients are created per-request with no shared state across threads
+- ✅ **SSL configuration**: SSL certificate configuration is protected with threading locks
+
+**Safe for use with:**
+- FastAPI with multiple workers (`--workers N`)
+- Gunicorn/Uvicorn worker processes
+- Django with multiple worker threads
+- Flask with threading
+- Concurrent request handling
+
+**Performance benefits:**
+- Discovery documents and JWKS are cached per process (LRU cache)
+- HTTP connection pooling reduces latency for repeated requests
+- Thread-safe design allows safe concurrent validation
+
+```python
+# Example: Concurrent token validation
+from concurrent.futures import ThreadPoolExecutor
+from py_identity_model import validate_token, TokenValidationConfig
+
+def validate_request(token: str) -> dict:
+    config = TokenValidationConfig(perform_disco=True, audience="my-api")
+    return validate_token(token, config, "https://issuer.example.com")
+
+# Safe to use with multiple threads
+with ThreadPoolExecutor(max_workers=10) as executor:
+    futures = [executor.submit(validate_request, token) for token in tokens]
+    results = [f.result() for f in futures]
+```
+
 This library inspired by [Duende.IdentityModel](https://github.com/DuendeSoftware/foss/tree/main/identity-model)
 
 From Duende.IdentityModel
@@ -110,6 +146,7 @@ For detailed usage instructions, examples, and guides, please see our comprehens
 * **[API Documentation](docs/index.md)** - Complete API reference with examples
 * **[Migration Guide](docs/migration-guide.md)** - Migrating from sync to async API
 * **[Performance Guide](docs/performance.md)** - Caching, optimization, and benchmarks
+* **[Pre-release Testing Guide](docs/pre-release-guide.md)** - Creating and testing pre-release versions
 * **[FAQ](docs/faq.md)** - Frequently asked questions
 * **[Troubleshooting Guide](docs/troubleshooting.md)** - Common issues and solutions
 * **[Project Roadmap](docs/py_identity_model_roadmap.md)** - Upcoming features and development plans

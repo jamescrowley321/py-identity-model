@@ -3,7 +3,7 @@ members = [".", "examples/fastapi"]
 
 [project]
 name = "py-identity-model"
-version = "1.2.0"
+version = "0.0.0"
 description = "OAuth2.0 and OpenID Connect Client Library"
 authors = [{ name = "jamescrowley321", email = "jamescrowley151@gmail.com" }]
 requires-python = ">=3.12"
@@ -20,6 +20,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "filelock>=3.16.1,<4",
     "pre-commit>=3.8.0,<4",
     "python-dotenv>=1.0.1,<2",
     "pytest>=8.3.2,<9",
