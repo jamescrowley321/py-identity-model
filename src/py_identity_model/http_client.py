@@ -72,18 +72,20 @@ def _log_and_sleep(
     time.sleep(delay)
 
 
-def retry_on_rate_limit(
+def retry_with_backoff(
     max_retries: int | None = None, base_delay: float | None = None
 ):
     """
-    Decorator to retry HTTP requests on rate limiting with exponential backoff.
+    Decorator to retry HTTP requests with exponential backoff.
+
+    Retries on transient errors including rate limiting (429) and server errors (5xx).
 
     Args:
         max_retries: Maximum number of retry attempts (default: from HTTP_RETRY_MAX_ATTEMPTS env or 3)
         base_delay: Base delay in seconds for exponential backoff (default: from HTTP_RETRY_BASE_DELAY env or 1.0)
 
     Returns:
-        Decorated function that retries on 429 and 5xx errors
+        Decorated function that retries on 429 and 5xx errors with exponential backoff
 
     Environment Variables:
         HTTP_RETRY_MAX_ATTEMPTS: Default max retries if not specified
@@ -152,7 +154,7 @@ def get_http_client() -> httpx.Client:
     Get a persistent HTTP client with connection pooling.
 
     Returns a singleton httpx.Client that reuses connections, improving
-    performance for multiple HTTP requests. Use @retry_on_rate_limit
+    performance for multiple HTTP requests. Use @retry_with_backoff
     decorator on HTTP calls for automatic retry logic.
 
     Returns:
@@ -199,7 +201,7 @@ async def _log_and_sleep_async(
     await asyncio.sleep(delay)
 
 
-def retry_on_rate_limit_async(
+def retry_with_backoff_async(
     max_retries: int | None = None, base_delay: float | None = None
 ):
     """
@@ -282,7 +284,7 @@ def get_async_http_client() -> httpx.AsyncClient:
     Get a persistent async HTTP client with connection pooling.
 
     Returns a singleton httpx.AsyncClient that reuses connections, improving
-    performance for multiple HTTP requests. Use @retry_on_rate_limit_async
+    performance for multiple HTTP requests. Use @retry_with_backoff_async
     decorator on HTTP calls for automatic retry logic.
 
     Returns:
@@ -350,6 +352,6 @@ __all__ = [
     "close_http_client",
     "get_async_http_client",
     "get_http_client",
-    "retry_on_rate_limit",
-    "retry_on_rate_limit_async",
+    "retry_with_backoff",
+    "retry_with_backoff_async",
 ]

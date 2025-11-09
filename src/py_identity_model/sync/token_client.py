@@ -16,10 +16,10 @@ from ..core.token_client_logic import (
     prepare_token_request_data,
     process_token_response,
 )
-from ..http_client import get_http_client, retry_on_rate_limit
+from ..http_client import get_http_client, retry_with_backoff
 
 
-@retry_on_rate_limit()
+@retry_with_backoff()
 def _request_token(
     client: httpx.Client,
     url: str,

@@ -28,7 +28,7 @@ RATE_LIMIT_ERROR_MESSAGE = "Rate limited"
 
 
 # Retry decorator for rate limit handling
-def retry_on_rate_limit():
+def retry_with_backoff():
     """Retry decorator that handles HTTP 429 rate limiting."""
     return retry(
         retry=retry_if_exception_type(httpx.HTTPStatusError),
@@ -64,7 +64,7 @@ def discovery_document(test_config):
     Includes retry logic to handle transient rate limits.
     """
 
-    @retry_on_rate_limit()
+    @retry_with_backoff()
     def fetch_discovery():
         disco_doc_req = DiscoveryDocumentRequest(
             address=test_config["TEST_DISCO_ADDRESS"]
@@ -94,7 +94,7 @@ def jwks_response(test_config):
     Includes retry logic to handle transient rate limits.
     """
 
-    @retry_on_rate_limit()
+    @retry_with_backoff()
     def fetch_jwks():
         jwks_req = JwksRequest(address=test_config["TEST_JWKS_ADDRESS"])
         response = get_jwks(jwks_req)
@@ -140,7 +140,7 @@ def client_credentials_token(test_config, token_endpoint):
     Includes retry logic to handle transient rate limits.
     """
 
-    @retry_on_rate_limit()
+    @retry_with_backoff()
     def fetch_token():
         response = request_client_credentials_token(
             ClientCredentialsTokenRequest(

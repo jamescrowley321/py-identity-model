@@ -12,10 +12,10 @@ from ..core.discovery_logic import (
 )
 from ..core.error_handlers import handle_discovery_error
 from ..core.models import DiscoveryDocumentRequest, DiscoveryDocumentResponse
-from ..http_client import get_async_http_client, retry_on_rate_limit_async
+from ..http_client import get_async_http_client, retry_with_backoff_async
 
 
-@retry_on_rate_limit_async()
+@retry_with_backoff_async()
 async def _fetch_discovery_document(
     client: httpx.AsyncClient, url: str
 ) -> httpx.Response:
