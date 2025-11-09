@@ -10,6 +10,7 @@ Environment Variables:
     HTTP_TIMEOUT: Request timeout in seconds (default: 30.0)
 """
 
+import asyncio
 from functools import lru_cache, wraps
 import os
 import time
@@ -165,4 +166,134 @@ def close_http_client() -> None:
         get_http_client.cache_clear()
 
 
-__all__ = ["close_http_client", "get_http_client", "retry_on_rate_limit"]
+def retry_on_rate_limit_async(
+    max_retries: int | None = None, base_delay: float | None = None
+):
+    """
+    Decorator to retry async HTTP requests on rate limiting with exponential backoff.
+
+    Args:
+        max_retries: Maximum number of retry attempts (default: from HTTP_RETRY_MAX_ATTEMPTS env or 3)
+        base_delay: Base delay in seconds for exponential backoff (default: from HTTP_RETRY_BASE_DELAY env or 1.0)
+
+    Returns:
+        Decorated async function that retries on 429 and 5xx errors
+
+    Environment Variables:
+        HTTP_RETRY_MAX_ATTEMPTS: Default max retries if not specified
+        HTTP_RETRY_BASE_DELAY: Default base delay if not specified
+    """
+
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Get retry config from env if not provided
+            env_max_retries, env_base_delay = _get_retry_config()
+            retries = (
+                max_retries if max_retries is not None else env_max_retries
+            )
+            delay_base = (
+                base_delay if base_delay is not None else env_base_delay
+            )
+
+            last_exception = None
+            response = None
+
+            for attempt in range(retries + 1):
+                try:
+                    response = await func(*args, **kwargs)
+
+                    # Retry on rate limiting (429) or server errors (5xx)
+                    if (
+                        response.status_code == 429
+                        or response.status_code >= 500
+                    ) and attempt < retries:
+                        delay = delay_base * (
+                            2**attempt
+                        )  # Exponential backoff
+                        logger.warning(
+                            f"HTTP {response.status_code} received, "
+                            f"retrying in {delay}s (attempt {attempt + 1}/{retries})"
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+
+                    # Success or non-retryable error
+                    return response
+
+                except httpx.RequestError as e:
+                    last_exception = e
+                    if attempt < retries:
+                        delay = delay_base * (2**attempt)
+                        logger.warning(
+                            f"Request error: {e}, retrying in {delay}s "
+                            f"(attempt {attempt + 1}/{retries})"
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+                    raise
+
+            # If we exhausted all retries without success, return last response or raise
+            if last_exception:
+                raise last_exception
+            if response is not None:
+                return response
+            # This should never happen, but satisfy type checker
+            raise RuntimeError("No response received after retries")
+
+        return wrapper
+
+    return decorator
+
+
+@lru_cache(maxsize=1)
+def get_async_http_client() -> httpx.AsyncClient:
+    """
+    Get a persistent async HTTP client with connection pooling.
+
+    Returns a singleton httpx.AsyncClient that reuses connections, improving
+    performance for multiple HTTP requests. Use @retry_on_rate_limit_async
+    decorator on HTTP calls for automatic retry logic.
+
+    Returns:
+        httpx.AsyncClient: Configured async HTTP client with connection pooling
+
+    Environment Variables:
+        HTTP_TIMEOUT: Request timeout in seconds (default: 30.0)
+
+    Note:
+        The client uses default limits:
+        - max_connections: 100
+        - max_keepalive_connections: 20
+        - keepalive_expiry: 5.0 seconds
+    """
+    timeout = _get_timeout()
+    return httpx.AsyncClient(
+        verify=get_ssl_verify(),
+        timeout=timeout,
+        follow_redirects=True,
+    )
+
+
+async def close_async_http_client() -> None:
+    """
+    Close the persistent async HTTP client and clear the cache.
+
+    This should be called when shutting down the application to properly
+    clean up resources. Not calling this will leave connections open, but
+    they will be cleaned up when the process exits.
+    """
+    client = get_async_http_client.cache_info()
+    if client.currsize > 0:
+        await get_async_http_client().aclose()
+        get_async_http_client.cache_clear()
+
+
+__all__ = [
+    "close_async_http_client",
+    "close_http_client",
+    "get_async_http_client",
+    "get_http_client",
+    "retry_on_rate_limit",
+    "retry_on_rate_limit_async",
+]

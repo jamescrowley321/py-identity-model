@@ -13,19 +13,19 @@ lint:
 
 .PHONY: test
 test:
-	uv run pytest src/tests -v -n auto
+	uv run pytest src/tests -v -n auto --cov=src/py_identity_model --cov-report=term-missing --cov-report=html
 
 .PHONY: test-unit
 test-unit:
-	uv run pytest src/tests -m unit -v -n auto
+	uv run pytest src/tests -m unit -v -n auto --cov=src/py_identity_model --cov-report=term-missing --cov-report=html
 
 .PHONY: test-integration-local
 test-integration-local:
-	uv run pytest src/tests -m integration --env-file=.env.local -v -n auto
+	uv run pytest src/tests -m integration --env-file=.env.local -v -n auto --cov=src/py_identity_model --cov-report=term-missing --cov-report=html
 
 .PHONY: test-integration-ory
 test-integration-ory:
-	uv run pytest src/tests -m integration -v -n auto
+	uv run pytest src/tests -m integration -v -n auto --cov=src/py_identity_model --cov-report=term-missing --cov-report=html
 
 .PHONY: generate-token
 generate-token:

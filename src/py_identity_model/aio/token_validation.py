@@ -36,7 +36,7 @@ from .jwks import get_jwks
 # ============================================================================
 
 
-@alru_cache
+@alru_cache(maxsize=128)
 async def _get_disco_response(
     disco_doc_address: str,
 ) -> DiscoveryDocumentResponse:
@@ -50,7 +50,7 @@ async def _get_disco_response(
     )
 
 
-@alru_cache
+@alru_cache(maxsize=128)
 async def _get_jwks_response(jwks_uri: str) -> JwksResponse:
     """
     Cached async JWKS fetching.

@@ -10,9 +10,26 @@ from ..core.models import (
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
 )
+from ..http_client import get_async_http_client, retry_on_rate_limit_async
 from ..logging_config import logger
 from ..logging_utils import redact_url
-from ..ssl_config import get_ssl_verify
+
+
+@retry_on_rate_limit_async()
+async def _request_token(
+    client: httpx.AsyncClient,
+    url: str,
+    data: dict,
+    headers: dict,
+    auth: tuple[str, str],
+) -> httpx.Response:
+    """
+    Request token with retry logic.
+
+    Automatically retries on 429 (rate limiting) and 5xx errors with
+    exponential backoff. Configuration is read from environment variables.
+    """
+    return await client.post(url, data=data, headers=headers, auth=auth)
 
 
 async def request_client_credentials_token(
@@ -37,15 +54,14 @@ async def request_client_credentials_token(
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
     try:
-        async with httpx.AsyncClient(
-            timeout=30.0, verify=get_ssl_verify()
-        ) as client:
-            response = await client.post(
-                request.address,
-                data=params,
-                headers=headers,
-                auth=(request.client_id, request.client_secret),
-            )
+        client = get_async_http_client()
+        response = await _request_token(
+            client,
+            request.address,
+            params,
+            headers,
+            (request.client_id, request.client_secret),
+        )
 
         logger.debug(f"Token request status code: {response.status_code}")
 
