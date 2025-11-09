@@ -6,31 +6,91 @@ This guide helps Claude Code understand the development workflow and requirement
 
 **ALL tests must pass before ANY commit. No exceptions.**
 
-### Test Commands (in order of execution):
+### Test Commands
 
-1. **Unit and Integration Tests**
+#### Quick Tests (Development)
+
+1. **Unit Tests Only** (Fastest - ~0.5s)
+   ```bash
+   make test-unit
+   ```
+   - Runs only unit tests (no network calls)
+   - 126 tests, completes in ~0.5 seconds
+   - Use during active development for fast feedback
+   - Location: `src/tests/unit/`
+
+2. **All Tests**
    ```bash
    make test
    ```
-   - Runs all unit tests and basic integration tests
-   - Must pass: 100% (or only expected/documented failures)
+   - Runs all unit + integration tests
+   - Use before committing
    - Location: `src/tests/`
 
-2. **Ory Integration Tests**
+#### Integration Tests
+
+3. **Integration Tests with Parallelization**
+   ```bash
+   make test-integration
+   ```
+   - Runs integration tests with parallel execution (`-n auto`)
+   - Faster for network-bound tests
+   - Uses pytest-xdist to run tests in parallel
+
+4. **Ory Integration Tests**
    ```bash
    make test-integration-ory
    ```
    - Tests against Ory identity provider
-   - Requires Docker containers to be running
+   - Requires valid Ory credentials in `.env`
    - Must pass: 100%
 
-3. **Example Tests**
+5. **Local Integration Tests**
+   ```bash
+   make test-integration-local
+   ```
+   - Tests against local identity server
+   - Uses `.env.local` configuration file
+   - Requires local Docker containers running
+
+#### Example Tests
+
+6. **Example Tests**
    ```bash
    make test-examples
    ```
    - Validates all examples work correctly
    - Tests Docker compose examples
+   - Runs `examples/run-tests.sh`
    - Must pass: 100%
+
+#### Complete Test Suite
+
+7. **All Tests + Examples**
+   ```bash
+   make test-all
+   ```
+   - Runs `make test` + `make test-examples`
+   - Complete validation before PR merge
+
+### Test Performance
+
+The test suite uses parallel execution for all test commands:
+
+- **All test commands**: Use `-n auto` flag for parallel execution
+  - Automatically uses optimal number of workers
+  - Powered by pytest-xdist
+  - Each worker runs tests independently
+
+**Performance:**
+- Unit tests: ~1.6s (126 tests across 22 workers)
+- Integration tests: Faster with parallel execution due to network I/O
+- Full test suite: Parallelized for maximum speed
+
+**During development:**
+- Use `make test-unit` for fastest feedback loop (~1.6s)
+- Run `make test` before committing
+- Run `make test-all` before pushing/PR
 
 ### Pre-commit Hooks
 

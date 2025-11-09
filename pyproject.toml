@@ -24,6 +24,7 @@ dev = [
     "python-dotenv>=1.0.1,<2",
     "pytest>=8.3.2,<9",
     "pytest-asyncio>=0.24.0",
+    "pytest-xdist>=3.6.1,<4",
     "respx>=0.21.0",
     "pytest-timeout>=2.3.1",
     "ruff>=0.11.12",
@@ -202,6 +203,9 @@ addopts = [
     "--strict-config", # raise error on config issues
     "--showlocals", # show local variables in tracebacks
     "-vv", # very verbose
+    "--tb=short", # shorter tracebacks
+    "--no-header", # skip pytest header info
+    "--disable-warnings", # hide warnings in output for cleaner results
 ]
 # Markers for test categorization
 markers = [
