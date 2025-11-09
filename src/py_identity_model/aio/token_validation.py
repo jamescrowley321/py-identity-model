@@ -8,7 +8,6 @@ import inspect
 
 from async_lru import alru_cache
 
-from ..core.jwt_helpers import decode_and_validate_jwt
 from ..core.models import (
     DiscoveryDocumentRequest,
     DiscoveryDocumentResponse,
@@ -17,10 +16,17 @@ from ..core.models import (
     TokenValidationConfig,
 )
 from ..core.parsers import get_public_key_from_jwk
+from ..core.token_validation_logic import (
+    decode_with_config,
+    log_validation_start,
+    log_validation_success,
+    validate_config_for_manual_validation,
+    validate_disco_response,
+    validate_jwks_response,
+)
 from ..core.validators import validate_token_config
-from ..exceptions import ConfigurationException, TokenValidationException
+from ..exceptions import TokenValidationException
 from ..logging_config import logger
-from ..logging_utils import redact_token
 from .discovery import get_discovery_document
 from .jwks import get_jwks
 
@@ -107,70 +113,31 @@ async def validate_token(
         TokenValidationException: If token validation fails
         ConfigurationException: If configuration is invalid
     """
-    logger.info(f"Starting token validation, token: {redact_token(jwt)}")
-    logger.debug(
-        f"Validation config - perform_disco: {token_validation_config.perform_disco}, "
-        f"audience: {token_validation_config.audience}",
-    )
-
+    log_validation_start(jwt, token_validation_config)
     validate_token_config(token_validation_config)
 
     if token_validation_config.perform_disco:
         disco_doc_response = await _get_disco_response(disco_doc_address)
-
-        if not disco_doc_response.is_successful:
-            error_msg = (
-                disco_doc_response.error or "Discovery document request failed"
-            )
-            logger.error(f"Discovery failed: {error_msg}")
-            raise TokenValidationException(error_msg)
+        validate_disco_response(disco_doc_response)
 
         jwks_response = await _get_jwks_response(disco_doc_response.jwks_uri)
-        if not jwks_response.is_successful:
-            error_msg = jwks_response.error or "JWKS request failed"
-            logger.error(f"JWKS fetch failed: {error_msg}")
-            raise TokenValidationException(error_msg)
-
-        if not jwks_response.keys:
-            error_msg = "No keys available in JWKS response"
-            logger.error(error_msg)
-            raise TokenValidationException(error_msg)
+        validate_jwks_response(jwks_response)
 
         # Use cached public key lookup for performance
         key_dict, alg = await _get_public_key(jwt, disco_doc_response.jwks_uri)
         token_validation_config.key = key_dict
         token_validation_config.algorithms = [alg]
 
-        decoded_token = decode_and_validate_jwt(
-            jwt=jwt,
-            key=token_validation_config.key,
-            algorithms=token_validation_config.algorithms,
-            audience=token_validation_config.audience,
-            issuer=disco_doc_response.issuer,
-            options=token_validation_config.options,
+        decoded_token = decode_with_config(
+            jwt, token_validation_config, disco_doc_response.issuer
         )
     else:
-        if not token_validation_config.key:
-            raise ConfigurationException(
-                "TokenValidationConfig.key is required",
-            )
-        if not token_validation_config.algorithms:
-            raise ConfigurationException(
-                "TokenValidationConfig.algorithms is required",
-            )
+        validate_config_for_manual_validation(token_validation_config)
+        decoded_token = decode_with_config(jwt, token_validation_config)
 
-        decoded_token = decode_and_validate_jwt(
-            jwt=jwt,
-            key=token_validation_config.key,
-            algorithms=token_validation_config.algorithms,
-            audience=token_validation_config.audience,
-            issuer=token_validation_config.issuer,
-            options=token_validation_config.options,
-        )
-
+    # Async-specific: Support both sync and async claims validators
     if token_validation_config.claims_validator:
         try:
-            # Check if the claims_validator is async
             if inspect.iscoroutinefunction(
                 token_validation_config.claims_validator
             ):
@@ -185,10 +152,7 @@ async def validate_token(
                 details={"error": str(e)},
             ) from e
 
-    logger.info(
-        f"Token validation successful for subject: {decoded_token.get('sub', 'unknown')}",
-    )
-    logger.debug(f"Decoded token claims: {list(decoded_token.keys())}")
+    log_validation_success(decoded_token)
     return decoded_token
 
 
