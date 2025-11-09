@@ -75,22 +75,32 @@ This guide helps Claude Code understand the development workflow and requirement
 
 ### Test Performance
 
-The test suite uses parallel execution for all test commands:
+The test suite uses **selective parallelization** to optimize speed while avoiding rate limits:
 
-- **All test commands**: Use `-n auto` flag for parallel execution
-  - Automatically uses optimal number of workers
-  - Powered by pytest-xdist
-  - Each worker runs tests independently
+**Parallel Execution:**
+- **Unit tests** (`make test-unit`): Use `-n auto` (22 workers)
+  - ~1.4 seconds for 126 tests
+  - No external dependencies, safe to parallelize
 
-**Performance:**
-- Unit tests: ~1.6s (126 tests across 22 workers)
-- Integration tests: Faster with parallel execution due to network I/O
-- Full test suite: Parallelized for maximum speed
+- **Full test suite** (`make test`): Use `-n auto`
+  - Combines unit tests (parallel) + integration tests
+  - Optimized for CI/CD pipelines
+
+**Sequential Execution:**
+- **Integration tests** (`make test-integration`, `make test-integration-ory`): Run sequentially
+  - **Reason:** Avoid HTTP 429 rate limiting from external APIs (Ory)
+  - Multiple parallel requests trigger rate limits
+  - Sequential execution prevents failures
+
+**Performance Summary:**
+- Unit tests: ~1.4s (parallel across 22 workers)
+- Integration tests: Sequential to avoid rate limits
+- Powered by pytest-xdist
 
 **During development:**
-- Use `make test-unit` for fastest feedback loop (~1.6s)
-- Run `make test` before committing
-- Run `make test-all` before pushing/PR
+- Use `make test-unit` for fastest feedback loop (~1.4s)
+- Run `make test` before committing (includes all tests)
+- Run `make test-integration-ory` only when testing Ory integration
 
 ### Pre-commit Hooks
 
