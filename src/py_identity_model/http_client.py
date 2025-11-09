@@ -43,6 +43,30 @@ def _get_timeout() -> float:
     return float(os.getenv("HTTP_TIMEOUT", "30.0"))
 
 
+def _should_retry_response(
+    response: httpx.Response, attempt: int, retries: int
+) -> bool:
+    """Check if response should be retried."""
+    return (
+        response.status_code == 429 or response.status_code >= 500
+    ) and attempt < retries
+
+
+def _calculate_delay(base_delay: float, attempt: int) -> float:
+    """Calculate exponential backoff delay."""
+    return base_delay * (2**attempt)
+
+
+def _log_and_sleep(
+    delay: float, message: str, attempt: int, retries: int
+) -> None:
+    """Log retry attempt and sleep."""
+    logger.warning(
+        f"{message}, retrying in {delay}s (attempt {attempt + 1}/{retries})"
+    )
+    time.sleep(delay)
+
+
 def retry_on_rate_limit(
     max_retries: int | None = None, base_delay: float | None = None
 ):
@@ -81,18 +105,14 @@ def retry_on_rate_limit(
                     response = func(*args, **kwargs)
 
                     # Retry on rate limiting (429) or server errors (5xx)
-                    if (
-                        response.status_code == 429
-                        or response.status_code >= 500
-                    ) and attempt < retries:
-                        delay = delay_base * (
-                            2**attempt
-                        )  # Exponential backoff
-                        logger.warning(
-                            f"HTTP {response.status_code} received, "
-                            f"retrying in {delay}s (attempt {attempt + 1}/{retries})"
+                    if _should_retry_response(response, attempt, retries):
+                        delay = _calculate_delay(delay_base, attempt)
+                        _log_and_sleep(
+                            delay,
+                            f"HTTP {response.status_code} received",
+                            attempt,
+                            retries,
                         )
-                        time.sleep(delay)
                         continue
 
                     # Success or non-retryable error
@@ -101,12 +121,10 @@ def retry_on_rate_limit(
                 except httpx.RequestError as e:
                     last_exception = e
                     if attempt < retries:
-                        delay = delay_base * (2**attempt)
-                        logger.warning(
-                            f"Request error: {e}, retrying in {delay}s "
-                            f"(attempt {attempt + 1}/{retries})"
+                        delay = _calculate_delay(delay_base, attempt)
+                        _log_and_sleep(
+                            delay, f"Request error: {e}", attempt, retries
                         )
-                        time.sleep(delay)
                         continue
                     raise
 
@@ -166,6 +184,16 @@ def close_http_client() -> None:
         get_http_client.cache_clear()
 
 
+async def _log_and_sleep_async(
+    delay: float, message: str, attempt: int, retries: int
+) -> None:
+    """Log retry attempt and sleep asynchronously."""
+    logger.warning(
+        f"{message}, retrying in {delay}s (attempt {attempt + 1}/{retries})"
+    )
+    await asyncio.sleep(delay)
+
+
 def retry_on_rate_limit_async(
     max_retries: int | None = None, base_delay: float | None = None
 ):
@@ -204,18 +232,14 @@ def retry_on_rate_limit_async(
                     response = await func(*args, **kwargs)
 
                     # Retry on rate limiting (429) or server errors (5xx)
-                    if (
-                        response.status_code == 429
-                        or response.status_code >= 500
-                    ) and attempt < retries:
-                        delay = delay_base * (
-                            2**attempt
-                        )  # Exponential backoff
-                        logger.warning(
-                            f"HTTP {response.status_code} received, "
-                            f"retrying in {delay}s (attempt {attempt + 1}/{retries})"
+                    if _should_retry_response(response, attempt, retries):
+                        delay = _calculate_delay(delay_base, attempt)
+                        await _log_and_sleep_async(
+                            delay,
+                            f"HTTP {response.status_code} received",
+                            attempt,
+                            retries,
                         )
-                        await asyncio.sleep(delay)
                         continue
 
                     # Success or non-retryable error
@@ -224,12 +248,10 @@ def retry_on_rate_limit_async(
                 except httpx.RequestError as e:
                     last_exception = e
                     if attempt < retries:
-                        delay = delay_base * (2**attempt)
-                        logger.warning(
-                            f"Request error: {e}, retrying in {delay}s "
-                            f"(attempt {attempt + 1}/{retries})"
+                        delay = _calculate_delay(delay_base, attempt)
+                        await _log_and_sleep_async(
+                            delay, f"Request error: {e}", attempt, retries
                         )
-                        await asyncio.sleep(delay)
                         continue
                     raise
 

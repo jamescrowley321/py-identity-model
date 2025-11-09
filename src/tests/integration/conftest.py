@@ -21,6 +21,10 @@ from py_identity_model import (
 from .test_utils import get_config
 
 
+# Constants
+RATE_LIMIT_ERROR_MESSAGE = "Rate limited"
+
+
 # Retry decorator for rate limit handling
 def retry_on_rate_limit():
     """Retry decorator that handles HTTP 429 rate limiting."""
@@ -62,7 +66,9 @@ def discovery_document(test_config):
         if not response.is_successful and "429" in str(response.error):
             request = httpx.Request("GET", test_config["TEST_DISCO_ADDRESS"])
             raise httpx.HTTPStatusError(
-                "Rate limited", request=request, response=httpx.Response(429)
+                RATE_LIMIT_ERROR_MESSAGE,
+                request=request,
+                response=httpx.Response(429),
             )
 
         return response
@@ -88,7 +94,9 @@ def jwks_response(test_config):
         if not response.is_successful and "429" in str(response.error):
             request = httpx.Request("GET", test_config["TEST_JWKS_ADDRESS"])
             raise httpx.HTTPStatusError(
-                "Rate limited", request=request, response=httpx.Response(429)
+                RATE_LIMIT_ERROR_MESSAGE,
+                request=request,
+                response=httpx.Response(429),
             )
 
         return response
@@ -138,7 +146,9 @@ def client_credentials_token(test_config, token_endpoint):
         if not response.is_successful and "429" in str(response.error):
             request = httpx.Request("POST", token_endpoint)
             raise httpx.HTTPStatusError(
-                "Rate limited", request=request, response=httpx.Response(429)
+                RATE_LIMIT_ERROR_MESSAGE,
+                request=request,
+                response=httpx.Response(429),
             )
 
         return response

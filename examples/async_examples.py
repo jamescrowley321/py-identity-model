@@ -18,6 +18,12 @@ from py_identity_model.aio import (
 )
 
 
+# Constants
+DEMO_DISCOVERY_URL = (
+    "https://demo.duendesoftware.com/.well-known/openid-configuration"
+)
+
+
 # =============================================================================
 # Example 1: Async Discovery Document Fetching
 # =============================================================================
@@ -29,9 +35,7 @@ async def fetch_discovery_document_example():
     print("Example 1: Async Discovery Document")
     print("=" * 60)
 
-    discovery_request = DiscoveryDocumentRequest(
-        address="https://demo.duendesoftware.com/.well-known/openid-configuration"
-    )
+    discovery_request = DiscoveryDocumentRequest(address=DEMO_DISCOVERY_URL)
 
     # Async fetch - non-blocking
     response = await get_discovery_document(discovery_request)
