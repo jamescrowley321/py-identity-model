@@ -18,6 +18,7 @@ from py_identity_model import (
     get_jwks,
     request_client_credentials_token,
 )
+from py_identity_model.http_client import close_http_client
 
 from .test_utils import get_config
 
@@ -162,3 +163,17 @@ def client_credentials_token(test_config, token_endpoint):
         return response
 
     return fetch_token()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_http_client():
+    """
+    Session-scoped fixture that ensures HTTP client is properly closed.
+
+    This fixture automatically runs after all tests complete to close
+    the persistent HTTP client and prevent resource warnings about
+    unclosed SSL sockets.
+    """
+    yield
+    # Cleanup happens after all tests in the session
+    close_http_client()
