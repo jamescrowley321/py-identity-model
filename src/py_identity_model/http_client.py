@@ -300,22 +300,49 @@ def get_async_http_client() -> httpx.AsyncClient:
         - keepalive_expiry: 5.0 seconds
 
         Thread-safe: Uses a lock to prevent race conditions when creating
-        the async client from multiple threads simultaneously.
+        the async client from multiple threads simultaneously. In case of
+        errors during creation, retries up to 3 times.
     """
     global _async_http_client
 
-    if _async_http_client is None:
-        with _async_client_lock:
-            # Double-check pattern to avoid race conditions
-            if _async_http_client is None:
+    # Fast path: client already exists
+    if _async_http_client is not None:
+        return _async_http_client
+
+    # Slow path: need to create client with lock
+    with _async_client_lock:
+        # Double-check: another thread might have created it while we waited
+        if _async_http_client is not None:
+            return _async_http_client
+
+        # Create client with retry logic for thread safety
+        max_attempts = 3
+        last_error = None
+
+        for attempt in range(max_attempts):
+            try:
                 timeout = _get_timeout()
                 _async_http_client = httpx.AsyncClient(
                     verify=get_ssl_verify(),
                     timeout=timeout,
                     follow_redirects=True,
                 )
+                return _async_http_client
+            except (FileNotFoundError, OSError) as e:
+                # These errors can occur when multiple threads try to
+                # initialize asyncio components simultaneously
+                last_error = e
+                if attempt < max_attempts - 1:
+                    # Small delay before retry
+                    time.sleep(0.01 * (attempt + 1))
+                continue
 
-    return _async_http_client
+        # If all retries failed, raise the last error
+        if last_error:
+            raise last_error
+
+        # This should never happen, but just in case
+        raise RuntimeError("Failed to create async HTTP client")
 
 
 async def close_async_http_client() -> None:
