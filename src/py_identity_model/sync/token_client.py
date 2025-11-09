@@ -11,10 +11,12 @@ from ..core.models import (
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
 )
-from ..core.response_processors import parse_token_response
+from ..core.token_client_logic import (
+    log_token_request,
+    prepare_token_request_data,
+    process_token_response,
+)
 from ..http_client import get_http_client, retry_on_rate_limit
-from ..logging_config import logger
-from ..logging_utils import redact_url
 
 
 @retry_on_rate_limit()
@@ -46,14 +48,8 @@ def request_client_credentials_token(
     Returns:
         ClientCredentialsTokenResponse: Token response
     """
-    logger.info(
-        f"Requesting client credentials token from {redact_url(request.address)}",
-    )
-    logger.debug(f"Client ID: {request.client_id}, Scope: {request.scope}")
-
-    params = {"grant_type": "client_credentials", "scope": request.scope}
-
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    log_token_request(request)
+    params, headers = prepare_token_request_data(request)
 
     try:
         client = get_http_client()
@@ -64,21 +60,7 @@ def request_client_credentials_token(
             headers,
             (request.client_id, request.client_secret),
         )
-
-        logger.debug(f"Token request status code: {response.status_code}")
-
-        # Parse response using shared logic
-        token_response = parse_token_response(response)
-
-        if token_response.is_successful and token_response.token:
-            logger.info("Client credentials token request successful")
-            logger.debug(
-                f"Token type: {token_response.token.get('token_type')}, "
-                f"Expires in: {token_response.token.get('expires_in')} seconds",
-            )
-
-        return token_response
-
+        return process_token_response(response)
     except Exception as e:
         return handle_token_error(e)
 

@@ -7,6 +7,7 @@ This module provides asynchronous HTTP layer for fetching JSON Web Key Sets.
 import httpx
 
 from ..core.error_handlers import handle_jwks_error
+from ..core.jwks_logic import log_jwks_request, process_jwks_response
 from ..core.models import (
     JsonWebAlgorithmsKeyTypes,
     JsonWebKey,
@@ -15,10 +16,7 @@ from ..core.models import (
     JwksResponse,
 )
 from ..core.parsers import jwks_from_dict
-from ..core.response_processors import parse_jwks_response
 from ..http_client import get_async_http_client, retry_on_rate_limit_async
-from ..logging_config import logger
-from ..logging_utils import redact_url
 
 
 @retry_on_rate_limit_async()
@@ -42,25 +40,11 @@ async def get_jwks(jwks_request: JwksRequest) -> JwksResponse:
     Returns:
         JwksResponse: JWKS response with keys
     """
-    logger.info(f"Fetching JWKS from {redact_url(jwks_request.address)}")
+    log_jwks_request(jwks_request)
     try:
         client = get_async_http_client()
         response = await _fetch_jwks(client, jwks_request.address)
-        logger.debug(f"JWKS request status code: {response.status_code}")
-
-        # Parse response using shared logic
-        jwks_response = parse_jwks_response(response)
-
-        if jwks_response.is_successful and jwks_response.keys:
-            logger.info(
-                f"JWKS fetched successfully, found {len(jwks_response.keys)} keys"
-            )
-            logger.debug(
-                f"Key IDs: {[k.kid for k in jwks_response.keys if k.kid is not None]}",
-            )
-
-        return jwks_response
-
+        return process_jwks_response(response)
     except Exception as e:
         return handle_jwks_error(e)
 
