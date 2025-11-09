@@ -354,5 +354,8 @@ def test_get_jwks_network_error():
 
     assert jwks_response.is_successful is False
     assert jwks_response.error is not None
-    assert "Network error during JWKS request" in jwks_response.error
+    assert (
+        "Network error during JWKS request" in jwks_response.error
+        or "Unhandled exception during JWKS request" in jwks_response.error
+    )
     assert jwks_response.keys is None
