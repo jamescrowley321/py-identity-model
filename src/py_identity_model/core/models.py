@@ -222,7 +222,7 @@ class JsonWebKey:
 
             mapped_data: dict[str, Any] = {}
             for k, v in data.items():
-                if k == "x5t#S256":
+                if k == JsonWebKeyParameterNames.X5T_S256.value:
                     mapped_data["x5t_s256"] = v
                 elif k == "key_ops" and isinstance(v, str):
                     # Ensure key_ops is a list
@@ -258,7 +258,7 @@ class JsonWebKey:
             if v is not None:
                 # Map Python field names back to JWK parameter names
                 if k == "x5t_s256":
-                    data["x5t#S256"] = v
+                    data[JsonWebKeyParameterNames.X5T_S256.value] = v
                 else:
                     data[k] = v
         return json.dumps(data)

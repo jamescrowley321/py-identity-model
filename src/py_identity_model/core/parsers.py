@@ -8,7 +8,7 @@ from jwt import get_unverified_header
 
 from ..exceptions import TokenValidationException
 from ..logging_config import logger
-from .models import JsonWebKey
+from .models import JsonWebKey, JsonWebKeyParameterNames
 
 
 # ============================================================================
@@ -38,7 +38,7 @@ def jwks_from_dict(keys_dict: dict) -> JsonWebKey:
         x5u=keys_dict.get("x5u"),
         x5c=keys_dict.get("x5c"),
         x5t=keys_dict.get("x5t"),
-        x5t_s256=keys_dict.get("x5t#S256"),
+        x5t_s256=keys_dict.get(JsonWebKeyParameterNames.X5T_S256.value),
         # Parameters for Elliptic Curve Keys
         crv=keys_dict.get("crv"),
         x=keys_dict.get("x"),

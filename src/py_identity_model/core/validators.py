@@ -71,16 +71,35 @@ def validate_required_parameters(response_data: dict) -> None:
         )
 
 
+def _validate_subject_types(subject_types: list) -> None:
+    """Validate subject_types_supported values."""
+    valid_subject_types = ["public", "pairwise"]
+    for subject_type in subject_types:
+        if subject_type not in valid_subject_types:
+            raise DiscoveryException(
+                f"Invalid subject type: {subject_type}. Must be 'public' or 'pairwise'",
+            )
+
+
+def _validate_response_type(
+    response_type: str, valid_response_types: list
+) -> None:
+    """Validate a single response type."""
+    if response_type not in valid_response_types:
+        # Allow custom response types that contain valid components
+        components = response_type.split()
+        valid_components = ["code", "id_token", "token"]
+        if not all(comp in valid_components for comp in components):
+            raise DiscoveryException(
+                f"Invalid response type: {response_type}",
+            )
+
+
 def validate_parameter_values(response_data: dict) -> None:
     """Validate parameter values according to OpenID Connect specifications"""
     # Validate subject_types_supported values
     if response_data.get("subject_types_supported"):
-        valid_subject_types = ["public", "pairwise"]
-        for subject_type in response_data["subject_types_supported"]:
-            if subject_type not in valid_subject_types:
-                raise DiscoveryException(
-                    f"Invalid subject type: {subject_type}. Must be 'public' or 'pairwise'",
-                )
+        _validate_subject_types(response_data["subject_types_supported"])
 
     # Validate response_types_supported values
     if response_data.get("response_types_supported"):
@@ -94,14 +113,7 @@ def validate_parameter_values(response_data: dict) -> None:
             "code id_token token",
         ]
         for response_type in response_data["response_types_supported"]:
-            if response_type not in valid_response_types:
-                # Allow custom response types that contain valid components
-                components = response_type.split()
-                valid_components = ["code", "id_token", "token"]
-                if not all(comp in valid_components for comp in components):
-                    raise DiscoveryException(
-                        f"Invalid response type: {response_type}",
-                    )
+            _validate_response_type(response_type, valid_response_types)
 
 
 # ============================================================================
