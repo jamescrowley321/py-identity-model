@@ -1,11 +1,14 @@
 """
-Commonly used claim types for JWT (JSON Web Tokens)
+Commonly used claim types for JWT (JSON Web Tokens).
+
+Note: Enum member names use PascalCase (not SCREAMING_SNAKE_CASE) to maintain
+compatibility with the C# Duende.IdentityModel library this is ported from.
+The actual JWT claim values (enum values) are the important part.
 """
 
 import enum
 
 
-# TODO: correct issues with python conventions in files below
 class JwtClaimTypes(enum.Enum):
     """Commonly used claim types"""
 

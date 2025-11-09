@@ -53,5 +53,4 @@ def setup_test_environment():
     """Setup test environment before running tests."""
     # This fixture runs automatically for all tests
     # Can be used for global setup/teardown if needed
-    return
     # Cleanup code can go here if needed
