@@ -90,6 +90,8 @@ For detailed usage instructions, examples, and guides, please see our comprehens
 
 * **[Getting Started Guide](docs/getting-started.md)** - Installation, quick start, and common use cases
 * **[API Documentation](docs/index.md)** - Complete API reference with examples
+* **[Migration Guide](docs/migration-guide.md)** - Migrating from sync to async API
+* **[Performance Guide](docs/performance.md)** - Caching, optimization, and benchmarks
 * **[FAQ](docs/faq.md)** - Frequently asked questions
 * **[Troubleshooting Guide](docs/troubleshooting.md)** - Common issues and solutions
 * **[Project Roadmap](docs/py_identity_model_roadmap.md)** - Upcoming features and development plans
