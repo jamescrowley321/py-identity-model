@@ -180,7 +180,13 @@ class TestHTTPClientThreadSafety:
 
     def test_async_http_client_concurrent_access(self):
         """Test that async HTTP client can be accessed concurrently."""
-        from py_identity_model.http_client import get_async_http_client
+        from py_identity_model.http_client import (
+            _reset_async_http_client,
+            get_async_http_client,
+        )
+
+        # Reset async client cache before test to ensure clean state
+        _reset_async_http_client()
 
         clients = []
         errors = []

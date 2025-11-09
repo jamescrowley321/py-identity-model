@@ -13,12 +13,17 @@ Environment Variables:
 import asyncio
 from functools import lru_cache, wraps
 import os
+import threading
 import time
 
 import httpx
 
 from .logging_config import logger
 from .ssl_config import get_ssl_verify
+
+
+# Thread lock for async client creation
+_async_client_lock = threading.Lock()
 
 
 def _get_retry_config() -> tuple[int, float]:
@@ -268,7 +273,10 @@ def retry_on_rate_limit_async(
     return decorator
 
 
-@lru_cache(maxsize=1)
+# Cached async client instance
+_async_http_client: httpx.AsyncClient | None = None
+
+
 def get_async_http_client() -> httpx.AsyncClient:
     """
     Get a persistent async HTTP client with connection pooling.
@@ -288,13 +296,24 @@ def get_async_http_client() -> httpx.AsyncClient:
         - max_connections: 100
         - max_keepalive_connections: 20
         - keepalive_expiry: 5.0 seconds
+
+        Thread-safe: Uses a lock to prevent race conditions when creating
+        the async client from multiple threads simultaneously.
     """
-    timeout = _get_timeout()
-    return httpx.AsyncClient(
-        verify=get_ssl_verify(),
-        timeout=timeout,
-        follow_redirects=True,
-    )
+    global _async_http_client
+
+    if _async_http_client is None:
+        with _async_client_lock:
+            # Double-check pattern to avoid race conditions
+            if _async_http_client is None:
+                timeout = _get_timeout()
+                _async_http_client = httpx.AsyncClient(
+                    verify=get_ssl_verify(),
+                    timeout=timeout,
+                    follow_redirects=True,
+                )
+
+    return _async_http_client
 
 
 async def close_async_http_client() -> None:
@@ -305,10 +324,25 @@ async def close_async_http_client() -> None:
     clean up resources. Not calling this will leave connections open, but
     they will be cleaned up when the process exits.
     """
-    client = get_async_http_client.cache_info()
-    if client.currsize > 0:
-        await get_async_http_client().aclose()
-        get_async_http_client.cache_clear()
+    global _async_http_client
+
+    if _async_http_client is not None:
+        with _async_client_lock:
+            if _async_http_client is not None:
+                await _async_http_client.aclose()
+                _async_http_client = None
+
+
+def _reset_async_http_client() -> None:
+    """
+    Reset the async HTTP client cache (for testing purposes only).
+
+    This function is intended for use in tests to clear the cached async
+    HTTP client instance. It should not be called in production code.
+    """
+    global _async_http_client
+    with _async_client_lock:
+        _async_http_client = None
 
 
 __all__ = [

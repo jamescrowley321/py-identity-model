@@ -40,14 +40,14 @@ def set_env_file(env_file_path: str | None) -> None:
     # This is safe in parallel execution because each worker has its own process
     # and environment, and this only runs once per session during fixture initialization.
     from py_identity_model.http_client import (
-        get_async_http_client,
+        _reset_async_http_client,
         get_http_client,
     )
     from py_identity_model.ssl_config import get_ssl_verify
 
     get_ssl_verify.cache_clear()
     get_http_client.cache_clear()
-    get_async_http_client.cache_clear()
+    _reset_async_http_client()
 
 
 def get_config(env_file: str | None = None) -> dict:
