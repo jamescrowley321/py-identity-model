@@ -36,7 +36,14 @@ from .jwks import get_jwks
 
 @lru_cache
 def _get_disco_response(disco_doc_address: str) -> DiscoveryDocumentResponse:
-    """Cached discovery document fetching."""
+    """
+    Cached discovery document fetching.
+
+    Note: httpx creates new connections for each request. For better performance
+    in applications making many discovery requests, consider using httpx.Client
+    with connection pooling. However, with this LRU cache, discovery documents
+    are only fetched once per address, making the connection overhead minimal.
+    """
     return get_discovery_document(
         DiscoveryDocumentRequest(address=disco_doc_address),
     )
