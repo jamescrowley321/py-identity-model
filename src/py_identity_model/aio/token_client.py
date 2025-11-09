@@ -6,10 +6,12 @@ This module provides asynchronous HTTP layer for OAuth 2.0 token requests.
 
 import httpx
 
+from ..core.error_handlers import handle_token_error
 from ..core.models import (
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
 )
+from ..core.response_processors import parse_token_response
 from ..http_client import get_async_http_client, retry_on_rate_limit_async
 from ..logging_config import logger
 from ..logging_utils import redact_url
@@ -65,33 +67,20 @@ async def request_client_credentials_token(
 
         logger.debug(f"Token request status code: {response.status_code}")
 
-        if response.is_success:
-            response_json = response.json()
+        # Parse response using shared logic
+        token_response = parse_token_response(response)
+
+        if token_response.is_successful and token_response.token:
             logger.info("Client credentials token request successful")
             logger.debug(
-                f"Token type: {response_json.get('token_type')}, "
-                f"Expires in: {response_json.get('expires_in')} seconds",
+                f"Token type: {token_response.token.get('token_type')}, "
+                f"Expires in: {token_response.token.get('expires_in')} seconds",
             )
-            return ClientCredentialsTokenResponse(
-                is_successful=True,
-                token=response_json,
-            )
-        error_msg = (
-            f"Token generation request failed with status code: "
-            f"{response.status_code}. Response Content: {response.content}"
-        )
-        logger.error(error_msg)
-        return ClientCredentialsTokenResponse(
-            is_successful=False,
-            error=error_msg,
-        )
-    except httpx.RequestError as e:
-        error_msg = f"Network error during token request: {e!s}"
-        logger.error(error_msg, exc_info=True)
-        return ClientCredentialsTokenResponse(
-            is_successful=False,
-            error=error_msg,
-        )
+
+        return token_response
+
+    except Exception as e:
+        return handle_token_error(e)
 
 
 __all__ = [
