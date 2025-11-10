@@ -16,10 +16,10 @@ from ..core.models import (
     JwksResponse,
 )
 from ..core.parsers import jwks_from_dict
-from ..http_client import get_http_client, retry_on_rate_limit
+from .http_client import get_http_client, retry_with_backoff
 
 
-@retry_on_rate_limit()
+@retry_with_backoff()
 def _fetch_jwks(client: httpx.Client, url: str) -> httpx.Response:
     """
     Fetch JWKS with retry logic.
@@ -44,7 +44,10 @@ def get_jwks(jwks_request: JwksRequest) -> JwksResponse:
     try:
         client = get_http_client()
         response = _fetch_jwks(client, jwks_request.address)
-        return process_jwks_response(response)
+        result = process_jwks_response(response)
+        # Explicitly close the response to ensure the connection is released
+        response.close()
+        return result
     except Exception as e:
         return handle_jwks_error(e)
 

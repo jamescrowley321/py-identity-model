@@ -1,5 +1,7 @@
 """Shared fixtures for integration tests with caching and retry logic."""
 
+from contextlib import suppress
+
 from filelock import FileLock
 import httpx
 import pytest
@@ -18,6 +20,7 @@ from py_identity_model import (
     get_jwks,
     request_client_credentials_token,
 )
+from py_identity_model.sync.http_client import close_http_client
 
 from .test_utils import get_config
 
@@ -27,7 +30,7 @@ RATE_LIMIT_ERROR_MESSAGE = "Rate limited"
 
 
 # Retry decorator for rate limit handling
-def retry_on_rate_limit():
+def retry_with_backoff():
     """Retry decorator that handles HTTP 429 rate limiting."""
     return retry(
         retry=retry_if_exception_type(httpx.HTTPStatusError),
@@ -63,7 +66,7 @@ def discovery_document(test_config):
     Includes retry logic to handle transient rate limits.
     """
 
-    @retry_on_rate_limit()
+    @retry_with_backoff()
     def fetch_discovery():
         disco_doc_req = DiscoveryDocumentRequest(
             address=test_config["TEST_DISCO_ADDRESS"]
@@ -93,7 +96,7 @@ def jwks_response(test_config):
     Includes retry logic to handle transient rate limits.
     """
 
-    @retry_on_rate_limit()
+    @retry_with_backoff()
     def fetch_jwks():
         jwks_req = JwksRequest(address=test_config["TEST_JWKS_ADDRESS"])
         response = get_jwks(jwks_req)
@@ -139,7 +142,7 @@ def client_credentials_token(test_config, token_endpoint):
     Includes retry logic to handle transient rate limits.
     """
 
-    @retry_on_rate_limit()
+    @retry_with_backoff()
     def fetch_token():
         response = request_client_credentials_token(
             ClientCredentialsTokenRequest(
@@ -162,3 +165,22 @@ def client_credentials_token(test_config, token_endpoint):
         return response
 
     return fetch_token()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_http_client():
+    """
+    Session-scoped fixture that ensures HTTP client is properly closed.
+
+    This fixture automatically runs after all tests complete to close
+    the persistent HTTP client and prevent resource warnings about
+    unclosed SSL sockets.
+
+    Each pytest-xdist worker process has its own HTTP client cache,
+    so cleanup happens independently per worker without race conditions.
+    """
+    yield
+    # Cleanup happens after all tests in the session
+    # Ignore errors during cleanup (e.g., if client was never created)
+    with suppress(Exception):
+        close_http_client()

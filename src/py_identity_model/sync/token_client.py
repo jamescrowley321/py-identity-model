@@ -16,10 +16,10 @@ from ..core.token_client_logic import (
     prepare_token_request_data,
     process_token_response,
 )
-from ..http_client import get_http_client, retry_on_rate_limit
+from .http_client import get_http_client, retry_with_backoff
 
 
-@retry_on_rate_limit()
+@retry_with_backoff()
 def _request_token(
     client: httpx.Client,
     url: str,
@@ -60,7 +60,10 @@ def request_client_credentials_token(
             headers,
             (request.client_id, request.client_secret),
         )
-        return process_token_response(response)
+        result = process_token_response(response)
+        # Explicitly close the response to ensure the connection is released
+        response.close()
+        return result
     except Exception as e:
         return handle_token_error(e)
 
