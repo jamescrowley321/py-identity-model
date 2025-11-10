@@ -16,7 +16,7 @@ py-identity-model v1.2.0 introduced full async/await support while maintaining 1
 |--------|-------------|--------------|
 | Import from | `py_identity_model` | `py_identity_model.aio` |
 | Function calls | Regular function calls | `await` function calls |
-| Caching | `functools.lru_cache` | `async_lru.alru_cache` |
+| HTTP Client | Thread-local `httpx.Client` | Singleton `httpx.AsyncClient` |
 | HTTP library | `httpx` (sync) | `httpx.AsyncClient` |
 | Best for | Scripts, CLI, Flask, Django | FastAPI, Starlette, high-concurrency apps |
 
@@ -403,19 +403,44 @@ async def api_endpoint(token: str):
     # ... async processing
 ```
 
-## Caching Behavior Differences
+## HTTP Client Management Differences
 
-Both sync and async implementations use caching, but with different libraries:
+Both sync and async implementations manage HTTP clients differently for optimal performance:
 
 | Aspect | Sync | Async |
 |--------|------|-------|
-| Cache library | `functools.lru_cache` | `async_lru.alru_cache` |
-| Cache sharing | Shared across sync calls | Shared across async calls |
-| Cache key | Same format | Same format |
-| Cache size | 128 entries (discovery), 128 (JWKS) | 128 entries (discovery), 128 (JWKS) |
-| Cache clearing | `function.cache_clear()` | `function.cache_clear()` |
+| Client Storage | Thread-local (`threading.local()`) | Singleton per process |
+| Connection Pooling | Per thread | Shared across all async operations |
+| Thread Safety | Isolated per thread | Lock-protected initialization |
+| Resource Management | Auto-created, manually closeable | Auto-created, manually closeable |
 
-**Important:** Sync and async caches are **separate**. If you call both sync and async functions with the same parameters, they will each fetch and cache the data independently.
+### Synchronous API
+Each thread gets its own HTTP client with its own connection pool. This provides thread isolation without locks:
+
+```python
+from py_identity_model.http_client import get_http_client, close_http_client
+
+# Each thread automatically gets its own client
+client = get_http_client()  # Thread-local client
+
+# Optional cleanup (usually not needed)
+close_http_client()  # Closes client for current thread only
+```
+
+### Asynchronous API
+All async operations share a single HTTP client per process:
+
+```python
+from py_identity_model.http_client import get_async_http_client, close_async_http_client
+
+# All async operations share this client
+client = await get_async_http_client()  # Singleton
+
+# Optional cleanup
+await close_async_http_client()  # Closes the shared client
+```
+
+**Important:** Sync and async HTTP clients are **completely separate**. Each manages its own connections independently.
 
 ## Performance Considerations
 

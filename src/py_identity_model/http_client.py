@@ -25,8 +25,11 @@ from .ssl_config import get_ssl_verify
 # Thread-local storage for sync HTTP client
 _thread_local = threading.local()
 
-# Thread lock for async client creation
-_async_client_lock = threading.Lock()
+# Thread lock for async client creation (protects multi-threaded initialization)
+_async_client_creation_lock = threading.Lock()
+
+# Async lock for async client cleanup (protects async operations)
+_async_client_cleanup_lock: asyncio.Lock | None = None
 
 
 def _get_retry_config() -> tuple[int, float]:
@@ -322,7 +325,7 @@ def get_async_http_client() -> httpx.AsyncClient:
         return _async_http_client
 
     # Slow path: need to create client with lock
-    with _async_client_lock:
+    with _async_client_creation_lock:
         # Double-check: another thread might have created it while we waited
         if _async_http_client is not None:
             return _async_http_client
@@ -368,11 +371,19 @@ async def close_async_http_client() -> None:
     This should be called when shutting down the application to properly
     clean up resources. Not calling this will leave connections open, but
     they will be cleaned up when the process exits.
+
+    Note:
+        This function uses asyncio.Lock for proper async cleanup without
+        blocking the event loop.
     """
-    global _async_http_client
+    global _async_http_client, _async_client_cleanup_lock
+
+    # Initialize the async cleanup lock if needed (lazy initialization)
+    if _async_client_cleanup_lock is None:
+        _async_client_cleanup_lock = asyncio.Lock()
 
     if _async_http_client is not None:
-        with _async_client_lock:
+        async with _async_client_cleanup_lock:
             if _async_http_client is not None:
                 await _async_http_client.aclose()
                 _async_http_client = None
@@ -398,9 +409,13 @@ def _reset_async_http_client() -> None:
     This function is intended for use in tests to clear the cached async
     HTTP client instance. It should not be called in production code.
     """
-    global _async_http_client
-    with _async_client_lock:
-        _async_http_client = None
+    global _async_http_client, _async_client_cleanup_lock
+    with _async_client_creation_lock:
+        if _async_http_client is not None:
+            # Note: Synchronous close for testing - may leave connections open
+            # In production, use close_async_http_client() for proper cleanup
+            _async_http_client = None
+        _async_client_cleanup_lock = None
 
 
 __all__ = [
