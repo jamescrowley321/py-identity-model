@@ -60,7 +60,10 @@ def request_client_credentials_token(
             headers,
             (request.client_id, request.client_secret),
         )
-        return process_token_response(response)
+        result = process_token_response(response)
+        # Explicitly close the response to ensure the connection is released
+        response.close()
+        return result
     except Exception as e:
         return handle_token_error(e)
 

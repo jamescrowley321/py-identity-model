@@ -49,6 +49,13 @@ uv run pre-commit run -a
 
 **ALL tests must pass before ANY commit. No exceptions.**
 
+**CRITICAL: Before ANY push to the repository, you MUST ALWAYS run these three commands:**
+```bash
+make test                    # Required - ALL unit and integration tests
+make test-integration-ory    # Required - Ory integration tests
+make test-examples          # Required - Example validation tests
+```
+
 ### Test Commands
 
 #### 1. Unit Tests (Fastest - Required Before Every Commit)
@@ -60,12 +67,13 @@ make test-unit
 - Use during active development for fast feedback
 - Location: `src/tests/unit/`
 
-#### 2. Integration Tests (Required Before PR Merge)
+#### 2. Integration Tests (Required Before EVERY Push - No Exceptions)
 
-**Ory Integration Tests** (External Service)
+**Ory Integration Tests** (External Service) - **ALWAYS RUN BEFORE PUSH**
 ```bash
 make test-integration-ory
 ```
+- **MANDATORY before every push to repository**
 - Tests against Ory identity provider
 - Requires valid Ory credentials in `.env`
 - Run sequentially to avoid rate limiting
@@ -80,19 +88,21 @@ make test-integration-local
 - Requires Docker containers running
 - For local development workflow
 
-#### 3. Example Tests
+#### 3. Example Tests - **ALWAYS RUN BEFORE PUSH**
 ```bash
 make test-examples
 ```
+- **MANDATORY before every push to repository**
 - Validates all examples work correctly
 - Tests Docker compose examples
 - Requires Docker
 - Must pass: 100%
 
-#### 4. Complete Test Suite
+#### 4. Complete Test Suite - **ALWAYS RUN BEFORE PUSH**
 ```bash
 make test-all
 ```
+- **MANDATORY before every push to repository**
 - Runs `make test` + `make test-examples`
 - Complete validation before PR merge
 
@@ -368,7 +378,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ## Never Skip
 
 **NEVER:**
-- Push without running `make test && make test-integration-ory && make test-examples && make lint`
+- Push without running ALL THREE MANDATORY COMMANDS: `make test && make test-integration-ory && make test-examples && make lint`
 - Commit without running tests
 - Skip pre-commit hooks (`--no-verify`)
 - Merge PR with failing tests
@@ -376,10 +386,16 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 - Assume code is thread-safe without verification
 - Commit directly to main
 - Push code with test failures
+- Skip `make test-integration-ory` (always required)
+- Skip `make test-examples` (always required)
+- Skip `make test` (always required)
 
 **ALWAYS:**
 - Create feature branches
-- Run all required tests before pushing: `make test && make test-integration-ory && make test-examples`
+- **Run ALL THREE required test commands before pushing: `make test && make test-integration-ory && make test-examples`**
+- **ALWAYS run `make test` before ANY push**
+- **ALWAYS run `make test-integration-ory` before ANY push**
+- **ALWAYS run `make test-examples` before ANY push**
 - Ensure pre-commit passes: `make lint`
 - Maintain backward compatibility
 - Document breaking changes

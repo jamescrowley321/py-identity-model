@@ -1,5 +1,7 @@
 """Shared fixtures for integration tests with caching and retry logic."""
 
+from contextlib import suppress
+
 from filelock import FileLock
 import httpx
 import pytest
@@ -173,7 +175,12 @@ def cleanup_http_client():
     This fixture automatically runs after all tests complete to close
     the persistent HTTP client and prevent resource warnings about
     unclosed SSL sockets.
+
+    Each pytest-xdist worker process has its own HTTP client cache,
+    so cleanup happens independently per worker without race conditions.
     """
     yield
     # Cleanup happens after all tests in the session
-    close_http_client()
+    # Ignore errors during cleanup (e.g., if client was never created)
+    with suppress(Exception):
+        close_http_client()

@@ -44,7 +44,10 @@ def get_jwks(jwks_request: JwksRequest) -> JwksResponse:
     try:
         client = get_http_client()
         response = _fetch_jwks(client, jwks_request.address)
-        return process_jwks_response(response)
+        result = process_jwks_response(response)
+        # Explicitly close the response to ensure the connection is released
+        response.close()
+        return result
     except Exception as e:
         return handle_jwks_error(e)
 

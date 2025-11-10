@@ -248,29 +248,110 @@ results = await asyncio.gather(
 )
 ```
 
-### 3. Connection Pooling
+### 3. HTTP Client Management & Connection Pooling
 
-Both sync and async implementations use `httpx` which provides automatic connection pooling:
+The library uses different HTTP client strategies for sync and async to optimize performance and thread safety.
 
-- **Max Connections**: 100 (httpx default)
-- **Max Keepalive**: 20 connections (httpx default)
-- **Timeout**: 30 seconds (py-identity-model default)
+#### Synchronous API: Thread-Local Clients
 
-To customize connection pooling (advanced):
+Each thread gets its own HTTP client using `threading.local()`:
 
 ```python
+# Thread-local storage for sync HTTP client
+_thread_local = threading.local()
+
+def get_http_client() -> httpx.Client:
+    """Get or create HTTP client for current thread."""
+    if not hasattr(_thread_local, "client") or _thread_local.client is None:
+        _thread_local.client = httpx.Client(
+            verify=get_ssl_verify(),
+            timeout=timeout,
+            follow_redirects=True,
+        )
+    return _thread_local.client
+```
+
+**Benefits:**
+- ✅ **No global state**: Eliminates race conditions
+- ✅ **Thread isolation**: Each thread has its own connection pool
+- ✅ **No locks needed**: Thread-local access is lock-free
+- ✅ **Automatic cleanup**: Each thread manages its own client lifecycle
+
+**Connection Pool per Thread:**
+- Max Connections: 100 (httpx default)
+- Max Keepalive: 20 connections (httpx default)
+- Timeout: 30 seconds (py-identity-model default)
+
+**Memory Trade-off:**
+- 10 threads = 10 clients (one per thread)
+- Each client has its own connection pool
+- Acceptable trade-off for thread safety
+
+#### Asynchronous API: Singleton Client
+
+All async operations share a single HTTP client per process:
+
+```python
+_async_http_client: httpx.AsyncClient | None = None
+_async_client_lock = threading.Lock()
+
+async def get_async_http_client() -> httpx.AsyncClient:
+    """Get or create the singleton async HTTP client."""
+    global _async_http_client
+    if _async_http_client is None:
+        with _async_client_lock:  # Thread-safe initialization
+            if _async_http_client is None:
+                _async_http_client = httpx.AsyncClient(...)
+    return _async_http_client
+```
+
+**Benefits:**
+- ✅ **Shared connection pool**: All async operations share connections
+- ✅ **Memory efficient**: Single client for all async operations
+- ✅ **No I/O locks**: Lock only used during initialization
+- ✅ **Optimal for async**: Matches async/await concurrency model
+
+**Shared Connection Pool:**
+- Max Connections: 100 (shared across all async operations)
+- Max Keepalive: 20 connections (shared)
+- Timeout: 30 seconds
+
+#### Performance Comparison
+
+| Aspect | Sync (Thread-Local) | Async (Singleton) |
+|--------|---------------------|-------------------|
+| Clients Created | One per thread | One per process |
+| Connection Pool | Per-thread | Shared process-wide |
+| Memory Usage | Higher (multiple clients) | Lower (single client) |
+| Lock Contention | None (thread-local) | None (during I/O) |
+| Best For | Multi-threaded apps | Async/await apps |
+
+#### Advanced: Custom Connection Limits
+
+For high-throughput applications, you may want to customize connection limits.
+
+**Note:** The library uses internal client creation, so customizing limits requires forking or using environment variables for timeout configuration.
+
+**Workaround for Custom Limits:**
+```python
+# Option 1: Use HTTP_TIMEOUT environment variable
+import os
+os.environ['HTTP_TIMEOUT'] = '60.0'  # Increase timeout to 60 seconds
+
+# Option 2: Create your own client wrapper (advanced)
 import httpx
-from py_identity_model.core.validators import validate_issuer
+from py_identity_model.core.discovery_logic import process_discovery_response
 
-# Custom client with tuned connection pool
-limits = httpx.Limits(
-    max_connections=200,
-    max_keepalive_connections=50,
-)
+async def custom_discovery_fetch(url: str):
+    """Custom discovery fetch with tuned connection pool."""
+    limits = httpx.Limits(
+        max_connections=200,
+        max_keepalive_connections=50,
+    )
 
-async with httpx.AsyncClient(limits=limits, timeout=30.0) as client:
-    response = await client.get(discovery_url)
-    # ... process response
+    async with httpx.AsyncClient(limits=limits, timeout=60.0) as client:
+        response = await client.get(url)
+        return process_discovery_response(response)
 ```
 
 ### 4. Batch Token Validations

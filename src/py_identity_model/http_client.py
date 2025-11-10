@@ -11,7 +11,7 @@ Environment Variables:
 """
 
 import asyncio
-from functools import lru_cache, wraps
+from functools import wraps
 import os
 import threading
 import time
@@ -21,6 +21,9 @@ import httpx
 from .logging_config import logger
 from .ssl_config import get_ssl_verify
 
+
+# Thread-local storage for sync HTTP client
+_thread_local = threading.local()
 
 # Thread lock for async client creation
 _async_client_lock = threading.Lock()
@@ -148,14 +151,14 @@ def retry_with_backoff(
     return decorator
 
 
-@lru_cache(maxsize=1)
 def get_http_client() -> httpx.Client:
     """
-    Get a persistent HTTP client with connection pooling.
+    Get a thread-local HTTP client with connection pooling.
 
-    Returns a singleton httpx.Client that reuses connections, improving
-    performance for multiple HTTP requests. Use @retry_with_backoff
-    decorator on HTTP calls for automatic retry logic.
+    Returns a thread-local httpx.Client that reuses connections within the
+    same thread, improving performance for multiple HTTP requests. Each thread
+    gets its own client instance, making this thread-safe for concurrent use
+    in web applications (FastAPI, Flask) and messaging systems.
 
     Returns:
         httpx.Client: Configured HTTP client with connection pooling
@@ -164,31 +167,40 @@ def get_http_client() -> httpx.Client:
         HTTP_TIMEOUT: Request timeout in seconds (default: 30.0)
 
     Note:
-        The client uses default limits:
-        - max_connections: 100
-        - max_keepalive_connections: 20
-        - keepalive_expiry: 5.0 seconds
+        - Thread-safe: Each thread gets its own client instance
+        - The client uses default limits:
+          - max_connections: 100
+          - max_keepalive_connections: 20
+          - keepalive_expiry: 5.0 seconds
+        - Ideal for web frameworks and messaging applications where each
+          request/message is handled in a separate thread
     """
-    timeout = _get_timeout()
-    return httpx.Client(
-        verify=get_ssl_verify(),
-        timeout=timeout,
-        follow_redirects=True,
-    )
+    # Check if current thread already has a client
+    if not hasattr(_thread_local, "client") or _thread_local.client is None:
+        timeout = _get_timeout()
+        _thread_local.client = httpx.Client(
+            verify=get_ssl_verify(),
+            timeout=timeout,
+            follow_redirects=True,
+        )
+    return _thread_local.client
 
 
 def close_http_client() -> None:
     """
-    Close the persistent HTTP client and clear the cache.
+    Close the HTTP client for the current thread.
 
-    This should be called when shutting down the application to properly
-    clean up resources. Not calling this will leave connections open, but
-    they will be cleaned up when the process exits.
+    This should be called when shutting down the application or cleaning up
+    after request processing to properly release resources. In web frameworks,
+    this can be called in teardown handlers or context managers.
+
+    Note:
+        This only closes the client for the current thread. Other threads
+        maintain their own clients independently.
     """
-    client = get_http_client.cache_info()
-    if client.currsize > 0:
-        get_http_client().close()
-        get_http_client.cache_clear()
+    if hasattr(_thread_local, "client") and _thread_local.client is not None:
+        _thread_local.client.close()
+        _thread_local.client = None
 
 
 async def _log_and_sleep_async(
@@ -366,6 +378,19 @@ async def close_async_http_client() -> None:
                 _async_http_client = None
 
 
+def _reset_http_client() -> None:
+    """
+    Reset the HTTP client for the current thread (for testing purposes only).
+
+    This function is intended for use in tests to clear the thread-local
+    HTTP client instance. It should not be called in production code.
+    """
+    if hasattr(_thread_local, "client"):
+        if _thread_local.client is not None:
+            _thread_local.client.close()
+        _thread_local.client = None
+
+
 def _reset_async_http_client() -> None:
     """
     Reset the async HTTP client cache (for testing purposes only).
@@ -379,6 +404,8 @@ def _reset_async_http_client() -> None:
 
 
 __all__ = [
+    "_reset_async_http_client",
+    "_reset_http_client",
     "close_async_http_client",
     "close_http_client",
     "get_async_http_client",
