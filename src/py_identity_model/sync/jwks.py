@@ -16,7 +16,7 @@ from ..core.models import (
     JwksResponse,
 )
 from ..core.parsers import jwks_from_dict
-from ..http_client import get_http_client, retry_with_backoff
+from .http_client import get_http_client, retry_with_backoff
 
 
 @retry_with_backoff()

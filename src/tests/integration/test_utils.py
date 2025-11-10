@@ -39,11 +39,9 @@ def set_env_file(env_file_path: str | None) -> None:
     # Clear all SSL and HTTP client caches to pick up environment changes.
     # This is safe in parallel execution because each worker has its own process
     # and environment, and this only runs once per session during fixture initialization.
-    from py_identity_model.http_client import (
-        _reset_async_http_client,
-        _reset_http_client,
-    )
+    from py_identity_model.aio.http_client import _reset_async_http_client
     from py_identity_model.ssl_config import get_ssl_verify
+    from py_identity_model.sync.http_client import _reset_http_client
 
     get_ssl_verify.cache_clear()
     _reset_http_client()

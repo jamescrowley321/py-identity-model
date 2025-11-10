@@ -152,11 +152,11 @@ class TestHTTPClientThreadSafety:
 
     def test_http_client_concurrent_access(self):
         """Test that HTTP client can be accessed concurrently with thread-local storage."""
-        from py_identity_model.http_client import (
+        from py_identity_model.ssl_config import get_ssl_verify
+        from py_identity_model.sync.http_client import (
             _reset_http_client,
             get_http_client,
         )
-        from py_identity_model.ssl_config import get_ssl_verify
 
         # Clear SSL verify cache to ensure we use system defaults
         # (previous tests may have set invalid SSL paths)

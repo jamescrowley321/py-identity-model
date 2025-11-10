@@ -16,7 +16,7 @@ from ..core.token_client_logic import (
     prepare_token_request_data,
     process_token_response,
 )
-from ..http_client import get_async_http_client, retry_with_backoff_async
+from .http_client import get_async_http_client, retry_with_backoff_async
 
 
 @retry_with_backoff_async()

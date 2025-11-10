@@ -20,7 +20,7 @@ from py_identity_model import (
     get_jwks,
     request_client_credentials_token,
 )
-from py_identity_model.http_client import close_http_client
+from py_identity_model.sync.http_client import close_http_client
 
 from .test_utils import get_config
 

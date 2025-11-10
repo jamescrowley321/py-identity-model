@@ -16,7 +16,7 @@ from ..core.models import (
     JwksResponse,
 )
 from ..core.parsers import jwks_from_dict
-from ..http_client import get_async_http_client, retry_with_backoff_async
+from .http_client import get_async_http_client, retry_with_backoff_async
 
 
 @retry_with_backoff_async()
