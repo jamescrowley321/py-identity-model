@@ -35,33 +35,66 @@ git push origin 2.0.0-beta.1
 - `X.Y.Z-alpha.N` - Alpha version
 - `X.Y.Z-beta.N` - Beta version
 
-### 2. Automatic Publishing to TestPyPI
+### 2. Automatic Publishing to GitHub Releases
 
 When you push a pre-release tag, GitHub Actions automatically:
-1. Runs all tests (unit + integration)
-2. Builds the distribution packages
-3. Publishes to [TestPyPI](https://test.pypi.org/)
-4. Creates a GitHub pre-release with installation instructions
+1. Builds the distribution packages (wheel and source distribution)
+2. Creates a GitHub pre-release
+3. Attaches the distribution files as release assets
+4. Provides installation instructions in the release notes
 
 **Workflow file:** `.github/workflows/publish-prerelease.yml`
 
-### 3. Installing from TestPyPI
+**Note:** Pre-releases are published to GitHub Releases only, not PyPI or TestPyPI. This provides:
+- Direct installation from GitHub without TestPyPI complexity
+- No dependency on TestPyPI's limited storage and retention policies
+- Simpler installation commands for downstream testing
 
-Once published, install the pre-release version for testing:
+### 3. Installing from GitHub Releases
+
+Once published, you have several options for installing the pre-release:
+
+**Option 1: Install from GitHub Release (Recommended)**
+
+This installs the pre-built wheel directly from the GitHub release:
 
 ```bash
 # Using pip
-pip install --index-url https://test.pypi.org/simple/ \
-            --extra-index-url https://pypi.org/simple/ \
-            py-identity-model==2.0.0-rc.1
+pip install https://github.com/jamescrowley321/py-identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
 
-# Using uv (recommended)
-uv pip install --index-url https://test.pypi.org/simple/ \
-               --extra-index-url https://pypi.org/simple/ \
-               py-identity-model==2.0.0-rc.1
+# Using uv
+uv pip install https://github.com/jamescrowley321/py-identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
 ```
 
-**Note:** The `--extra-index-url` is required because dependencies are installed from regular PyPI.
+**Option 2: Install from Git Tag**
+
+This builds the package from source at the specified tag:
+
+```bash
+# Using pip
+pip install git+https://github.com/jamescrowley321/py-identity-model.git@2.0.0-rc.1
+
+# Using uv
+uv pip install git+https://github.com/jamescrowley321/py-identity-model.git@2.0.0-rc.1
+```
+
+**Option 3: Install in Editable Mode for Development**
+
+For active development and testing:
+
+```bash
+git clone https://github.com/jamescrowley321/py-identity-model.git
+cd py-identity-model
+git checkout 2.0.0-rc.1
+pip install -e .
+```
+
+**Finding the Wheel URL:**
+
+1. Go to the [Releases page](https://github.com/jamescrowley321/py-identity-model/releases)
+2. Find the pre-release version
+3. Copy the link to the `.whl` file from the Assets section
+4. The release notes will also include the exact installation command
 
 ### 4. Testing in a Clean Environment
 
@@ -72,10 +105,11 @@ Always test pre-releases in a clean virtual environment:
 python -m venv test-env
 source test-env/bin/activate  # On Windows: test-env\Scripts\activate
 
-# Install the pre-release
-pip install --index-url https://test.pypi.org/simple/ \
-            --extra-index-url https://pypi.org/simple/ \
-            py-identity-model==2.0.0-rc.1
+# Install the pre-release (Option 1 - from GitHub release)
+pip install https://github.com/jamescrowley321/py-identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
+
+# Or Option 2 - from git tag
+pip install git+https://github.com/jamescrowley321/py-identity-model.git@2.0.0-rc.1
 
 # Run your tests
 python your_test_script.py
@@ -89,13 +123,11 @@ To test in an existing application:
 # In your application directory
 cd /path/to/your/app
 
-# Create a backup of requirements
-cp requirements.txt requirements.txt.backup
+# Install pre-release (Option 1 - from GitHub release)
+pip install https://github.com/jamescrowley321/py-identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
 
-# Install pre-release
-pip install --index-url https://test.pypi.org/simple/ \
-            --extra-index-url https://pypi.org/simple/ \
-            py-identity-model==2.0.0-rc.1
+# Or Option 2 - from git tag
+pip install git+https://github.com/jamescrowley321/py-identity-model.git@2.0.0-rc.1
 
 # Test your application
 pytest
@@ -104,8 +136,8 @@ python manage.py test  # Django
 # or
 python -m flask run    # Flask
 
-# Restore original requirements when done
-pip install -r requirements.txt.backup
+# When done, reinstall stable version
+pip install --force-reinstall py-identity-model
 ```
 
 ## Pre-release Checklist
@@ -119,45 +151,61 @@ Before creating a pre-release:
 - [ ] Breaking changes clearly documented
 - [ ] Migration guide updated (if needed)
 
-## TestPyPI vs PyPI
+## GitHub Releases vs PyPI
 
-### TestPyPI (Pre-releases)
-- **URL:** https://test.pypi.org/
+### GitHub Releases (Pre-releases)
+- **URL:** https://github.com/jamescrowley321/py-identity-model/releases
 - **Purpose:** Testing package distribution before official release
-- **Retention:** Packages may be deleted over time
+- **Retention:** Releases can be deleted or updated as needed
 - **Usage:** Pre-release testing only
+- **Installation:** Direct URL to wheel file or git tag
 
 ### PyPI (Official Releases)
 - **URL:** https://pypi.org/
 - **Purpose:** Official package distribution
 - **Retention:** Packages are permanent (cannot be deleted)
 - **Usage:** Production use
+- **Installation:** Standard `pip install py-identity-model`
 
 ## Troubleshooting
 
-### "Package not found" Error
+### "Package not found" or 404 Error
 
-If you get a "package not found" error:
+If you get a 404 error when installing from GitHub:
 
 ```bash
-# Make sure you're using the correct index URL
-pip install --index-url https://test.pypi.org/simple/ \
-            --extra-index-url https://pypi.org/simple/ \
-            py-identity-model==2.0.0-rc.1
+# Verify the release exists
+# Go to: https://github.com/jamescrowley321/py-identity-model/releases
 
-# Check if the version exists
-pip index versions py-identity-model --index-url https://test.pypi.org/simple/
+# Check the exact wheel filename in the release assets
+# The filename format is: py_identity_model-{version}-py3-none-any.whl
+# Note: Version may have dashes converted (e.g., 2.0.0-rc.1 becomes 2.0.0rc1)
+
+# Correct example:
+pip install https://github.com/jamescrowley321/py-identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
 ```
 
 ### Version Already Exists
 
-TestPyPI allows overwriting versions, but it's better to increment:
+To create a new pre-release, increment the pre-release number:
 - `2.0.0-rc.1` → `2.0.0-rc.2`
 - `2.0.0-alpha.1` → `2.0.0-alpha.2`
 
-### Dependencies Not Installing
+GitHub Releases can be deleted if needed, but it's better to create new versions.
 
-Always include `--extra-index-url https://pypi.org/simple/` to install dependencies from PyPI.
+### Git Install Fails
+
+If installing from git tag fails:
+
+```bash
+# Make sure git is installed
+git --version
+
+# Try with verbose output to see the error
+pip install -v git+https://github.com/jamescrowley321/py-identity-model.git@2.0.0-rc.1
+
+# Alternative: Install from the wheel URL instead
+```
 
 ## Promoting Pre-release to Stable
 
