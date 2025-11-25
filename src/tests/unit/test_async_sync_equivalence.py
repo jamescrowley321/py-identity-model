@@ -277,7 +277,7 @@ class TestResponseStructureEquivalence:
             if not attr.startswith("_"):
                 sync_val = getattr(sync_result, attr)
                 async_val = getattr(async_result, attr)
-                assert type(sync_val) == type(async_val), (
+                assert type(sync_val) is type(async_val), (
                     f"Attribute {attr} has different types"
                 )
 
@@ -316,6 +316,6 @@ class TestResponseStructureEquivalence:
         assert dir(sync_result) == dir(async_result)
 
         # Check keys structure
-        assert type(sync_result.keys) == type(async_result.keys)
+        assert type(sync_result.keys) is type(async_result.keys)
         if sync_result.keys and async_result.keys:
             assert dir(sync_result.keys[0]) == dir(async_result.keys[0])

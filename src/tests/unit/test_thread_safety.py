@@ -151,16 +151,31 @@ class TestHTTPClientThreadSafety:
     """Test thread safety of HTTP client access."""
 
     def test_http_client_concurrent_access(self):
-        """Test that HTTP client can be accessed concurrently."""
-        from py_identity_model.http_client import get_http_client
+        """Test that HTTP client can be accessed concurrently with thread-local storage."""
+        from py_identity_model.ssl_config import get_ssl_verify
+        from py_identity_model.sync.http_client import (
+            _reset_http_client,
+            get_http_client,
+        )
+
+        # Clear SSL verify cache to ensure we use system defaults
+        # (previous tests may have set invalid SSL paths)
+        get_ssl_verify.cache_clear()
+
+        # Reset HTTP client for clean state
+        _reset_http_client()
 
         clients = []
         errors = []
+        thread_ids = []
 
         def get_client():
             try:
+                import threading
+
                 client = get_http_client()
                 clients.append(id(client))  # Store object ID
+                thread_ids.append(threading.current_thread().ident)
             except Exception as e:
                 errors.append(e)
 
@@ -172,39 +187,31 @@ class TestHTTPClientThreadSafety:
         # No errors should occur
         assert len(errors) == 0, f"Errors occurred: {errors}"
 
-        # All threads should get the same client instance (cached)
+        # We should have collected 100 client IDs
         assert len(clients) == 100
-        assert all(c == clients[0] for c in clients), (
-            "All threads should get same client"
+
+        # With thread-local storage, each thread gets its own client.
+        # The number of unique clients should equal the number of unique threads used.
+        unique_clients = len(set(clients))
+        unique_threads = len(set(thread_ids))
+
+        # Each unique thread should have its own client
+        assert unique_clients == unique_threads, (
+            f"Expected {unique_threads} unique clients (one per thread), got {unique_clients}"
         )
 
-    def test_async_http_client_concurrent_access(self):
-        """Test that async HTTP client can be accessed concurrently."""
-        from py_identity_model.http_client import get_async_http_client
+        # Verify that calls from the same thread get the same client
+        thread_to_clients = {}
+        for tid, cid in zip(thread_ids, clients, strict=True):
+            if tid not in thread_to_clients:
+                thread_to_clients[tid] = []
+            thread_to_clients[tid].append(cid)
 
-        clients = []
-        errors = []
-
-        def get_client():
-            try:
-                client = get_async_http_client()
-                clients.append(id(client))  # Store object ID
-            except Exception as e:
-                errors.append(e)
-
-        # Access client from 50 threads concurrently
-        with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
-            futures = [executor.submit(get_client) for _ in range(100)]
-            concurrent.futures.wait(futures)
-
-        # No errors should occur
-        assert len(errors) == 0, f"Errors occurred: {errors}"
-
-        # All threads should get the same client instance (cached)
-        assert len(clients) == 100
-        assert all(c == clients[0] for c in clients), (
-            "All threads should get same client"
-        )
+        # All calls from the same thread should get the same client instance
+        for tid, client_ids in thread_to_clients.items():
+            assert all(cid == client_ids[0] for cid in client_ids), (
+                f"Thread {tid} got different client instances: {client_ids}"
+            )
 
 
 class TestCachingThreadSafety:

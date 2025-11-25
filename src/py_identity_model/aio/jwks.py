@@ -16,10 +16,10 @@ from ..core.models import (
     JwksResponse,
 )
 from ..core.parsers import jwks_from_dict
-from ..http_client import get_async_http_client, retry_on_rate_limit_async
+from .http_client import get_async_http_client, retry_with_backoff_async
 
 
-@retry_on_rate_limit_async()
+@retry_with_backoff_async()
 async def _fetch_jwks(client: httpx.AsyncClient, url: str) -> httpx.Response:
     """
     Fetch JWKS with retry logic.

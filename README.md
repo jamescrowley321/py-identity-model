@@ -90,41 +90,118 @@ response = await get_discovery_document(request)
 
 See [examples/async_examples.py](examples/async_examples.py) for complete async examples!
 
-## Thread Safety 🔒
+## Thread Safety & Concurrency 🔒
 
-**py-identity-model is fully thread-safe** and can be used in multi-threaded and multi-worker environments:
+**py-identity-model is fully thread-safe and async-safe** for use in multi-threaded, multi-worker, and async environments.
 
-- ✅ **Thread-safe caching**: All caching uses thread-safe `functools.lru_cache` and `async_lru.alru_cache`
-- ✅ **Connection pooling**: HTTP clients use persistent connection pools (shared per process, isolated per worker)
-- ✅ **No shared mutable state**: HTTP clients are created per-request with no shared state across threads
-- ✅ **SSL configuration**: SSL certificate configuration is protected with threading locks
+### HTTP Client Management
 
-**Safe for use with:**
-- FastAPI with multiple workers (`--workers N`)
-- Gunicorn/Uvicorn worker processes
-- Django with multiple worker threads
-- Flask with threading
-- Concurrent request handling
+The library uses different strategies for sync and async clients to ensure optimal performance and thread safety:
 
-**Performance benefits:**
-- Discovery documents and JWKS are cached per process (LRU cache)
-- HTTP connection pooling reduces latency for repeated requests
-- Thread-safe design allows safe concurrent validation
+#### Synchronous API (Thread-Local Storage)
+- **Each thread gets its own HTTP client** using `threading.local()`
+- **Thread-isolated connection pooling**: Connections are reused within the same thread
+- **No global state**: Eliminates race conditions and lock contention
+- **Automatic cleanup**: Each thread manages its own client lifecycle
 
 ```python
-# Example: Concurrent token validation
+# Sync API - thread-safe by design
+from py_identity_model import get_discovery_document, DiscoveryDocumentRequest
+
+# Each thread gets its own client with connection pooling
+response = get_discovery_document(DiscoveryDocumentRequest(address=url))
+```
+
+**Perfect for:**
+- Flask with threading (`threaded=True`)
+- Gunicorn/uWSGI with threaded workers
+- Messaging consumers (Kafka, RabbitMQ) with thread-per-message
+- Any multi-threaded application
+
+#### Asynchronous API (Singleton with Lock Protection)
+- **Single async HTTP client per process** created lazily
+- **Thread-safe initialization**: Protected by `threading.Lock()`
+- **Shared connection pool**: All async operations share connections efficiently
+- **Optimal for async**: No locks during I/O operations
+
+```python
+# Async API - async-safe with efficient connection sharing
+from py_identity_model.aio import get_discovery_document, DiscoveryDocumentRequest
+
+# All async operations share a single client and connection pool
+response = await get_discovery_document(DiscoveryDocumentRequest(address=url))
+```
+
+**Perfect for:**
+- FastAPI with async endpoints
+- Starlette applications
+- aiohttp servers
+- Any asyncio-based application
+
+### Caching Strategy
+
+- ✅ **Discovery documents**: Cached per process with `functools.lru_cache` (sync) and `async_lru.alru_cache` (async)
+- ✅ **JWKS keys**: Cached per process for fast validation
+- ✅ **SSL configuration**: Thread-safe with lock protection
+- ✅ **Response bodies**: Always fully consumed and closed
+
+### Safe for Production
+
+**Works seamlessly with:**
+- ✅ FastAPI with multiple workers (`uvicorn --workers N`)
+- ✅ Gunicorn with threading or async workers
+- ✅ Django with multiple worker threads
+- ✅ Flask with threading enabled
+- ✅ Celery/messaging workers
+- ✅ Concurrent request handling
+
+### Performance Benefits
+
+1. **Connection pooling**: HTTP connections are reused for better performance
+2. **Thread-local clients (sync)**: No lock contention between threads
+3. **Shared async client**: Efficient connection sharing in async code
+4. **Cached discovery/JWKS**: Reduces redundant network calls
+5. **Explicit resource cleanup**: Responses are closed to prevent connection leaks
+
+```python
+# Example: Concurrent token validation in threaded environment
 from concurrent.futures import ThreadPoolExecutor
 from py_identity_model import validate_token, TokenValidationConfig
 
 def validate_request(token: str) -> dict:
     config = TokenValidationConfig(perform_disco=True, audience="my-api")
+    # Each thread uses its own HTTP client with connection pooling
     return validate_token(token, config, "https://issuer.example.com")
 
-# Safe to use with multiple threads
+# Safe to use with multiple threads - no shared state
 with ThreadPoolExecutor(max_workers=10) as executor:
     futures = [executor.submit(validate_request, token) for token in tokens]
     results = [f.result() for f in futures]
 ```
+
+```python
+# Example: Concurrent async token validation
+import asyncio
+from py_identity_model.aio import validate_token, TokenValidationConfig
+
+async def validate_request(token: str) -> dict:
+    config = TokenValidationConfig(perform_disco=True, audience="my-api")
+    # All async calls share a single client and connection pool
+    return await validate_token(token, config, "https://issuer.example.com")
+
+# Safe concurrent async operations
+async def main():
+    results = await asyncio.gather(*[validate_request(token) for token in tokens])
+```
+
+### Key Architectural Decisions
+
+| Component | Sync API | Async API |
+|-----------|----------|-----------|
+| **HTTP Client** | Thread-local (one per thread) | Singleton (one per process) |
+| **Connection Pooling** | Per-thread pools | Shared process pool |
+| **Thread Safety** | Isolation via thread-local | Lock-protected initialization |
+| **Best For** | Multi-threaded apps | Async/await apps |
 
 This library inspired by [Duende.IdentityModel](https://github.com/DuendeSoftware/foss/tree/main/identity-model)
 
@@ -157,6 +234,49 @@ For detailed usage instructions, examples, and guides, please see our comprehens
 
 * **[OpenID Connect Discovery Compliance](docs/discovery_specification_compliance_assessment.md)** - ✅ 100% compliant
 * **[JWKS Specification Compliance](docs/jwks_specification_compliance_assessment.md)** - ✅ 100% compliant
+
+## Configuration
+
+### Environment Variables
+
+The library supports the following environment variables for configuration:
+
+#### HTTP Client Configuration
+
+- **`HTTP_TIMEOUT`** - HTTP request timeout in seconds (default: 30.0)
+  ```bash
+  export HTTP_TIMEOUT=60.0  # Increase timeout to 60 seconds
+  ```
+
+- **`HTTP_RETRY_COUNT`** - Number of retries for rate-limited requests (default: 3)
+  ```bash
+  export HTTP_RETRY_COUNT=5  # Retry up to 5 times
+  ```
+
+- **`HTTP_RETRY_BASE_DELAY`** - Base delay in seconds for exponential backoff (default: 1.0)
+  ```bash
+  export HTTP_RETRY_BASE_DELAY=2.0  # Start with 2-second delay
+  ```
+
+#### SSL/TLS Certificate Configuration
+
+For working with custom SSL certificates (corporate environments, self-signed certificates):
+
+- **`SSL_CERT_FILE`** - Path to CA bundle file (recommended, httpx native)
+- **`CURL_CA_BUNDLE`** - Alternative CA bundle path (also supported by httpx)
+- **`REQUESTS_CA_BUNDLE`** - Legacy support for backward compatibility
+
+```bash
+# Recommended approach
+export SSL_CERT_FILE=/path/to/ca-bundle.crt
+
+# OR use legacy variable (backward compatible)
+export REQUESTS_CA_BUNDLE=/path/to/ca-bundle.crt
+```
+
+**Priority Order:** `SSL_CERT_FILE` → `REQUESTS_CA_BUNDLE` → `CURL_CA_BUNDLE` → System defaults
+
+See the [Migration Guide](docs/migration-guide.md#ssl-certificate-configuration) for more details.
 
 ## Quick Examples
 

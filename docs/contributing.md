@@ -275,11 +275,53 @@ Then visit http://127.0.0.1:8000 to view the docs.
 
 ## Release Process
 
+### Official Releases
+
 Releases are automated using semantic-release. Version numbers follow [Semantic Versioning](https://semver.org/):
 
 - **MAJOR**: Breaking changes
 - **MINOR**: New features (backward compatible)
 - **PATCH**: Bug fixes (backward compatible)
+
+When commits are pushed to the `main` branch, semantic-release automatically:
+1. Analyzes commit messages to determine version bump
+2. Updates version in `pyproject.toml`
+3. Generates CHANGELOG
+4. Creates a git tag
+5. Publishes to PyPI
+
+### Pre-releases
+
+For testing changes before official release, create a pre-release tag:
+
+```bash
+# Create and push a pre-release tag
+git tag 2.0.0-rc.1
+git push origin 2.0.0-rc.1
+```
+
+**Pre-release tag formats:**
+- `X.Y.Z-rc.N` - Release candidate
+- `X.Y.Z-alpha.N` - Alpha version
+- `X.Y.Z-beta.N` - Beta version
+
+When you push a pre-release tag, GitHub Actions will:
+1. Build distribution packages (wheel and source distribution)
+2. Create a GitHub pre-release
+3. Attach distribution files as release assets
+4. Include installation instructions in release notes
+
+**Installing pre-releases:**
+
+```bash
+# Option 1: From GitHub release (recommended)
+pip install https://github.com/jamescrowley321/py-identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
+
+# Option 2: From git tag
+pip install git+https://github.com/jamescrowley321/py-identity-model.git@2.0.0-rc.1
+```
+
+For detailed pre-release testing instructions, see [Pre-release Testing Guide](pre-release-guide.md).
 
 ## Project Structure
 
