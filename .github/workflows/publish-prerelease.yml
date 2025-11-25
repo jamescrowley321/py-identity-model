@@ -1,4 +1,4 @@
-name: Publish Pre-release to TestPyPI 🧪
+name: Publish Pre-release to GitHub 🚀
 
 on:
   push:
@@ -9,17 +9,11 @@ on:
       - "[0-9]+.[0-9]+.[0-9]+-beta.[0-9]+"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  publish-to-testpypi:
+  publish-prerelease:
     runs-on: ubuntu-latest
-    environment:
-      name: testpypi
-      url: https://test.pypi.org/p/py-identity-model
-
-    permissions:
-      id-token: write  # Required for trusted publishing
 
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +31,7 @@ jobs:
         run: echo "tag=$(git describe --tags $(git rev-list --tags --max-count=1))" >> $GITHUB_OUTPUT
 
       - name: Display version
-        run: echo "Publishing version ${{ steps.vars.outputs.tag }} to TestPyPI"
+        run: echo "Publishing version ${{ steps.vars.outputs.tag }} to GitHub Releases"
 
       - name: Build distribution 📦
         run: |
@@ -45,15 +39,12 @@ jobs:
           sed -i -e "s/0.0.0/${{ steps.vars.outputs.tag }}/" pyproject.toml
           make build-dist
 
-      - name: Publish distribution 📦 to TestPyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-          skip-existing: true
+      - name: Get wheel filename
+        id: wheel
+        run: echo "filename=$(ls dist/*.whl | xargs -n 1 basename)" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Pre-release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           prerelease: true
           files: dist/*
@@ -64,14 +55,37 @@ jobs:
 
             ### Installation for Testing
 
+            **Option 1: Install from GitHub Release (Recommended)**
             ```bash
-            # Install from TestPyPI
-            pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ py-identity-model==${{ steps.vars.outputs.tag }}
+            # Using pip
+            pip install https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ steps.wheel.outputs.filename }}
 
-            # Or with uv
-            uv pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ py-identity-model==${{ steps.vars.outputs.tag }}
+            # Using uv
+            uv pip install https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ steps.wheel.outputs.filename }}
             ```
+
+            **Option 2: Install from Git Tag**
+            ```bash
+            # Using pip
+            pip install git+https://github.com/${{ github.repository }}.git@${{ steps.vars.outputs.tag }}
+
+            # Using uv
+            uv pip install git+https://github.com/${{ github.repository }}.git@${{ steps.vars.outputs.tag }}
+            ```
+
+            **Option 3: Install in editable mode for development**
+            ```bash
+            git clone https://github.com/${{ github.repository }}.git
+            cd py-identity-model
+            git checkout ${{ steps.vars.outputs.tag }}
+            pip install -e .
+            ```
+
+            ---
 
             ⚠️ **This is a pre-release version.** Do not use in production.
 
-            For production use, install from PyPI: `pip install py-identity-model`
+            For production use, install the stable version from PyPI:
+            ```bash
+            pip install py-identity-model
+            ```
