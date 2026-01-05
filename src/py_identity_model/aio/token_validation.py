@@ -13,7 +13,7 @@ from ..core.models import (
     JwksResponse,
     TokenValidationConfig,
 )
-from ..core.parsers import extract_kid_from_jwt
+from ..core.parsers import extract_kid_from_jwt, find_key_by_kid
 from ..core.token_validation_logic import (
     decode_with_config,
     log_validation_start,
@@ -24,7 +24,6 @@ from ..core.token_validation_logic import (
     validate_jwks_response,
 )
 from ..core.validators import validate_token_config
-from ..exceptions import TokenValidationException
 from .discovery import get_discovery_document
 from .jwks import get_jwks
 
@@ -76,22 +75,7 @@ async def _get_public_key_by_kid(
         caching. Multiple JWTs signed with the same key will share a cache entry.
     """
     jwks_response = await _get_jwks_response(jwks_uri)
-    if not jwks_response.keys:
-        raise TokenValidationException("No keys available in JWKS response")
-
-    # Find key by kid
-    filtered_keys = [k for k in jwks_response.keys if k.kid == kid]
-    if not filtered_keys:
-        available_kids = [k.kid for k in jwks_response.keys if k.kid]
-        raise TokenValidationException(
-            f"No matching kid found: {kid}",
-            token_part="header",
-            details={"kid": kid, "available_kids": available_kids},
-        )
-
-    public_key = filtered_keys[0]
-    alg = public_key.alg if public_key.alg else "RS256"
-    return public_key.as_dict(), alg
+    return find_key_by_kid(kid, jwks_response.keys or [])
 
 
 # ============================================================================

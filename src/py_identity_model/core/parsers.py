@@ -72,6 +72,41 @@ def jwks_from_dict(keys_dict: dict) -> JsonWebKey:
     )
 
 
+def find_key_by_kid(
+    kid: str | None, keys: list[JsonWebKey]
+) -> tuple[dict, str]:
+    """
+    Find a public key from JWKS by key ID and return it with algorithm.
+
+    This is the core key lookup logic shared by sync and async implementations.
+
+    Args:
+        kid: The key ID from the JWT header
+        keys: List of JsonWebKey objects from JWKS
+
+    Returns:
+        tuple: (public_key_dict, algorithm)
+
+    Raises:
+        TokenValidationException: If no keys available or no matching key found
+    """
+    if not keys:
+        raise TokenValidationException("No keys available in JWKS response")
+
+    filtered_keys = [k for k in keys if k.kid == kid]
+    if not filtered_keys:
+        available_kids = [k.kid for k in keys if k.kid]
+        raise TokenValidationException(
+            f"No matching kid found: {kid}",
+            token_part="header",
+            details={"kid": kid, "available_kids": available_kids},
+        )
+
+    public_key = filtered_keys[0]
+    alg = public_key.alg if public_key.alg else "RS256"
+    return public_key.as_dict(), alg
+
+
 def get_public_key_from_jwk(jwt: str, keys: list[JsonWebKey]) -> JsonWebKey:
     """
     Find the public key from JWKS that matches the JWT's kid.
@@ -112,6 +147,7 @@ def get_public_key_from_jwk(jwt: str, keys: list[JsonWebKey]) -> JsonWebKey:
 
 __all__ = [
     "extract_kid_from_jwt",
+    "find_key_by_kid",
     "get_public_key_from_jwk",
     "jwks_from_dict",
 ]

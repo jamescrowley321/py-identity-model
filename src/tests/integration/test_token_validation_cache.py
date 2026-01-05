@@ -17,7 +17,10 @@ from py_identity_model import (
     request_client_credentials_token,
     validate_token,
 )
-from py_identity_model.exceptions import TokenValidationException
+from py_identity_model.exceptions import (
+    TokenExpiredException,
+    TokenValidationException,
+)
 from py_identity_model.sync.token_validation import (
     _get_disco_response,
     _get_jwks_response,
@@ -34,11 +37,55 @@ DEFAULT_OPTIONS = {
 }
 
 
+@pytest.fixture
+def clear_validation_caches():
+    """Clear all token validation caches before and after test."""
+    _get_disco_response.cache_clear()
+    _get_jwks_response.cache_clear()
+    _get_public_key_by_kid.cache_clear()
+    yield
+    # Also clear after test for isolation
+    _get_disco_response.cache_clear()
+    _get_jwks_response.cache_clear()
+    _get_public_key_by_kid.cache_clear()
+
+
+@pytest.fixture
+def validation_config(test_config):
+    """Create standard validation config for tests."""
+    return TokenValidationConfig(
+        perform_disco=True,
+        audience=test_config["TEST_AUDIENCE"],
+        options=DEFAULT_OPTIONS,
+    )
+
+
+def generate_tokens(
+    test_config: dict, token_endpoint: str, count: int
+) -> list[str]:
+    """Generate multiple tokens from the provider."""
+    tokens = []
+    for _ in range(count):
+        response = request_client_credentials_token(
+            ClientCredentialsTokenRequest(
+                client_id=test_config["TEST_CLIENT_ID"],
+                client_secret=test_config["TEST_CLIENT_SECRET"],
+                address=token_endpoint,
+                scope=test_config["TEST_SCOPE"],
+            )
+        )
+        assert response.is_successful, "Failed to generate token"
+        assert response.token is not None
+        tokens.append(response.token["access_token"])
+    return tokens
+
+
+@pytest.mark.usefixtures("clear_validation_caches")
 class TestMultipleTokensFromSameProvider:
     """Test that multiple tokens from the same provider work correctly."""
 
     def test_multiple_tokens_validation_succeeds(
-        self, test_config, token_endpoint
+        self, test_config, token_endpoint, validation_config
     ):
         """
         Generate multiple tokens from the same provider and validate each one.
@@ -48,36 +95,11 @@ class TestMultipleTokensFromSameProvider:
         2. Caching doesn't cause cross-token interference
         3. The cache correctly handles tokens with the same kid
         """
-        # Clear caches to start fresh
-        _get_disco_response.cache_clear()
-        _get_jwks_response.cache_clear()
-        _get_public_key_by_kid.cache_clear()
-
-        # Generate multiple tokens
         num_tokens = 3
-        tokens = []
-
-        for i in range(num_tokens):
-            response = request_client_credentials_token(
-                ClientCredentialsTokenRequest(
-                    client_id=test_config["TEST_CLIENT_ID"],
-                    client_secret=test_config["TEST_CLIENT_SECRET"],
-                    address=token_endpoint,
-                    scope=test_config["TEST_SCOPE"],
-                )
-            )
-            assert response.is_successful, f"Failed to get token {i + 1}"
-            assert response.token is not None
-            tokens.append(response.token["access_token"])
+        tokens = generate_tokens(test_config, token_endpoint, num_tokens)
 
         # All tokens should be different (different jti claims)
         assert len(set(tokens)) == num_tokens, "Tokens should be unique"
-
-        validation_config = TokenValidationConfig(
-            perform_disco=True,
-            audience=test_config["TEST_AUDIENCE"],
-            options=DEFAULT_OPTIONS,
-        )
 
         # Validate each token
         validated_claims = []
@@ -107,10 +129,13 @@ class TestMultipleTokensFromSameProvider:
         assert jwks_cache_info.hits >= 2, "JWKS cache should have hits"
 
 
+@pytest.mark.usefixtures("clear_validation_caches")
 class TestCacheIsolationBetweenProviders:
     """Test that cache is properly isolated between different providers."""
 
-    def test_wrong_provider_token_fails_validation(self, test_config):
+    def test_wrong_provider_token_fails_validation(
+        self, test_config, validation_config
+    ):
         """
         Test that a token from one provider fails when validated
         against a different provider's discovery document.
@@ -123,21 +148,9 @@ class TestCacheIsolationBetweenProviders:
         2. Cache doesn't allow cross-provider token acceptance
         3. The kid mismatch causes proper rejection
         """
-        # Get token from alternate provider (.env.local)
         alternate_provider_token = get_alternate_provider_expired_token()
         if alternate_provider_token is None:
             pytest.skip(".env.local not found - skipping cross-provider test")
-
-        # Clear caches to ensure clean state
-        _get_disco_response.cache_clear()
-        _get_jwks_response.cache_clear()
-        _get_public_key_by_kid.cache_clear()
-
-        validation_config = TokenValidationConfig(
-            perform_disco=True,
-            audience=test_config["TEST_AUDIENCE"],
-            options=DEFAULT_OPTIONS,
-        )
 
         # Token from alternate provider should fail when validated against
         # current provider's JWKS because the kid won't match
@@ -153,9 +166,6 @@ class TestCacheIsolationBetweenProviders:
         assert "kid" in error_msg or "key" in error_msg, (
             f"Expected kid/key mismatch error, got: {exc_info.value}"
         )
-        print(
-            f"Cross-provider validation correctly failed with: {exc_info.value}"
-        )
 
     def test_expired_token_from_same_provider_fails(self, test_config):
         """
@@ -164,18 +174,10 @@ class TestCacheIsolationBetweenProviders:
 
         This ensures the cache doesn't bypass expiration checks.
         """
-        # Clear caches
-        _get_disco_response.cache_clear()
-        _get_jwks_response.cache_clear()
-        _get_public_key_by_kid.cache_clear()
-
         validation_config = TokenValidationConfig(
             perform_disco=True,
             options=DEFAULT_OPTIONS,
         )
-
-        # Use the pre-configured expired token
-        from py_identity_model.exceptions import TokenExpiredException
 
         with pytest.raises(TokenExpiredException):
             validate_token(
@@ -185,6 +187,7 @@ class TestCacheIsolationBetweenProviders:
             )
 
 
+@pytest.mark.usefixtures("clear_validation_caches")
 class TestBenchmarkWithPreGeneratedTokens:
     """
     Benchmark tests with pre-generated tokens for accuracy.
@@ -194,7 +197,7 @@ class TestBenchmarkWithPreGeneratedTokens:
     """
 
     def test_benchmark_with_multiple_unique_tokens(
-        self, test_config, token_endpoint
+        self, test_config, token_endpoint, validation_config
     ):
         """
         Benchmark validation with multiple unique tokens.
@@ -205,32 +208,9 @@ class TestBenchmarkWithPreGeneratedTokens:
         3. Ensures the benchmark reflects real-world usage where
            different tokens are validated
         """
-        # Clear caches
-        _get_disco_response.cache_clear()
-        _get_jwks_response.cache_clear()
-        _get_public_key_by_kid.cache_clear()
-
-        # Pre-generate tokens (this is not part of the benchmark)
         num_unique_tokens = 5
-        tokens = []
-
-        for _ in range(num_unique_tokens):
-            response = request_client_credentials_token(
-                ClientCredentialsTokenRequest(
-                    client_id=test_config["TEST_CLIENT_ID"],
-                    client_secret=test_config["TEST_CLIENT_SECRET"],
-                    address=token_endpoint,
-                    scope=test_config["TEST_SCOPE"],
-                )
-            )
-            assert response.is_successful, "Failed to generate token"
-            assert response.token is not None
-            tokens.append(response.token["access_token"])
-
-        validation_config = TokenValidationConfig(
-            perform_disco=True,
-            audience=test_config["TEST_AUDIENCE"],
-            options=DEFAULT_OPTIONS,
+        tokens = generate_tokens(
+            test_config, token_endpoint, num_unique_tokens
         )
 
         # Warm up the cache with one validation
@@ -267,7 +247,10 @@ class TestBenchmarkWithPreGeneratedTokens:
         )
 
     def test_benchmark_single_token_repeated(
-        self, test_config, client_credentials_token
+        self,
+        test_config,
+        client_credentials_token,
+        validation_config,
     ):
         """
         Benchmark validation of a single token repeated many times.
@@ -275,17 +258,6 @@ class TestBenchmarkWithPreGeneratedTokens:
         This represents the optimal caching scenario where the same
         token is validated repeatedly (e.g., during its lifetime).
         """
-        # Clear caches
-        _get_disco_response.cache_clear()
-        _get_jwks_response.cache_clear()
-        _get_public_key_by_kid.cache_clear()
-
-        validation_config = TokenValidationConfig(
-            perform_disco=True,
-            audience=test_config["TEST_AUDIENCE"],
-            options=DEFAULT_OPTIONS,
-        )
-
         token = client_credentials_token.token["access_token"]
 
         # Warm up
