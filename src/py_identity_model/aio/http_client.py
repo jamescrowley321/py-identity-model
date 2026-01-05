@@ -13,7 +13,6 @@ Environment Variables:
 import asyncio
 from functools import wraps
 import threading
-import time
 
 import httpx
 
@@ -202,8 +201,7 @@ def get_async_http_client() -> httpx.AsyncClient:
         - keepalive_expiry: 5.0 seconds
 
         Thread-safe: Uses a lock to prevent race conditions when creating
-        the async client from multiple threads simultaneously. In case of
-        errors during creation, retries up to 5 times with exponential backoff.
+        the async client from multiple threads simultaneously.
     """
     global _async_http_client
 
@@ -217,38 +215,14 @@ def get_async_http_client() -> httpx.AsyncClient:
         if _async_http_client is not None:
             return _async_http_client
 
-        # Create client with retry logic for thread safety
-        max_attempts = 5
-        last_error = None
-
-        for attempt in range(max_attempts):
-            try:
-                timeout = get_timeout()
-                _async_http_client = httpx.AsyncClient(
-                    verify=get_ssl_verify(),
-                    timeout=timeout,
-                    follow_redirects=True,
-                )
-                return _async_http_client
-            except OSError as e:
-                # These errors can occur when multiple threads try to
-                # initialize asyncio components simultaneously
-                last_error = e
-                if attempt < max_attempts - 1:
-                    # Exponential backoff with jitter
-                    import random
-
-                    # ruff: noqa: S311
-                    delay = (0.01 * (2**attempt)) + (random.random() * 0.01)
-                    time.sleep(delay)
-                continue
-
-        # If all retries failed, raise the last error
-        if last_error:
-            raise last_error
-
-        # This should never happen, but just in case
-        raise RuntimeError("Failed to create async HTTP client")
+        # Create client - httpx.AsyncClient creation is synchronous and safe
+        timeout = get_timeout()
+        _async_http_client = httpx.AsyncClient(
+            verify=get_ssl_verify(),
+            timeout=timeout,
+            follow_redirects=True,
+        )
+        return _async_http_client
 
 
 async def close_async_http_client() -> None:

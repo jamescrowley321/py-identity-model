@@ -11,6 +11,20 @@ from ..logging_config import logger
 from .models import JsonWebKey, JsonWebKeyParameterNames
 
 
+def extract_kid_from_jwt(jwt: str) -> str | None:
+    """
+    Extract the 'kid' (key ID) from a JWT header without verification.
+
+    Args:
+        jwt: The JWT token string
+
+    Returns:
+        str | None: The key ID from the JWT header, or None if not present
+    """
+    headers = get_unverified_header(jwt)
+    return headers.get("kid")
+
+
 # ============================================================================
 # JWKS Parsing
 # ============================================================================
@@ -97,6 +111,7 @@ def get_public_key_from_jwk(jwt: str, keys: list[JsonWebKey]) -> JsonWebKey:
 
 
 __all__ = [
+    "extract_kid_from_jwt",
     "get_public_key_from_jwk",
     "jwks_from_dict",
 ]

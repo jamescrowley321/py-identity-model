@@ -121,7 +121,7 @@ def validate_claims(
     token_validation_config: TokenValidationConfig,
 ) -> None:
     """
-    Validate claims using custom validator if provided.
+    Validate claims using custom sync validator if provided.
 
     Args:
         decoded_token: Decoded token claims
@@ -133,6 +133,42 @@ def validate_claims(
     if token_validation_config.claims_validator:
         try:
             token_validation_config.claims_validator(decoded_token)
+        except Exception as e:
+            logger.error(f"Claims validation failed: {e!s}")
+            raise TokenValidationException(
+                f"Claims validation failed: {e!s}",
+                token_part="payload",
+                details={"error": str(e)},
+            ) from e
+
+
+async def validate_async_claims(
+    decoded_token: dict,
+    token_validation_config: TokenValidationConfig,
+) -> None:
+    """
+    Validate claims using custom validator if provided (supports both sync and async).
+
+    This function handles both synchronous and asynchronous claims validators,
+    making it suitable for use in async contexts where the validator type is unknown.
+
+    Args:
+        decoded_token: Decoded token claims
+        token_validation_config: Token validation configuration
+
+    Raises:
+        TokenValidationException: If claims validation fails
+    """
+    import inspect
+
+    if token_validation_config.claims_validator:
+        try:
+            if inspect.iscoroutinefunction(
+                token_validation_config.claims_validator
+            ):
+                await token_validation_config.claims_validator(decoded_token)
+            else:
+                token_validation_config.claims_validator(decoded_token)
         except Exception as e:
             logger.error(f"Claims validation failed: {e!s}")
             raise TokenValidationException(
@@ -178,6 +214,7 @@ __all__ = [
     "decode_with_config",
     "log_validation_start",
     "log_validation_success",
+    "validate_async_claims",
     "validate_claims",
     "validate_config_for_manual_validation",
     "validate_disco_response",
