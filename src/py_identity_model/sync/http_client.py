@@ -238,7 +238,6 @@ def _reset_http_client() -> None:
 
 
 __all__ = [
-    "_reset_http_client",
     "close_http_client",
     "get_http_client",
     "retry_with_backoff",

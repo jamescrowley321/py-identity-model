@@ -267,7 +267,6 @@ def _reset_async_http_client() -> None:
 
 
 __all__ = [
-    "_reset_async_http_client",
     "close_async_http_client",
     "get_async_http_client",
     "retry_with_backoff_async",
