@@ -125,9 +125,8 @@ def test_benchmark_validation(test_config, client_credentials_token):
         )
     elapsed_time = datetime.datetime.now(tz=datetime.UTC) - start_time
     print(elapsed_time)
-    # 100 token validations should complete in under 10 seconds
-    # Note: Even with optimal caching, RSA signature verification is expensive
-    assert elapsed_time.total_seconds() < 10
+    # 100 token validations should complete in under 1 second with caching
+    assert elapsed_time.total_seconds() < 1
 
 
 def test_claim_validation_function_succeeds(
