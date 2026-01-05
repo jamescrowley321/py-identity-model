@@ -5,6 +5,11 @@ This module contains shared business logic, models, validators, and utilities
 that are used by both sync and async implementations.
 """
 
+from .http_utils import (
+    DEFAULT_HTTP_TIMEOUT,
+    DEFAULT_RETRY_BASE_DELAY,
+    DEFAULT_RETRY_MAX_ATTEMPTS,
+)
 from .jwt_helpers import decode_and_validate_jwt
 from .models import (
     ClientCredentialsTokenRequest,
@@ -29,6 +34,10 @@ from .validators import (
 
 
 __all__ = [
+    # From http_utils
+    "DEFAULT_HTTP_TIMEOUT",
+    "DEFAULT_RETRY_BASE_DELAY",
+    "DEFAULT_RETRY_MAX_ATTEMPTS",
     # From models
     "ClientCredentialsTokenRequest",
     "ClientCredentialsTokenResponse",

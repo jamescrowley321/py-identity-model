@@ -14,6 +14,12 @@ import os
 import httpx
 
 
+# Default HTTP configuration constants
+DEFAULT_HTTP_TIMEOUT = 30.0
+DEFAULT_RETRY_MAX_ATTEMPTS = 3
+DEFAULT_RETRY_BASE_DELAY = 1.0
+
+
 def get_retry_config() -> tuple[int, float]:
     """
     Get retry configuration from environment variables.
@@ -21,8 +27,12 @@ def get_retry_config() -> tuple[int, float]:
     Returns:
         tuple: (max_retries, base_delay)
     """
-    max_retries = int(os.getenv("HTTP_RETRY_MAX_ATTEMPTS", "3"))
-    base_delay = float(os.getenv("HTTP_RETRY_BASE_DELAY", "1.0"))
+    max_retries = int(
+        os.getenv("HTTP_RETRY_MAX_ATTEMPTS", str(DEFAULT_RETRY_MAX_ATTEMPTS))
+    )
+    base_delay = float(
+        os.getenv("HTTP_RETRY_BASE_DELAY", str(DEFAULT_RETRY_BASE_DELAY))
+    )
     return max_retries, base_delay
 
 
@@ -33,7 +43,7 @@ def get_timeout() -> float:
     Returns:
         float: Timeout in seconds
     """
-    return float(os.getenv("HTTP_TIMEOUT", "30.0"))
+    return float(os.getenv("HTTP_TIMEOUT", str(DEFAULT_HTTP_TIMEOUT)))
 
 
 def should_retry_response(
@@ -70,6 +80,9 @@ def calculate_delay(base_delay: float, attempt: int) -> float:
 
 
 __all__ = [
+    "DEFAULT_HTTP_TIMEOUT",
+    "DEFAULT_RETRY_BASE_DELAY",
+    "DEFAULT_RETRY_MAX_ATTEMPTS",
     "calculate_delay",
     "get_retry_config",
     "get_timeout",
