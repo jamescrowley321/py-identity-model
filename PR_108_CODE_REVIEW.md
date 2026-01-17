@@ -293,3 +293,122 @@ The public API remains unchanged, so the breaking change designation is appropri
 ---
 
 **Overall Assessment:** This is a well-structured, thoughtfully designed refactor that significantly improves the library's architecture. The async support is implemented correctly, and the shared core logic reduces maintenance burden. The identified issues are relatively minor and don't block the overall value of this PR.
+
+---
+
+## Additional Review: Async Retry Code Architecture
+
+### High Priority Issues
+
+#### 14. Single Responsibility Violation in `_log_and_sleep_async`
+**File:** `src/py_identity_model/aio/http_client.py:39-46`
+
+```python
+async def _log_and_sleep_async(
+    delay: float, message: str, attempt: int, retries: int
+) -> None:
+    """Log retry attempt and sleep asynchronously."""
+    logger.warning(
+        f"{message}, retrying in {delay}s (attempt {attempt + 1}/{retries})"
+    )
+    await asyncio.sleep(delay)
+```
+
+**Problem:** This function violates the Single Responsibility Principle by combining two unrelated concerns:
+1. Logging a warning message
+2. Sleeping for a delay
+
+These are independent operations that should not be coupled. The function name `_log_and_sleep_async` itself signals the code smell - names with "and" often indicate doing too much.
+
+**Why this matters:**
+- Cannot log without sleeping, or sleep without logging
+- Harder to test each behavior in isolation
+- If logging format needs to change, a function named "sleep" is being modified
+- The synchronous version has the same issue (`_log_and_sleep` in `sync/http_client.py:33-40`)
+
+**Recommendation:** Separate concerns - log inline where needed, sleep inline where needed. Or create a dedicated `_log_retry_attempt()` function for logging only.
+
+#### 15. Convoluted Retry Flow with Scattered Responsibilities
+**Files:**
+- `src/py_identity_model/aio/http_client.py:49-103` (handler functions)
+- `src/py_identity_model/aio/http_client.py:125-180` (decorator)
+- `src/py_identity_model/core/http_utils.py:49-79` (utility functions)
+
+**Problem:** The retry logic is fragmented across multiple functions with unclear boundaries:
+
+1. `_handle_retry_response()` - Checks condition, calculates delay, logs, sleeps, returns bool
+2. `_handle_retry_exception()` - Checks condition, calculates delay, logs, sleeps, OR raises
+3. `should_retry_response()` - Pure condition check (in core/http_utils.py)
+4. `calculate_delay()` - Pure calculation (in core/http_utils.py)
+5. `retry_with_backoff_async()` - Decorator that orchestrates everything
+
+The flow is difficult to follow:
+- `should_retry_response()` is pure, but `_handle_retry_response()` has side effects (logging, sleeping)
+- `_handle_retry_response()` returns `True` to mean "continue the loop" which is counterintuitive
+- `_handle_retry_exception()` has two exit paths: return normally (continue) OR raise
+- The decorator has complex state management (`last_exception`, `response`, loop with `continue`)
+
+**Recommendation:** Refactor to a cleaner pattern - either centralize in a `RetryPolicy` class, or keep functions pure and move all side effects (logging, sleeping) into the decorator itself.
+
+#### 16. Inconsistent Naming Conventions
+**Files:**
+- `src/py_identity_model/aio/http_client.py`
+- `src/py_identity_model/sync/http_client.py`
+
+| Async Module | Sync Module | Issue |
+|--------------|-------------|-------|
+| `_log_and_sleep_async` | `_log_and_sleep` | Async uses suffix, other funcs use prefix |
+| `get_async_http_client` | `get_http_client` | Uses prefix - OK |
+| `close_async_http_client` | `close_http_client` | Uses prefix - OK |
+| `_handle_retry_response` | `_handle_retry_response` | Same name, one is async |
+
+**Problem:** `_log_and_sleep_async` uses a suffix while other async functions use a prefix pattern (`get_async_http_client`). This inconsistency makes the codebase harder to navigate.
+
+**Recommendation:** Standardize on prefix pattern: `_async_log_and_sleep` or drop suffix entirely since it's in the `aio` module.
+
+---
+
+## Updated Summary of Required Changes
+
+### Must Fix Before Merge
+1. ~~Fix mutable `TokenValidationConfig` modification in validation functions~~ ✅ FIXED
+2. ~~Optimize cache key in `_get_public_key()` to use `kid` instead of full JWT~~ ✅ FIXED
+
+### Should Fix (Can Be Separate PR)
+3. ~~Unify claims validation logic between sync/async~~ ✅ FIXED
+4. ~~Review SSL lock necessity~~ ✅ FIXED
+5. ~~Centralize default constants~~ ✅ FIXED
+6. **Address benchmark threshold regression** - See Performance Investigation below
+7. ~~Separate logging and sleeping into distinct operations~~ ✅ FIXED
+8. ~~Simplify retry flow - consider RetryPolicy class or moving all side effects to decorator~~ ✅ FIXED
+9. ~~Standardize async naming convention (prefix vs suffix)~~ ✅ FIXED
+10. ~~Fix Content-Type validation to properly parse media type~~ ✅ FIXED
+
+---
+
+## Performance Investigation Required
+
+### Benchmark Regression Analysis
+
+The token validation benchmark test (`test_benchmark_validation`) expects 100 validations to complete in under 1 second. Currently it takes 1.7-3.8 seconds.
+
+**Key differences from main branch:**
+
+1. **HTTP Library Change**: `requests` → `httpx`
+   - httpx may have different connection pooling/reuse characteristics
+   - Need to benchmark httpx vs requests for repeated requests
+
+2. **New TokenValidationConfig Creation**: The fix for mutable config (Issue #1) creates a new `TokenValidationConfig` object on every validation call to avoid mutating the original. This adds overhead from dataclass instantiation.
+
+3. **JWT Decode Caching Layer**: Added `_decode_jwt_cached` with JSON serialization for cache keys (`json.dumps(key, sort_keys=True)`). This serialization happens on every call even when cached.
+
+4. **Additional Validation Logic**: New validation helper functions add function call overhead.
+
+**Potential solutions to investigate:**
+
+1. Profile to identify the actual bottleneck (httpx vs object creation vs JSON serialization)
+2. Consider pre-serializing the key in the cache lookup functions
+3. Optimize the TokenValidationConfig creation (use `__slots__`, or pass values directly instead of creating new objects)
+4. Review httpx client configuration for connection pooling optimization
+
+**Note:** The 1-second threshold may have been achievable with `requests` but httpx may have fundamentally different performance characteristics that require adjusting the benchmark expectation or optimizing the implementation differently
