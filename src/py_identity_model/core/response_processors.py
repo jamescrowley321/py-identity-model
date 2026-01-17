@@ -37,9 +37,10 @@ def validate_and_parse_discovery_response(
     Raises:
         DiscoveryException: If response is invalid
     """
-    # Check content type (case-insensitive, handles parameters like charset)
-    content_type = response.headers.get("Content-Type", "").lower()
-    if "application/json" not in content_type:
+    # Check content type - extract media type before any parameters (e.g., charset)
+    content_type_header = response.headers.get("Content-Type", "")
+    media_type = content_type_header.split(";")[0].strip().lower()
+    if media_type != "application/json":
         raise DiscoveryException(
             f"Invalid content type. Expected application/json, got: "
             f"{response.headers.get('Content-Type', 'unknown')}"

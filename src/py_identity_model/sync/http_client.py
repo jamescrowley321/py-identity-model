@@ -30,69 +30,11 @@ from ..ssl_config import get_ssl_verify
 _thread_local = threading.local()
 
 
-def _log_and_sleep(
-    delay: float, message: str, attempt: int, retries: int
-) -> None:
-    """Log retry attempt and sleep."""
+def _log_retry(message: str, delay: float, attempt: int, retries: int) -> None:
+    """Log a retry attempt warning."""
     logger.warning(
         f"{message}, retrying in {delay}s (attempt {attempt + 1}/{retries})"
     )
-    time.sleep(delay)
-
-
-def _handle_retry_response(
-    response: httpx.Response,
-    attempt: int,
-    retries: int,
-    delay_base: float,
-) -> bool:
-    """
-    Handle response that may need retry.
-
-    Args:
-        response: HTTP response to check
-        attempt: Current attempt number
-        retries: Maximum number of retries
-        delay_base: Base delay for exponential backoff
-
-    Returns:
-        bool: True if should continue retry loop, False if should return response
-    """
-    if should_retry_response(response, attempt, retries):
-        delay = calculate_delay(delay_base, attempt)
-        _log_and_sleep(
-            delay,
-            f"HTTP {response.status_code} received",
-            attempt,
-            retries,
-        )
-        return True
-    return False
-
-
-def _handle_retry_exception(
-    exception: httpx.RequestError,
-    attempt: int,
-    retries: int,
-    delay_base: float,
-) -> None:
-    """
-    Handle exception that may need retry.
-
-    Args:
-        exception: Request error that occurred
-        attempt: Current attempt number
-        retries: Maximum number of retries
-        delay_base: Base delay for exponential backoff
-
-    Raises:
-        httpx.RequestError: If no more retries available
-    """
-    if attempt < retries:
-        delay = calculate_delay(delay_base, attempt)
-        _log_and_sleep(delay, f"Request error: {exception}", attempt, retries)
-    else:
-        raise exception
 
 
 def _get_retry_params(
@@ -138,33 +80,40 @@ def retry_with_backoff(
         @wraps(func)
         def wrapper(*args, **kwargs):
             retries, delay_base = _get_retry_params(max_retries, base_delay)
-            last_exception = None
-            response = None
+            last_exception: httpx.RequestError | None = None
 
             for attempt in range(retries + 1):
                 try:
                     response = func(*args, **kwargs)
 
-                    # Check if response needs retry
-                    should_continue = _handle_retry_response(
-                        response, attempt, retries, delay_base
-                    )
-                    if should_continue:
+                    # Check if response needs retry (429 or 5xx with retries remaining)
+                    if should_retry_response(response, attempt, retries):
+                        delay = calculate_delay(delay_base, attempt)
+                        _log_retry(
+                            f"HTTP {response.status_code}",
+                            delay,
+                            attempt,
+                            retries,
+                        )
+                        time.sleep(delay)
                         continue
 
-                    # Success or non-retryable error
                     return response
 
                 except httpx.RequestError as e:
                     last_exception = e
-                    _handle_retry_exception(e, attempt, retries, delay_base)
-                    continue
+                    if attempt < retries:
+                        delay = calculate_delay(delay_base, attempt)
+                        _log_retry(
+                            f"Request error: {e}", delay, attempt, retries
+                        )
+                        time.sleep(delay)
+                        continue
+                    raise
 
-            # Exhausted all retries
+            # Exhausted all retries - return last response or raise last exception
             if last_exception:
                 raise last_exception
-            if response is not None:
-                return response
             raise RuntimeError("No response received after retries")
 
         return wrapper
