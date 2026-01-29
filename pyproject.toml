@@ -14,7 +14,7 @@ classifiers = [
 dependencies = [
     "PyJWT>=2.9.0,<3",
     "httpx>=0.28.1,<1",
-    "cryptography>=45.0.2,<46",
+    "cryptography>=45.0.2,<47",
     "async-lru>=2.0.4,<3",
 ]
 
