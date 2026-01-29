@@ -20,6 +20,24 @@ This example shows how to integrate [Descope](https://www.descope.com/), a no-/l
 - ✅ Docker containerization
 - ✅ Integration testing
 
+### Code Architecture
+
+This example **reuses shared code** from the generic FastAPI example (`examples/fastapi/`) to minimize duplication:
+
+**Shared Components** (imported from `examples.fastapi`):
+- `TokenValidationMiddleware` - JWT validation middleware
+- Base dependency functions - `get_claims()`, `get_current_user()`, `get_token()`, `require_scope()`
+
+**Descope-Specific Components** (unique to this example):
+- `app.py` - Main application with Descope-specific endpoints
+- `dependencies.py` - Descope roles/permissions extraction functions
+- `test_integration.py` - Integration tests for Descope features
+
+This modular approach demonstrates:
+- 🔄 **Code reuse** across provider examples
+- 🎯 **Provider-specific extensions** without duplication
+- 📦 **Future-ready** for extraction into `fastapi-identity-model` package
+
 ## Prerequisites
 
 ### 1. Descope Account Setup

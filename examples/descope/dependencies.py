@@ -1,114 +1,35 @@
 """
 FastAPI dependency injection functions for Descope-specific claims and authorization.
 
-These dependencies extend the generic py-identity-model dependencies with
-Descope-specific functionality for roles, permissions, and custom claims.
+This module extends the base FastAPI dependencies with Descope-specific functionality
+for roles, permissions, and custom claims.
 """
 
 from collections.abc import Callable
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 
-from py_identity_model.identity import ClaimsPrincipal
-
-
-# Error message constants
-_NOT_AUTHENTICATED_MSG = "Not authenticated"
-
-
-def get_current_user(request: Request) -> ClaimsPrincipal:
-    """
-    Dependency to get the current authenticated user as a ClaimsPrincipal.
-
-    This dependency should be used after the TokenValidationMiddleware has
-    validated the token and attached the user to the request state.
-
-    Args:
-        request: The FastAPI request object
-
-    Returns:
-        ClaimsPrincipal: The authenticated user principal
-
-    Raises:
-        HTTPException: If no authenticated user is found
-
-    Example:
-        ```python
-        @app.get("/profile")
-        async def get_profile(
-            user: ClaimsPrincipal = Depends(get_current_user),
-        ):
-            return {"user_id": user.identity.name}
-        ```
-    """
-    if not hasattr(request.state, "user"):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=_NOT_AUTHENTICATED_MSG,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return request.state.user
+# Import base dependencies from generic FastAPI example
+from examples.fastapi.dependencies import (
+    get_claims,
+    get_current_user,
+    get_token,
+    require_scope,
+)
 
 
-def get_claims(request: Request) -> dict:
-    """
-    Dependency to get all claims from the validated token.
-
-    Args:
-        request: The FastAPI request object
-
-    Returns:
-        dict: Dictionary of all claims from the token
-
-    Raises:
-        HTTPException: If no claims are found
-
-    Example:
-        ```python
-        @app.get("/claims")
-        async def get_all_claims(claims: dict = Depends(get_claims)):
-            return {"claims": claims}
-        ```
-    """
-    if not hasattr(request.state, "claims"):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=_NOT_AUTHENTICATED_MSG,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return request.state.claims
-
-
-def get_token(request: Request) -> str:
-    """
-    Dependency to get the raw JWT token.
-
-    Args:
-        request: The FastAPI request object
-
-    Returns:
-        str: The raw JWT token
-
-    Raises:
-        HTTPException: If no token is found
-
-    Example:
-        ```python
-        @app.get("/token-info")
-        async def get_token_info(token: str = Depends(get_token)):
-            return {"token_length": len(token)}
-        ```
-    """
-    if not hasattr(request.state, "token"):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=_NOT_AUTHENTICATED_MSG,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return request.state.token
+__all__ = [
+    # Re-export base dependencies
+    "get_claims",
+    "get_current_user",
+    "get_descope_permissions",
+    # Descope-specific dependencies
+    "get_descope_roles",
+    "get_token",
+    "require_descope_permission",
+    "require_descope_role",
+    "require_scope",
+]
 
 
 # Descope-Specific Dependencies
@@ -265,52 +186,3 @@ def require_descope_permission(permission: str) -> Callable[..., None]:
             )
 
     return _check_permission
-
-
-def require_scope(scope: str) -> Callable[..., None]:
-    """
-    Factory function to create a dependency that requires a specific OAuth scope.
-
-    Args:
-        scope: The required scope
-
-    Returns:
-        callable: A dependency function that validates the scope
-
-    Raises:
-        HTTPException: If the required scope is not present
-
-    Example:
-        ```python
-        require_read_scope = require_scope("openid")
-
-
-        @app.get("/data")
-        async def get_data(_: None = Depends(require_read_scope)):
-            return {"data": "sensitive information"}
-        ```
-    """
-
-    def _check_scope(claims: dict = Depends(get_claims)) -> None:
-        # Scopes can be in 'scope' (space-separated string) or 'scp' (array)
-        scope_claim = claims.get("scope") or claims.get("scp")
-
-        if not scope_claim:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="No scope claim found in token",
-            )
-
-        # Handle space-separated string or array
-        if isinstance(scope_claim, str):
-            scopes = scope_claim.split()
-        else:
-            scopes = scope_claim
-
-        if scope not in scopes:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Required scope '{scope}' not found",
-            )
-
-    return _check_scope
