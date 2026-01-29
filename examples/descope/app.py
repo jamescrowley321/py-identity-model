@@ -11,7 +11,11 @@ This example demonstrates integrating py-identity-model with Descope's OIDC prov
 
 import os
 
-from dependencies import (
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+import uvicorn
+
+from examples.descope.dependencies import (
     get_claims,
     get_current_user,
     get_descope_permissions,
@@ -21,11 +25,7 @@ from dependencies import (
     require_descope_role,
     require_scope,
 )
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-from middleware import TokenValidationMiddleware
-import uvicorn
-
+from examples.fastapi.middleware import TokenValidationMiddleware
 from py_identity_model.identity import ClaimsPrincipal
 
 
