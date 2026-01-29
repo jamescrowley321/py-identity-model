@@ -233,6 +233,7 @@ omit = [
     "*/tests/*",
     "*/__pycache__/*",
     "*/oidc_constants.py",  # Constants file - no logic to test
+    "*/__init__.py",  # Import-only files - no logic to test
 ]
 
 [tool.coverage.report]
