@@ -4,10 +4,20 @@ import os
 import threading
 from unittest.mock import patch
 
+import pytest
+
 from py_identity_model.ssl_config import (
     ensure_ssl_compatibility,
     get_ssl_verify,
 )
+
+
+@pytest.fixture(autouse=True)
+def clear_ssl_cache():
+    """Clear get_ssl_verify cache before and after each test."""
+    get_ssl_verify.cache_clear()
+    yield
+    get_ssl_verify.cache_clear()
 
 
 class TestSSLConfig:

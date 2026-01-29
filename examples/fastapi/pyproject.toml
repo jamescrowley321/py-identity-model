@@ -8,6 +8,7 @@ readme = "README.md"
 dependencies = [
     "py-identity-model",
     "fastapi>=0.100.0",
+    "starlette>=0.49.1",
     "uvicorn[standard]>=0.23.0",
     "types-requests",
 ]
