@@ -206,6 +206,89 @@ git commit -m "docs: update migration guide for v2.0"
 - Use heredoc syntax for multi-line commits: `git commit -m "$(cat <<'EOF' ... EOF)"`
 - Pre-commit hooks will run automatically (linting, type checking, coverage)
 
+### Branch Naming Conventions
+
+Branch names should follow conventional commit types to maintain consistency across the codebase. Use the format:
+
+```
+<type>/<short-description>
+```
+
+**Format Rules:**
+- **type**: Must match one of the allowed conventional commit types (feat, fix, docs, test, chore, etc.)
+- **short-description**: Lowercase, hyphen-separated, concise description of the work
+- Keep branch names under 50 characters when possible
+
+**Allowed Types:**
+- `feat/` - New features or enhancements
+- `fix/` - Bug fixes
+- `docs/` - Documentation-only changes
+- `test/` - Adding or updating tests
+- `chore/` - Maintenance, tooling, dependencies
+- `refactor/` - Code refactoring
+- `perf/` - Performance improvements
+- `ci/` - CI/CD changes
+- `build/` - Build system changes
+- `style/` - Code formatting/style changes
+
+**Examples:**
+
+```bash
+# Feature branch
+git checkout -b feat/descope-integration
+
+# Bug fix branch
+git checkout -b fix/token-validation-edge-case
+
+# Documentation branch
+git checkout -b docs/add-migration-guide
+
+# Test branch
+git checkout -b test/increase-coverage
+
+# Chore branch
+git checkout -b chore/update-dependencies
+
+# Multiple related features (use most significant type)
+git checkout -b feat/add-auth0-example
+```
+
+**Branch Naming Anti-Patterns:**
+
+❌ **Avoid:**
+- Generic names: `fix/updates`, `feat/changes`
+- Non-descriptive: `feat/new-stuff`
+- Wrong type: `fix/add-new-feature` (should be `feat/`)
+- Mixed purposes: `feat/fix-bug-and-add-feature` (create separate branches)
+- Uppercase or spaces: `Feat/New-Feature`, `feat/new feature`
+
+✅ **Prefer:**
+- Specific: `fix/jwks-key-rotation-bug`
+- Descriptive: `feat/auth0-fastapi-example`
+- Correct type: `feat/add-introspection-endpoint`
+- Single purpose: One branch per logical change
+- Lowercase with hyphens: `feat/descope-integration`
+
+**Working with Issues:**
+
+When working on GitHub issues, optionally reference the issue number:
+
+```bash
+# With issue number
+git checkout -b feat/descope-integration-158
+
+# Or use issue number in commits instead
+git checkout -b feat/descope-integration
+git commit -m "feat(examples): add Descope example
+
+Related: #158"
+```
+
+**Important:**
+- Branch names should align with the primary conventional commit type in the branch
+- If a branch contains multiple commit types, use the most significant type (feat > fix > chore > docs)
+- Create separate branches for unrelated changes, even if they use the same commit type
+
 ## Key Implementation Details
 
 ### Adding New Features
