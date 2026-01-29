@@ -127,6 +127,85 @@ make build-dist             # Creates wheel and sdist in dist/
 make ci-setup               # Installs uv and sets up environment
 ```
 
+## Git Workflow
+
+### Conventional Commits
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) with Angular convention for semantic versioning automation. All commit messages must follow this format:
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+**Required Components:**
+- **type**: The type of change (see allowed types below)
+- **subject**: Short description in imperative mood (e.g., "add feature" not "added feature")
+
+**Optional Components:**
+- **scope**: Module or component affected (e.g., `discovery`, `jwks`, `token-validation`)
+- **body**: Detailed explanation with bullet points if needed
+- **footer**: Breaking changes, issue references
+
+**Allowed Types** (from `pyproject.toml`):
+- `feat`: New feature (triggers minor version bump)
+- `fix`: Bug fix (triggers patch version bump)
+- `perf`: Performance improvement (triggers patch version bump)
+- `docs`: Documentation changes only
+- `test`: Adding or updating tests
+- `build`: Build system or dependencies
+- `ci`: CI/CD pipeline changes
+- `chore`: Maintenance tasks, tooling
+- `refactor`: Code refactoring without changing behavior
+- `style`: Code style/formatting changes
+
+**Examples:**
+
+```bash
+# Feature addition (minor version bump)
+git commit -m "feat(discovery): add support for OAuth 2.0 authorization server metadata"
+
+# Bug fix with detailed body (patch version bump)
+git commit -m "$(cat <<'EOF'
+fix(token-validation): handle missing kid in JWT header
+
+- Add fallback to use first key when kid is missing
+- Improve error messages for key lookup failures
+- Add test coverage for missing kid scenario
+
+Fixes #123
+EOF
+)"
+
+# Breaking change (major version bump)
+git commit -m "$(cat <<'EOF'
+feat(api)!: remove deprecated sync-only exports
+
+BREAKING CHANGE: Removed `get_token` function. Use `request_client_credentials_token` instead.
+
+Migration guide:
+- Replace get_token() with request_client_credentials_token()
+- Update TokenRequest to ClientCredentialsTokenRequest
+EOF
+)"
+
+# Chore (no version bump)
+git commit -m "chore: enforce 80% test coverage threshold"
+
+# Documentation (no version bump)
+git commit -m "docs: update migration guide for v2.0"
+```
+
+**Important Notes:**
+- Use the body for detailed explanations with bullet points
+- Reference issue numbers in the footer
+- Breaking changes must include `!` after type/scope AND `BREAKING CHANGE:` in footer
+- Use heredoc syntax for multi-line commits: `git commit -m "$(cat <<'EOF' ... EOF)"`
+- Pre-commit hooks will run automatically (linting, type checking, coverage)
+
 ## Key Implementation Details
 
 ### Adding New Features
