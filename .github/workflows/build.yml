@@ -32,6 +32,18 @@ jobs:
           TEST_SCOPE: ${{ secrets.TEST_SCOPE }}
           TEST_EXPIRED_TOKEN: ${{ secrets.TEST_EXPIRED_TOKEN }}
           TEST_AUDIENCE: ${{ secrets.TEST_AUDIENCE }}
+      - name: Integration Tests (Descope)
+        run: make test-integration-descope
+        env:
+          TEST_DISCO_ADDRESS: ${{ secrets.DESCOPE_DISCO_ADDRESS }}
+          TEST_JWKS_ADDRESS: ${{ secrets.DESCOPE_JWKS_ADDRESS }}
+          TEST_CLIENT_ID: ${{ secrets.DESCOPE_CLIENT_ID }}
+          TEST_CLIENT_SECRET: ${{ secrets.DESCOPE_CLIENT_SECRET }}
+          TEST_SCOPE: ${{ secrets.DESCOPE_SCOPE }}
+          TEST_EXPIRED_TOKEN: ${{ secrets.DESCOPE_EXPIRED_TOKEN }}
+          TEST_AUDIENCE: ${{ secrets.DESCOPE_AUDIENCE }}
+        # Only run if Descope secrets are configured
+        if: ${{ secrets.DESCOPE_CLIENT_ID != '' }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
       - name: Example Integration Tests
