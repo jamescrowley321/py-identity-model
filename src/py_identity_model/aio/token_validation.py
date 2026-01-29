@@ -4,8 +4,6 @@ Token validation (asynchronous implementation).
 This module provides asynchronous token validation using discovery and JWKS.
 """
 
-import inspect
-
 from async_lru import alru_cache
 
 from ..core.models import (
@@ -15,18 +13,17 @@ from ..core.models import (
     JwksResponse,
     TokenValidationConfig,
 )
-from ..core.parsers import get_public_key_from_jwk
+from ..core.parsers import extract_kid_from_jwt, find_key_by_kid
 from ..core.token_validation_logic import (
     decode_with_config,
     log_validation_start,
     log_validation_success,
+    validate_async_claims,
     validate_config_for_manual_validation,
     validate_disco_response,
     validate_jwks_response,
 )
 from ..core.validators import validate_token_config
-from ..exceptions import TokenValidationException
-from ..logging_config import logger
 from .discovery import get_discovery_document
 from .jwks import get_jwks
 
@@ -61,31 +58,24 @@ async def _get_jwks_response(jwks_uri: str) -> JwksResponse:
 
 
 @alru_cache(maxsize=128)
-async def _get_public_key(jwt: str, jwks_uri: str) -> tuple[dict, str]:
-    """Cached public key extraction from JWKS.
+async def _get_public_key_by_kid(
+    kid: str | None, jwks_uri: str
+) -> tuple[dict, str]:
+    """Cached public key extraction from JWKS by key ID.
 
     Args:
-        jwt: The JWT token (used to extract kid from header)
+        kid: The key ID from the JWT header
         jwks_uri: The JWKS URI to fetch keys from
 
     Returns:
         tuple: (public_key_dict, algorithm)
 
     Note:
-        This cache uses the JWT itself as part of the key. In practice, the same
-        JWT is validated repeatedly in benchmarks. In production, different JWTs
-        with the same kid will have different cache entries, which is acceptable
-        given the maxsize limit.
-
-        TODO: Consider implementing HTTP-aware caching that respects Cache-Control
-        and Expires headers for disco/JWKS responses.
+        This cache uses the kid (key ID) instead of the full JWT for efficient
+        caching. Multiple JWTs signed with the same key will share a cache entry.
     """
     jwks_response = await _get_jwks_response(jwks_uri)
-    if not jwks_response.keys:
-        raise TokenValidationException("No keys available in JWKS response")
-    public_key = get_public_key_from_jwk(jwt, jwks_response.keys)
-    alg = public_key.alg if public_key.alg else "RS256"
-    return public_key.as_dict(), alg
+    return find_key_by_kid(kid, jwks_response.keys or [])
 
 
 # ============================================================================
@@ -123,34 +113,33 @@ async def validate_token(
         jwks_response = await _get_jwks_response(disco_doc_response.jwks_uri)
         validate_jwks_response(jwks_response)
 
-        # Use cached public key lookup for performance
-        key_dict, alg = await _get_public_key(jwt, disco_doc_response.jwks_uri)
-        token_validation_config.key = key_dict
-        token_validation_config.algorithms = [alg]
+        # Extract kid from JWT and use cached public key lookup for performance
+        kid = extract_kid_from_jwt(jwt)
+        key_dict, alg = await _get_public_key_by_kid(
+            kid, disco_doc_response.jwks_uri
+        )
 
+        # Use local variables instead of mutating the config object
         decoded_token = decode_with_config(
-            jwt, token_validation_config, disco_doc_response.issuer
+            jwt,
+            TokenValidationConfig(
+                perform_disco=token_validation_config.perform_disco,
+                key=key_dict,
+                audience=token_validation_config.audience,
+                algorithms=[alg],
+                issuer=token_validation_config.issuer,
+                subject=token_validation_config.subject,
+                options=token_validation_config.options,
+                claims_validator=token_validation_config.claims_validator,
+            ),
+            disco_doc_response.issuer,
         )
     else:
         validate_config_for_manual_validation(token_validation_config)
         decoded_token = decode_with_config(jwt, token_validation_config)
 
-    # Async-specific: Support both sync and async claims validators
-    if token_validation_config.claims_validator:
-        try:
-            if inspect.iscoroutinefunction(
-                token_validation_config.claims_validator
-            ):
-                await token_validation_config.claims_validator(decoded_token)
-            else:
-                token_validation_config.claims_validator(decoded_token)
-        except Exception as e:
-            logger.error(f"Claims validation failed: {e!s}")
-            raise TokenValidationException(
-                f"Claims validation failed: {e!s}",
-                token_part="payload",
-                details={"error": str(e)},
-            ) from e
+    # Use shared async claims validation logic
+    await validate_async_claims(decoded_token, token_validation_config)
 
     log_validation_success(decoded_token)
     return decoded_token

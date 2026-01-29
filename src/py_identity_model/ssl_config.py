@@ -7,11 +7,6 @@ when migrating from requests to httpx.
 
 from functools import lru_cache
 import os
-from threading import Lock
-
-
-# Thread safety lock for SSL configuration
-_ssl_lock = Lock()
 
 
 def ensure_ssl_compatibility() -> None:
@@ -48,9 +43,8 @@ def get_ssl_verify() -> str | bool:
     """
     Get SSL verification configuration for httpx with full backward compatibility.
 
-    This function is thread-safe and cached for performance. It checks environment
-    variables in priority order and returns the appropriate value for httpx's
-    verify parameter.
+    This function is cached for performance. It checks environment variables in
+    priority order and returns the appropriate value for httpx's verify parameter.
 
     Environment variables checked (in priority order):
     1. SSL_CERT_FILE - standard environment variable (highest priority)
@@ -62,12 +56,13 @@ def get_ssl_verify() -> str | bool:
         bool: True for default system CA verification
 
     Note:
-        Result is cached using @lru_cache. If environment variables change at
-        runtime, call get_ssl_verify.cache_clear() to refresh.
+        Result is cached using @lru_cache (which is thread-safe). If environment
+        variables change at runtime, call get_ssl_verify.cache_clear() to refresh.
 
     Thread Safety:
-        This function is thread-safe and can be called from multiple threads
-        concurrently in web applications (FastAPI, Flask, Django).
+        This function is thread-safe via @lru_cache's built-in thread safety
+        (Python 3.2+) and can be called from multiple threads concurrently
+        in web applications (FastAPI, Flask, Django).
 
     Examples:
         >>> # Use in httpx client
@@ -77,15 +72,14 @@ def get_ssl_verify() -> str | bool:
         >>> # Synchronous usage
         >>> response = httpx.get(url, verify=get_ssl_verify())
     """
-    with _ssl_lock:
-        for env_var in [
-            "SSL_CERT_FILE",
-            "CURL_CA_BUNDLE",
-            "REQUESTS_CA_BUNDLE",
-        ]:
-            if os.environ.get(env_var):
-                return os.environ[env_var]
-        return True  # Default: verify with system CA bundle
+    for env_var in [
+        "SSL_CERT_FILE",
+        "CURL_CA_BUNDLE",
+        "REQUESTS_CA_BUNDLE",
+    ]:
+        if os.environ.get(env_var):
+            return os.environ[env_var]
+    return True  # Default: verify with system CA bundle
 
 
 # Initialize SSL compatibility when module is imported

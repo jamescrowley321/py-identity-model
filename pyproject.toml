@@ -3,7 +3,7 @@ members = [".", "examples/fastapi"]
 
 [project]
 name = "py-identity-model"
-version = "0.0.0"
+version = "2.0.0-rc.1"
 description = "OAuth2.0 and OpenID Connect Client Library"
 authors = [{ name = "jamescrowley321", email = "jamescrowley151@gmail.com" }]
 requires-python = ">=3.12"
@@ -233,12 +233,14 @@ omit = [
     "*/tests/*",
     "*/__pycache__/*",
     "*/oidc_constants.py",  # Constants file - no logic to test
+    "*/__init__.py",  # Import-only files - no logic to test
 ]
 
 [tool.coverage.report]
 precision = 2
 show_missing = true
 skip_covered = false
+fail_under = 80.0
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",

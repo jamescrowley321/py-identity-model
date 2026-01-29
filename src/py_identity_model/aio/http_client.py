@@ -13,7 +13,6 @@ Environment Variables:
 import asyncio
 from functools import wraps
 import threading
-import time
 
 import httpx
 
@@ -37,71 +36,11 @@ _async_client_cleanup_lock: asyncio.Lock | None = None
 _async_http_client: httpx.AsyncClient | None = None
 
 
-async def _log_and_sleep_async(
-    delay: float, message: str, attempt: int, retries: int
-) -> None:
-    """Log retry attempt and sleep asynchronously."""
+def _log_retry(message: str, delay: float, attempt: int, retries: int) -> None:
+    """Log a retry attempt warning."""
     logger.warning(
         f"{message}, retrying in {delay}s (attempt {attempt + 1}/{retries})"
     )
-    await asyncio.sleep(delay)
-
-
-async def _handle_retry_response(
-    response: httpx.Response,
-    attempt: int,
-    retries: int,
-    delay_base: float,
-) -> bool:
-    """
-    Handle response that may need retry.
-
-    Args:
-        response: HTTP response to check
-        attempt: Current attempt number
-        retries: Maximum number of retries
-        delay_base: Base delay for exponential backoff
-
-    Returns:
-        bool: True if should continue retry loop, False if should return response
-    """
-    if should_retry_response(response, attempt, retries):
-        delay = calculate_delay(delay_base, attempt)
-        await _log_and_sleep_async(
-            delay,
-            f"HTTP {response.status_code} received",
-            attempt,
-            retries,
-        )
-        return True
-    return False
-
-
-async def _handle_retry_exception(
-    exception: httpx.RequestError,
-    attempt: int,
-    retries: int,
-    delay_base: float,
-) -> None:
-    """
-    Handle exception that may need retry.
-
-    Args:
-        exception: Request error that occurred
-        attempt: Current attempt number
-        retries: Maximum number of retries
-        delay_base: Base delay for exponential backoff
-
-    Raises:
-        httpx.RequestError: If no more retries available
-    """
-    if attempt < retries:
-        delay = calculate_delay(delay_base, attempt)
-        await _log_and_sleep_async(
-            delay, f"Request error: {exception}", attempt, retries
-        )
-    else:
-        raise exception
 
 
 def _get_retry_params(
@@ -145,35 +84,40 @@ def retry_with_backoff_async(
         @wraps(func)
         async def wrapper(*args, **kwargs):
             retries, delay_base = _get_retry_params(max_retries, base_delay)
-            last_exception = None
-            response = None
+            last_exception: httpx.RequestError | None = None
 
             for attempt in range(retries + 1):
                 try:
                     response = await func(*args, **kwargs)
 
-                    # Check if response needs retry
-                    should_continue = await _handle_retry_response(
-                        response, attempt, retries, delay_base
-                    )
-                    if should_continue:
+                    # Check if response needs retry (429 or 5xx with retries remaining)
+                    if should_retry_response(response, attempt, retries):
+                        delay = calculate_delay(delay_base, attempt)
+                        _log_retry(
+                            f"HTTP {response.status_code}",
+                            delay,
+                            attempt,
+                            retries,
+                        )
+                        await asyncio.sleep(delay)
                         continue
 
-                    # Success or non-retryable error
                     return response
 
                 except httpx.RequestError as e:
                     last_exception = e
-                    await _handle_retry_exception(
-                        e, attempt, retries, delay_base
-                    )
-                    continue
+                    if attempt < retries:
+                        delay = calculate_delay(delay_base, attempt)
+                        _log_retry(
+                            f"Request error: {e}", delay, attempt, retries
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+                    raise
 
-            # Exhausted all retries
+            # Exhausted all retries - return last response or raise last exception
             if last_exception:
                 raise last_exception
-            if response is not None:
-                return response
             raise RuntimeError("No response received after retries")
 
         return wrapper
@@ -202,8 +146,7 @@ def get_async_http_client() -> httpx.AsyncClient:
         - keepalive_expiry: 5.0 seconds
 
         Thread-safe: Uses a lock to prevent race conditions when creating
-        the async client from multiple threads simultaneously. In case of
-        errors during creation, retries up to 5 times with exponential backoff.
+        the async client from multiple threads simultaneously.
     """
     global _async_http_client
 
@@ -217,38 +160,14 @@ def get_async_http_client() -> httpx.AsyncClient:
         if _async_http_client is not None:
             return _async_http_client
 
-        # Create client with retry logic for thread safety
-        max_attempts = 5
-        last_error = None
-
-        for attempt in range(max_attempts):
-            try:
-                timeout = get_timeout()
-                _async_http_client = httpx.AsyncClient(
-                    verify=get_ssl_verify(),
-                    timeout=timeout,
-                    follow_redirects=True,
-                )
-                return _async_http_client
-            except OSError as e:
-                # These errors can occur when multiple threads try to
-                # initialize asyncio components simultaneously
-                last_error = e
-                if attempt < max_attempts - 1:
-                    # Exponential backoff with jitter
-                    import random
-
-                    # ruff: noqa: S311
-                    delay = (0.01 * (2**attempt)) + (random.random() * 0.01)
-                    time.sleep(delay)
-                continue
-
-        # If all retries failed, raise the last error
-        if last_error:
-            raise last_error
-
-        # This should never happen, but just in case
-        raise RuntimeError("Failed to create async HTTP client")
+        # Create client - httpx.AsyncClient creation is synchronous and safe
+        timeout = get_timeout()
+        _async_http_client = httpx.AsyncClient(
+            verify=get_ssl_verify(),
+            timeout=timeout,
+            follow_redirects=True,
+        )
+        return _async_http_client
 
 
 async def close_async_http_client() -> None:
@@ -293,7 +212,6 @@ def _reset_async_http_client() -> None:
 
 
 __all__ = [
-    "_reset_async_http_client",
     "close_async_http_client",
     "get_async_http_client",
     "retry_with_backoff_async",

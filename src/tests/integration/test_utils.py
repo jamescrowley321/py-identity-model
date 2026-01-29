@@ -48,6 +48,28 @@ def set_env_file(env_file_path: str | None) -> None:
     _reset_async_http_client()
 
 
+def get_alternate_provider_expired_token() -> str | None:
+    """
+    Get an expired token from an alternate provider for cross-provider testing.
+
+    Loads the expired token from .env.local which can be used to test that
+    tokens from one provider fail validation against another provider's
+    discovery endpoint.
+
+    Returns:
+        The expired token string, or None if .env.local doesn't exist
+    """
+    env_local_path = Path(".env.local")
+    if not env_local_path.is_file():
+        return None
+
+    # Temporarily load .env.local to get the token without affecting current env
+    from dotenv import dotenv_values
+
+    local_config = dotenv_values(env_local_path)
+    return local_config.get("TEST_EXPIRED_TOKEN")
+
+
 def get_config(env_file: str | None = None) -> dict:
     """
     Get test configuration from environment variables.

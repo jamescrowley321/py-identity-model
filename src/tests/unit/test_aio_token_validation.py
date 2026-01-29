@@ -24,7 +24,9 @@ class TestAsyncTokenValidation:
     @respx.mock
     async def test_get_jwks_response_no_keys(self):
         """Test that fetching JWKS with no keys raises exception."""
-        from py_identity_model.aio.token_validation import _get_public_key
+        from py_identity_model.aio.token_validation import (
+            _get_public_key_by_kid,
+        )
 
         # Mock JWKS endpoint to return empty keys array
         respx.get("https://example.com/jwks").mock(
@@ -41,8 +43,8 @@ class TestAsyncTokenValidation:
             TokenValidationException,
             match="No keys available in JWKS response",
         ):
-            await _get_public_key(
-                jwt="eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2V5In0.e30.test",
+            await _get_public_key_by_kid(
+                kid="test-key",
                 jwks_uri="https://example.com/jwks",
             )
 

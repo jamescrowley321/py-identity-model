@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to release from'
+        required: true
+        default: 'main'
+        type: string
 
 permissions:
   contents: read
@@ -17,19 +24,29 @@ jobs:
 
     permissions:
       contents: write
+      id-token: write
 
     steps:
-      - uses: actions/checkout@v1
-      - name: Set up Python
-        uses: actions/setup-python@v1
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
         with:
           python-version: 3.13
+
       - name: Install dependencies
         run: make ci-setup
+
       - name: Lint
         run: make lint
+
       - name: Unit Tests
         run: make test-unit
+
       - name: Integration Tests (ORY)
         run: make test-integration-ory
         env:
@@ -40,62 +57,68 @@ jobs:
           TEST_SCOPE: ${{ secrets.TEST_SCOPE }}
           TEST_EXPIRED_TOKEN: ${{ secrets.TEST_EXPIRED_TOKEN }}
           TEST_AUDIENCE: ${{ secrets.TEST_AUDIENCE }}
-      - name: Build
-        run: make build-dist
-      - name: Setup | Checkout Repository on Release Branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
-          fetch-depth: 0
 
-      - name: Setup | Force release branch to be at workflow sha
+      - name: Determine branch name
+        id: branch
         run: |
-          git reset --hard ${{ github.sha }}
-
-      - name: Evaluate | Verify upstream has NOT changed
-        shell: bash
-        run: |
-          set +o pipefail
-
-          UPSTREAM_BRANCH_NAME="$(git status -sb | head -n 1 | cut -d' ' -f2 | grep -E '\.{3}' | cut -d'.' -f4)"
-          printf '%s\n' "Upstream branch name: $UPSTREAM_BRANCH_NAME"
-
-          set -o pipefail
-
-          if [ -z "$UPSTREAM_BRANCH_NAME" ]; then
-              printf >&2 '%s\n' "::error::Unable to determine upstream branch name!"
-              exit 1
+          BRANCH="${{ github.event.inputs.branch || github.ref_name }}"
+          echo "name=$BRANCH" >> $GITHUB_OUTPUT
+          if [[ "$BRANCH" == "main" ]]; then
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
           fi
 
-          git fetch "${UPSTREAM_BRANCH_NAME%%/*}"
-
-          if ! UPSTREAM_SHA="$(git rev-parse "$UPSTREAM_BRANCH_NAME")"; then
-              printf >&2 '%s\n' "::error::Unable to determine upstream branch sha!"
-              exit 1
-          fi
-
-          HEAD_SHA="$(git rev-parse HEAD)"
-
-          if [ "$HEAD_SHA" != "$UPSTREAM_SHA" ]; then
-              printf >&2 '%s\n' "[HEAD SHA] $HEAD_SHA != $UPSTREAM_SHA [UPSTREAM SHA]"
-              printf >&2 '%s\n' "::error::Upstream has changed, aborting release..."
-              exit 1
-          fi
-
-          printf '%s\n' "Verified upstream branch has not changed, continuing with release..."
-
-      - name: Action | Semantic Version Release
+      - name: Semantic Version Release
         id: release
-        # Adjust tag with desired version if applicable.
         uses: python-semantic-release/python-semantic-release@v10.0.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           git_committer_name: "github-actions"
           git_committer_email: "actions@users.noreply.github.com"
 
-      - name: Publish | Upload to GitHub Release Assets
+      - name: Build distribution
+        if: steps.release.outputs.released == 'true'
+        run: |
+          echo "Building version ${{ steps.release.outputs.version }}"
+          # Ensure version is set in pyproject.toml (semantic-release should have done this,
+          # but we verify/set it explicitly to be safe)
+          sed -i -e "s/0.0.0/${{ steps.release.outputs.version }}/" pyproject.toml
+          make build-dist
+
+      - name: Upload to GitHub Release Assets
         uses: python-semantic-release/publish-action@v10.0.2
         if: steps.release.outputs.released == 'true'
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ steps.release.outputs.tag }}
+
+      - name: Publish to PyPI
+        if: steps.release.outputs.released == 'true'
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.pypi_token }}
+        run: make upload-dist
+
+      - name: Release Summary
+        if: steps.release.outputs.released == 'true'
+        run: |
+          echo "## Release Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${{ steps.release.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ steps.branch.outputs.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ steps.branch.outputs.is_prerelease }}" == "true" ]]; then
+            echo "This is a **prerelease** version." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "This is a **stable** release." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: No Release Needed
+        if: steps.release.outputs.released != 'true'
+        run: |
+          echo "## No Release" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No release was created. This can happen if:" >> $GITHUB_STEP_SUMMARY
+          echo "- There are no releasable commits (commits must follow conventional commit format)" >> $GITHUB_STEP_SUMMARY
+          echo "- The version would not change based on the commits" >> $GITHUB_STEP_SUMMARY
