@@ -28,8 +28,7 @@ jobs:
         run: make ci-setup
 
       - name: Run tests with coverage
-        run: uv run pytest src/tests -m unit -v -n auto --cov=src/py_identity_model --cov-report=xml --cov-report=term-missing
-        continue-on-error: true  # Continue even if tests fail to get coverage report
+        run: uv run pytest src/tests -m unit -v -n auto --cov=src/py_identity_model --cov-report=xml --cov-report=term-missing --cov-fail-under=80
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
