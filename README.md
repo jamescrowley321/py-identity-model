@@ -18,6 +18,24 @@ uv add py-identity-model
 
 **Requirements:** Python 3.12 or higher
 
+### SSL Certificate Configuration
+
+If you're working with custom SSL certificates (e.g., in corporate environments or with self-signed certificates), the library supports the following environment variables:
+
+- **`SSL_CERT_FILE`** - Recommended for new setups (httpx native)
+- **`CURL_CA_BUNDLE`** - Alternative option (also supported by httpx)
+- **`REQUESTS_CA_BUNDLE`** - Legacy support for backward compatibility
+
+```bash
+export SSL_CERT_FILE=/path/to/ca-bundle.crt
+# OR
+export REQUESTS_CA_BUNDLE=/path/to/ca-bundle.crt
+```
+
+**Note:** For backward compatibility, if you're upgrading from an older version that used `requests`, your existing `REQUESTS_CA_BUNDLE` environment variable will continue to work automatically.
+
+See the [Migration Guide](docs/migration-guide.md#ssl-certificate-configuration) for more details.
+
 ## Compliance Status
 
 * ✅ **OpenID Connect Discovery 1.0** - Fully compliant with specification requirements
@@ -37,6 +55,154 @@ For more information on token validation options, refer to the official [PyJWT D
 
 **Note**: Does not currently support opaque tokens.
 
+## Async/Await Support ⚡
+
+**NEW in v1.2.0**: Full async/await support for all client operations!
+
+py-identity-model now provides **both synchronous and asynchronous APIs**:
+
+- **Synchronous API** (default import): Traditional blocking I/O - perfect for scripts, CLIs, Flask, Django
+- **Asynchronous API** (`from py_identity_model.aio import ...`): Non-blocking I/O - perfect for FastAPI, Starlette, high-concurrency apps
+
+```python
+# Sync (default) - works as before
+from py_identity_model import get_discovery_document
+
+response = get_discovery_document(request)
+
+# Async (new!) - for async frameworks
+from py_identity_model.aio import get_discovery_document
+
+response = await get_discovery_document(request)
+```
+
+**When to use async:**
+- ✅ Async web frameworks (FastAPI, Starlette, aiohttp)
+- ✅ High-concurrency applications
+- ✅ Concurrent I/O operations
+- ✅ Applications already using asyncio
+
+**When to use sync:**
+- ✅ Scripts and CLIs
+- ✅ Traditional web frameworks (Flask, Django)
+- ✅ Simple applications
+- ✅ Blocking I/O is acceptable
+
+See [examples/async_examples.py](examples/async_examples.py) for complete async examples!
+
+## Thread Safety & Concurrency 🔒
+
+**py-identity-model is fully thread-safe and async-safe** for use in multi-threaded, multi-worker, and async environments.
+
+### HTTP Client Management
+
+The library uses different strategies for sync and async clients to ensure optimal performance and thread safety:
+
+#### Synchronous API (Thread-Local Storage)
+- **Each thread gets its own HTTP client** using `threading.local()`
+- **Thread-isolated connection pooling**: Connections are reused within the same thread
+- **No global state**: Eliminates race conditions and lock contention
+- **Automatic cleanup**: Each thread manages its own client lifecycle
+
+```python
+# Sync API - thread-safe by design
+from py_identity_model import get_discovery_document, DiscoveryDocumentRequest
+
+# Each thread gets its own client with connection pooling
+response = get_discovery_document(DiscoveryDocumentRequest(address=url))
+```
+
+**Perfect for:**
+- Flask with threading (`threaded=True`)
+- Gunicorn/uWSGI with threaded workers
+- Messaging consumers (Kafka, RabbitMQ) with thread-per-message
+- Any multi-threaded application
+
+#### Asynchronous API (Singleton with Lock Protection)
+- **Single async HTTP client per process** created lazily
+- **Thread-safe initialization**: Protected by `threading.Lock()`
+- **Shared connection pool**: All async operations share connections efficiently
+- **Optimal for async**: No locks during I/O operations
+
+```python
+# Async API - async-safe with efficient connection sharing
+from py_identity_model.aio import get_discovery_document, DiscoveryDocumentRequest
+
+# All async operations share a single client and connection pool
+response = await get_discovery_document(DiscoveryDocumentRequest(address=url))
+```
+
+**Perfect for:**
+- FastAPI with async endpoints
+- Starlette applications
+- aiohttp servers
+- Any asyncio-based application
+
+### Caching Strategy
+
+- ✅ **Discovery documents**: Cached per process with `functools.lru_cache` (sync) and `async_lru.alru_cache` (async)
+- ✅ **JWKS keys**: Cached per process for fast validation
+- ✅ **SSL configuration**: Thread-safe with lock protection
+- ✅ **Response bodies**: Always fully consumed and closed
+
+### Safe for Production
+
+**Works seamlessly with:**
+- ✅ FastAPI with multiple workers (`uvicorn --workers N`)
+- ✅ Gunicorn with threading or async workers
+- ✅ Django with multiple worker threads
+- ✅ Flask with threading enabled
+- ✅ Celery/messaging workers
+- ✅ Concurrent request handling
+
+### Performance Benefits
+
+1. **Connection pooling**: HTTP connections are reused for better performance
+2. **Thread-local clients (sync)**: No lock contention between threads
+3. **Shared async client**: Efficient connection sharing in async code
+4. **Cached discovery/JWKS**: Reduces redundant network calls
+5. **Explicit resource cleanup**: Responses are closed to prevent connection leaks
+
+```python
+# Example: Concurrent token validation in threaded environment
+from concurrent.futures import ThreadPoolExecutor
+from py_identity_model import validate_token, TokenValidationConfig
+
+def validate_request(token: str) -> dict:
+    config = TokenValidationConfig(perform_disco=True, audience="my-api")
+    # Each thread uses its own HTTP client with connection pooling
+    return validate_token(token, config, "https://issuer.example.com")
+
+# Safe to use with multiple threads - no shared state
+with ThreadPoolExecutor(max_workers=10) as executor:
+    futures = [executor.submit(validate_request, token) for token in tokens]
+    results = [f.result() for f in futures]
+```
+
+```python
+# Example: Concurrent async token validation
+import asyncio
+from py_identity_model.aio import validate_token, TokenValidationConfig
+
+async def validate_request(token: str) -> dict:
+    config = TokenValidationConfig(perform_disco=True, audience="my-api")
+    # All async calls share a single client and connection pool
+    return await validate_token(token, config, "https://issuer.example.com")
+
+# Safe concurrent async operations
+async def main():
+    results = await asyncio.gather(*[validate_request(token) for token in tokens])
+```
+
+### Key Architectural Decisions
+
+| Component | Sync API | Async API |
+|-----------|----------|-----------|
+| **HTTP Client** | Thread-local (one per thread) | Singleton (one per process) |
+| **Connection Pooling** | Per-thread pools | Shared process pool |
+| **Thread Safety** | Isolation via thread-local | Lock-protected initialization |
+| **Best For** | Multi-threaded apps | Async/await apps |
+
 This library inspired by [Duende.IdentityModel](https://github.com/DuendeSoftware/foss/tree/main/identity-model)
 
 From Duende.IdentityModel
@@ -55,6 +221,9 @@ For detailed usage instructions, examples, and guides, please see our comprehens
 
 * **[Getting Started Guide](docs/getting-started.md)** - Installation, quick start, and common use cases
 * **[API Documentation](docs/index.md)** - Complete API reference with examples
+* **[Migration Guide](docs/migration-guide.md)** - Migrating from sync to async API
+* **[Performance Guide](docs/performance.md)** - Caching, optimization, and benchmarks
+* **[Pre-release Testing Guide](docs/pre-release-guide.md)** - Creating and testing pre-release versions
 * **[FAQ](docs/faq.md)** - Frequently asked questions
 * **[Troubleshooting Guide](docs/troubleshooting.md)** - Common issues and solutions
 * **[Project Roadmap](docs/py_identity_model_roadmap.md)** - Upcoming features and development plans
@@ -65,6 +234,49 @@ For detailed usage instructions, examples, and guides, please see our comprehens
 
 * **[OpenID Connect Discovery Compliance](docs/discovery_specification_compliance_assessment.md)** - ✅ 100% compliant
 * **[JWKS Specification Compliance](docs/jwks_specification_compliance_assessment.md)** - ✅ 100% compliant
+
+## Configuration
+
+### Environment Variables
+
+The library supports the following environment variables for configuration:
+
+#### HTTP Client Configuration
+
+- **`HTTP_TIMEOUT`** - HTTP request timeout in seconds (default: 30.0)
+  ```bash
+  export HTTP_TIMEOUT=60.0  # Increase timeout to 60 seconds
+  ```
+
+- **`HTTP_RETRY_COUNT`** - Number of retries for rate-limited requests (default: 3)
+  ```bash
+  export HTTP_RETRY_COUNT=5  # Retry up to 5 times
+  ```
+
+- **`HTTP_RETRY_BASE_DELAY`** - Base delay in seconds for exponential backoff (default: 1.0)
+  ```bash
+  export HTTP_RETRY_BASE_DELAY=2.0  # Start with 2-second delay
+  ```
+
+#### SSL/TLS Certificate Configuration
+
+For working with custom SSL certificates (corporate environments, self-signed certificates):
+
+- **`SSL_CERT_FILE`** - Path to CA bundle file (recommended, httpx native)
+- **`CURL_CA_BUNDLE`** - Alternative CA bundle path (also supported by httpx)
+- **`REQUESTS_CA_BUNDLE`** - Legacy support for backward compatibility
+
+```bash
+# Recommended approach
+export SSL_CERT_FILE=/path/to/ca-bundle.crt
+
+# OR use legacy variable (backward compatible)
+export REQUESTS_CA_BUNDLE=/path/to/ca-bundle.crt
+```
+
+**Priority Order:** `SSL_CERT_FILE` → `REQUESTS_CA_BUNDLE` → `CURL_CA_BUNDLE` → System defaults
+
+See the [Migration Guide](docs/migration-guide.md#ssl-certificate-configuration) for more details.
 
 ## Quick Examples
 
@@ -233,6 +445,8 @@ else:
 * ✅ **Protocol Constants** - OIDC and OAuth 2.0 constants
 * ✅ **Comprehensive Type Hints** - Full type safety throughout
 * ✅ **Error Handling** - Structured exceptions and validation
+* ✅ **Async/Await Support** - Full async API via `py_identity_model.aio` module (v1.2.0)
+* ✅ **Modular Architecture** - Clean separation between HTTP layer and business logic (v1.2.0)
 
 ### 🚧 Upcoming Features
 * Token Introspection Endpoint (RFC 7662)
@@ -241,7 +455,6 @@ else:
 * Dynamic Client Registration (RFC 7591)
 * Device Authorization Endpoint
 * Additional grant types (authorization code, refresh token, device flow)
-* Async support
 * Opaque tokens support
 
 For detailed development plans, see the [Project Roadmap](docs/py_identity_model_roadmap.md).

@@ -17,3 +17,10 @@ repos:
         types_or: [python, pyi]
         pass_filenames: false
         require_serial: true
+      - id: pytest-coverage
+        name: pytest coverage check (80% minimum)
+        entry: bash -c 'uv run pytest src/tests -m unit -q --cov=src/py_identity_model --cov-report=term-missing:skip-covered --cov-fail-under=80'
+        language: system
+        types: [python]
+        pass_filenames: false
+        require_serial: true

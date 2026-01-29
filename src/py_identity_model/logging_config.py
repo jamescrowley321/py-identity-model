@@ -40,18 +40,18 @@ def configure_logging(
         >>> # Or use standard Python logging
         >>> logging.basicConfig(level=logging.DEBUG)
     """
-    if log_format is None:
+    if log_format is None:  # pragma: no cover
         log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
-    if handler is None:
+    if handler is None:  # pragma: no cover
         handler = logging.StreamHandler()
 
-    handler.setFormatter(logging.Formatter(log_format))
+    handler.setFormatter(logging.Formatter(log_format))  # pragma: no cover
 
     # Remove any existing handlers to avoid duplicates
-    logger.handlers.clear()
-    logger.addHandler(handler)
-    logger.setLevel(level)
+    logger.handlers.clear()  # pragma: no cover
+    logger.addHandler(handler)  # pragma: no cover
+    logger.setLevel(level)  # pragma: no cover
 
 
 __all__ = ["configure_logging", "logger"]

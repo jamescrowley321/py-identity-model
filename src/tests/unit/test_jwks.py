@@ -1,7 +1,8 @@
 import json
-from unittest.mock import Mock, patch
 
+import httpx
 import pytest
+import respx
 
 from py_identity_model.exceptions import ConfigurationException
 from py_identity_model.jwks import (
@@ -530,35 +531,38 @@ class TestJwksFromDict:
 
 
 class TestGetJwks:
-    @patch("py_identity_model.jwks.requests.get")
-    def test_get_jwks_success(self, mock_get):
+    @respx.mock
+    def test_get_jwks_success(self):
         # Mock successful response
-        mock_response = Mock()
-        mock_response.ok = True
-        mock_response.json.return_value = {
-            "keys": [
-                {
-                    "kty": "RSA",
-                    "use": "sig",
-                    "alg": "RS256",
-                    "kid": "key1",
-                    "n": "example_n",
-                    "e": "AQAB",
+        url = "https://example.com/jwks"
+        respx.get(url).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "keys": [
+                        {
+                            "kty": "RSA",
+                            "use": "sig",
+                            "alg": "RS256",
+                            "kid": "key1",
+                            "n": "example_n",
+                            "e": "AQAB",
+                        },
+                        {
+                            "kty": "EC",
+                            "use": "sig",
+                            "alg": "ES256",
+                            "kid": "key2",
+                            "crv": "P-256",
+                            "x": "example_x",
+                            "y": "example_y",
+                        },
+                    ],
                 },
-                {
-                    "kty": "EC",
-                    "use": "sig",
-                    "alg": "ES256",
-                    "kid": "key2",
-                    "crv": "P-256",
-                    "x": "example_x",
-                    "y": "example_y",
-                },
-            ],
-        }
-        mock_get.return_value = mock_response
+            )
+        )
 
-        request = JwksRequest(address="https://example.com/jwks")
+        request = JwksRequest(address=url)
         result = get_jwks(request)
 
         assert result.is_successful is True
@@ -569,18 +573,16 @@ class TestGetJwks:
         assert result.keys[1].kty == "EC"
         assert result.keys[1].kid == "key2"
         assert result.error is None
-        mock_get.assert_called_once_with("https://example.com/jwks")
 
-    @patch("py_identity_model.jwks.requests.get")
-    def test_get_jwks_http_error(self, mock_get):
+    @respx.mock
+    def test_get_jwks_http_error(self):
         # Mock HTTP error response
-        mock_response = Mock()
-        mock_response.ok = False
-        mock_response.status_code = 404
-        mock_response.content = b"Not Found"
-        mock_get.return_value = mock_response
+        url = "https://example.com/jwks"
+        respx.get(url).mock(
+            return_value=httpx.Response(404, content=b"Not Found")
+        )
 
-        request = JwksRequest(address="https://example.com/jwks")
+        request = JwksRequest(address=url)
         result = get_jwks(request)
 
         assert result.is_successful is False
@@ -588,14 +590,14 @@ class TestGetJwks:
         assert result.error is not None
         assert "404" in result.error
         assert "Not Found" in result.error
-        mock_get.assert_called_once_with("https://example.com/jwks")
 
-    @patch("py_identity_model.jwks.requests.get")
-    def test_get_jwks_exception_handling(self, mock_get):
+    @respx.mock
+    def test_get_jwks_exception_handling(self):
         # Mock exception during request
-        mock_get.side_effect = Exception("Network error")
+        url = "https://example.com/jwks"
+        respx.get(url).mock(side_effect=Exception("Network error"))
 
-        request = JwksRequest(address="https://example.com/jwks")
+        request = JwksRequest(address=url)
         result = get_jwks(request)
 
         assert result.is_successful is False
@@ -603,25 +605,22 @@ class TestGetJwks:
         assert result.error is not None
         assert "Unhandled exception during JWKS request" in result.error
         assert "Network error" in result.error
-        mock_get.assert_called_once_with("https://example.com/jwks")
 
-    @patch("py_identity_model.jwks.requests.get")
-    def test_get_jwks_json_decode_error(self, mock_get):
+    @respx.mock
+    def test_get_jwks_json_decode_error(self):
         # Mock response that raises JSON decode error
-        mock_response = Mock()
-        mock_response.ok = True
-        mock_response.json.side_effect = json.JSONDecodeError(
-            "Invalid JSON",
-            "",
-            0,
+        url = "https://example.com/jwks"
+        respx.get(url).mock(
+            return_value=httpx.Response(
+                200,
+                content=b"invalid json{",
+            )
         )
-        mock_get.return_value = mock_response
 
-        request = JwksRequest(address="https://example.com/jwks")
+        request = JwksRequest(address=url)
         result = get_jwks(request)
 
         assert result.is_successful is False
         assert result.keys is None
         assert result.error is not None
         assert "Unhandled exception during JWKS request" in result.error
-        mock_get.assert_called_once_with("https://example.com/jwks")

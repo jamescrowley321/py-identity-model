@@ -1,0 +1,194 @@
+name: Publish Pre-release to GitHub 🚀
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  publish-prerelease:
+    runs-on: ubuntu-latest
+    # Only run on PRs from the same repo (not forks) to have access to secrets/permissions
+    if: github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.13
+
+      - name: Install dependencies
+        run: make ci-setup
+
+      - name: Generate prerelease version
+        id: vars
+        run: |
+          # Get the latest release tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
+
+          # Parse current version and determine next version based on conventional commits
+          BASE_SHA=${{ github.event.pull_request.base.sha }}
+          HEAD_SHA=${{ github.event.pull_request.head.sha }}
+
+          # Analyze commits to determine version bump type
+          COMMITS=$(git log --format="%s" ${BASE_SHA}..${HEAD_SHA})
+
+          # Determine bump type based on conventional commits
+          if echo "$COMMITS" | grep -qE "^(feat|fix|perf)(\(.+\))?!:|^BREAKING CHANGE:"; then
+            BUMP="major"
+          elif echo "$COMMITS" | grep -qE "^feat(\(.+\))?:"; then
+            BUMP="minor"
+          elif echo "$COMMITS" | grep -qE "^(fix|perf)(\(.+\))?:"; then
+            BUMP="patch"
+          else
+            BUMP="patch"
+          fi
+
+          # Parse current version and bump it
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST_TAG#v}"
+          MAJOR=${MAJOR:-0}
+          MINOR=${MINOR:-0}
+          PATCH=${PATCH:-0}
+
+          case $BUMP in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+          esac
+
+          # Create prerelease version with PR number and short SHA
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          SHORT_SHA=$(echo $HEAD_SHA | cut -c1-7)
+          VERSION="${MAJOR}.${MINOR}.${PATCH}-rc.${PR_NUMBER}.${SHORT_SHA}"
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Generated version: $VERSION"
+
+      - name: Display version
+        run: echo "Publishing version ${{ steps.vars.outputs.version }} to GitHub Releases"
+
+      - name: Build distribution 📦
+        run: |
+          echo ${{ steps.vars.outputs.version }}
+          sed -i -e "s/0.0.0/${{ steps.vars.outputs.version }}/" pyproject.toml
+          make build-dist
+
+      - name: Get wheel filename
+        id: wheel
+        run: echo "filename=$(ls dist/*.whl | xargs -n 1 basename)" >> $GITHUB_OUTPUT
+
+      - name: Delete existing prerelease for this PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Find and delete any existing prerelease for this PR
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          EXISTING_RELEASES=$(gh release list --json tagName,isPrerelease -q ".[] | select(.isPrerelease and (.tagName | contains(\"-rc.${PR_NUMBER}.\"))) | .tagName")
+          for tag in $EXISTING_RELEASES; do
+            echo "Deleting existing prerelease: $tag"
+            gh release delete "$tag" --yes --cleanup-tag || true
+          done
+
+      - name: Create GitHub Pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.version }}
+          prerelease: true
+          files: dist/*
+          body: |
+            ## Pre-release ${{ steps.vars.outputs.version }}
+
+            This is an automated pre-release from PR #${{ github.event.pull_request.number }}: **${{ github.event.pull_request.title }}**
+
+            **PR:** ${{ github.event.pull_request.html_url }}
+
+            ### Installation for Testing
+
+            **Option 1: Install from GitHub Release (Recommended)**
+            ```bash
+            # Using pip
+            pip install https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.version }}/${{ steps.wheel.outputs.filename }}
+
+            # Using uv
+            uv pip install https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.version }}/${{ steps.wheel.outputs.filename }}
+            ```
+
+            **Option 2: Install from PR branch**
+            ```bash
+            # Using pip
+            pip install git+https://github.com/${{ github.repository }}.git@${{ github.event.pull_request.head.ref }}
+
+            # Using uv
+            uv pip install git+https://github.com/${{ github.repository }}.git@${{ github.event.pull_request.head.ref }}
+            ```
+
+            ---
+
+            ⚠️ **This is a pre-release version.** Do not use in production.
+
+            For production use, install the stable version from PyPI:
+            ```bash
+            pip install py-identity-model
+            ```
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ steps.vars.outputs.version }}';
+            const wheelFilename = '${{ steps.wheel.outputs.filename }}';
+            const repo = context.repo.owner + '/' + context.repo.repo;
+
+            const body = `## 🚀 Pre-release Published
+
+            **Version:** \`${version}\`
+
+            ### Quick Install
+            \`\`\`bash
+            pip install https://github.com/${repo}/releases/download/${version}/${wheelFilename}
+            \`\`\`
+
+            Or with uv:
+            \`\`\`bash
+            uv pip install https://github.com/${repo}/releases/download/${version}/${wheelFilename}
+            \`\`\`
+
+            [View Release](https://github.com/${repo}/releases/tag/${version})`;
+
+            // Find and update existing comment or create new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Pre-release Published')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }

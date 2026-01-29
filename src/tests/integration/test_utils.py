@@ -23,7 +23,51 @@ def set_env_file(env_file_path: str | None) -> None:
         load_dotenv(env_file_path, override=True)
     elif Path(".env").is_file():
         # Load default .env file only if it exists
-        load_dotenv()
+        # Don't load .env.local - it's for local IdentityServer testing only
+        load_dotenv(".env", override=True)
+
+    # Clear SSL certificate environment variables for external service testing
+    # These may be set in .env.local for local IdentityServer testing but should
+    # not be used when testing against external services like Ory.
+    #
+    # We clear them BEFORE clearing caches to ensure get_ssl_verify() returns
+    # the correct value (True for system certificates) on next call.
+    os.environ.pop("SSL_CERT_FILE", None)
+    os.environ.pop("REQUESTS_CA_BUNDLE", None)
+    os.environ.pop("CURL_CA_BUNDLE", None)
+
+    # Clear all SSL and HTTP client caches to pick up environment changes.
+    # This is safe in parallel execution because each worker has its own process
+    # and environment, and this only runs once per session during fixture initialization.
+    from py_identity_model.aio.http_client import _reset_async_http_client
+    from py_identity_model.ssl_config import get_ssl_verify
+    from py_identity_model.sync.http_client import _reset_http_client
+
+    get_ssl_verify.cache_clear()
+    _reset_http_client()
+    _reset_async_http_client()
+
+
+def get_alternate_provider_expired_token() -> str | None:
+    """
+    Get an expired token from an alternate provider for cross-provider testing.
+
+    Loads the expired token from .env.local which can be used to test that
+    tokens from one provider fail validation against another provider's
+    discovery endpoint.
+
+    Returns:
+        The expired token string, or None if .env.local doesn't exist
+    """
+    env_local_path = Path(".env.local")
+    if not env_local_path.is_file():
+        return None
+
+    # Temporarily load .env.local to get the token without affecting current env
+    from dotenv import dotenv_values
+
+    local_config = dotenv_values(env_local_path)
+    return local_config.get("TEST_EXPIRED_TOKEN")
 
 
 def get_config(env_file: str | None = None) -> dict:

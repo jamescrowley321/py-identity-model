@@ -205,6 +205,59 @@ else:
     print(f"Discovery failed: {disco_doc_response.error}")
 ```
 
+## Code Architecture
+
+py-identity-model uses a clean, modular architecture that separates concerns and eliminates code duplication:
+
+### Module Structure
+
+```
+py_identity_model/
+├── core/                    # Shared business logic
+│   ├── models.py           # All dataclasses and models
+│   ├── validators.py       # Validation functions
+│   ├── parsers.py          # JWKS and response parsing
+│   └── jwt_helpers.py      # JWT validation logic
+├── sync/                    # Synchronous HTTP layer
+│   ├── discovery.py        # Discovery document fetching
+│   ├── jwks.py            # JWKS fetching
+│   ├── token_client.py    # Token requests
+│   └── token_validation.py # Token validation with caching
+└── aio/                     # Asynchronous HTTP layer
+    ├── discovery.py        # Async discovery document fetching
+    ├── jwks.py            # Async JWKS fetching
+    ├── token_client.py    # Async token requests
+    └── token_validation.py # Async token validation with caching
+```
+
+### Design Principles
+
+- **Separation of Concerns**: HTTP layer (sync/aio) is separate from business logic (core)
+- **Code Reuse**: Both sync and async implementations share the same validators, parsers, and models
+- **Type Safety**: Comprehensive type hints throughout
+- **Testability**: Core business logic can be tested independently of HTTP operations
+
+### Async Support
+
+The library provides both synchronous and asynchronous APIs:
+
+**Synchronous** (default):
+```python
+from py_identity_model import get_discovery_document, DiscoveryDocumentRequest
+
+response = get_discovery_document(DiscoveryDocumentRequest(address=url))
+```
+
+**Asynchronous**:
+```python
+from py_identity_model.aio import get_discovery_document
+from py_identity_model import DiscoveryDocumentRequest
+
+response = await get_discovery_document(DiscoveryDocumentRequest(address=url))
+```
+
+See [examples/async_examples.py](../examples/async_examples.py) and [examples/sync_examples.py](../examples/sync_examples.py) for complete examples.
+
 ## Features Status
 
 ### ✅ Completed Features
@@ -216,6 +269,8 @@ else:
 * ✅ **Protocol Constants** - OIDC and OAuth 2.0 constants
 * ✅ **Comprehensive Type Hints** - Full type safety throughout
 * ✅ **Error Handling** - Structured exceptions and validation
+* ✅ **Async/Await Support** - Full async API via `py_identity_model.aio` (v1.2.0)
+* ✅ **Modular Architecture** - Clean separation between HTTP layer and business logic
 
 ### 🚧 Upcoming Features
 * Token Introspection Endpoint (RFC 7662)
@@ -224,7 +279,6 @@ else:
 * Dynamic Client Registration (RFC 7591)
 * Device Authorization Endpoint
 * Additional grant types (authorization code, refresh token, device flow)
-* Async support
 * Opaque tokens support
 
 ## Documentation

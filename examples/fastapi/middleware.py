@@ -20,8 +20,8 @@ from py_identity_model import (
     PyIdentityModelException,
     TokenValidationConfig,
     to_principal,
-    validate_token,
 )
+from py_identity_model.aio import validate_token
 
 
 class TokenValidationMiddleware(BaseHTTPMiddleware):
@@ -87,7 +87,7 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
 
         token = parts[1]
 
-        # Validate token
+        # Validate token asynchronously
         try:
             validation_config = TokenValidationConfig(
                 perform_disco=True,
@@ -95,7 +95,7 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
                 claims_validator=self.custom_claims_validator,
             )
 
-            claims = validate_token(
+            claims = await validate_token(
                 jwt=token,
                 token_validation_config=validation_config,
                 disco_doc_address=self.discovery_url,

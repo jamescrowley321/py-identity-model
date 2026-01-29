@@ -60,6 +60,7 @@ services:
       - AUDIENCE=py-identity-model
       - PYTHONUNBUFFERED=1
       - REQUESTS_CA_BUNDLE=/usr/local/share/ca-certificates/dev/ca-cert.crt
+      - SSL_CERT_FILE=/usr/local/share/ca-certificates/dev/ca-cert.crt
     volumes:
       - shared-certs:/usr/local/share/ca-certificates/dev:ro
     networks:
@@ -90,6 +91,7 @@ services:
       - AUDIENCE=py-identity-model
       - SCOPE=py-identity-model
       - REQUESTS_CA_BUNDLE=/usr/local/share/ca-certificates/dev/ca-cert.crt
+      - SSL_CERT_FILE=/usr/local/share/ca-certificates/dev/ca-cert.crt
     volumes:
       - shared-certs:/usr/local/share/ca-certificates/dev:ro
     networks:

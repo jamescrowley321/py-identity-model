@@ -3,7 +3,7 @@ members = [".", "examples/fastapi"]
 
 [project]
 name = "py-identity-model"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 description = "OAuth2.0 and OpenID Connect Client Library"
 authors = [{ name = "jamescrowley321", email = "jamescrowley151@gmail.com" }]
 requires-python = ">=3.12"
@@ -13,17 +13,25 @@ classifiers = [
 ]
 dependencies = [
     "PyJWT>=2.9.0,<3",
-    "requests>=2.32.3,<3",
+    "httpx>=0.28.1,<1",
     "cryptography>=45.0.2,<46",
+    "async-lru>=2.0.4,<3",
 ]
 
 [dependency-groups]
 dev = [
+    "filelock>=3.16.1,<4",
     "pre-commit>=3.8.0,<4",
     "python-dotenv>=1.0.1,<2",
     "pytest>=8.3.2,<9",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0,<7",
+    "pytest-xdist>=3.6.1,<4",
+    "respx>=0.21.0",
+    "pytest-timeout>=2.3.1",
     "ruff>=0.11.12",
-    "pyrefly>=0.34.0"
+    "pyrefly>=0.34.0",
+    "tenacity>=9.0.0,<10"
 ]
 docs = [
     "mkdocs>=1.6.0,<2",
@@ -198,6 +206,9 @@ addopts = [
     "--strict-config", # raise error on config issues
     "--showlocals", # show local variables in tracebacks
     "-vv", # very verbose
+    "--tb=short", # shorter tracebacks
+    "--no-header", # skip pytest header info
+    "--disable-warnings", # hide warnings in output for cleaner results
 ]
 # Markers for test categorization
 markers = [
@@ -205,6 +216,9 @@ markers = [
     "unit: marks tests as unit tests",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
+# Async test configuration
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 # Filter warnings
 filterwarnings = [
     "error", # treat warnings as errors
@@ -218,12 +232,15 @@ branch = true
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
+    "*/oidc_constants.py",  # Constants file - no logic to test
+    "*/__init__.py",  # Import-only files - no logic to test
 ]
 
 [tool.coverage.report]
 precision = 2
 show_missing = true
 skip_covered = false
+fail_under = 80.0
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",

@@ -430,3 +430,42 @@ class ClaimsPrincipal(Principal):
         return [
             claim for claim in self._claims if claim.claim_type == claim_type
         ]
+
+
+def to_principal(
+    token_claims: dict,
+    authentication_type: str = "Bearer",
+) -> ClaimsPrincipal:
+    """
+    Converts a dictionary of token claims (output from validate_token)
+    into a ClaimsPrincipal object.
+
+    Args:
+        token_claims: Dictionary of claims returned from validate_token
+        authentication_type: The authentication type (defaults to "Bearer")
+
+    Returns:
+        ClaimsPrincipal object containing the claims from the token
+    """
+    claims = []
+
+    for claim_type, claim_value in token_claims.items():
+        # Handle different claim value types
+        if isinstance(claim_value, list):
+            # Multiple values for the same claim type
+            claims.extend(
+                Claim(claim_type=claim_type, value=str(value))
+                for value in claim_value
+            )
+        else:
+            # Single value claim
+            claims.append(Claim(claim_type=claim_type, value=str(claim_value)))
+
+    # Create a ClaimsIdentity with the claims
+    identity = ClaimsIdentity(
+        claims=claims,
+        authentication_type=authentication_type,
+    )
+
+    # Create and return the ClaimsPrincipal
+    return ClaimsPrincipal(identity=identity)

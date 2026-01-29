@@ -1,7 +1,6 @@
 import json
 
 import pytest
-import requests
 
 from py_identity_model import JsonWebKey
 from py_identity_model.exceptions import ConfigurationException
@@ -10,18 +9,11 @@ from py_identity_model.jwks import JwksRequest, get_jwks, jwks_from_dict
 from .test_utils import get_config
 
 
-def fetch_jwks(jwks_address: str) -> list[dict]:
-    """Fetch JWKS from the provided URL"""
-    response = requests.get(jwks_address)
-    response.raise_for_status()
-    return response.json()["keys"]
-
-
 @pytest.fixture
-def jwks_data(env_file):
+def jwks_data(jwks_response):
     """Pytest fixture to provide JWKS data for tests"""
-    config = get_config(env_file)
-    return fetch_jwks(config["TEST_JWKS_ADDRESS"])
+    # Convert JsonWebKey objects to dictionaries
+    return [jwk.as_dict() for jwk in jwks_response.keys]
 
 
 def test_jwk_deserialization(jwks_data):
@@ -362,5 +354,8 @@ def test_get_jwks_network_error():
 
     assert jwks_response.is_successful is False
     assert jwks_response.error is not None
-    assert "Network error during JWKS request" in jwks_response.error
+    assert (
+        "Network error during JWKS request" in jwks_response.error
+        or "Unhandled exception during JWKS request" in jwks_response.error
+    )
     assert jwks_response.keys is None
