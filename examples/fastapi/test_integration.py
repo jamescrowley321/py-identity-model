@@ -13,7 +13,9 @@ import requests
 from py_identity_model import (
     ClientCredentialsTokenRequest,
     DiscoveryDocumentRequest,
+    UserInfoRequest,
     get_discovery_document,
+    get_userinfo,
     request_client_credentials_token,
 )
 
@@ -51,8 +53,12 @@ def _create_auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def get_access_token() -> str | None:
-    """Get an access token from the identity server using client credentials."""
+def get_access_token() -> tuple[str | None, str | None]:
+    """Get an access token and userinfo endpoint from the identity server.
+
+    Returns:
+        Tuple of (access_token, userinfo_endpoint). Either may be None on failure.
+    """
     print(f"🔍 Getting discovery document from {DISCOVERY_URL}")
 
     try:
@@ -62,11 +68,15 @@ def get_access_token() -> str | None:
 
         if not disco_response.is_successful:
             print(f"❌ Discovery failed: {disco_response.error}")
-            return None
+            return None, None
 
         if not disco_response.token_endpoint:
             print("❌ Token endpoint not found in discovery document")
-            return None
+            return None, None
+
+        userinfo_endpoint = disco_response.userinfo_endpoint
+        if userinfo_endpoint:
+            print(f"📋 UserInfo endpoint: {userinfo_endpoint}")
 
         print(f"🎫 Requesting token from {disco_response.token_endpoint}")
 
@@ -81,7 +91,7 @@ def get_access_token() -> str | None:
 
         if not token_response.is_successful:
             print(f"❌ Token request failed: {token_response.error}")
-            return None
+            return None, userinfo_endpoint
 
         access_token = (
             token_response.token.get("access_token")
@@ -90,13 +100,13 @@ def get_access_token() -> str | None:
         )
         if access_token:
             print("✅ Successfully obtained access token")
-            return access_token
+            return access_token, userinfo_endpoint
         print("❌ No access token in response")
-        return None
+        return None, userinfo_endpoint
 
     except Exception as e:
         print(f"❌ Error getting access token: {e}")
-        return None
+        return None, None
 
 
 def wait_for_service(url: str, max_attempts: int = 30) -> bool:
@@ -265,6 +275,41 @@ def test_admin_endpoints_without_role(token: str):
     print("✅ Admin stats endpoint correctly rejects token without admin role")
 
 
+def test_userinfo_endpoint(token: str, userinfo_endpoint: str):
+    """Test UserInfo endpoint integration using py-identity-model."""
+    print("\n🧪 Testing UserInfo endpoint...")
+
+    # Test with client credentials token - behavior varies by provider:
+    # Some return claims, others reject (no user context for client credentials)
+    request = UserInfoRequest(
+        address=userinfo_endpoint,
+        token=token,
+    )
+    response = get_userinfo(request)
+
+    if response.is_successful:
+        assert response.claims is not None or response.raw is not None
+        print("✅ UserInfo returned claims for client credentials token")
+    else:
+        assert response.error is not None
+        print(
+            "✅ UserInfo correctly rejects client credentials token (no user context)"
+        )
+
+    # Test with invalid token
+    request = UserInfoRequest(
+        address=userinfo_endpoint,
+        token="invalid-token",
+    )
+    response = get_userinfo(request)
+
+    assert response.is_successful is False, (
+        "Expected UserInfo to fail with invalid token"
+    )
+    assert response.error is not None
+    print("✅ UserInfo correctly rejects invalid token")
+
+
 def run_tests():
     """Run all integration tests."""
     print("=" * 60)
@@ -303,8 +348,8 @@ def run_tests():
         print("❌ Identity server not available")
         return 1
 
-    # Get access token
-    token = get_access_token()
+    # Get access token and userinfo endpoint
+    token, userinfo_endpoint = get_access_token()
     if not token:
         print("❌ Failed to obtain access token")
         return 1
@@ -317,6 +362,12 @@ def run_tests():
         test_protected_endpoints_with_valid_token(token)
         test_scope_based_authorization(token)
         test_admin_endpoints_without_role(token)
+        if userinfo_endpoint:
+            test_userinfo_endpoint(token, userinfo_endpoint)
+        else:
+            print(
+                "\n⚠️  Skipping UserInfo tests (no userinfo_endpoint in discovery)"
+            )
 
         print("\n" + "=" * 60)
         print("✅ All tests passed!")

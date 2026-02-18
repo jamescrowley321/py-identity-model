@@ -134,6 +134,12 @@ def issuer(discovery_document):
 
 
 @pytest.fixture(scope="session")
+def userinfo_endpoint(discovery_document):
+    """Provide the UserInfo endpoint from cached discovery document."""
+    return discovery_document.userinfo_endpoint
+
+
+@pytest.fixture(scope="session")
 def client_credentials_token(test_config, token_endpoint):
     """
     Session-scoped fixture providing a cached client credentials token.

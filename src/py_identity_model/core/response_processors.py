@@ -12,6 +12,7 @@ from .models import (
     ClientCredentialsTokenResponse,
     DiscoveryDocumentResponse,
     JwksResponse,
+    UserInfoResponse,
 )
 from .parsers import jwks_from_dict
 from .validators import (
@@ -237,9 +238,51 @@ def parse_token_response(
     )
 
 
+def parse_userinfo_response(response: httpx.Response) -> UserInfoResponse:
+    """
+    Parse UserInfo HTTP response.
+
+    Supports Content-Type detection per OIDC Core 1.0 Section 5.3.2/5.3.3:
+    - application/json: Claims extracted as dict
+    - application/jwt: Raw JWT string stored for caller to decode/validate
+
+    Args:
+        response: HTTP response from UserInfo endpoint
+
+    Returns:
+        UserInfoResponse: Parsed response with claims or raw JWT
+    """
+    if not response.is_success:
+        error_msg = (
+            f"UserInfo request failed with status code: "
+            f"{response.status_code}. Response Content: {response.content}"
+        )
+        return UserInfoResponse(
+            is_successful=False,
+            error=error_msg,
+        )
+
+    content_type = response.headers.get("Content-Type", "")
+    media_type = content_type.split(";")[0].strip().lower()
+
+    if media_type == "application/jwt":
+        return UserInfoResponse(
+            is_successful=True,
+            raw=response.text,
+        )
+
+    # Default to JSON parsing (application/json or unspecified)
+    claims = response.json()
+    return UserInfoResponse(
+        is_successful=True,
+        claims=claims,
+    )
+
+
 __all__ = [
     "build_discovery_response",
     "parse_jwks_response",
     "parse_token_response",
+    "parse_userinfo_response",
     "validate_and_parse_discovery_response",
 ]

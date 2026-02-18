@@ -13,6 +13,7 @@ from .models import (
     ClientCredentialsTokenResponse,
     DiscoveryDocumentResponse,
     JwksResponse,
+    UserInfoResponse,
 )
 
 
@@ -122,8 +123,35 @@ def handle_token_error(e: Exception) -> ClientCredentialsTokenResponse:
     )
 
 
+def handle_userinfo_error(e: Exception) -> UserInfoResponse:
+    """
+    Handle errors during UserInfo requests.
+
+    Args:
+        e: Exception that occurred
+
+    Returns:
+        UserInfoResponse: Error response
+    """
+    if isinstance(e, httpx.RequestError):
+        error_msg = f"Network error during UserInfo request: {e!s}"
+        logger.error(error_msg, exc_info=True)
+        return UserInfoResponse(
+            is_successful=False,
+            error=error_msg,
+        )
+
+    error_msg = f"Unexpected error during UserInfo request: {e!s}"
+    logger.error(error_msg, exc_info=True)
+    return UserInfoResponse(
+        is_successful=False,
+        error=error_msg,
+    )
+
+
 __all__ = [
     "handle_discovery_error",
     "handle_jwks_error",
     "handle_token_error",
+    "handle_userinfo_error",
 ]

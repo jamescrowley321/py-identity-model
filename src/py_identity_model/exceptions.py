@@ -114,6 +114,10 @@ class TokenRequestException(NetworkException):
     """Raised when token request fails."""
 
 
+class UserInfoException(NetworkException):
+    """Raised when UserInfo request fails."""
+
+
 class ConfigurationException(PyIdentityModelException):
     """Raised when configuration is invalid or incomplete."""
 
@@ -130,5 +134,6 @@ __all__ = [
     "TokenExpiredException",
     "TokenRequestException",
     "TokenValidationException",
+    "UserInfoException",
     "ValidationException",
 ]

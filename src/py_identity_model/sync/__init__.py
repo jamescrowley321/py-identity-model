@@ -20,6 +20,7 @@ from .token_client import (
     request_client_credentials_token,
 )
 from .token_validation import TokenValidationConfig, validate_token
+from .userinfo import UserInfoRequest, UserInfoResponse, get_userinfo
 
 
 __all__ = [
@@ -37,8 +38,12 @@ __all__ = [
     "JwksResponse",
     # Token Validation
     "TokenValidationConfig",
+    # UserInfo
+    "UserInfoRequest",
+    "UserInfoResponse",
     "get_discovery_document",
     "get_jwks",
+    "get_userinfo",
     "jwks_from_dict",
     "request_client_credentials_token",
     "validate_token",

@@ -409,6 +409,25 @@ class ClientCredentialsTokenResponse:
 
 
 # ============================================================================
+# UserInfo Models - OpenID Connect Core 1.0 Section 5.3
+# ============================================================================
+
+
+@dataclass
+class UserInfoRequest:
+    address: str
+    token: str
+
+
+@dataclass
+class UserInfoResponse:
+    is_successful: bool
+    claims: dict | None = None
+    raw: str | None = None
+    error: str | None = None
+
+
+# ============================================================================
 # Token Validation Models
 # ============================================================================
 
@@ -470,4 +489,7 @@ __all__ = [
     "JwksResponse",
     # Token Validation
     "TokenValidationConfig",
+    # UserInfo
+    "UserInfoRequest",
+    "UserInfoResponse",
 ]
