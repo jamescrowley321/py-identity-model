@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v2.1.0 (2026-02-18)
+
+### Build System
+
+- Consolidate dependabot dependency updates
+  ([#175](https://github.com/jamescrowley321/py-identity-model/pull/175),
+  [`e9ae811`](https://github.com/jamescrowley321/py-identity-model/commit/e9ae81150ee005c68d6de5291b3a02f5a7b7baaa))
+
+### Features
+
+- **userinfo**: Add OpenID Connect UserInfo endpoint support
+  ([`9e35dce`](https://github.com/jamescrowley321/py-identity-model/commit/9e35dce4ead829c2b0676d4c9180714685f24cd2))
+
+
 ## v2.0.0 (2026-01-29)
 
 
