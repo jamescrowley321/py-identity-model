@@ -115,6 +115,19 @@ def test_benchmark_validation(test_config, client_credentials_token):
         audience=test_config["TEST_AUDIENCE"],
         options=DEFAULT_OPTIONS,
     )
+
+    # Warm the lru_cache (discovery + JWKS) before benchmarking.
+    # The conftest fixtures fetch discovery/JWKS via get_discovery_document/get_jwks
+    # directly, but validate_token uses its own _get_disco_response/_get_jwks_response
+    # lru_cache wrappers — a separate cache that starts cold in each pytest-xdist worker.
+    # Without this warmup, the first iteration makes real HTTP requests that can hit
+    # Ory's rate limits (429 + 1s retry backoff), pushing the benchmark over budget.
+    validate_token(
+        jwt=client_credentials_token.token["access_token"],
+        disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
+        token_validation_config=validation_config,
+    )
+
     start_time = datetime.datetime.now(tz=datetime.UTC)
 
     for _ in range(100):
