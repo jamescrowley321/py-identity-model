@@ -10,8 +10,10 @@ from py_identity_model import (
     DiscoveryDocumentRequest,
     JwksRequest,
     TokenValidationConfig,
+    UserInfoRequest,
     get_discovery_document,
     get_jwks,
+    get_userinfo,
     request_client_credentials_token,
     validate_token,
 )
@@ -202,14 +204,62 @@ def custom_claims_validation_example(access_token: str):
 
 
 # =============================================================================
-# Example 6: Error Handling
+# Example 6: UserInfo Endpoint
+# =============================================================================
+
+
+def userinfo_example(access_token: str):
+    """Fetch user claims from the UserInfo endpoint."""
+    print("\\n" + "=" * 60)
+    print("Example 6: UserInfo Endpoint")
+    print("=" * 60)
+
+    # First get the discovery document to find the userinfo endpoint
+    discovery_request = DiscoveryDocumentRequest(address=DEMO_DISCOVERY_URL)
+    disco_response = get_discovery_document(discovery_request)
+
+    if not disco_response.is_successful:
+        print(f"✗ Discovery failed: {disco_response.error}")
+        return None
+
+    userinfo_endpoint = disco_response.userinfo_endpoint
+    if not userinfo_endpoint:
+        print("✗ No userinfo endpoint found in discovery document")
+        return None
+
+    print(f"  UserInfo Endpoint: {userinfo_endpoint}")
+
+    # Request user info using the access token
+    userinfo_request = UserInfoRequest(
+        address=userinfo_endpoint,
+        token=access_token,
+    )
+
+    response = get_userinfo(userinfo_request)
+
+    if response.is_successful:
+        print("✓ UserInfo fetched successfully!")
+        if response.claims:
+            for claim_name, claim_value in response.claims.items():
+                print(f"  {claim_name}: {claim_value}")
+        return response
+    print(f"✗ UserInfo request failed: {response.error}")
+    print(
+        "  Note: Client credentials tokens may not have a "
+        "userinfo endpoint available"
+    )
+    return response
+
+
+# =============================================================================
+# Example 7: Error Handling
 # =============================================================================
 
 
 def error_handling_example():
     """Demonstrate comprehensive error handling."""
     print("\\n" + "=" * 60)
-    print("Example 6: Error Handling")
+    print("Example 7: Error Handling")
     print("=" * 60)
 
     # Test with invalid URL
@@ -245,7 +295,7 @@ def error_handling_example():
 
 
 # =============================================================================
-# Example 7: Flask Integration Pattern
+# Example 8: Flask Integration Pattern
 # =============================================================================
 
 
@@ -256,7 +306,7 @@ def flask_pattern_example():
     This is a demonstration - in real Flask, you'd use decorators or before_request.
     """
     print("\\n" + "=" * 60)
-    print("Example 7: Flask Integration Pattern")
+    print("Example 8: Flask Integration Pattern")
     print("=" * 60)
 
     def protected_endpoint(authorization: str):
@@ -343,10 +393,13 @@ def main():
         # Example 5: Custom Claims Validation
         custom_claims_validation_example(access_token)
 
-    # Example 6: Error Handling
+        # Example 6: UserInfo
+        userinfo_example(access_token)
+
+    # Example 7: Error Handling
     error_handling_example()
 
-    # Example 7: Flask Pattern
+    # Example 8: Flask Pattern
     flask_pattern_example()
 
     print("\\n" + "=" * 60)
