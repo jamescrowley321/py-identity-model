@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.1.2 (2026-02-24)
+
+### Bug Fixes
+
+- **docs**: Switch GitHub Pages to Actions deployment and add docs targets
+  ([#181](https://github.com/jamescrowley321/py-identity-model/pull/181),
+  [`7ba1135`](https://github.com/jamescrowley321/py-identity-model/commit/7ba11351bdb926829dad1655e7839bcecff2070a))
+
+
 ## v2.1.1 (2026-02-24)
 
 ### Bug Fixes
