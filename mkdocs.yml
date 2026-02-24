@@ -60,6 +60,9 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - Guides:
+      - Migration Guide: migration-guide.md
+      - Performance: performance.md
+      - Pre-release Guide: pre-release-guide.md
       - Troubleshooting: troubleshooting.md
       - FAQ: faq.md
       - Contributing: contributing.md
@@ -67,8 +70,8 @@ nav:
       - Discovery Compliance: discovery_specification_compliance_assessment.md
       - JWKS Compliance: jwks_specification_compliance_assessment.md
   - Roadmap: py_identity_model_roadmap.md
-  - Testing:
-      - Integration Tests: integration-tests.md
   - Examples:
       - Identity Server: identity-server-example.md
+  - Testing:
+      - Integration Tests: integration-tests.md
   - Changelog: changelog.md

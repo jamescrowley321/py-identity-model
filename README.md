@@ -38,8 +38,8 @@ See the [Migration Guide](docs/migration-guide.md#ssl-certificate-configuration)
 
 ## Compliance Status
 
-* ✅ **OpenID Connect Discovery 1.0** - Fully compliant with specification requirements
-* ✅ **RFC 7517 (JSON Web Key)** - Fully compliant with JWK/JWKS specifications
+* ✅ **OpenID Connect Discovery 1.0** - Implements all specification requirements
+* ✅ **RFC 7517 (JSON Web Key)** - Implements JWK/JWKS specification requirements
 * ✅ **JWT Validation** - Comprehensive validation with PyJWT integration
 * ✅ **Client Credentials Flow** - OAuth 2.0 client credentials grant support
 
@@ -49,6 +49,7 @@ The library currently supports:
 * ✅ JWT token validation with auto-discovery
 * ✅ Authorization servers with multiple active keys
 * ✅ Client credentials token generation
+* ✅ UserInfo endpoint (OpenID Connect)
 * ✅ Comprehensive error handling and validation
 
 For more information on token validation options, refer to the official [PyJWT Docs](https://pyjwt.readthedocs.io/en/stable/index.html)
@@ -217,23 +218,19 @@ This library aims to provide the same features in Python.
 
 ## Documentation
 
-For detailed usage instructions, examples, and guides, please see our comprehensive documentation:
+Full documentation is available at **[jamescrowley321.github.io/py-identity-model](https://jamescrowley321.github.io/py-identity-model/)**.
 
-* **[Getting Started Guide](docs/getting-started.md)** - Installation, quick start, and common use cases
-* **[API Documentation](docs/index.md)** - Complete API reference with examples
-* **[Migration Guide](docs/migration-guide.md)** - Migrating from sync to async API
-* **[Performance Guide](docs/performance.md)** - Caching, optimization, and benchmarks
-* **[Pre-release Testing Guide](docs/pre-release-guide.md)** - Creating and testing pre-release versions
-* **[FAQ](docs/faq.md)** - Frequently asked questions
-* **[Troubleshooting Guide](docs/troubleshooting.md)** - Common issues and solutions
-* **[Project Roadmap](docs/py_identity_model_roadmap.md)** - Upcoming features and development plans
-* **[Integration Tests](docs/integration-tests.md)** - Testing against real identity providers
-* **[Identity Server Example](docs/identity-server-example.md)** - Running the example identity server
+* **[Getting Started Guide](https://jamescrowley321.github.io/py-identity-model/getting-started/)** - Installation, quick start, and common use cases
+* **[Migration Guide](https://jamescrowley321.github.io/py-identity-model/migration-guide/)** - Migrating from sync to async API
+* **[Performance Guide](https://jamescrowley321.github.io/py-identity-model/performance/)** - Caching, optimization, and benchmarks
+* **[FAQ](https://jamescrowley321.github.io/py-identity-model/faq/)** - Frequently asked questions
+* **[Troubleshooting Guide](https://jamescrowley321.github.io/py-identity-model/troubleshooting/)** - Common issues and solutions
+* **[Project Roadmap](https://jamescrowley321.github.io/py-identity-model/py_identity_model_roadmap/)** - Upcoming features and development plans
 
 ### Compliance Documentation
 
-* **[OpenID Connect Discovery Compliance](docs/discovery_specification_compliance_assessment.md)** - ✅ 100% compliant
-* **[JWKS Specification Compliance](docs/jwks_specification_compliance_assessment.md)** - ✅ 100% compliant
+* **[OpenID Connect Discovery Compliance](https://jamescrowley321.github.io/py-identity-model/discovery_specification_compliance_assessment/)**
+* **[JWKS Specification Compliance](https://jamescrowley321.github.io/py-identity-model/jwks_specification_compliance_assessment/)**
 
 ## Configuration
 
@@ -437,10 +434,11 @@ else:
 ## Features Status
 
 ### ✅ Completed Features
-* ✅ **Discovery Endpoint** - Fully compliant with OpenID Connect Discovery 1.0
-* ✅ **JWKS Endpoint** - Fully compliant with RFC 7517 (JSON Web Key)
+* ✅ **Discovery Endpoint** - Implements OpenID Connect Discovery 1.0
+* ✅ **JWKS Endpoint** - Implements RFC 7517 (JSON Web Key)
 * ✅ **Token Validation** - JWT validation with auto-discovery and PyJWT integration
 * ✅ **Token Endpoint** - Client credentials grant type
+* ✅ **UserInfo Endpoint** - OpenID Connect UserInfo with sync and async support
 * ✅ **Token-to-Principal Conversion** - Convert JWTs to ClaimsPrincipal objects
 * ✅ **Protocol Constants** - OIDC and OAuth 2.0 constants
 * ✅ **Comprehensive Type Hints** - Full type safety throughout
@@ -451,7 +449,6 @@ else:
 ### 🚧 Upcoming Features
 * Token Introspection Endpoint (RFC 7662)
 * Token Revocation Endpoint (RFC 7009)
-* UserInfo Endpoint
 * Dynamic Client Registration (RFC 7591)
 * Device Authorization Endpoint
 * Additional grant types (authorization code, refresh token, device flow)

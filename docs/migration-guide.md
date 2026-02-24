@@ -619,7 +619,7 @@ async def test_async_discovery():
 
 ## Additional Resources
 
-- [Async Examples](../examples/async_examples.py) - Complete async usage examples
-- [Mixed Usage Example](../examples/mixed_usage.py) - Using both sync and async
-- [FastAPI Middleware Example](../examples/fastapi/middleware.py) - Production-ready FastAPI integration
+- [Async Examples](https://github.com/jamescrowley321/py-identity-model/blob/main/examples/async_examples.py) - Complete async usage examples
+- [Mixed Usage Example](https://github.com/jamescrowley321/py-identity-model/blob/main/examples/mixed_usage.py) - Using both sync and async
+- [FastAPI Middleware Example](https://github.com/jamescrowley321/py-identity-model/blob/main/examples/fastapi/middleware.py) - Production-ready FastAPI integration
 - [Python Asyncio Documentation](https://docs.python.org/3/library/asyncio.html)

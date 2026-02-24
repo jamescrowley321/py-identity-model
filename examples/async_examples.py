@@ -11,8 +11,10 @@ from py_identity_model import DiscoveryDocumentRequest, TokenValidationConfig
 from py_identity_model.aio import (
     ClientCredentialsTokenRequest,
     JwksRequest,
+    UserInfoRequest,
     get_discovery_document,
     get_jwks,
+    get_userinfo,
     request_client_credentials_token,
     validate_token,
 )
@@ -160,14 +162,62 @@ async def validate_token_example(access_token: str):
 
 
 # =============================================================================
-# Example 5: Concurrent Operations (Power of Async!)
+# Example 5: Async UserInfo Endpoint
+# =============================================================================
+
+
+async def userinfo_example(access_token: str):
+    """Fetch user claims from the UserInfo endpoint asynchronously."""
+    print("\\n" + "=" * 60)
+    print("Example 5: Async UserInfo Endpoint")
+    print("=" * 60)
+
+    # First get the discovery document to find the userinfo endpoint
+    discovery_request = DiscoveryDocumentRequest(address=DEMO_DISCOVERY_URL)
+    disco_response = await get_discovery_document(discovery_request)
+
+    if not disco_response.is_successful:
+        print(f"✗ Discovery failed: {disco_response.error}")
+        return None
+
+    userinfo_endpoint = disco_response.userinfo_endpoint
+    if not userinfo_endpoint:
+        print("✗ No userinfo endpoint found in discovery document")
+        return None
+
+    print(f"  UserInfo Endpoint: {userinfo_endpoint}")
+
+    # Request user info asynchronously using the access token
+    userinfo_request = UserInfoRequest(
+        address=userinfo_endpoint,
+        token=access_token,
+    )
+
+    response = await get_userinfo(userinfo_request)
+
+    if response.is_successful:
+        print("✓ UserInfo fetched successfully!")
+        if response.claims:
+            for claim_name, claim_value in response.claims.items():
+                print(f"  {claim_name}: {claim_value}")
+        return response
+    print(f"✗ UserInfo request failed: {response.error}")
+    print(
+        "  Note: Client credentials tokens may not have a "
+        "userinfo endpoint available"
+    )
+    return response
+
+
+# =============================================================================
+# Example 6: Concurrent Operations (Power of Async!)
 # =============================================================================
 
 
 async def concurrent_operations_example():
     """Demonstrate concurrent async operations - the main benefit of async!"""
     print("\\n" + "=" * 60)
-    print("Example 5: Concurrent Operations")
+    print("Example 6: Concurrent Operations")
     print("=" * 60)
     print("Fetching discovery document and JWKS concurrently...")
 
@@ -197,14 +247,14 @@ async def concurrent_operations_example():
 
 
 # =============================================================================
-# Example 6: Multiple Token Validations Concurrently
+# Example 7: Multiple Token Validations Concurrently
 # =============================================================================
 
 
 async def validate_multiple_tokens_example(tokens: list[str]):
     """Validate multiple tokens concurrently."""
     print("\\n" + "=" * 60)
-    print("Example 6: Concurrent Token Validations")
+    print("Example 7: Concurrent Token Validations")
     print("=" * 60)
     print(f"Validating {len(tokens)} tokens concurrently...")
 
@@ -237,7 +287,7 @@ async def validate_multiple_tokens_example(tokens: list[str]):
 
 
 # =============================================================================
-# Example 7: FastAPI Integration Pattern
+# Example 8: FastAPI Integration Pattern
 # =============================================================================
 
 
@@ -248,7 +298,7 @@ async def fastapi_pattern_example():
     This is a demonstration - in real FastAPI, you'd use dependency injection.
     """
     print("\\n" + "=" * 60)
-    print("Example 7: FastAPI Integration Pattern")
+    print("Example 8: FastAPI Integration Pattern")
     print("=" * 60)
 
     # Simulated FastAPI endpoint
@@ -333,15 +383,18 @@ async def main():
     if access_token:
         await validate_token_example(access_token)
 
-    # Example 5: Concurrent Operations (the power of async!)
+        # Example 5: UserInfo
+        await userinfo_example(access_token)
+
+    # Example 6: Concurrent Operations (the power of async!)
     await concurrent_operations_example()
 
-    # Example 6: Concurrent Token Validations
+    # Example 7: Concurrent Token Validations
     if access_token:
         # For demo, validate the same token 3 times concurrently
         await validate_multiple_tokens_example([access_token] * 3)
 
-    # Example 7: FastAPI Pattern
+    # Example 8: FastAPI Pattern
     await fastapi_pattern_example()
 
     print("\\n" + "=" * 60)

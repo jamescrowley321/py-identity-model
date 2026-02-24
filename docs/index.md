@@ -7,8 +7,8 @@ OIDC/OAuth2.0 helper library for decoding JWTs and creating JWTs utilizing the `
 
 ## Compliance Status
 
-* ✅ **OpenID Connect Discovery 1.0** - Fully compliant with specification requirements
-* ✅ **RFC 7517 (JSON Web Key)** - Fully compliant with JWK/JWKS specifications
+* ✅ **OpenID Connect Discovery 1.0** - Implements all specification requirements
+* ✅ **RFC 7517 (JSON Web Key)** - Implements JWK/JWKS specification requirements
 * ✅ **JWT Validation** - Comprehensive validation with PyJWT integration
 * ✅ **Client Credentials Flow** - OAuth 2.0 client credentials grant support
 
@@ -19,6 +19,7 @@ The library currently supports:
 * ✅ JWT token validation with auto-discovery
 * ✅ Authorization servers with multiple active keys
 * ✅ Client credentials token generation
+* ✅ UserInfo endpoint (OpenID Connect)
 * ✅ Comprehensive error handling and validation
 
 For more information on token validation options, refer to the official [PyJWT Docs](https://pyjwt.readthedocs.io/en/stable/index.html)
@@ -217,17 +218,20 @@ py_identity_model/
 │   ├── models.py           # All dataclasses and models
 │   ├── validators.py       # Validation functions
 │   ├── parsers.py          # JWKS and response parsing
-│   └── jwt_helpers.py      # JWT validation logic
+│   ├── jwt_helpers.py      # JWT validation logic
+│   └── userinfo_logic.py   # UserInfo request logic
 ├── sync/                    # Synchronous HTTP layer
 │   ├── discovery.py        # Discovery document fetching
 │   ├── jwks.py            # JWKS fetching
 │   ├── token_client.py    # Token requests
-│   └── token_validation.py # Token validation with caching
+│   ├── token_validation.py # Token validation with caching
+│   └── userinfo.py         # UserInfo endpoint
 └── aio/                     # Asynchronous HTTP layer
     ├── discovery.py        # Async discovery document fetching
     ├── jwks.py            # Async JWKS fetching
     ├── token_client.py    # Async token requests
-    └── token_validation.py # Async token validation with caching
+    ├── token_validation.py # Async token validation with caching
+    └── userinfo.py         # Async UserInfo endpoint
 ```
 
 ### Design Principles
@@ -256,15 +260,16 @@ from py_identity_model import DiscoveryDocumentRequest
 response = await get_discovery_document(DiscoveryDocumentRequest(address=url))
 ```
 
-See [examples/async_examples.py](../examples/async_examples.py) and [examples/sync_examples.py](../examples/sync_examples.py) for complete examples.
+See [examples/async_examples.py](https://github.com/jamescrowley321/py-identity-model/blob/main/examples/async_examples.py) and [examples/sync_examples.py](https://github.com/jamescrowley321/py-identity-model/blob/main/examples/sync_examples.py) for complete examples.
 
 ## Features Status
 
 ### ✅ Completed Features
-* ✅ **Discovery Endpoint** - Fully compliant with OpenID Connect Discovery 1.0
-* ✅ **JWKS Endpoint** - Fully compliant with RFC 7517 (JSON Web Key)
+* ✅ **Discovery Endpoint** - Implements OpenID Connect Discovery 1.0
+* ✅ **JWKS Endpoint** - Implements RFC 7517 (JSON Web Key)
 * ✅ **Token Validation** - JWT validation with auto-discovery and PyJWT integration
 * ✅ **Token Endpoint** - Client credentials grant type
+* ✅ **UserInfo Endpoint** - OpenID Connect UserInfo with sync and async support
 * ✅ **Token-to-Principal Conversion** - Convert JWTs to ClaimsPrincipal objects
 * ✅ **Protocol Constants** - OIDC and OAuth 2.0 constants
 * ✅ **Comprehensive Type Hints** - Full type safety throughout
@@ -275,7 +280,6 @@ See [examples/async_examples.py](../examples/async_examples.py) and [examples/sy
 ### 🚧 Upcoming Features
 * Token Introspection Endpoint (RFC 7662)
 * Token Revocation Endpoint (RFC 7009)
-* UserInfo Endpoint
 * Dynamic Client Registration (RFC 7591)
 * Device Authorization Endpoint
 * Additional grant types (authorization code, refresh token, device flow)
@@ -283,8 +287,8 @@ See [examples/async_examples.py](../examples/async_examples.py) and [examples/sy
 
 ## Documentation
 
-* [Discovery Specification Compliance](discovery_specification_compliance_assessment.md) - ✅ **100% Compliant**
-* [JWKS Specification Compliance](jwks_specification_compliance_assessment.md) - ✅ **100% Compliant**
+* [Discovery Specification Compliance](discovery_specification_compliance_assessment.md)
+* [JWKS Specification Compliance](jwks_specification_compliance_assessment.md)
 * [Project Roadmap](py_identity_model_roadmap.md)
 
 ## Contributing
