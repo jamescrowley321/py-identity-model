@@ -36,7 +36,6 @@ dev = [
 docs = [
     "mkdocs>=1.6.0,<2",
     "mkdocs-material>=9.6.0,<10",
-    "mkdocs-awesome-pages-plugin>=2.10.0,<3"
 ]
 
 [build-system]
