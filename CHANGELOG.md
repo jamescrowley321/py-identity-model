@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.1.4 (2026-02-24)
+
+### Bug Fixes
+
+- **hooks**: Remove unnecessary bash -c wrappers from pre-commit config
+  ([#183](https://github.com/jamescrowley321/py-identity-model/pull/183),
+  [`e2bab26`](https://github.com/jamescrowley321/py-identity-model/commit/e2bab26b44a654ea2c77e1d737c4c3a2d8e7686b))
+
+
 ## v2.1.3 (2026-02-24)
 
 ### Bug Fixes
