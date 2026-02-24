@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.1.3 (2026-02-24)
+
+### Bug Fixes
+
+- **test**: Warm lru_cache before benchmark to avoid 429 rate limits
+  ([#182](https://github.com/jamescrowley321/py-identity-model/pull/182),
+  [`ee6fa2f`](https://github.com/jamescrowley321/py-identity-model/commit/ee6fa2faadd601b019d70dba0343072c80e982dd))
+
+
 ## v2.1.2 (2026-02-24)
 
 ### Bug Fixes
