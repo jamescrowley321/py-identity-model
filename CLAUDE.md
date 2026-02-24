@@ -12,6 +12,26 @@ py-identity-model is a production-grade OIDC/OAuth2.0 helper library for Python 
 - **Modular Architecture**: Clean separation between HTTP layer, business logic (`core/`), and API surface
 - **Production Ready**: Used in production for years as foundation for Flask/FastAPI middleware
 
+## Mandatory Workflow Rules
+
+**CRITICAL: Follow these rules for every change. No exceptions.**
+
+1. **Always work on a feature branch** — never commit directly to `main`. Create a branch from `main` before starting work:
+   ```bash
+   git checkout -b feat/my-feature main
+   ```
+
+2. **Always run `make lint` before committing** — this runs all pre-commit hooks (ruff lint, ruff format, pyrefly typecheck, pytest coverage). If `ruff format` modifies files, re-stage them and commit again. Do NOT use `--no-verify` to skip hooks.
+   ```bash
+   make lint                    # Run BEFORE every commit
+   ```
+
+3. **Always run `make test` before pushing** — ensures all unit and integration tests pass with 80% minimum coverage.
+
+4. **Use conventional commits** — commit messages must follow the Angular convention (see Git Workflow section below). Commits to `main` trigger semantic-release version bumps.
+
+5. **Create a PR for all changes** — push the feature branch and open a PR against `main`.
+
 ## Architecture
 
 ### Module Structure
@@ -23,19 +43,22 @@ src/py_identity_model/
 │   ├── discovery.py        # Sync discovery document operations
 │   ├── jwks.py             # Sync JWKS operations
 │   ├── token_client.py     # Sync token endpoint operations
-│   └── token_validation.py # Sync token validation
+│   ├── token_validation.py # Sync token validation
+│   └── userinfo.py         # Sync UserInfo endpoint operations
 ├── aio/                     # Asynchronous API implementations
 │   ├── http_client.py      # Singleton async HTTP client (lock-protected)
 │   ├── discovery.py        # Async discovery document operations
 │   ├── jwks.py             # Async JWKS operations
 │   ├── token_client.py     # Async token endpoint operations
-│   └── token_validation.py # Async token validation
+│   ├── token_validation.py # Async token validation
+│   └── userinfo.py         # Async UserInfo endpoint operations
 ├── core/                    # Shared business logic (protocol-agnostic)
 │   ├── models.py           # Request/Response models (dataclasses)
 │   ├── discovery_logic.py  # Discovery document parsing/validation
 │   ├── jwks_logic.py       # JWKS parsing/validation logic
 │   ├── token_validation_logic.py  # JWT validation orchestration
 │   ├── token_client_logic.py      # Token request logic
+│   ├── userinfo_logic.py   # UserInfo request logic
 │   ├── validators.py       # Input validation utilities
 │   ├── error_handlers.py   # HTTP error response handling
 │   ├── parsers.py          # JSON/text parsing utilities
@@ -67,7 +90,7 @@ src/py_identity_model/
    - All caches are per-process, not shared across processes
 
 4. **Error Handling**
-   - HTTP errors handled in `core/error_handlers.py:handle_http_error()`
+   - Per-feature error handlers in `core/error_handlers.py` (e.g., `handle_discovery_error()`, `handle_token_error()`, `handle_userinfo_error()`)
    - Structured exceptions in `exceptions.py` (all inherit from `PyIdentityModelException`)
    - Error responses follow OIDC/OAuth2 error formats
 
@@ -122,11 +145,6 @@ uv run ruff check --fix src/
 make build-dist             # Creates wheel and sdist in dist/
 ```
 
-### CI Setup (for local CI simulation)
-```bash
-make ci-setup               # Installs uv and sets up environment
-```
-
 ## Git Workflow
 
 ### Conventional Commits
@@ -146,7 +164,7 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/) w
 - **subject**: Short description in imperative mood (e.g., "add feature" not "added feature")
 
 **Optional Components:**
-- **scope**: Module or component affected (e.g., `discovery`, `jwks`, `token-validation`)
+- **scope**: Module or component affected (e.g., `discovery`, `jwks`, `token-validation`, `userinfo`)
 - **body**: Detailed explanation with bullet points if needed
 - **footer**: Breaking changes, issue references
 
@@ -191,12 +209,6 @@ Migration guide:
 - Update TokenRequest to ClientCredentialsTokenRequest
 EOF
 )"
-
-# Chore (no version bump)
-git commit -m "chore: enforce 80% test coverage threshold"
-
-# Documentation (no version bump)
-git commit -m "docs: update migration guide for v2.0"
 ```
 
 **Important Notes:**
@@ -210,14 +222,19 @@ git commit -m "docs: update migration guide for v2.0"
 
 ### Adding New Features
 
-When adding new protocol features (introspection, revocation, userinfo, etc.):
+When adding new protocol features (introspection, revocation, etc.):
 
 1. **Define models in `core/models.py`** using dataclasses with type hints
 2. **Implement business logic in `core/`** as pure functions (no I/O)
-3. **Add sync wrapper in `sync/`** that calls core logic with sync HTTP client
-4. **Add async wrapper in `aio/`** that calls same core logic with async HTTP client
-5. **Export from `sync/__init__.py`** and `aio/__init__.py`
-6. **Export from top-level `__init__.py`** (sync only, for backward compatibility)
+3. **Add error handler in `core/error_handlers.py`** returning the response model on failure
+4. **Add response parser in `core/response_processors.py`** for HTTP response parsing
+5. **Add sync wrapper in `sync/`** that calls core logic with sync HTTP client
+6. **Add async wrapper in `aio/`** that calls same core logic with async HTTP client
+7. **Export from `sync/__init__.py`** and `aio/__init__.py`
+8. **Export from top-level `__init__.py`** (sync only, for backward compatibility)
+9. **Add exception type in `exceptions.py`** inheriting from `NetworkException`
+10. **Add unit tests** for both sync (`test_sync_*.py`) and async (`test_aio_*.py`) using `respx` mocks
+11. **Add integration tests** in `src/tests/integration/` testing against real identity providers
 
 Example structure:
 ```python
@@ -241,9 +258,8 @@ async def new_feature_async(request: RequestModel) -> ResultModel:
 
 ### Testing Patterns
 
-- **Unit tests**: Test business logic in `core/` with mocked data (no HTTP)
-- **Integration tests**: Test against real identity providers (marked with `@pytest.mark.integration`)
-- **Async tests**: Use `pytest-asyncio` with `@pytest.mark.asyncio` decorator
+- **Unit tests**: Use `respx` to mock HTTP in `src/tests/unit/`. Sync tests use `@respx.mock` decorator, async tests use `@pytest.mark.asyncio` class + `@respx.mock` on methods.
+- **Integration tests**: Test against real identity providers in `src/tests/integration/`. Session-scoped fixtures in `conftest.py` cache discovery docs, JWKS, and tokens to avoid rate limits.
 - **Coverage**: Minimum 80% coverage required (enforced by pytest, pre-commit, and SonarCloud)
 
 ### HTTP Configuration
@@ -269,9 +285,8 @@ See `ssl_config.py` for implementation details.
 1. **Don't mix sync and async**: Never call sync functions from async code or vice versa. Use the appropriate API for your context.
 2. **Don't bypass core logic**: Always implement business logic in `core/` first, then wrap in sync/async layers.
 3. **Don't share state between threads**: The sync API uses thread-local storage for a reason. Global state breaks thread safety.
-4. **Don't forget to close responses**: HTTP responses must be fully consumed (`response.read()` or `response.json()`) to return connections to the pool.
-5. **Don't hardcode timeouts in tests**: Use environment variables or test fixtures for configurable timeouts.
-6. **Always add type hints**: This codebase requires comprehensive type annotations for all functions and classes.
+4. **Don't forget to close responses**: HTTP responses must be fully consumed (`response.read()` or `response.json()`) to return connections to the pool. Sync wrappers call `response.close()` explicitly.
+5. **Always add type hints**: This codebase requires comprehensive type annotations for all functions and classes.
 
 ## Version Management
 
