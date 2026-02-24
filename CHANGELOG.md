@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.1.1 (2026-02-24)
+
+### Bug Fixes
+
+- **docs**: Resolve MkDocs strict mode build failures
+  ([#179](https://github.com/jamescrowley321/py-identity-model/pull/179),
+  [`bec22b4`](https://github.com/jamescrowley321/py-identity-model/commit/bec22b4dba82b8725578494461b40bc2482c23c5))
+
+
 ## v2.1.0 (2026-02-18)
 
 ### Build System
