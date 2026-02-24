@@ -39,6 +39,14 @@ test-examples:
 .PHONY: test-all
 test-all: test test-examples
 
+.PHONY: docs-serve
+docs-serve:
+	uv run --group docs mkdocs serve
+
+.PHONY: docs-build
+docs-build:
+	uv run --group docs mkdocs build --strict
+
 .PHONY: ci-setup
 ci-setup:
 	python -m pip install --upgrade pip
@@ -46,5 +54,3 @@ ci-setup:
 	pipx install uv
 	uv venv
 	uv sync --all-packages
-
-
