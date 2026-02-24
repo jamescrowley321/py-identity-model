@@ -8,8 +8,8 @@
 **Scope**: Client-side protocol operations (NOT server/provider implementation)
 
 ## ✅ Currently Implemented Features
-- ✅ **Discovery Document**: `DiscoveryDocumentRequest`, `get_discovery_document()` - **100% OpenID Connect Discovery 1.0 Compliant**
-- ✅ **JWKS Retrieval**: `JwksRequest`, `get_jwks()` - **100% RFC 7517 Compliant**
+- ✅ **Discovery Document**: `DiscoveryDocumentRequest`, `get_discovery_document()` - **Implements OpenID Connect Discovery 1.0**
+- ✅ **JWKS Retrieval**: `JwksRequest`, `get_jwks()` - **Implements RFC 7517**
 - ✅ **JWT Validation**: `TokenValidationConfig`, `validate_token()` with PyJWT integration
 - ✅ **Client Credentials Flow**: `ClientCredentialsTokenRequest`, `request_client_credentials_token()`
 - ✅ **Token-to-Principal Conversion**: `to_principal()` - Converts JWTs to `ClaimsPrincipal` objects
@@ -90,8 +90,8 @@
 ## Phase 3: Discovery & Metadata
 ### Discovery Document Enhancement
 - [x] **Extended Discovery Support**
-  - ✅ Basic OpenID Connect discovery document parsing (completed) - **100% Compliant**
-  - ✅ JWKS endpoint discovery and retrieval (completed) - **100% RFC 7517 Compliant**
+  - ✅ Basic OpenID Connect discovery document parsing (completed) - **Implemented**
+  - ✅ JWKS endpoint discovery and retrieval (completed) - **Implements RFC 7517**
   - ✅ OAuth 2.0 Authorization Server Metadata (RFC 8414) (completed)
   - ✅ Full parameter validation and error handling (completed)
   - ✅ Issuer format validation (completed)
@@ -112,8 +112,8 @@
   - [ ] Response parsing utilities
 
 ### Deliverables
-- ✅ **Discovery document support (completed)** - **100% OpenID Connect Discovery 1.0 Compliant**
-- ✅ **JWKS retrieval (completed)** - **100% RFC 7517 Compliant**
+- ✅ **Discovery document support (completed)** - **Implements OpenID Connect Discovery 1.0**
+- ✅ **JWKS retrieval (completed)** - **Implements RFC 7517**
 - ✅ Comprehensive parameter validation and error handling
 - [ ] All standard endpoint clients
 - ✅ Comprehensive constants library (OidcConstants, JwtClaimTypes available)
@@ -132,10 +132,10 @@
   - Support for access_token and refresh_token revocation
   - Revocation endpoint client
 
-- [ ] **UserInfo Endpoint**
+- [x] **UserInfo Endpoint** - ✅ **COMPLETED v2.1.0**
   - `UserInfoRequest/Response` classes
   - Claims parsing and validation
-  - UserInfo endpoint client
+  - UserInfo endpoint client (sync and async)
 
 - [ ] **Dynamic Client Registration (RFC 7591)**
   - `ClientRegistrationRequest/Response` classes
@@ -262,7 +262,7 @@
 ---
 
 ## Phase 8: Architecture Improvements - **PLANNED v2.0.0**
-> **See [Issue #109](https://github.com/jamescrowley321/py-identity-model/issues/109)** and [docs/architecture-improvements.md](../architecture-improvements.md)
+> **See [Issue #109](https://github.com/jamescrowley321/py-identity-model/issues/109)**
 
 ### Policy-Based Configuration (v2.0.0)
 - [ ] **DiscoveryPolicy** - Security configuration object
@@ -358,10 +358,10 @@
 - [ ] **IntrospectionRequest.cs** - Token introspection requests
 - [ ] **IntrospectionResponse.cs** - Token introspection responses
 - [ ] **RevocationRequest.cs** - Token revocation requests
-- [x] **DiscoveryDocumentRequest.cs** - ✅ **Implemented - 100% OpenID Connect Discovery 1.0 Compliant**
-- [x] **DiscoveryDocumentResponse.cs** - ✅ **Implemented - 100% Compliant**
-- [x] **JwksRequest.cs** - ✅ **Implemented - 100% RFC 7517 Compliant**
-- [x] **JwksResponse.cs** - ✅ **Implemented - 100% RFC 7517 Compliant**
+- [x] **DiscoveryDocumentRequest.cs** - ✅ **Implemented - Implements OpenID Connect Discovery 1.0**
+- [x] **DiscoveryDocumentResponse.cs** - ✅ **Implemented - Implemented**
+- [x] **JwksRequest.cs** - ✅ **Implemented - Implements RFC 7517**
+- [x] **JwksResponse.cs** - ✅ **Implemented - Implements RFC 7517**
 - [ ] **DeviceAuthorizationRequest.cs** - Device authorization requests
 - [ ] **DeviceAuthorizationResponse.cs** - Device authorization responses
 - [ ] **ClientRegistrationRequest.cs** - Dynamic client registration
@@ -393,15 +393,15 @@
 ### JWT Handling (src/Jwt/)
 - [ ] **JwtPayload.cs** - JWT payload handling
 - [ ] **JwtHeader.cs** - JWT header handling
-- [x] **JsonWebKey.cs** - ✅ **Implemented - 100% RFC 7517 Compliant**
-- [x] **JsonWebKeySet.cs** - ✅ **Implemented - 100% RFC 7517 Compliant**
+- [x] **JsonWebKey.cs** - ✅ **Implemented - Implements RFC 7517**
+- [x] **JsonWebKeySet.cs** - ✅ **Implemented - Implements RFC 7517**
 - [ ] **JwtSecurityToken.cs** - JWT token representation
 - [x] **JwtTokenValidation.cs** - ✅ **Implemented as validate_token()**
 
 ### HTTP Client Abstractions (src/Client/)
 - [ ] **HttpClientTokenRequestExtensions.cs** - Token request extensions
-- [x] **HttpClientDiscoveryExtensions.cs** - ✅ **Implemented as get_discovery_document() - 100% Compliant**
-- [x] **HttpClientJwksExtensions.cs** - ✅ **Implemented as get_jwks() - 100% RFC 7517 Compliant**
+- [x] **HttpClientDiscoveryExtensions.cs** - ✅ **Implemented as get_discovery_document() - Implemented**
+- [x] **HttpClientJwksExtensions.cs** - ✅ **Implemented as get_jwks() - Implements RFC 7517**
 - [ ] **HttpClientIntrospectionExtensions.cs** - Introspection extensions
 - [ ] **HttpClientRevocationExtensions.cs** - Revocation extensions
 - [ ] **HttpClientUserInfoExtensions.cs** - UserInfo extensions
@@ -451,8 +451,8 @@
 - **Performance**: <50ms for typical operations (with caching: <1ms)
 - **Adoption**: Active development, production usage in Flask/FastAPI middleware
 - **Standards Compliance**:
-  - ✅ 100% OpenID Connect Discovery 1.0 compliant
-  - ✅ 100% RFC 7517 (JWKS) compliant
+  - ✅ Implements OpenID Connect Discovery 1.0 (not yet officially certified)
+  - ✅ Implements RFC 7517 (JWKS) (not yet officially certified)
 - **Architecture**: 📋 Phase 8 planned for v2.0 - Policy-based configuration and enhanced abstractions ([Issue #109](https://github.com/jamescrowley321/py-identity-model/issues/109))
 
 ## Technical Priorities
