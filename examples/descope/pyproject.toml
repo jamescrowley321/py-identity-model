@@ -2,15 +2,19 @@
 name = "descope-fastapi-example"
 version = "1.0.0"
 description = "FastAPI example with Descope and py-identity-model"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.6",
     "uvicorn[standard]>=0.34.0",
-    "py-identity-model>=2.0.0",
-    "pytest>=8.3.4",
+    "py-identity-model",
     "requests>=2.32.3",
-    "python-dotenv>=1.0.1",
 ]
+
+[tool.uv.sources]
+py-identity-model = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
 
 [build-system]
 requires = ["hatchling"]

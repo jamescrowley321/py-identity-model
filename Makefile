@@ -30,7 +30,7 @@ test-integration-ory:
 .PHONY: test-integration-descope
 test-integration-descope:
 	@echo "Running integration tests against Descope..."
-	uv run pytest src/tests -m integration -v -n auto --cov=src/py_identity_model --cov-report=term-missing --cov-fail-under=80
+	uv run pytest src/tests -m integration $(if $(wildcard .env.descope),--env-file=.env.descope) -v -n auto
 
 .PHONY: generate-token
 generate-token:

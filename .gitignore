@@ -139,3 +139,10 @@ dmypy.json
 
 # Claude Code MCP configuration (may contain tokens)
 .claude/mcp.json
+
+# Terraform
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.backup
+infra/**/*.tfvars
+infra/**/access_key.json
