@@ -16,6 +16,7 @@ COPY uv.lock /workspace/uv.lock
 COPY README.md /workspace/README.md
 COPY src /workspace/src
 COPY examples/fastapi /workspace/examples/fastapi
+COPY examples/descope /workspace/examples/descope
 
 # Set workspace root
 WORKDIR /workspace
@@ -24,14 +25,14 @@ WORKDIR /workspace
 RUN uv sync --all-packages
 
 # Switch to example directory
-WORKDIR /workspace/examples/fastapi
+WORKDIR /workspace/examples/descope
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /workspace
 
 # Copy entrypoint script
-COPY examples/fastapi/entrypoint.sh /entrypoint.sh
+COPY examples/descope/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Expose FastAPI port

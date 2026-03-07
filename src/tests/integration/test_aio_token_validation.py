@@ -4,8 +4,6 @@ Integration tests for async token validation.
 These tests verify async token validation with real tokens and async claims validators.
 """
 
-import warnings
-
 import pytest
 
 from py_identity_model.core.models import TokenValidationConfig
@@ -73,8 +71,7 @@ class TestAsyncTokenValidation:
             claims_validator=async_validate_claims,
         )
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", ResourceWarning)
+        try:
             with pytest.raises(
                 TokenValidationException, match="Claims validation failed"
             ):
@@ -83,6 +80,7 @@ class TestAsyncTokenValidation:
                     disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
                     token_validation_config=validation_config,
                 )
+        finally:
             await close_async_http_client()
 
     @pytest.mark.asyncio
