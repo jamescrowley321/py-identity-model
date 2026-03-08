@@ -27,6 +27,11 @@ test-integration-local:
 test-integration-ory:
 	uv run pytest src/tests -m integration -v -n auto
 
+.PHONY: test-integration-descope
+test-integration-descope:
+	@echo "Running integration tests against Descope..."
+	uv run pytest src/tests -m integration $(if $(wildcard .env.descope),--env-file=.env.descope) -v -n auto
+
 .PHONY: generate-token
 generate-token:
 	uv run python examples/generate_token.py

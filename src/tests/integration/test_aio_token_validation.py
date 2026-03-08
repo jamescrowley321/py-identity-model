@@ -55,6 +55,7 @@ class TestAsyncTokenValidation:
         self, test_config, client_credentials_token
     ):
         """Test async claims validator that fails."""
+        from py_identity_model.aio.http_client import close_async_http_client
         from py_identity_model.aio.token_validation import validate_token
 
         assert client_credentials_token.token is not None
@@ -70,14 +71,17 @@ class TestAsyncTokenValidation:
             claims_validator=async_validate_claims,
         )
 
-        with pytest.raises(
-            TokenValidationException, match="Claims validation failed"
-        ):
-            await validate_token(
-                jwt=client_credentials_token.token["access_token"],
-                disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
-                token_validation_config=validation_config,
-            )
+        try:
+            with pytest.raises(
+                TokenValidationException, match="Claims validation failed"
+            ):
+                await validate_token(
+                    jwt=client_credentials_token.token["access_token"],
+                    disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
+                    token_validation_config=validation_config,
+                )
+        finally:
+            await close_async_http_client()
 
     @pytest.mark.asyncio
     async def test_sync_claims_validator_in_async_context(

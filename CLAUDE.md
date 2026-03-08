@@ -12,6 +12,11 @@ py-identity-model is a production-grade OIDC/OAuth2.0 helper library for Python 
 - **Modular Architecture**: Clean separation between HTTP layer, business logic (`core/`), and API surface
 - **Production Ready**: Used in production for years as foundation for Flask/FastAPI middleware
 
+**Future Vision:**
+- **Monorepo Evolution**: Project will evolve into a monorepo structure with separate packages for framework-specific middleware
+- **Framework Packages**: Planned packages include `fastapi-identity-model`, `flask-identity-model`, etc.
+- **Code Reuse**: Examples should reuse shared code to demonstrate future package structure and minimize duplication
+
 ## Mandatory Workflow Rules
 
 **CRITICAL: Follow these rules for every change. No exceptions.**
@@ -218,6 +223,89 @@ EOF
 - Use heredoc syntax for multi-line commits: `git commit -m "$(cat <<'EOF' ... EOF)"`
 - Pre-commit hooks will run automatically (linting, type checking, coverage)
 
+### Branch Naming Conventions
+
+Branch names should follow conventional commit types to maintain consistency across the codebase. Use the format:
+
+```
+<type>/<short-description>
+```
+
+**Format Rules:**
+- **type**: Must match one of the allowed conventional commit types (feat, fix, docs, test, chore, etc.)
+- **short-description**: Lowercase, hyphen-separated, concise description of the work
+- Keep branch names under 50 characters when possible
+
+**Allowed Types:**
+- `feat/` - New features or enhancements
+- `fix/` - Bug fixes
+- `docs/` - Documentation-only changes
+- `test/` - Adding or updating tests
+- `chore/` - Maintenance, tooling, dependencies
+- `refactor/` - Code refactoring
+- `perf/` - Performance improvements
+- `ci/` - CI/CD changes
+- `build/` - Build system changes
+- `style/` - Code formatting/style changes
+
+**Examples:**
+
+```bash
+# Feature branch
+git checkout -b feat/descope-integration
+
+# Bug fix branch
+git checkout -b fix/token-validation-edge-case
+
+# Documentation branch
+git checkout -b docs/add-migration-guide
+
+# Test branch
+git checkout -b test/increase-coverage
+
+# Chore branch
+git checkout -b chore/update-dependencies
+
+# Multiple related features (use most significant type)
+git checkout -b feat/add-auth0-example
+```
+
+**Branch Naming Anti-Patterns:**
+
+❌ **Avoid:**
+- Generic names: `fix/updates`, `feat/changes`
+- Non-descriptive: `feat/new-stuff`
+- Wrong type: `fix/add-new-feature` (should be `feat/`)
+- Mixed purposes: `feat/fix-bug-and-add-feature` (create separate branches)
+- Uppercase or spaces: `Feat/New-Feature`, `feat/new feature`
+
+✅ **Prefer:**
+- Specific: `fix/jwks-key-rotation-bug`
+- Descriptive: `feat/auth0-fastapi-example`
+- Correct type: `feat/add-introspection-endpoint`
+- Single purpose: One branch per logical change
+- Lowercase with hyphens: `feat/descope-integration`
+
+**Working with Issues:**
+
+When working on GitHub issues, optionally reference the issue number:
+
+```bash
+# With issue number
+git checkout -b feat/descope-integration-158
+
+# Or use issue number in commits instead
+git checkout -b feat/descope-integration
+git commit -m "feat(examples): add Descope example
+
+Related: #158"
+```
+
+**Important:**
+- Branch names should align with the primary conventional commit type in the branch
+- If a branch contains multiple commit types, use the most significant type (feat > fix > chore > docs)
+- Create separate branches for unrelated changes, even if they use the same commit type
+
 ## Key Implementation Details
 
 ### Adding New Features
@@ -261,6 +349,67 @@ async def new_feature_async(request: RequestModel) -> ResultModel:
 - **Unit tests**: Use `respx` to mock HTTP in `src/tests/unit/`. Sync tests use `@respx.mock` decorator, async tests use `@pytest.mark.asyncio` class + `@respx.mock` on methods.
 - **Integration tests**: Test against real identity providers in `src/tests/integration/`. Session-scoped fixtures in `conftest.py` cache discovery docs, JWKS, and tokens to avoid rate limits.
 - **Coverage**: Minimum 80% coverage required (enforced by pytest, pre-commit, and SonarCloud)
+
+### Examples and Code Reuse
+
+Examples demonstrate framework integration patterns and should **minimize code duplication** through reuse:
+
+**Architecture Principles:**
+- **Shared Base Code**: Generic framework integration code lives in `examples/<framework>/` (e.g., `examples/fastapi/`)
+- **Provider-Specific Extensions**: Provider examples (e.g., `examples/descope/`) import and extend base code
+- **No Duplication**: Middleware, base dependencies, and utilities should be imported, not copied
+- **Future-Ready**: This structure prepares for extraction into framework-specific packages (e.g., `fastapi-identity-model`)
+
+**Example Structure:**
+
+```
+examples/
+├── fastapi/                    # Generic FastAPI example (base)
+│   ├── middleware.py          # Reusable: Token validation middleware
+│   ├── dependencies.py        # Reusable: Base dependency injection
+│   ├── token_refresh.py       # Reusable: Token refresh utilities
+│   └── app.py                 # Generic example app
+├── descope/                    # Descope-specific example (extends base)
+│   ├── app.py                 # Descope-specific endpoints
+│   ├── dependencies.py        # Imports base deps + adds Descope-specific deps
+│   └── test_integration.py   # Descope integration tests
+└── auth0/                      # Future: Auth0-specific example
+    ├── app.py                 # Auth0-specific endpoints
+    └── dependencies.py        # Imports base deps + adds Auth0-specific deps
+```
+
+**When Adding Provider Examples:**
+
+1. **Identify Shared Code**: Determine what can be reused from generic example
+2. **Import Base Components**: Import middleware, base dependencies from `examples.<framework>`
+3. **Add Provider-Specific Code**: Only create new files for provider-unique features
+4. **Document Code Reuse**: Update README to explain what's shared vs. provider-specific
+
+**Example: Descope Dependencies**
+
+```python
+# examples/descope/dependencies.py
+from examples.fastapi.dependencies import (
+    get_claims,
+    get_current_user,
+    get_token,
+    require_scope,
+)
+
+# Only define Descope-specific functions
+def get_descope_roles(claims: dict = Depends(get_claims)) -> list:
+    return claims.get("roles", [])
+
+def require_descope_role(role: str):
+    # Provider-specific authorization logic
+    pass
+```
+
+**Benefits:**
+- 📦 Reduces duplication across examples
+- 🔄 Easier maintenance (fix once, applies to all)
+- 🎯 Clear separation of generic vs. provider-specific code
+- 🚀 Natural evolution path to framework packages
 
 ### HTTP Configuration
 

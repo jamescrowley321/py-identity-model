@@ -94,14 +94,14 @@ class TestMultipleTokensFromSameProvider:
         1. Each token can be validated independently
         2. Caching doesn't cause cross-token interference
         3. The cache correctly handles tokens with the same kid
+
+        Note: Some providers (e.g., Descope) return identical tokens when
+        requested within the same second and don't include a jti claim.
         """
         num_tokens = 3
         tokens = generate_tokens(test_config, token_endpoint, num_tokens)
 
-        # All tokens should be different (different jti claims)
-        assert len(set(tokens)) == num_tokens, "Tokens should be unique"
-
-        # Validate each token
+        # Validate each token (may be duplicates for some providers)
         validated_claims = []
         for i, token in enumerate(tokens):
             claims = validate_token(
@@ -110,14 +110,14 @@ class TestMultipleTokensFromSameProvider:
                 token_validation_config=validation_config,
             )
             assert claims, f"Token {i + 1} validation failed"
-            assert "jti" in claims, f"Token {i + 1} missing jti claim"
             validated_claims.append(claims)
 
-        # Each token should have a unique jti
-        jtis = [c["jti"] for c in validated_claims]
-        assert len(set(jtis)) == num_tokens, (
-            "Each token should have unique jti"
-        )
+        # If provider includes jti, verify uniqueness
+        if "jti" in validated_claims[0]:
+            jtis = [c["jti"] for c in validated_claims]
+            assert len(set(jtis)) == num_tokens, (
+                "Each token should have unique jti"
+            )
 
         # Verify caching is working - disco and jwks should have cache hits
         disco_cache_info = _get_disco_response.cache_info()
@@ -174,6 +174,9 @@ class TestCacheIsolationBetweenProviders:
 
         This ensures the cache doesn't bypass expiration checks.
         """
+        if not test_config.get("TEST_EXPIRED_TOKEN"):
+            pytest.skip("TEST_EXPIRED_TOKEN not configured")
+
         validation_config = TokenValidationConfig(
             perform_disco=True,
             options=DEFAULT_OPTIONS,
