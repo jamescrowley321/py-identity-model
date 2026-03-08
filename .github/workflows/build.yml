@@ -47,7 +47,7 @@ jobs:
           TEST_EXPIRED_TOKEN: ${{ secrets.DESCOPE_EXPIRED_TOKEN }}
           TEST_AUDIENCE: ${{ secrets.DESCOPE_AUDIENCE }}
         # Only run if Descope secrets are configured
-        if: ${{ secrets.DESCOPE_CLIENT_ID != '' }}
+        if: ${{ env.TEST_CLIENT_ID != '' }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
       - name: Example Integration Tests
