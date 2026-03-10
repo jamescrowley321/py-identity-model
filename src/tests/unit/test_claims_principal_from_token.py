@@ -32,6 +32,11 @@ def test_create_claims_principal_from_simple_token():
     assert principal.has_claim("iat", "1234567800")
     assert principal.has_claim("email", "user@example.com")
 
+    # Check that issuer is set from the iss claim
+    sub_claim = principal.find_first("sub")
+    assert sub_claim is not None
+    assert sub_claim.issuer == "https://example.com"
+
 
 def test_create_claims_principal_with_custom_auth_type():
     """Test creating ClaimsPrincipal with custom authentication type"""
@@ -71,6 +76,22 @@ def test_create_claims_principal_from_token_with_array_claims():
     # Check other claims
     assert principal.has_claim("sub", "user123")
     assert principal.has_claim("iss", "https://example.com")
+
+    # Array claim values should also have the token issuer
+    role_claims = principal.find_all("roles")
+    for claim in role_claims:
+        assert claim.issuer == "https://example.com"
+
+
+def test_claims_issuer_defaults_to_local_authority_without_iss():
+    """Test that claims default to LOCAL AUTHORITY when no iss claim is present"""
+    token_claims = {"sub": "user123", "email": "user@example.com"}
+
+    principal = to_principal(token_claims)
+
+    sub_claim = principal.find_first("sub")
+    assert sub_claim is not None
+    assert sub_claim.issuer == "LOCAL AUTHORITY"
 
 
 def test_create_claims_principal_from_empty_token():
