@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref to checkout'
+        required: false
+        type: string
+        default: ''
+      run-descope-integration:
+        description: 'Run Descope integration tests'
+        required: false
+        type: boolean
+        default: false
+      run-example-tests:
+        description: 'Run example integration tests'
+        required: false
+        type: boolean
+        default: false
+      run-build:
+        description: 'Run build step'
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      TEST_DISCO_ADDRESS:
+        required: false
+      TEST_JWKS_ADDRESS:
+        required: false
+      TEST_CLIENT_ID:
+        required: false
+      TEST_CLIENT_SECRET:
+        required: false
+      TEST_SCOPE:
+        required: false
+      TEST_EXPIRED_TOKEN:
+        required: false
+      TEST_AUDIENCE:
+        required: false
+      DESCOPE_DISCO_ADDRESS:
+        required: false
+      DESCOPE_JWKS_ADDRESS:
+        required: false
+      DESCOPE_CLIENT_ID:
+        required: false
+      DESCOPE_CLIENT_SECRET:
+        required: false
+      DESCOPE_SCOPE:
+        required: false
+      DESCOPE_EXPIRED_TOKEN:
+        required: false
+      DESCOPE_AUDIENCE:
+        required: false
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.13
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.2.0
+
+      - name: Set up TFLint
+        uses: terraform-linters/setup-tflint@90f302c255ef959cbfb4bd10581afecdb7ece3e6 # v4.1.1
+
+      - name: Install dependencies
+        run: make ci-setup
+
+      - name: Lint
+        run: make lint
+
+      - name: Unit Tests
+        run: make test-unit
+
+      - name: Integration Tests (ORY)
+        run: make test-integration-ory
+        env:
+          TEST_DISCO_ADDRESS: ${{ secrets.TEST_DISCO_ADDRESS }}
+          TEST_JWKS_ADDRESS: ${{ secrets.TEST_JWKS_ADDRESS }}
+          TEST_CLIENT_ID: ${{ secrets.TEST_CLIENT_ID }}
+          TEST_CLIENT_SECRET: ${{ secrets.TEST_CLIENT_SECRET }}
+          TEST_SCOPE: ${{ secrets.TEST_SCOPE }}
+          TEST_EXPIRED_TOKEN: ${{ secrets.TEST_EXPIRED_TOKEN }}
+          TEST_AUDIENCE: ${{ secrets.TEST_AUDIENCE }}
+
+      - name: Integration Tests (Descope)
+        if: inputs.run-descope-integration
+        run: make test-integration-descope
+        env:
+          TEST_DISCO_ADDRESS: ${{ secrets.DESCOPE_DISCO_ADDRESS }}
+          TEST_JWKS_ADDRESS: ${{ secrets.DESCOPE_JWKS_ADDRESS }}
+          TEST_CLIENT_ID: ${{ secrets.DESCOPE_CLIENT_ID }}
+          TEST_CLIENT_SECRET: ${{ secrets.DESCOPE_CLIENT_SECRET }}
+          TEST_SCOPE: ${{ secrets.DESCOPE_SCOPE }}
+          TEST_EXPIRED_TOKEN: ${{ secrets.DESCOPE_EXPIRED_TOKEN }}
+          TEST_AUDIENCE: ${{ secrets.DESCOPE_AUDIENCE }}
+
+      - name: Set up Docker Buildx
+        if: inputs.run-example-tests
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - name: Example Integration Tests
+        if: inputs.run-example-tests
+        run: make test-examples
+
+      - name: Build
+        if: inputs.run-build
+        run: make build-dist
