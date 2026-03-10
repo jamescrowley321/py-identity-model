@@ -447,6 +447,7 @@ def to_principal(
     Returns:
         ClaimsPrincipal object containing the claims from the token
     """
+    issuer = str(token_claims.get("iss", "LOCAL AUTHORITY"))
     claims = []
 
     for claim_type, claim_value in token_claims.items():
@@ -454,12 +455,18 @@ def to_principal(
         if isinstance(claim_value, list):
             # Multiple values for the same claim type
             claims.extend(
-                Claim(claim_type=claim_type, value=str(value))
+                Claim(claim_type=claim_type, value=str(value), issuer=issuer)
                 for value in claim_value
             )
         else:
             # Single value claim
-            claims.append(Claim(claim_type=claim_type, value=str(claim_value)))
+            claims.append(
+                Claim(
+                    claim_type=claim_type,
+                    value=str(claim_value),
+                    issuer=issuer,
+                )
+            )
 
     # Create a ClaimsIdentity with the claims
     identity = ClaimsIdentity(
