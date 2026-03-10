@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.1.5 (2026-03-10)
+
+### Bug Fixes
+
+- Add Terraform and TFLint setup to release workflow
+  ([#189](https://github.com/jamescrowley321/py-identity-model/pull/189),
+  [`d76de12`](https://github.com/jamescrowley321/py-identity-model/commit/d76de12a5cd07473c32394d478f0263be7b660f6))
+
+
 ## v2.1.4 (2026-02-24)
 
 ### Bug Fixes
