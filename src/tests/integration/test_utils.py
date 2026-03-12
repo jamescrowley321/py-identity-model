@@ -48,6 +48,13 @@ def set_env_file(env_file_path: str | None) -> None:
     _reset_async_http_client()
 
 
+def _is_valid_jwt_format(token: str) -> bool:
+    """Check if a string looks like a JWT (3 dot-separated segments)."""
+    return token.count(".") == 2 and all(
+        len(part) > 0 for part in token.split(".")
+    )
+
+
 def get_alternate_provider_expired_token() -> str | None:
     """
     Get an expired token from an alternate provider for cross-provider testing.
@@ -67,7 +74,10 @@ def get_alternate_provider_expired_token() -> str | None:
     from dotenv import dotenv_values
 
     local_config = dotenv_values(env_local_path)
-    return local_config.get("TEST_EXPIRED_TOKEN")
+    token = local_config.get("TEST_EXPIRED_TOKEN")
+    if token and not _is_valid_jwt_format(token):
+        return None
+    return token
 
 
 def get_config(env_file: str | None = None) -> dict:
