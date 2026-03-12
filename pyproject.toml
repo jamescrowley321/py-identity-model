@@ -99,6 +99,12 @@ ignore_token_for_push = false
 dist_glob_patterns = ["dist/*"]
 upload_to_vcs_release = true
 
+[tool.pyrefly]
+project_excludes = [
+    "examples/fastapi/",
+    "examples/descope/",
+]
+
 [tool.ruff]
 line-length = 79
 target-version = "py312"

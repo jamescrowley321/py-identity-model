@@ -80,6 +80,7 @@ def sync_example():
 
     # 2. Request access token (synchronous)
     print("\n2. Requesting access token (sync)...")
+    assert disco_response.token_endpoint is not None
     token_request = ClientCredentialsTokenRequest(
         address=disco_response.token_endpoint,
         client_id=CLIENT_ID,
@@ -89,6 +90,7 @@ def sync_example():
     token_response = sync_request_token(token_request)
 
     if token_response.is_successful:
+        assert token_response.token is not None
         print("✓ Token received successfully")
         print(f"  Token type: {token_response.token.get('token_type')}")
         print(
@@ -106,6 +108,7 @@ def sync_example():
     )
 
     try:
+        assert token_response.token is not None
         claims = sync_validate_token(
             jwt=token_response.token["access_token"],
             token_validation_config=validation_config,
@@ -149,6 +152,7 @@ async def async_example():
 
     # 2. Request access token (asynchronous)
     print("\n2. Requesting access token (async)...")
+    assert disco_response.token_endpoint is not None
     token_request = ClientCredentialsTokenRequest(
         address=disco_response.token_endpoint,
         client_id=CLIENT_ID,
@@ -158,6 +162,7 @@ async def async_example():
     token_response = await async_request_token(token_request)
 
     if token_response.is_successful:
+        assert token_response.token is not None
         print("✓ Token received successfully")
         print(f"  Token type: {token_response.token.get('token_type')}")
         print(
@@ -175,6 +180,7 @@ async def async_example():
     )
 
     try:
+        assert token_response.token is not None
         claims = await async_validate_token(
             jwt=token_response.token["access_token"],
             token_validation_config=validation_config,
@@ -214,6 +220,7 @@ async def concurrent_async_example():
         return
 
     # Request multiple tokens concurrently
+    assert disco_response.token_endpoint is not None
     token_requests = [
         ClientCredentialsTokenRequest(
             address=disco_response.token_endpoint,
@@ -313,6 +320,7 @@ def mixed_app_example():
 
     if disco_response and disco_response.is_successful:
         # Get a token for testing the async endpoint
+        assert disco_response.token_endpoint is not None
         token_request = ClientCredentialsTokenRequest(
             address=disco_response.token_endpoint,
             client_id=CLIENT_ID,
@@ -322,11 +330,13 @@ def mixed_app_example():
         token_response = sync_request_token(token_request)
 
         if token_response.is_successful:
+            assert token_response.token is not None
+
             # Async API endpoint (needs to run in async context)
+            access_token = token_response.token["access_token"]
+
             async def test_endpoint():
-                result = await app.api_endpoint(
-                    token_response.token["access_token"]
-                )
+                result = await app.api_endpoint(access_token)
                 return result
 
             result = asyncio.run(test_endpoint())
