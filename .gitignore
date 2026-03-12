@@ -146,3 +146,4 @@ infra/**/*.tfstate
 infra/**/*.tfstate.backup
 infra/**/*.tfvars
 infra/**/access_key.json
+infra/**/expired_token.txt

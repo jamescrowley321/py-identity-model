@@ -1,11 +1,10 @@
-variable "descope_management_key" {
+variable "project_id" {
   type        = string
-  sensitive   = true
-  description = "Descope management key from Company settings. Set via DESCOPE_MANAGEMENT_KEY env var."
+  description = "Shared Descope project ID (from descope-saas-starter). Used as audience and in discovery URLs."
 }
 
-variable "project_name" {
+variable "github_repository" {
   type        = string
-  default     = "py-identity-model-test"
-  description = "Name for the Descope project"
+  default     = "py-identity-model"
+  description = "GitHub repository name (without owner) for CI secrets"
 }
