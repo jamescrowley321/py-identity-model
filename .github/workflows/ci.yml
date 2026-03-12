@@ -42,10 +42,10 @@ jobs:
           python-version: 3.13
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.2.0
+        uses: hashicorp/setup-terraform@v4
 
       - name: Set up TFLint
-        uses: terraform-linters/setup-tflint@90f302c255ef959cbfb4bd10581afecdb7ece3e6 # v4.1.1
+        uses: terraform-linters/setup-tflint@v6
 
       - name: Install dependencies
         run: make ci-setup
