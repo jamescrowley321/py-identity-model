@@ -26,35 +26,6 @@ on:
         required: false
         type: boolean
         default: false
-    secrets:
-      TEST_DISCO_ADDRESS:
-        required: false
-      TEST_JWKS_ADDRESS:
-        required: false
-      TEST_CLIENT_ID:
-        required: false
-      TEST_CLIENT_SECRET:
-        required: false
-      TEST_SCOPE:
-        required: false
-      TEST_EXPIRED_TOKEN:
-        required: false
-      TEST_AUDIENCE:
-        required: false
-      DESCOPE_DISCO_ADDRESS:
-        required: false
-      DESCOPE_JWKS_ADDRESS:
-        required: false
-      DESCOPE_CLIENT_ID:
-        required: false
-      DESCOPE_CLIENT_SECRET:
-        required: false
-      DESCOPE_SCOPE:
-        required: false
-      DESCOPE_EXPIRED_TOKEN:
-        required: false
-      DESCOPE_AUDIENCE:
-        required: false
 
 jobs:
   lint-and-test:
