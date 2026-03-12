@@ -75,6 +75,7 @@ async def fetch_jwks_example():
     response = await get_jwks(jwks_request)
 
     if response.is_successful:
+        assert response.keys is not None
         print("✓ JWKS fetched successfully!")
         print(f"  Number of keys: {len(response.keys)}")
         for key in response.keys:
@@ -109,11 +110,12 @@ async def request_token_example():
     response = await request_client_credentials_token(token_request)
 
     if response.is_successful:
+        assert response.token is not None
         print("✓ Token obtained successfully!")
         print(f"  Token Type: {response.token.get('token_type')}")
         print(f"  Expires In: {response.token.get('expires_in')} seconds")
         print(
-            f"  Access Token (first 50 chars): {response.token.get('access_token')[:50]}..."
+            f"  Access Token (first 50 chars): {str(response.token.get('access_token'))[:50]}..."
         )
         return response.token.get("access_token")
     print(f"✗ Token request failed: {response.error}")
@@ -239,6 +241,7 @@ async def concurrent_operations_example():
 
     print("\\n✓ Both operations completed concurrently!")
     print(f"  Discovery: {disco_response.is_successful}")
+    assert jwks_response.keys is not None
     print(
         f"  JWKS: {jwks_response.is_successful} ({len(jwks_response.keys)} keys)"
     )
@@ -343,6 +346,7 @@ async def fastapi_pattern_example():
     token_response = await request_client_credentials_token(token_request)
 
     if token_response.is_successful:
+        assert token_response.token is not None
         access_token = token_response.token.get("access_token")
 
         # Simulate the endpoint call

@@ -8,21 +8,11 @@ repos:
         args: [ --fix ]
       # Run the formatter.
       - id: ruff-format
-  - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.99.5
-    hooks:
-      - id: terraform_fmt
-      - id: terraform_validate
-        args:
-          - --hook-config=--retry-once-with-cleanup=true
-      - id: terraform_tflint
-        args:
-          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
   - repo: local
     hooks:
-      - id: pyrefly-typecheck
+      - id: pyrefly-check
         name: pyrefly check
-        entry: uv run pyrefly check src/
+        entry: uv run pyrefly check
         language: system
         types_or: [python, pyi]
         pass_filenames: false

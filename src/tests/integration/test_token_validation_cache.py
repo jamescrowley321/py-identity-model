@@ -27,7 +27,10 @@ from py_identity_model.sync.token_validation import (
     _get_public_key_by_kid,
 )
 
-from .test_utils import get_alternate_provider_expired_token
+from .test_utils import (
+    _is_valid_jwt_format,
+    get_alternate_provider_expired_token,
+)
 
 
 # Token validation options - only override defaults where needed
@@ -174,8 +177,9 @@ class TestCacheIsolationBetweenProviders:
 
         This ensures the cache doesn't bypass expiration checks.
         """
-        if not test_config.get("TEST_EXPIRED_TOKEN"):
-            pytest.skip("TEST_EXPIRED_TOKEN not configured")
+        expired_token = test_config.get("TEST_EXPIRED_TOKEN", "")
+        if not expired_token or not _is_valid_jwt_format(expired_token):
+            pytest.skip("TEST_EXPIRED_TOKEN not configured or not a valid JWT")
 
         validation_config = TokenValidationConfig(
             perform_disco=True,
