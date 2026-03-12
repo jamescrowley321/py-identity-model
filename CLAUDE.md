@@ -35,7 +35,7 @@ py-identity-model is a production-grade OIDC/OAuth2.0 helper library for Python 
 
 4. **Use conventional commits** — commit messages must follow the Angular convention (see Git Workflow section below). Commits to `main` trigger semantic-release version bumps.
 
-5. **Create a PR for all changes** — push the feature branch and open a PR against `main`.
+5. **Create a PR for all changes** — push the feature branch and open a PR against `main`. PR titles **must** follow conventional commit format (e.g., `feat(discovery): add metadata support`, `fix: handle missing kid`, `ci: update actions`).
 
 ## Architecture
 
