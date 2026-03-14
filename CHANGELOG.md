@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.2.0 (2026-03-14)
+
+### Features
+
+- Add guarded field access on failed response models
+  ([#200](https://github.com/jamescrowley321/py-identity-model/pull/200),
+  [`1e2b7ba`](https://github.com/jamescrowley321/py-identity-model/commit/1e2b7ba3622492ffa0715437decc030e632f3ad8))
+
+
 ## v2.1.5 (2026-03-10)
 
 ### Bug Fixes
