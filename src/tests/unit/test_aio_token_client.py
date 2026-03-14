@@ -8,6 +8,7 @@ from py_identity_model.aio.token_client import (
     ClientCredentialsTokenRequest,
     request_client_credentials_token,
 )
+from py_identity_model.exceptions import FailedResponseAccessError
 
 
 @pytest.mark.asyncio
@@ -58,7 +59,8 @@ class TestAsyncTokenClient:
         result = await request_client_credentials_token(request)
 
         assert result.is_successful is False
-        assert result.token is None
+        with pytest.raises(FailedResponseAccessError):
+            _ = result.token
         assert result.error is not None
         assert "401" in result.error
 

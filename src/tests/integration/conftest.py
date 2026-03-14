@@ -84,7 +84,10 @@ def discovery_document(test_config):
 
         return response
 
-    return fetch_discovery()
+    response = fetch_discovery()
+    if not response.is_successful:
+        pytest.fail(f"Failed to fetch discovery document: {response.error}")
+    return response
 
 
 @pytest.fixture(scope="session")
@@ -112,7 +115,10 @@ def jwks_response(test_config):
 
         return response
 
-    return fetch_jwks()
+    response = fetch_jwks()
+    if not response.is_successful:
+        pytest.fail(f"Failed to fetch JWKS: {response.error}")
+    return response
 
 
 @pytest.fixture(scope="session")
@@ -170,7 +176,10 @@ def client_credentials_token(test_config, token_endpoint):
 
         return response
 
-    return fetch_token()
+    response = fetch_token()
+    if not response.is_successful:
+        pytest.fail(f"Failed to obtain token: {response.error}")
+    return response
 
 
 @pytest.fixture(scope="session", autouse=True)

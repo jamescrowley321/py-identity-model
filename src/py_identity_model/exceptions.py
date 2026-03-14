@@ -122,9 +122,23 @@ class ConfigurationException(PyIdentityModelException):
     """Raised when configuration is invalid or incomplete."""
 
 
+class FailedResponseAccessError(PyIdentityModelException):
+    """Raised when accessing data fields on a failed response."""
+
+    def __init__(self, field_name: str, error: str | None = None):
+        error_detail = f": {error}" if error else ""
+        message = (
+            f"Cannot access '{field_name}' on a failed response{error_detail}. "
+            f"Check 'is_successful' before accessing response data."
+        )
+        super().__init__(message)
+        self.field_name = field_name
+
+
 __all__ = [
     "ConfigurationException",
     "DiscoveryException",
+    "FailedResponseAccessError",
     "InvalidAudienceException",
     "InvalidIssuerException",
     "JwksException",

@@ -3,7 +3,10 @@ import json
 import pytest
 
 from py_identity_model import JsonWebKey
-from py_identity_model.exceptions import ConfigurationException
+from py_identity_model.exceptions import (
+    ConfigurationException,
+    FailedResponseAccessError,
+)
 from py_identity_model.jwks import JwksRequest, get_jwks, jwks_from_dict
 
 from .test_utils import get_config
@@ -335,7 +338,8 @@ def test_get_jwks_failure():
 
     assert jwks_response.is_successful is False
     assert jwks_response.error is not None
-    assert jwks_response.keys is None
+    with pytest.raises(FailedResponseAccessError):
+        _ = jwks_response.keys
 
     # Test with URL that returns non-JWKS content
     jwks_request = JwksRequest(address="https://google.com")
@@ -343,7 +347,8 @@ def test_get_jwks_failure():
 
     assert jwks_response.is_successful is False
     assert jwks_response.error is not None
-    assert jwks_response.keys is None
+    with pytest.raises(FailedResponseAccessError):
+        _ = jwks_response.keys
 
 
 def test_get_jwks_network_error():
@@ -358,4 +363,5 @@ def test_get_jwks_network_error():
         "Network error during JWKS request" in jwks_response.error
         or "Unhandled exception during JWKS request" in jwks_response.error
     )
-    assert jwks_response.keys is None
+    with pytest.raises(FailedResponseAccessError):
+        _ = jwks_response.keys
