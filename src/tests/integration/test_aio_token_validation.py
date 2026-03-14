@@ -19,13 +19,18 @@ DEFAULT_OPTIONS = {
 
 @pytest.mark.integration
 class TestAsyncTokenValidation:
-    """Test async token validation with real tokens."""
+    """Test async token validation with real tokens.
+
+    Each test closes the async HTTP client to prevent ResourceWarning
+    from unclosed sockets/transports during garbage collection.
+    """
 
     @pytest.mark.asyncio
     async def test_async_claims_validator_success(
         self, test_config, client_credentials_token
     ):
         """Test async claims validator that succeeds."""
+        from py_identity_model.aio.http_client import close_async_http_client
         from py_identity_model.aio.token_validation import validate_token
 
         assert client_credentials_token.token is not None
@@ -41,14 +46,17 @@ class TestAsyncTokenValidation:
             claims_validator=async_validate_claims,
         )
 
-        decoded_token = await validate_token(
-            jwt=client_credentials_token.token["access_token"],
-            disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
-            token_validation_config=validation_config,
-        )
+        try:
+            decoded_token = await validate_token(
+                jwt=client_credentials_token.token["access_token"],
+                disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
+                token_validation_config=validation_config,
+            )
 
-        assert decoded_token
-        assert decoded_token["iss"]
+            assert decoded_token
+            assert decoded_token["iss"]
+        finally:
+            await close_async_http_client()
 
     @pytest.mark.asyncio
     async def test_async_claims_validator_failure(
@@ -88,6 +96,7 @@ class TestAsyncTokenValidation:
         self, test_config, client_credentials_token
     ):
         """Test that sync claims validator works in async validation."""
+        from py_identity_model.aio.http_client import close_async_http_client
         from py_identity_model.aio.token_validation import validate_token
 
         assert client_credentials_token.token is not None
@@ -103,11 +112,14 @@ class TestAsyncTokenValidation:
             claims_validator=sync_validate_claims,
         )
 
-        decoded_token = await validate_token(
-            jwt=client_credentials_token.token["access_token"],
-            disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
-            token_validation_config=validation_config,
-        )
+        try:
+            decoded_token = await validate_token(
+                jwt=client_credentials_token.token["access_token"],
+                disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
+                token_validation_config=validation_config,
+            )
 
-        assert decoded_token
-        assert decoded_token["iss"]
+            assert decoded_token
+            assert decoded_token["iss"]
+        finally:
+            await close_async_http_client()
