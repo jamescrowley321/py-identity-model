@@ -1,16 +1,15 @@
 version: 2
 updates:
+  # Dependency updates are handled by the nightly update-dependencies workflow.
+  # Dependabot config is retained so security alerts still work (they are
+  # independent of the open-pull-requests-limit setting).
   - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "daily"
       time: "09:00"
       timezone: "UTC"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "deps"
       include: "scope"
-    ignore:
-      # Ignore patch updates for stable packages
-      - dependency-name: "*"
-        update-types: ["version-update:semver-patch"]
