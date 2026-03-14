@@ -44,9 +44,7 @@ jobs:
       - name: Cache uv dependencies
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/uv
-            .venv
+          path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
@@ -73,9 +71,7 @@ jobs:
       - name: Cache uv dependencies
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/uv
-            .venv
+          path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
@@ -102,9 +98,7 @@ jobs:
       - name: Cache uv dependencies
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/uv
-            .venv
+          path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
@@ -140,9 +134,7 @@ jobs:
       - name: Cache uv dependencies
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/uv
-            .venv
+          path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
@@ -178,9 +170,7 @@ jobs:
       - name: Cache uv dependencies
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/uv
-            .venv
+          path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
@@ -211,9 +201,7 @@ jobs:
       - name: Cache uv dependencies
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/uv
-            .venv
+          path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
