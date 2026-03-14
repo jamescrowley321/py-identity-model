@@ -35,6 +35,23 @@ theme:
 
 plugins:
   - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+            heading_level: 2
+            members_order: source
+            show_bases: true
+            show_inheritance_diagram: false
+            docstring_style: google
+            merge_init_into_class: true
+            show_if_no_docstring: false
+            signature_crossrefs: true
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -69,6 +86,15 @@ nav:
   - Specifications:
       - Discovery Compliance: discovery_specification_compliance_assessment.md
       - JWKS Compliance: jwks_specification_compliance_assessment.md
+  - API Reference:
+      - Overview: api/index.md
+      - Discovery: api/discovery.md
+      - JWKS: api/jwks.md
+      - Token Client: api/token-client.md
+      - Token Validation: api/token-validation.md
+      - UserInfo: api/userinfo.md
+      - Identity & Claims: api/identity.md
+      - Exceptions: api/exceptions.md
   - Roadmap: py_identity_model_roadmap.md
   - Examples:
       - Identity Server: identity-server-example.md

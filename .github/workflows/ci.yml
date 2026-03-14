@@ -42,11 +42,9 @@ jobs:
           python-version: 3.13
 
       - name: Cache uv dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: |
-            ~/.cache/uv
-            .venv
+          path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
@@ -71,11 +69,9 @@ jobs:
           python-version: 3.13
 
       - name: Cache uv dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: |
-            ~/.cache/uv
-            .venv
+          path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
@@ -100,11 +96,9 @@ jobs:
           python-version: 3.13
 
       - name: Cache uv dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: |
-            ~/.cache/uv
-            .venv
+          path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
@@ -138,11 +132,9 @@ jobs:
           python-version: 3.13
 
       - name: Cache uv dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: |
-            ~/.cache/uv
-            .venv
+          path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
@@ -176,11 +168,9 @@ jobs:
           python-version: 3.13
 
       - name: Cache uv dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: |
-            ~/.cache/uv
-            .venv
+          path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
@@ -189,7 +179,7 @@ jobs:
         run: make ci-setup
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+        uses: docker/setup-buildx-action@v4
 
       - name: Example Integration Tests
         run: make test-examples
@@ -209,11 +199,9 @@ jobs:
           python-version: 3.13
 
       - name: Cache uv dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: |
-            ~/.cache/uv
-            .venv
+          path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
