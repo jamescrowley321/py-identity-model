@@ -201,13 +201,14 @@ def _reset_async_http_client() -> None:
 
     This function is intended for use in tests to clear the cached async
     HTTP client instance. It should not be called in production code.
+
+    IMPORTANT: This does NOT close the underlying connections. Callers
+    must await close_async_http_client() first to properly release
+    sockets and prevent ResourceWarning during garbage collection.
     """
     global _async_http_client, _async_client_cleanup_lock
     with _async_client_creation_lock:
-        if _async_http_client is not None:
-            # Note: Synchronous close for testing - may leave connections open
-            # In production, use close_async_http_client() for proper cleanup
-            _async_http_client = None
+        _async_http_client = None
         _async_client_cleanup_lock = None
 
 

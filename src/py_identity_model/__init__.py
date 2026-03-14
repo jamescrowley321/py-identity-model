@@ -10,6 +10,7 @@ from . import ssl_config  # noqa: F401
 from .exceptions import (
     ConfigurationException,
     DiscoveryException,
+    FailedResponseAccessError,
     InvalidAudienceException,
     InvalidIssuerException,
     JwksException,
@@ -59,6 +60,7 @@ __all__ = [
     "DiscoveryDocumentRequest",
     "DiscoveryDocumentResponse",
     "DiscoveryException",
+    "FailedResponseAccessError",
     "InvalidAudienceException",
     "InvalidIssuerException",
     "JsonWebAlgorithmsKeyTypes",

@@ -5,6 +5,7 @@ import pytest
 import respx
 
 from py_identity_model.aio.userinfo import UserInfoRequest, get_userinfo
+from py_identity_model.exceptions import FailedResponseAccessError
 
 
 @pytest.mark.asyncio
@@ -80,7 +81,8 @@ class TestAsyncUserInfo:
         result = await get_userinfo(request)
 
         assert result.is_successful is False
-        assert result.claims is None
+        with pytest.raises(FailedResponseAccessError):
+            _ = result.claims
         assert result.error is not None
         assert "401" in result.error
 

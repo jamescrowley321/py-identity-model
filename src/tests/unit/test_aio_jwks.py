@@ -5,6 +5,7 @@ import pytest
 import respx
 
 from py_identity_model.aio.jwks import JwksRequest, get_jwks
+from py_identity_model.exceptions import FailedResponseAccessError
 
 
 @pytest.mark.asyncio
@@ -63,7 +64,8 @@ class TestAsyncJwks:
         result = await get_jwks(request)
 
         assert result.is_successful is False
-        assert result.keys is None
+        with pytest.raises(FailedResponseAccessError):
+            _ = result.keys
         assert result.error is not None
         assert "404" in result.error
 

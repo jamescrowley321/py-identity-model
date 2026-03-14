@@ -4,7 +4,10 @@ import httpx
 import pytest
 import respx
 
-from py_identity_model.exceptions import ConfigurationException
+from py_identity_model.exceptions import (
+    ConfigurationException,
+    FailedResponseAccessError,
+)
 from py_identity_model.jwks import (
     JsonWebAlgorithmsKeyTypes,
     JsonWebKey,
@@ -35,7 +38,8 @@ class TestJwksResponse:
         error_msg = "Request failed"
         response = JwksResponse(is_successful=False, error=error_msg)
         assert response.is_successful is False
-        assert response.keys is None
+        with pytest.raises(FailedResponseAccessError):
+            _ = response.keys
         assert response.error == error_msg
 
 
@@ -586,7 +590,8 @@ class TestGetJwks:
         result = get_jwks(request)
 
         assert result.is_successful is False
-        assert result.keys is None
+        with pytest.raises(FailedResponseAccessError):
+            _ = result.keys
         assert result.error is not None
         assert "404" in result.error
         assert "Not Found" in result.error
@@ -601,7 +606,8 @@ class TestGetJwks:
         result = get_jwks(request)
 
         assert result.is_successful is False
-        assert result.keys is None
+        with pytest.raises(FailedResponseAccessError):
+            _ = result.keys
         assert result.error is not None
         assert "Unhandled exception during JWKS request" in result.error
         assert "Network error" in result.error
@@ -621,6 +627,7 @@ class TestGetJwks:
         result = get_jwks(request)
 
         assert result.is_successful is False
-        assert result.keys is None
+        with pytest.raises(FailedResponseAccessError):
+            _ = result.keys
         assert result.error is not None
         assert "Unhandled exception during JWKS request" in result.error

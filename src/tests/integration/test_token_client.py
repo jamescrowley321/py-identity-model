@@ -1,7 +1,10 @@
+import pytest
+
 from py_identity_model import (
     ClientCredentialsTokenRequest,
     request_client_credentials_token,
 )
+from py_identity_model.exceptions import FailedResponseAccessError
 
 
 def test_request_client_credentials_token_is_successful(
@@ -37,7 +40,8 @@ def test_request_client_credentials_token_fails_invalid_credentials(
     assert client_creds_token
     assert client_creds_token.is_successful is False
     assert client_creds_token.error
-    assert client_creds_token.token is None
+    with pytest.raises(FailedResponseAccessError):
+        _ = client_creds_token.token
 
 
 def test_request_client_credentials_token_fails_invalid_scope(
@@ -65,7 +69,8 @@ def test_request_client_credentials_token_fails_invalid_scope(
     else:
         # Provider rejects unknown scopes (e.g., Ory)
         assert client_creds_token.error
-        assert client_creds_token.token is None
+        with pytest.raises(FailedResponseAccessError):
+            _ = client_creds_token.token
 
 
 def test_request_client_credentials_token_fails_invalid_endpoint(

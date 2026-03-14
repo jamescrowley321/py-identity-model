@@ -8,8 +8,36 @@ from collections.abc import Callable
 from dataclasses import dataclass, fields
 from enum import Enum
 import json
+from typing import ClassVar
 
 from ..exceptions import ConfigurationException
+
+
+# ============================================================================
+# Guarded Response Mixin
+# ============================================================================
+
+
+class _GuardedResponseMixin:
+    """Mixin that guards data field access on failed responses.
+
+    Subclasses declare _guarded_fields as a frozenset of field names.
+    Accessing a guarded field when is_successful is False raises
+    FailedResponseAccessError with the original error message.
+    """
+
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset()
+
+    def __getattribute__(self, name: str):
+        guarded = object.__getattribute__(self, "_guarded_fields")
+        if name in guarded:
+            is_successful = object.__getattribute__(self, "is_successful")
+            if not is_successful:
+                error = object.__getattribute__(self, "error")
+                from ..exceptions import FailedResponseAccessError
+
+                raise FailedResponseAccessError(name, error)
+        return object.__getattribute__(self, name)
 
 
 # ============================================================================
@@ -314,7 +342,47 @@ class DiscoveryDocumentRequest:
 
 
 @dataclass
-class DiscoveryDocumentResponse:
+class DiscoveryDocumentResponse(_GuardedResponseMixin):
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset(
+        {
+            "issuer",
+            "jwks_uri",
+            "authorization_endpoint",
+            "token_endpoint",
+            "response_types_supported",
+            "subject_types_supported",
+            "id_token_signing_alg_values_supported",
+            "userinfo_endpoint",
+            "registration_endpoint",
+            "scopes_supported",
+            "response_modes_supported",
+            "grant_types_supported",
+            "acr_values_supported",
+            "id_token_encryption_alg_values_supported",
+            "id_token_encryption_enc_values_supported",
+            "userinfo_signing_alg_values_supported",
+            "userinfo_encryption_alg_values_supported",
+            "userinfo_encryption_enc_values_supported",
+            "request_object_signing_alg_values_supported",
+            "request_object_encryption_alg_values_supported",
+            "request_object_encryption_enc_values_supported",
+            "token_endpoint_auth_methods_supported",
+            "token_endpoint_auth_signing_alg_values_supported",
+            "display_values_supported",
+            "claim_types_supported",
+            "claims_supported",
+            "claims_locales_supported",
+            "ui_locales_supported",
+            "claims_parameter_supported",
+            "request_parameter_supported",
+            "request_uri_parameter_supported",
+            "require_request_uri_registration",
+            "service_documentation",
+            "op_policy_uri",
+            "op_tos_uri",
+        }
+    )
+
     is_successful: bool
     # Core OpenID Connect endpoints
     issuer: str | None = None
@@ -382,7 +450,9 @@ class JwksRequest:
 
 
 @dataclass
-class JwksResponse:
+class JwksResponse(_GuardedResponseMixin):
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset({"keys"})
+
     is_successful: bool
     keys: list[JsonWebKey] | None = None
     error: str | None = None
@@ -402,7 +472,9 @@ class ClientCredentialsTokenRequest:
 
 
 @dataclass
-class ClientCredentialsTokenResponse:
+class ClientCredentialsTokenResponse(_GuardedResponseMixin):
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
+
     is_successful: bool
     token: dict | None = None
     error: str | None = None
@@ -420,7 +492,9 @@ class UserInfoRequest:
 
 
 @dataclass
-class UserInfoResponse:
+class UserInfoResponse(_GuardedResponseMixin):
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset({"claims", "raw"})
+
     is_successful: bool
     claims: dict | None = None
     raw: str | None = None
