@@ -318,7 +318,6 @@ def test_get_jwks_success(env_file):
 
     # Verify successful response
     assert jwks_response.is_successful is True
-    assert jwks_response.error is None
     assert jwks_response.keys is not None
     assert len(jwks_response.keys) > 0
 

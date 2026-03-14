@@ -38,7 +38,6 @@ class TestAsyncUserInfo:
         assert result.claims["sub"] == "248289761001"
         assert result.claims["name"] == "Jane Doe"
         assert result.raw is None
-        assert result.error is None
 
     @respx.mock
     async def test_async_get_userinfo_jwt_response(self):
@@ -64,7 +63,6 @@ class TestAsyncUserInfo:
         assert result.is_successful is True
         assert result.raw == jwt_string
         assert result.claims is None
-        assert result.error is None
 
     @respx.mock
     async def test_async_get_userinfo_http_error(self):

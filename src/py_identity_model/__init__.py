@@ -17,6 +17,7 @@ from .exceptions import (
     NetworkException,
     PyIdentityModelException,
     SignatureVerificationException,
+    SuccessfulResponseAccessError,
     TokenExpiredException,
     TokenRequestException,
     TokenValidationException,
@@ -73,6 +74,7 @@ __all__ = [
     # Exceptions
     "PyIdentityModelException",
     "SignatureVerificationException",
+    "SuccessfulResponseAccessError",
     "TokenExpiredException",
     "TokenRequestException",
     "TokenValidationConfig",

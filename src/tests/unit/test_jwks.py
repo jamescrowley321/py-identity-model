@@ -32,7 +32,6 @@ class TestJwksResponse:
         response = JwksResponse(is_successful=True, keys=keys)
         assert response.is_successful is True
         assert response.keys == keys
-        assert response.error is None
 
     def test_jwks_response_creation_failure(self):
         error_msg = "Request failed"
@@ -576,7 +575,6 @@ class TestGetJwks:
         assert result.keys[0].kid == "key1"
         assert result.keys[1].kty == "EC"
         assert result.keys[1].kid == "key2"
-        assert result.error is None
 
     @respx.mock
     def test_get_jwks_http_error(self):

@@ -40,7 +40,6 @@ class TestAsyncTokenClient:
         assert result.token is not None
         assert result.token["access_token"] == "test_token"
         assert result.token["token_type"] == "Bearer"
-        assert result.error is None
 
     @respx.mock
     async def test_async_request_client_credentials_token_http_error(self):
