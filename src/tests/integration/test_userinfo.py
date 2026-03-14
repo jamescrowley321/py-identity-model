@@ -37,7 +37,6 @@ def test_get_userinfo_with_client_credentials_token(
     if response.is_successful:
         # Provider returned claims for client credentials token
         assert response.claims is not None or response.raw is not None
-        assert response.error is None
     else:
         # Provider rejected client credentials token (no user context)
         assert response.error is not None

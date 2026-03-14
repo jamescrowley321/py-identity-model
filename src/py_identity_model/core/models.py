@@ -19,11 +19,13 @@ from ..exceptions import ConfigurationException
 
 
 class _GuardedResponseMixin:
-    """Mixin that guards data field access on failed responses.
+    """Mixin that guards field access based on response success state.
 
     Subclasses declare _guarded_fields as a frozenset of field names.
     Accessing a guarded field when is_successful is False raises
     FailedResponseAccessError with the original error message.
+    Accessing 'error' when is_successful is True raises
+    SuccessfulResponseAccessError.
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset()
@@ -37,6 +39,12 @@ class _GuardedResponseMixin:
                 from ..exceptions import FailedResponseAccessError
 
                 raise FailedResponseAccessError(name, error)
+        elif name == "error":
+            is_successful = object.__getattribute__(self, "is_successful")
+            if is_successful:
+                from ..exceptions import SuccessfulResponseAccessError
+
+                raise SuccessfulResponseAccessError(name)
         return object.__getattribute__(self, name)
 
 

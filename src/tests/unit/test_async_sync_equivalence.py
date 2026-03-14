@@ -64,7 +64,6 @@ class TestDiscoveryEquivalence:
             == async_result.authorization_endpoint
         )
         assert sync_result.token_endpoint == async_result.token_endpoint
-        assert sync_result.error == async_result.error
 
     @respx.mock
     @pytest.mark.asyncio
@@ -273,8 +272,9 @@ class TestResponseStructureEquivalence:
         assert dir(sync_result) == dir(async_result)
 
         # Check that all attributes have the same type
+        # Skip 'error' — guarded on successful responses
         for attr in dir(sync_result):
-            if not attr.startswith("_"):
+            if not attr.startswith("_") and attr != "error":
                 sync_val = getattr(sync_result, attr)
                 async_val = getattr(async_result, attr)
                 assert type(sync_val) is type(async_val), (

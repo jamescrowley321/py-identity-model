@@ -44,7 +44,6 @@ class TestSyncUserInfo:
         assert response.claims["name"] == "Jane Doe"
         assert response.claims["email"] == "janedoe@example.com"
         assert response.raw is None
-        assert response.error is None
 
     @respx.mock
     def test_get_userinfo_jwt_response(self):
@@ -70,7 +69,6 @@ class TestSyncUserInfo:
         assert response.is_successful is True
         assert response.raw == jwt_string
         assert response.claims is None
-        assert response.error is None
 
     @respx.mock
     def test_get_userinfo_http_error(self):

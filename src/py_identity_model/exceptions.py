@@ -135,6 +135,18 @@ class FailedResponseAccessError(PyIdentityModelException):
         self.field_name = field_name
 
 
+class SuccessfulResponseAccessError(PyIdentityModelException):
+    """Raised when accessing the error field on a successful response."""
+
+    def __init__(self, field_name: str = "error"):
+        message = (
+            f"Cannot access '{field_name}' on a successful response. "
+            f"Check 'is_successful' before accessing error details."
+        )
+        super().__init__(message)
+        self.field_name = field_name
+
+
 __all__ = [
     "ConfigurationException",
     "DiscoveryException",
@@ -145,6 +157,7 @@ __all__ = [
     "NetworkException",
     "PyIdentityModelException",
     "SignatureVerificationException",
+    "SuccessfulResponseAccessError",
     "TokenExpiredException",
     "TokenRequestException",
     "TokenValidationException",
