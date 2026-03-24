@@ -24,6 +24,7 @@ from ..core.token_validation_logic import (
     validate_jwks_response,
 )
 from ..core.validators import validate_token_config
+from ..exceptions import ConfigurationException
 from .discovery import get_discovery_document
 from .jwks import get_jwks
 from .managed_client import AsyncHTTPClient
@@ -117,9 +118,10 @@ async def validate_token(
     if token_validation_config.perform_disco:
         if http_client is not None:
             # Bypass cache — use injected client directly
-            assert (
-                disco_doc_address is not None
-            )  # enforced by validate_token_config
+            if disco_doc_address is None:
+                raise ConfigurationException(
+                    "disco_doc_address is required when perform_disco is True"
+                )
             disco_doc_response = await get_discovery_document(
                 DiscoveryDocumentRequest(
                     address=disco_doc_address,
@@ -129,9 +131,10 @@ async def validate_token(
             )
             validate_disco_response(disco_doc_response)
 
-            assert (
-                disco_doc_response.jwks_uri is not None
-            )  # enforced by validate_disco_response
+            if disco_doc_response.jwks_uri is None:
+                raise ConfigurationException(
+                    "Discovery document missing jwks_uri"
+                )
             jwks_response = await get_jwks(
                 JwksRequest(address=disco_doc_response.jwks_uri),
                 http_client=http_client,
