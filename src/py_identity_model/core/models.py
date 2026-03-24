@@ -598,7 +598,8 @@ class TokenValidationConfig:
             claims.  Useful when clocks between the issuer and this
             server are not perfectly synchronized.
 
-    Example:
+    Examples:
+        >>> # Multi-tenant with clock skew tolerance
         >>> config = TokenValidationConfig(
         ...     perform_disco=True,
         ...     audience="my-api",
@@ -606,7 +607,17 @@ class TokenValidationConfig:
         ...         "https://idp1.example.com",
         ...         "https://idp2.example.com",
         ...     ],
-        ...     leeway=30,  # allow 30 seconds of clock skew
+        ...     leeway=30,
+        ... )
+
+        >>> # Custom claims validation
+        >>> def validate_custom_claims(claims: dict) -> None:
+        ...     if claims.get("role") != "admin":
+        ...         raise ValueError("User is not an admin")
+        >>>
+        >>> config = TokenValidationConfig(
+        ...     perform_disco=True,
+        ...     claims_validator=validate_custom_claims,
         ... )
     """
 
