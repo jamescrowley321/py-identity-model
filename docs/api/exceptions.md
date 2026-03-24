@@ -5,6 +5,7 @@ All exceptions inherit from `PyIdentityModelException`.
 ```
 PyIdentityModelException
 ├── ValidationException
+│   ├── AuthorizeCallbackException
 │   └── TokenValidationException
 │       ├── SignatureVerificationException
 │       ├── TokenExpiredException
@@ -27,6 +28,8 @@ PyIdentityModelException
 ## Validation Exceptions
 
 ::: py_identity_model.exceptions.ValidationException
+
+::: py_identity_model.exceptions.AuthorizeCallbackException
 
 ::: py_identity_model.exceptions.TokenValidationException
 
