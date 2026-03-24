@@ -15,6 +15,7 @@ from ..core.userinfo_logic import (
     process_userinfo_response,
 )
 from .http_client import get_http_client, retry_with_backoff
+from .managed_client import HTTPClient
 
 
 @retry_with_backoff()
@@ -32,12 +33,17 @@ def _request_userinfo(
     return client.get(url, headers=headers)
 
 
-def get_userinfo(request: UserInfoRequest) -> UserInfoResponse:
+def get_userinfo(
+    request: UserInfoRequest,
+    http_client: HTTPClient | None = None,
+) -> UserInfoResponse:
     """
     Get claims about an authenticated user from the UserInfo endpoint.
 
     Args:
         request: UserInfo request with endpoint address and access token
+        http_client: Optional managed HTTP client.  When ``None``, uses the
+            thread-local default.
 
     Returns:
         UserInfoResponse: Response with claims (JSON) or raw JWT string
@@ -46,7 +52,7 @@ def get_userinfo(request: UserInfoRequest) -> UserInfoResponse:
     headers = prepare_userinfo_headers(request.token)
 
     try:
-        client = get_http_client()
+        client = http_client.client if http_client else get_http_client()
         response = _request_userinfo(client, request.address, headers)
         result = process_userinfo_response(response)
         response.close()
