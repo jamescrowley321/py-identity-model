@@ -165,19 +165,20 @@ class TestHTTPClientThreadSafety:
         # Reset HTTP client for clean state
         _reset_http_client()
 
-        clients = []
+        results = []  # list of (thread_id, client_id) tuples
         errors = []
-        thread_ids = []
+        lock = threading.Lock()
 
         def get_client():
             try:
-                import threading
-
                 client = get_http_client()
-                clients.append(id(client))  # Store object ID
-                thread_ids.append(threading.current_thread().ident)
+                tid = threading.current_thread().ident
+                # Append both values atomically to avoid interleaving
+                with lock:
+                    results.append((tid, id(client)))
             except Exception as e:
-                errors.append(e)
+                with lock:
+                    errors.append(e)
 
         # Access client from 50 threads concurrently
         with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
@@ -187,8 +188,11 @@ class TestHTTPClientThreadSafety:
         # No errors should occur
         assert len(errors) == 0, f"Errors occurred: {errors}"
 
-        # We should have collected 100 client IDs
-        assert len(clients) == 100
+        # We should have collected 100 results
+        assert len(results) == 100
+
+        thread_ids = [r[0] for r in results]
+        clients = [r[1] for r in results]
 
         # With thread-local storage, each thread gets its own client.
         # The number of unique clients should equal the number of unique threads used.
@@ -201,8 +205,8 @@ class TestHTTPClientThreadSafety:
         )
 
         # Verify that calls from the same thread get the same client
-        thread_to_clients = {}
-        for tid, cid in zip(thread_ids, clients, strict=True):
+        thread_to_clients: dict[int, list[int]] = {}
+        for tid, cid in results:
             if tid not in thread_to_clients:
                 thread_to_clients[tid] = []
             thread_to_clients[tid].append(cid)

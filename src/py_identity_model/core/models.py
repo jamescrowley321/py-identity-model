@@ -346,11 +346,26 @@ class JsonWebKey:
 
 @dataclass
 class DiscoveryDocumentRequest:
+    """Request for fetching an OpenID Connect discovery document.
+
+    Attributes:
+        address: The base URL of the identity provider
+            (e.g. ``https://example.com``). The well-known path is
+            appended automatically.
+    """
+
     address: str
 
 
 @dataclass
 class DiscoveryDocumentResponse(_GuardedResponseMixin):
+    """Response from an OpenID Connect discovery document fetch.
+
+    Check ``is_successful`` before accessing data fields. Accessing guarded
+    fields on a failed response raises
+    ``FailedResponseAccessError``.
+    """
+
     _guarded_fields: ClassVar[frozenset[str]] = frozenset(
         {
             "issuer",
@@ -454,11 +469,22 @@ class DiscoveryDocumentResponse(_GuardedResponseMixin):
 
 @dataclass
 class JwksRequest:
+    """Request for fetching a JSON Web Key Set.
+
+    Attributes:
+        address: The JWKS endpoint URL (typically from ``DiscoveryDocumentResponse.jwks_uri``).
+    """
+
     address: str
 
 
 @dataclass
 class JwksResponse(_GuardedResponseMixin):
+    """Response from a JWKS endpoint fetch.
+
+    Check ``is_successful`` before accessing ``keys``.
+    """
+
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"keys"})
 
     is_successful: bool
@@ -473,6 +499,15 @@ class JwksResponse(_GuardedResponseMixin):
 
 @dataclass
 class ClientCredentialsTokenRequest:
+    """Request for an OAuth 2.0 client credentials token.
+
+    Attributes:
+        address: The token endpoint URL.
+        client_id: The client identifier.
+        client_secret: The client secret.
+        scope: Space-delimited list of requested scopes.
+    """
+
     address: str
     client_id: str
     client_secret: str
@@ -481,6 +516,11 @@ class ClientCredentialsTokenRequest:
 
 @dataclass
 class ClientCredentialsTokenResponse(_GuardedResponseMixin):
+    """Response from a client credentials token request.
+
+    Check ``is_successful`` before accessing ``token``.
+    """
+
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
 
     is_successful: bool
@@ -495,12 +535,24 @@ class ClientCredentialsTokenResponse(_GuardedResponseMixin):
 
 @dataclass
 class UserInfoRequest:
+    """Request for the OpenID Connect UserInfo endpoint.
+
+    Attributes:
+        address: The UserInfo endpoint URL.
+        token: A valid access token with ``openid`` scope.
+    """
+
     address: str
     token: str
 
 
 @dataclass
 class UserInfoResponse(_GuardedResponseMixin):
+    """Response from the UserInfo endpoint.
+
+    Check ``is_successful`` before accessing ``claims`` or ``raw``.
+    """
+
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"claims", "raw"})
 
     is_successful: bool
