@@ -9,6 +9,7 @@ import httpx
 
 from ..exceptions import DiscoveryException
 from .models import (
+    AuthorizationCodeTokenResponse,
     ClientCredentialsTokenResponse,
     DiscoveryDocumentResponse,
     JwksResponse,
@@ -238,6 +239,26 @@ def parse_token_response(
     )
 
 
+def parse_auth_code_token_response(
+    response: httpx.Response,
+) -> AuthorizationCodeTokenResponse:
+    """Parse authorization code token exchange HTTP response."""
+    if response.is_success:
+        return AuthorizationCodeTokenResponse(
+            is_successful=True,
+            token=response.json(),
+        )
+
+    error_msg = (
+        f"Authorization code token exchange failed with status code: "
+        f"{response.status_code}. Response Content: {response.content}"
+    )
+    return AuthorizationCodeTokenResponse(
+        is_successful=False,
+        error=error_msg,
+    )
+
+
 def parse_userinfo_response(response: httpx.Response) -> UserInfoResponse:
     """
     Parse UserInfo HTTP response.
@@ -281,6 +302,7 @@ def parse_userinfo_response(response: httpx.Response) -> UserInfoResponse:
 
 __all__ = [
     "build_discovery_response",
+    "parse_auth_code_token_response",
     "parse_jwks_response",
     "parse_token_response",
     "parse_userinfo_response",
