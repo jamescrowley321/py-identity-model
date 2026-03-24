@@ -19,11 +19,11 @@ from .models import _GuardedResponseMixin
 class AuthorizeCallbackResponse(_GuardedResponseMixin):
     """Parsed OAuth 2.0 / OIDC authorization callback response.
 
-    Fields like ``code``, ``access_token``, and ``state`` are guarded:
-    accessing them raises ``FailedResponseAccessError`` when
-    ``is_successful`` is ``False``.  The ``error`` and
-    ``error_description`` fields are only accessible when the response
-    represents an error (``is_successful is False``).
+    Fields like ``code`` and ``access_token`` are guarded: accessing them
+    raises ``FailedResponseAccessError`` when ``is_successful`` is
+    ``False``.  The ``state`` field is *not* guarded, per RFC 6749 Section
+    4.1.2.1 which requires ``state`` in error responses so callers can
+    correlate errors with the original request.
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset(
