@@ -13,6 +13,7 @@ from ..core.discovery_logic import (
 from ..core.error_handlers import handle_discovery_error
 from ..core.models import DiscoveryDocumentRequest, DiscoveryDocumentResponse
 from .http_client import get_async_http_client, retry_with_backoff_async
+from .managed_client import AsyncHTTPClient
 
 
 @retry_with_backoff_async()
@@ -30,19 +31,22 @@ async def _fetch_discovery_document(
 
 async def get_discovery_document(
     disco_doc_req: DiscoveryDocumentRequest,
+    http_client: AsyncHTTPClient | None = None,
 ) -> DiscoveryDocumentResponse:
     """
     Fetch discovery document from the specified address (async).
 
     Args:
         disco_doc_req: Discovery document request configuration
+        http_client: Optional managed HTTP client.  When ``None``, uses the
+            module-level singleton.
 
     Returns:
         DiscoveryDocumentResponse: Discovery document response
     """
     log_discovery_request(disco_doc_req)
     try:
-        client = get_async_http_client()
+        client = http_client.client if http_client else get_async_http_client()
         response = await _fetch_discovery_document(
             client, disco_doc_req.address
         )

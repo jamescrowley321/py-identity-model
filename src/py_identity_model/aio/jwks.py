@@ -17,6 +17,7 @@ from ..core.models import (
 )
 from ..core.parsers import jwks_from_dict
 from .http_client import get_async_http_client, retry_with_backoff_async
+from .managed_client import AsyncHTTPClient
 
 
 @retry_with_backoff_async()
@@ -30,19 +31,24 @@ async def _fetch_jwks(client: httpx.AsyncClient, url: str) -> httpx.Response:
     return await client.get(url)
 
 
-async def get_jwks(jwks_request: JwksRequest) -> JwksResponse:
+async def get_jwks(
+    jwks_request: JwksRequest,
+    http_client: AsyncHTTPClient | None = None,
+) -> JwksResponse:
     """
     Fetch JWKS from the specified address (async).
 
     Args:
         jwks_request: JWKS request configuration
+        http_client: Optional managed HTTP client.  When ``None``, uses the
+            module-level singleton.
 
     Returns:
         JwksResponse: JWKS response with keys
     """
     log_jwks_request(jwks_request)
     try:
-        client = get_async_http_client()
+        client = http_client.client if http_client else get_async_http_client()
         response = await _fetch_jwks(client, jwks_request.address)
         return process_jwks_response(response)
     except Exception as e:
