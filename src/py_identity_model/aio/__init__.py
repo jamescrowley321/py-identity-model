@@ -44,6 +44,7 @@ from .jwks import (
     get_jwks,
     jwks_from_dict,
 )
+from .managed_client import AsyncHTTPClient
 from .token_client import (
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
@@ -54,6 +55,8 @@ from .userinfo import UserInfoRequest, UserInfoResponse, get_userinfo
 
 
 __all__ = [
+    # HTTP Client
+    "AsyncHTTPClient",
     # Authorize Callback
     "AuthorizeCallbackResponse",
     "AuthorizeCallbackValidationResult",
