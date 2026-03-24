@@ -216,3 +216,56 @@ Committed fe53358 on `test/integration-core-flows` with comprehensive review-fix
 - All lint checks pass (ruff, format, pyrefly, coverage)
 
 Phase set to pr. Next iteration pushes and creates PR.
+
+## 2026-03-30 — Iteration: ci-fix phase completed (T121)
+
+### Context
+- Task T121: Integration tests for core flows
+- Branch: test/integration-core-flows, PR #279
+- Phase: ci-fix (resumed from task.resume event)
+
+### What happened this iteration
+1. **Merged origin/main** — resolved 13 conflicts from features merged to main since T121 branched
+   - Combined require_https support with DI http_client injection
+   - Accepted main's authorize_response.py, kept T121's issueRefreshToken in provider.js
+   - Committed merge resolution (12396a9)
+
+2. **First CI push** — 9 integration test failures:
+   - 7 tests missing `require_https=False` for HTTP node-oidc-provider
+   - 1 auth code PKCE test hardcoding HTTPS assertion
+   - 1 opaque token test invalid (provider now issues JWTs via defaultResource)
+   - Fixed all 9, committed (ee6f9b2)
+
+3. **Second CI push** — `integration-tests-descope` failed:
+   - Root cause: `pytest_collection_modifyitems` auto-adds `integration` marker to all tests in `tests/integration/`
+   - Descope/ORY Makefile targets ran `-m integration` which included `node_oidc` tests
+   - Those tests tried to connect to localhost:9010 which only exists in the node-oidc CI job
+   - Fix: Changed Makefile targets to `-m "integration and not node_oidc"` (5c13cb5)
+
+4. **Third CI push** — ALL 9 checks pass:
+   - build: pass, ci-complete: pass, example-tests: pass
+   - integration-tests-descope: pass, integration-tests-node-oidc: pass, integration-tests-ory: pass
+   - lint: pass, unit-tests: pass, security/snyk: pass
+
+### Phase set to `complete`. Task T121 closed.
+
+### Next
+- Next iteration: execute `complete` phase — update prompt file, clean up worktree, delete task-state.md
+
+## 2026-03-30 — T121 complete, T122 setup
+
+### Context
+- T121 marked done in prompt file, worktree cleaned up, task-state.md reset
+- T122: Integration tests for Introspection (RFC 7662) and Revocation (RFC 7009)
+- Branch: test/integration-token-mgmt, worktree: /tmp/pim-T122
+- Based on origin/main at e4365ca (v2.4.1)
+
+### What happened this iteration
+- Completed T121: updated prompt queue, removed /tmp/pim-T121 worktree, cleared task-state
+- Set up T122: created worktree at /tmp/pim-T122, branch test/integration-token-mgmt
+- Phase set to `analyze`
+
+### Next
+- Next iteration: execute `analyze` phase for T122
+- Read node-oidc-provider fixture, existing integration tests, introspection/revocation source
+- Plan integration tests for RFC 7662 (introspection) and RFC 7009 (revocation)

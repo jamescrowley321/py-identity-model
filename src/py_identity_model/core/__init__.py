@@ -16,6 +16,8 @@ from .http_utils import (
 )
 from .jwt_helpers import decode_and_validate_jwt
 from .models import (
+    BaseRequest,
+    BaseResponse,
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
     DiscoveryDocumentRequest,
@@ -51,6 +53,9 @@ __all__ = [
     "AuthorizeCallbackResponse",
     # From state_validation
     "AuthorizeCallbackValidationResult",
+    # From models (base classes)
+    "BaseRequest",
+    "BaseResponse",
     # From models
     "ClientCredentialsTokenRequest",
     "ClientCredentialsTokenResponse",
