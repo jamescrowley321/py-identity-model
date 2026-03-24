@@ -580,6 +580,47 @@ class ClientCredentialsTokenResponse(BaseResponse):
 
 
 # ============================================================================
+# Authorization Code Token Models
+# ============================================================================
+
+
+@dataclass
+class AuthorizationCodeTokenRequest(BaseRequest):
+    """Request for exchanging an authorization code for tokens.
+
+    Attributes:
+        address: The token endpoint URL.
+        client_id: The client identifier.
+        code: The authorization code received from the callback.
+        redirect_uri: The same redirect URI used in the authorization request.
+        code_verifier: PKCE code verifier (required when PKCE was used).
+        client_secret: Client secret (optional for public clients per RFC 7636).
+        scope: Space-delimited list of requested scopes (optional).
+    """
+
+    client_id: str
+    code: str
+    redirect_uri: str
+    code_verifier: str | None = None
+    client_secret: str | None = None
+    scope: str | None = None
+
+
+@dataclass
+class AuthorizationCodeTokenResponse(BaseResponse):
+    """Response from an authorization code token exchange.
+
+    Check ``is_successful`` before accessing ``token``.
+    The token dict typically contains ``access_token``, ``token_type``,
+    ``expires_in``, ``refresh_token``, and optionally ``id_token``.
+    """
+
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
+
+    token: dict | None = None
+
+
+# ============================================================================
 # UserInfo Models - OpenID Connect Core 1.0 Section 5.3
 # ============================================================================
 
@@ -673,6 +714,9 @@ class TokenValidationConfig:
 
 
 __all__ = [
+    # Authorization Code Token
+    "AuthorizationCodeTokenRequest",
+    "AuthorizationCodeTokenResponse",
     # Base Classes
     "BaseRequest",
     "BaseResponse",
