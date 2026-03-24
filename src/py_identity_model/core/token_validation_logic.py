@@ -113,6 +113,8 @@ def decode_with_config(
         audience=token_validation_config.audience,
         issuer=issuer or token_validation_config.issuer,
         options=token_validation_config.options,
+        leeway=token_validation_config.leeway,
+        subject=token_validation_config.subject,
     )
 
 
