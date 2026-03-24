@@ -585,24 +585,28 @@ class TokenValidationConfig:
         key: Public key for JWT verification (dict with 'kty', 'n', 'e' for RSA)
         audience: Expected audience claim(s) in the token
         algorithms: List of allowed signing algorithms (e.g., ['RS256'])
-        issuer: Expected issuer claim in the token
-        subject: Expected subject claim in the token
+        issuer: Expected issuer claim.  A single string or a list of
+            accepted issuers for multi-tenant validation.
+        subject: Expected ``sub`` claim.  Validated after decoding.
         options: Additional PyJWT decode options (e.g., {'verify_exp': False})
         claims_validator: Optional callable for custom claims validation.
                          Can be sync: Callable[[dict], None]
                          or async: Callable[[dict], Awaitable[None]] (in async context)
                          Should raise an exception if validation fails.
                          The decoded token claims dict is passed as the only argument.
+        leeway: Clock skew tolerance in seconds for ``exp`` and ``nbf``
+            claims.  Useful when clocks between the issuer and this
+            server are not perfectly synchronized.
 
     Example:
-        >>> def validate_custom_claims(claims: dict) -> None:
-        ...     if claims.get("role") != "admin":
-        ...         raise ValueError("User is not an admin")
-        >>>
         >>> config = TokenValidationConfig(
         ...     perform_disco=True,
         ...     audience="my-api",
-        ...     claims_validator=validate_custom_claims,
+        ...     issuer=[
+        ...         "https://idp1.example.com",
+        ...         "https://idp2.example.com",
+        ...     ],
+        ...     leeway=30,  # allow 30 seconds of clock skew
         ... )
     """
 
@@ -610,11 +614,12 @@ class TokenValidationConfig:
     key: dict | None = None
     audience: str | None = None
     algorithms: list[str] | None = None
-    issuer: str | None = None
+    issuer: str | list[str] | None = None
     subject: str | None = None
     options: dict | None = None
     claims_validator: Callable | None = None
     require_https: bool = True
+    leeway: float | None = None
 
 
 __all__ = [
