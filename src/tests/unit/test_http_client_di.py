@@ -17,8 +17,10 @@ from py_identity_model.core.models import (
     ClientCredentialsTokenRequest,
     DiscoveryDocumentRequest,
     JwksRequest,
+    TokenValidationConfig,
     UserInfoRequest,
 )
+from py_identity_model.exceptions import ConfigurationException
 from py_identity_model.sync.discovery import (
     get_discovery_document as sync_get_disco,
 )
@@ -26,6 +28,9 @@ from py_identity_model.sync.jwks import get_jwks as sync_get_jwks
 from py_identity_model.sync.managed_client import HTTPClient
 from py_identity_model.sync.token_client import (
     request_client_credentials_token as sync_request_token,
+)
+from py_identity_model.sync.token_validation import (
+    validate_token as sync_validate_token,
 )
 from py_identity_model.sync.userinfo import get_userinfo as sync_get_userinfo
 
@@ -125,6 +130,61 @@ class TestSyncDI:
         )
         response = sync_get_disco(DiscoveryDocumentRequest(address=DISCO_URL))
         assert response.is_successful
+
+    def test_validate_token_di_requires_disco_address(self):
+        """validate_token with http_client raises if disco_doc_address is None."""
+        config = TokenValidationConfig(perform_disco=True)
+        with (
+            HTTPClient() as client,
+            pytest.raises(ConfigurationException, match="disco_doc_address"),
+        ):
+            sync_validate_token(
+                jwt="fake.jwt.token",
+                token_validation_config=config,
+                disco_doc_address=None,
+                http_client=client,
+            )
+
+    @respx.mock
+    def test_validate_token_di_bypasses_cache(self):
+        """validate_token with http_client hits discovery directly (no cache)."""
+        respx.get(DISCO_URL).mock(
+            return_value=httpx.Response(200, json=DISCO_JSON)
+        )
+        respx.get(JWKS_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "keys": [
+                        {
+                            "kty": "RSA",
+                            "kid": "k1",
+                            "use": "sig",
+                            "alg": "RS256",
+                            "n": "test",
+                            "e": "AQAB",
+                        }
+                    ]
+                },
+            )
+        )
+        config = TokenValidationConfig(perform_disco=True)
+        # JWT with valid header (kid=k1, alg=RS256) but invalid signature
+        fake_jwt = (
+            "eyJhbGciOiAiUlMyNTYiLCAia2lkIjogImsxIiwgInR5cCI6ICJKV1QifQ"
+            ".eyJzdWIiOiAidGVzdCJ9.invalid_signature"
+        )
+        import contextlib
+
+        with HTTPClient() as client, contextlib.suppress(Exception):
+            sync_validate_token(
+                jwt=fake_jwt,
+                token_validation_config=config,
+                disco_doc_address=DISCO_URL,
+                http_client=client,
+            )
+        # Verify discovery and JWKS were called via injected client
+        assert respx.calls.call_count >= 2
 
 
 @pytest.mark.unit
