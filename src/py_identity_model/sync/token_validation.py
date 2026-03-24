@@ -26,6 +26,7 @@ from ..core.token_validation_logic import (
 from ..core.validators import validate_token_config
 from .discovery import get_discovery_document
 from .jwks import get_jwks
+from .managed_client import HTTPClient
 
 
 # ============================================================================
@@ -86,6 +87,7 @@ def validate_token(
     jwt: str,
     token_validation_config: TokenValidationConfig,
     disco_doc_address: str | None = None,
+    http_client: HTTPClient | None = None,
 ) -> dict:
     """
     Validate a JWT token.
@@ -94,6 +96,9 @@ def validate_token(
         jwt: The JWT token to validate
         token_validation_config: Token validation configuration
         disco_doc_address: Discovery document address (required if perform_disco=True)
+        http_client: Optional managed HTTP client.  When ``None``, uses the
+            thread-local default with response caching.  When provided,
+            caching is bypassed and the injected client is used directly.
 
     Returns:
         dict: Decoded token claims
@@ -106,19 +111,45 @@ def validate_token(
     validate_token_config(token_validation_config)
 
     if token_validation_config.perform_disco:
-        disco_doc_response = _get_disco_response(
-            disco_doc_address, token_validation_config.require_https
-        )
-        validate_disco_response(disco_doc_response)
+        if http_client is not None:
+            # Bypass cache — use injected client directly
+            assert (
+                disco_doc_address is not None
+            )  # enforced by validate_token_config
+            disco_doc_response = get_discovery_document(
+                DiscoveryDocumentRequest(
+                    address=disco_doc_address,
+                    require_https=token_validation_config.require_https,
+                ),
+                http_client=http_client,
+            )
+            validate_disco_response(disco_doc_response)
 
-        jwks_response = _get_jwks_response(disco_doc_response.jwks_uri)
-        validate_jwks_response(jwks_response)
+            assert (
+                disco_doc_response.jwks_uri is not None
+            )  # enforced by validate_disco_response
+            jwks_response = get_jwks(
+                JwksRequest(address=disco_doc_response.jwks_uri),
+                http_client=http_client,
+            )
+            validate_jwks_response(jwks_response)
 
-        # Extract kid from JWT and use cached public key lookup for performance
-        kid = extract_kid_from_jwt(jwt)
-        key_dict, alg = _get_public_key_by_kid(
-            kid, disco_doc_response.jwks_uri
-        )
+            kid = extract_kid_from_jwt(jwt)
+            key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [])
+        else:
+            # Cached path (existing behavior)
+            disco_doc_response = _get_disco_response(
+                disco_doc_address, token_validation_config.require_https
+            )
+            validate_disco_response(disco_doc_response)
+
+            jwks_response = _get_jwks_response(disco_doc_response.jwks_uri)
+            validate_jwks_response(jwks_response)
+
+            kid = extract_kid_from_jwt(jwt)
+            key_dict, alg = _get_public_key_by_kid(
+                kid, disco_doc_response.jwks_uri
+            )
 
         # Use local variables instead of mutating the config object
         decoded_token = decode_with_config(

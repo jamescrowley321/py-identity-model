@@ -172,3 +172,47 @@
 - Deleted task-state.md (no worktree to clean — worked in repo root)
 - T101 is fully complete: all review findings addressed, CI green, PR #211 ready for merge
 - Next eligible task: T102 (Fix PR #222 — HTTP Client DI), now unblocked
+
+---
+
+## Review-Fix Phase Complete (T121)
+
+Committed fe53358 on `test/integration-core-flows` with comprehensive review-fix addressing all findings from 4 review phases.
+
+### Fixes Applied (23 tests now, up from 21)
+
+**MUST FIX (3):**
+1. Refresh token tests perform independent auth code flows — no shared session fixture, no order-dependent flakiness from oidc-provider token rotation
+2. test_validate_auth_code_jwt_token now asserts JWT format instead of silently passing on opaque tokens
+3. Added test_validate_expired_token using datetime mock to verify TokenExpiredException mapping
+
+**SHOULD FIX (6):**
+- Removed dead `_follow_redirect` function
+- NODE_OIDC_ISSUER constant replaces hardcoded issuer in 8 locations
+- Renamed test_validate_jwt_with_discovery → test_validate_jwt_manual_key
+- Error tests assert OIDC error codes (invalid_client, invalid_grant)
+- Simplified test_auth_code_invalid_code_verifier (no duplicated devInteractions)
+- Replaced star import with explicit fixture imports in conftest.py
+
+**EDGE CASES (7):**
+- MAX_REDIRECTS=20 loop protection
+- Location header guard via _resolve_location
+- TransportError catch (was ConnectError only)
+- Exact redirect_uri matching (query/fragment, not prefix)
+- authorization_endpoint assertion
+- JSON decode error handling for discovery
+- JWKS kid lookup assertion
+
+**SECURITY WARN (2):**
+- Added test_validate_wrong_audience for audience validation coverage
+- Removed autouse from cleanup, explicit imports prevent leaking to non-node-oidc tests
+
+**PARTIAL (1):**
+- Documented intentional omission of test_auth_code_without_pkce_fails in module docstring
+
+### Verification
+- 23/23 integration tests pass (was 21)
+- 530/530 unit tests pass (94.22% coverage)
+- All lint checks pass (ruff, format, pyrefly, coverage)
+
+Phase set to pr. Next iteration pushes and creates PR.
