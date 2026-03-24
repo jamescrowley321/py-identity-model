@@ -6,8 +6,11 @@ from py_identity_model.core.authorize_response import (
     parse_authorize_callback_response,
 )
 from py_identity_model.exceptions import (
+    AuthorizeCallbackException,
     FailedResponseAccessError,
+    PyIdentityModelException,
     SuccessfulResponseAccessError,
+    ValidationException,
 )
 
 
@@ -157,11 +160,17 @@ class TestAuthorizeCallbackResponseGuards:
         with pytest.raises(FailedResponseAccessError, match="code"):
             _ = response.code
 
-        with pytest.raises(FailedResponseAccessError, match="state"):
-            _ = response.state
-
         with pytest.raises(FailedResponseAccessError, match="access_token"):
             _ = response.access_token
+
+    def test_state_accessible_on_error_response(self):
+        """RFC 6749 Section 4.1.2.1: state MUST be included in error responses."""
+        response = parse_authorize_callback_response(
+            "https://app.example.com/callback"
+            "?error=access_denied&state=original_state"
+        )
+
+        assert response.state == "original_state"
 
     def test_error_field_blocked_on_successful_response(self):
         response = parse_authorize_callback_response(
@@ -189,3 +198,20 @@ class TestAuthorizeCallbackResponseGuards:
 
         assert success.is_successful is True
         assert error.is_successful is False
+
+
+@pytest.mark.unit
+class TestAuthorizeCallbackException:
+    """Tests for AuthorizeCallbackException hierarchy."""
+
+    def test_inherits_from_validation_exception(self):
+        exc = AuthorizeCallbackException("test error")
+        assert isinstance(exc, ValidationException)
+
+    def test_inherits_from_base_exception(self):
+        exc = AuthorizeCallbackException("test error")
+        assert isinstance(exc, PyIdentityModelException)
+
+    def test_catchable_as_validation_exception(self):
+        with pytest.raises(ValidationException):
+            raise AuthorizeCallbackException("callback failed")

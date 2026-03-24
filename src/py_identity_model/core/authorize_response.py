@@ -34,7 +34,6 @@ class AuthorizeCallbackResponse(_GuardedResponseMixin):
             "token_type",
             "expires_in",
             "scope",
-            "state",
             "session_state",
             "issuer",
         }
