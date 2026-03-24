@@ -15,6 +15,7 @@ from ..core.userinfo_logic import (
     process_userinfo_response,
 )
 from .http_client import get_async_http_client, retry_with_backoff_async
+from .managed_client import AsyncHTTPClient
 
 
 @retry_with_backoff_async()
@@ -32,12 +33,17 @@ async def _request_userinfo(
     return await client.get(url, headers=headers)
 
 
-async def get_userinfo(request: UserInfoRequest) -> UserInfoResponse:
+async def get_userinfo(
+    request: UserInfoRequest,
+    http_client: AsyncHTTPClient | None = None,
+) -> UserInfoResponse:
     """
     Get claims about an authenticated user from the UserInfo endpoint (async).
 
     Args:
         request: UserInfo request with endpoint address and access token
+        http_client: Optional managed HTTP client.  When ``None``, uses the
+            module-level singleton.
 
     Returns:
         UserInfoResponse: Response with claims (JSON) or raw JWT string
@@ -46,7 +52,7 @@ async def get_userinfo(request: UserInfoRequest) -> UserInfoResponse:
     headers = prepare_userinfo_headers(request.token)
 
     try:
-        client = get_async_http_client()
+        client = http_client.client if http_client else get_async_http_client()
         response = await _request_userinfo(client, request.address, headers)
         return process_userinfo_response(response)
     except Exception as e:
