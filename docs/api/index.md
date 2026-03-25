@@ -24,6 +24,7 @@ from py_identity_model import DiscoveryDocumentRequest
 | [Auth Code + PKCE](auth-code-pkce.md) | Authorization code grant with PKCE (RFC 7636) |
 | [Authorize Callback](authorize-callback.md) | Authorization callback parsing and state validation |
 | [HTTP Client](http-client.md) | Dependency injection for HTTP client management |
+| [Introspection](introspection.md) | Token Introspection (RFC 7662) |
 | [Discovery](discovery.md) | OpenID Connect Discovery 1.0 document fetching |
 | [JWKS](jwks.md) | JSON Web Key Set (RFC 7517) operations |
 | [Token Client](token-client.md) | OAuth 2.0 token endpoint (client credentials) |
