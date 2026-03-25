@@ -25,6 +25,7 @@ from py_identity_model import DiscoveryDocumentRequest
 | [Authorize Callback](authorize-callback.md) | Authorization callback parsing and state validation |
 | [HTTP Client](http-client.md) | Dependency injection for HTTP client management |
 | [Introspection](introspection.md) | Token Introspection (RFC 7662) |
+| [DPoP](dpop.md) | Demonstrating Proof of Possession (RFC 9449) |
 | [Discovery](discovery.md) | OpenID Connect Discovery 1.0 document fetching |
 | [JWKS](jwks.md) | JSON Web Key Set (RFC 7517) operations |
 | [Refresh Token](refresh-token.md) | Refresh Token Grant (RFC 6749 Section 6) |
