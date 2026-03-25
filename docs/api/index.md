@@ -34,6 +34,7 @@ from py_identity_model import DiscoveryDocumentRequest
 | [Refresh Token](refresh-token.md) | Refresh Token Grant (RFC 6749 Section 6) |
 | [Revocation](revocation.md) | Token Revocation (RFC 7009) |
 | [Token Client](token-client.md) | OAuth 2.0 token endpoint (client credentials) |
+| [Token Exchange](token-exchange.md) | Token Exchange (RFC 8693) |
 | [Token Validation](token-validation.md) | JWT validation with auto-discovery |
 | [UserInfo](userinfo.md) | OpenID Connect UserInfo endpoint |
 | [Identity & Claims](identity.md) | Claims-based identity model |
