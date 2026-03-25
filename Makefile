@@ -13,7 +13,7 @@ lint:
 
 .PHONY: test
 test:
-	uv run pytest src/tests -v -n auto --cov=src/py_identity_model --cov-report=term-missing --cov-report=html --cov-fail-under=80
+	uv run pytest src/tests -v -n auto --cov=src/py_identity_model --cov-report=term-missing --cov-report=html --cov-fail-under=80 --ignore=src/tests/benchmarks
 
 .PHONY: test-unit
 test-unit:
@@ -44,6 +44,10 @@ test-integration-node-oidc: ## Run integration tests against node-oidc-provider
 .PHONY: generate-token
 generate-token:
 	uv run python examples/generate_token.py
+
+.PHONY: test-benchmark
+test-benchmark:
+	uv run pytest src/tests/benchmarks -v --benchmark-only --benchmark-sort=name
 
 .PHONY: test-examples
 test-examples:

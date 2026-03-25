@@ -25,6 +25,7 @@ dev = [
     "python-dotenv>=1.0.1,<2",
     "pytest>=8.3.2,<10",
     "pytest-asyncio>=0.24.0",
+    "pytest-benchmark>=5.1.0,<6",
     "pytest-cov>=6.0.0,<8",
     "pytest-xdist>=3.6.1,<4",
     "respx>=0.21.0",
@@ -221,6 +222,7 @@ markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
     "unit: marks tests as unit tests",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "benchmark: marks tests as performance benchmarks",
 ]
 # Async test configuration
 asyncio_mode = "auto"
