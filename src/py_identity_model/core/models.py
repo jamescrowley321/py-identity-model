@@ -656,6 +656,39 @@ class TokenIntrospectionResponse(BaseResponse):
 
 
 # ============================================================================
+# Token Revocation Models - RFC 7009
+# ============================================================================
+
+
+@dataclass
+class TokenRevocationRequest(BaseRequest):
+    """Request for OAuth 2.0 Token Revocation (RFC 7009).
+
+    Attributes:
+        address: The revocation endpoint URL.
+        token: The token to revoke.
+        client_id: The client identifier for authentication.
+        token_type_hint: Optional hint — ``"access_token"`` or ``"refresh_token"``.
+        client_secret: Client secret for authentication (optional for public clients).
+    """
+
+    token: str
+    client_id: str
+    token_type_hint: str | None = None
+    client_secret: str | None = None
+
+
+@dataclass
+class TokenRevocationResponse(BaseResponse):
+    """Response from a token revocation endpoint (RFC 7009).
+
+    A successful revocation returns ``is_successful=True`` with no data
+    fields.  Per RFC 7009, the server responds with 200 even if the token
+    was already invalid.
+    """
+
+
+# ============================================================================
 # UserInfo Models - OpenID Connect Core 1.0 Section 5.3
 # ============================================================================
 
@@ -768,6 +801,9 @@ __all__ = [
     # Token Introspection
     "TokenIntrospectionRequest",
     "TokenIntrospectionResponse",
+    # Token Revocation
+    "TokenRevocationRequest",
+    "TokenRevocationResponse",
     # Token Validation
     "TokenValidationConfig",
     # UserInfo

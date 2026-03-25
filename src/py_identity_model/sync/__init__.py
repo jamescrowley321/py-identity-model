@@ -36,6 +36,11 @@ from .jwks import (
     jwks_from_dict,
 )
 from .managed_client import HTTPClient
+from .revocation import (
+    TokenRevocationRequest,
+    TokenRevocationResponse,
+    revoke_token,
+)
 from .token_client import (
     AuthorizationCodeTokenRequest,
     AuthorizationCodeTokenResponse,
@@ -76,6 +81,9 @@ __all__ = [
     # Token Introspection
     "TokenIntrospectionRequest",
     "TokenIntrospectionResponse",
+    # Token Revocation
+    "TokenRevocationRequest",
+    "TokenRevocationResponse",
     # Token Validation
     "TokenValidationConfig",
     # UserInfo
@@ -93,6 +101,7 @@ __all__ = [
     "parse_authorize_callback_response",
     "request_authorization_code_token",
     "request_client_credentials_token",
+    "revoke_token",
     "validate_authorize_callback_state",
     "validate_token",
 ]

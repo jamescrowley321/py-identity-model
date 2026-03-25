@@ -15,6 +15,7 @@ from .models import (
     DiscoveryDocumentResponse,
     JwksResponse,
     TokenIntrospectionResponse,
+    TokenRevocationResponse,
     UserInfoResponse,
 )
 
@@ -157,6 +158,18 @@ def handle_introspection_error(
     error_msg = f"Unexpected error during token introspection: {e!s}"
     logger.error(error_msg, exc_info=True)
     return TokenIntrospectionResponse(is_successful=False, error=error_msg)
+
+
+def handle_revocation_error(e: Exception) -> TokenRevocationResponse:
+    """Handle errors during token revocation requests."""
+    if isinstance(e, httpx.RequestError):
+        error_msg = f"Network error during token revocation: {e!s}"
+        logger.error(error_msg, exc_info=True)
+        return TokenRevocationResponse(is_successful=False, error=error_msg)
+
+    error_msg = f"Unexpected error during token revocation: {e!s}"
+    logger.error(error_msg, exc_info=True)
+    return TokenRevocationResponse(is_successful=False, error=error_msg)
 
 
 def handle_userinfo_error(e: Exception) -> UserInfoResponse:
