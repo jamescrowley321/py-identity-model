@@ -5,6 +5,13 @@ from ..core.authorize_response import (
     parse_authorize_callback_response,
 )
 from ..core.authorize_url import build_authorization_url
+from ..core.dpop import (
+    DPoPKey,
+    build_dpop_headers,
+    compute_ath,
+    create_dpop_proof,
+    generate_dpop_key,
+)
 from ..core.models import BaseRequest, BaseResponse
 from ..core.pkce import (
     generate_code_challenge,
@@ -69,6 +76,8 @@ __all__ = [
     # Token Client
     "ClientCredentialsTokenRequest",
     "ClientCredentialsTokenResponse",
+    # DPoP
+    "DPoPKey",
     # Discovery
     "DiscoveryDocumentRequest",
     "DiscoveryDocumentResponse",
@@ -96,8 +105,12 @@ __all__ = [
     "UserInfoRequest",
     "UserInfoResponse",
     "build_authorization_url",
+    "build_dpop_headers",
+    "compute_ath",
+    "create_dpop_proof",
     "generate_code_challenge",
     "generate_code_verifier",
+    "generate_dpop_key",
     "generate_pkce_pair",
     "get_discovery_document",
     "get_jwks",
