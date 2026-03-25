@@ -43,6 +43,11 @@ from .jwks import (
     jwks_from_dict,
 )
 from .managed_client import HTTPClient
+from .par import (
+    PushedAuthorizationRequest,
+    PushedAuthorizationResponse,
+    push_authorization_request,
+)
 from .revocation import (
     TokenRevocationRequest,
     TokenRevocationResponse,
@@ -89,6 +94,9 @@ __all__ = [
     "JsonWebKeyParameterNames",
     "JwksRequest",
     "JwksResponse",
+    # PAR
+    "PushedAuthorizationRequest",
+    "PushedAuthorizationResponse",
     # Refresh Token
     "RefreshTokenRequest",
     "RefreshTokenResponse",
@@ -118,6 +126,7 @@ __all__ = [
     "introspect_token",
     "jwks_from_dict",
     "parse_authorize_callback_response",
+    "push_authorization_request",
     "refresh_token",
     "request_authorization_code_token",
     "request_client_credentials_token",

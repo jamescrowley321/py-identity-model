@@ -1,0 +1,58 @@
+"""
+Pushed Authorization Requests (asynchronous implementation, RFC 9126).
+"""
+
+from ..core.models import (
+    PushedAuthorizationRequest,
+    PushedAuthorizationResponse,
+)
+from ..core.par_logic import (
+    handle_par_error,
+    log_par_request,
+    prepare_par_request_data,
+    process_par_response,
+)
+from .http_client import get_async_http_client, retry_with_backoff_async
+from .managed_client import AsyncHTTPClient
+
+
+@retry_with_backoff_async()
+async def _push_authorization_request(client, url, data, headers, auth=None):
+    """Make PAR request with retry logic (async)."""
+    kwargs: dict = {"data": data, "headers": headers}
+    if auth is not None:
+        kwargs["auth"] = auth
+    return await client.post(url, **kwargs)
+
+
+async def push_authorization_request(
+    request: PushedAuthorizationRequest,
+    http_client: AsyncHTTPClient | None = None,
+) -> PushedAuthorizationResponse:
+    """Push authorization parameters to the PAR endpoint (RFC 9126, async).
+
+    Args:
+        request: PAR request with authorization parameters.
+        http_client: Optional managed HTTP client.
+
+    Returns:
+        PushedAuthorizationResponse with ``request_uri`` and ``expires_in``.
+    """
+    log_par_request(request)
+    params, headers, auth = prepare_par_request_data(request)
+
+    try:
+        client = http_client.client if http_client else get_async_http_client()
+        response = await _push_authorization_request(
+            client, request.address, params, headers, auth
+        )
+        return process_par_response(response)
+    except Exception as e:
+        return handle_par_error(e)
+
+
+__all__ = [
+    "PushedAuthorizationRequest",
+    "PushedAuthorizationResponse",
+    "push_authorization_request",
+]
