@@ -29,6 +29,9 @@ from .exceptions import (
 # Identity models (shared)
 from .identity import Claim, ClaimsIdentity, ClaimsPrincipal, to_principal
 from .sync import (
+    FAPI2_ALLOWED_SIGNING_ALGORITHMS,
+    FAPI2_REQUIRED_PKCE_METHOD,
+    FAPI2_REQUIRED_RESPONSE_TYPE,
     AuthorizationCodeTokenRequest,
     AuthorizationCodeTokenResponse,
     AuthorizeCallbackResponse,
@@ -44,6 +47,7 @@ from .sync import (
     DiscoveryDocumentRequest,
     DiscoveryDocumentResponse,
     DPoPKey,
+    FAPIValidationResult,
     HTTPClient,
     JsonWebAlgorithmsKeyTypes,
     JsonWebKey,
@@ -89,11 +93,18 @@ from .sync import (
     request_device_authorization,
     revoke_token,
     validate_authorize_callback_state,
+    validate_fapi_authorization_request,
+    validate_fapi_client_config,
+    validate_fapi_discovery,
     validate_token,
 )
 
 
 __all__ = [
+    # FAPI 2.0
+    "FAPI2_ALLOWED_SIGNING_ALGORITHMS",
+    "FAPI2_REQUIRED_PKCE_METHOD",
+    "FAPI2_REQUIRED_RESPONSE_TYPE",
     # Auth Code + PKCE
     "AuthorizationCodeTokenRequest",
     "AuthorizationCodeTokenResponse",
@@ -122,6 +133,7 @@ __all__ = [
     "DiscoveryDocumentRequest",
     "DiscoveryDocumentResponse",
     "DiscoveryException",
+    "FAPIValidationResult",
     "FailedResponseAccessError",
     # HTTP Client
     "HTTPClient",
@@ -189,5 +201,8 @@ __all__ = [
     "revoke_token",
     "to_principal",
     "validate_authorize_callback_state",
+    "validate_fapi_authorization_request",
+    "validate_fapi_client_config",
+    "validate_fapi_discovery",
     "validate_token",
 ]

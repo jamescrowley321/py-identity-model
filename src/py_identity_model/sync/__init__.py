@@ -12,6 +12,15 @@ from ..core.dpop import (
     create_dpop_proof,
     generate_dpop_key,
 )
+from ..core.fapi import (
+    FAPI2_ALLOWED_SIGNING_ALGORITHMS,
+    FAPI2_REQUIRED_PKCE_METHOD,
+    FAPI2_REQUIRED_RESPONSE_TYPE,
+    FAPIValidationResult,
+    validate_fapi_authorization_request,
+    validate_fapi_client_config,
+    validate_fapi_discovery,
+)
 from ..core.jar import build_jar_authorization_url, create_request_object
 from ..core.models import BaseRequest, BaseResponse
 from ..core.pkce import (
@@ -83,6 +92,10 @@ from .userinfo import UserInfoRequest, UserInfoResponse, get_userinfo
 
 
 __all__ = [
+    # FAPI 2.0
+    "FAPI2_ALLOWED_SIGNING_ALGORITHMS",
+    "FAPI2_REQUIRED_PKCE_METHOD",
+    "FAPI2_REQUIRED_RESPONSE_TYPE",
     # Auth Code + PKCE
     "AuthorizationCodeTokenRequest",
     "AuthorizationCodeTokenResponse",
@@ -105,6 +118,7 @@ __all__ = [
     # Discovery
     "DiscoveryDocumentRequest",
     "DiscoveryDocumentResponse",
+    "FAPIValidationResult",
     # HTTP Client
     "HTTPClient",
     # JWKS
@@ -159,5 +173,8 @@ __all__ = [
     "request_device_authorization",
     "revoke_token",
     "validate_authorize_callback_state",
+    "validate_fapi_authorization_request",
+    "validate_fapi_client_config",
+    "validate_fapi_discovery",
     "validate_token",
 ]
