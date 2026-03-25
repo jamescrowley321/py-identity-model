@@ -14,6 +14,7 @@ from .models import (
     ClientCredentialsTokenResponse,
     DiscoveryDocumentResponse,
     JwksResponse,
+    RefreshTokenResponse,
     TokenIntrospectionResponse,
     TokenRevocationResponse,
     UserInfoResponse,
@@ -144,6 +145,18 @@ def handle_auth_code_token_error(
     )
     logger.error(error_msg, exc_info=True)
     return AuthorizationCodeTokenResponse(is_successful=False, error=error_msg)
+
+
+def handle_refresh_token_error(e: Exception) -> RefreshTokenResponse:
+    """Handle errors during refresh token requests."""
+    if isinstance(e, httpx.RequestError):
+        error_msg = f"Network error during token refresh: {e!s}"
+        logger.error(error_msg, exc_info=True)
+        return RefreshTokenResponse(is_successful=False, error=error_msg)
+
+    error_msg = f"Unexpected error during token refresh: {e!s}"
+    logger.error(error_msg, exc_info=True)
+    return RefreshTokenResponse(is_successful=False, error=error_msg)
 
 
 def handle_introspection_error(

@@ -8,6 +8,7 @@ import httpx
 
 from ..core.error_handlers import (
     handle_auth_code_token_error,
+    handle_refresh_token_error,
     handle_token_error,
 )
 from ..core.models import (
@@ -15,13 +16,18 @@ from ..core.models import (
     AuthorizationCodeTokenResponse,
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
+    RefreshTokenRequest,
+    RefreshTokenResponse,
 )
 from ..core.token_client_logic import (
     log_auth_code_token_request,
+    log_refresh_token_request,
     log_token_request,
     prepare_auth_code_token_request_data,
+    prepare_refresh_token_request_data,
     prepare_token_request_data,
     process_auth_code_token_response,
+    process_refresh_token_response,
     process_token_response,
 )
 from .http_client import get_http_client, retry_with_backoff
@@ -111,11 +117,42 @@ def request_authorization_code_token(
         return handle_auth_code_token_error(e)
 
 
+def refresh_token(
+    request: RefreshTokenRequest,
+    http_client: HTTPClient | None = None,
+) -> RefreshTokenResponse:
+    """Refresh an OAuth 2.0 access token using a refresh token.
+
+    Args:
+        request: Refresh token request with refresh_token and client credentials.
+        http_client: Optional managed HTTP client.
+
+    Returns:
+        RefreshTokenResponse with new token dict or error.
+    """
+    log_refresh_token_request(request)
+    params, headers, auth = prepare_refresh_token_request_data(request)
+
+    try:
+        client = http_client.client if http_client else get_http_client()
+        response = _request_token(
+            client, request.address, params, headers, auth
+        )
+        result = process_refresh_token_response(response)
+        response.close()
+        return result
+    except Exception as e:
+        return handle_refresh_token_error(e)
+
+
 __all__ = [
     "AuthorizationCodeTokenRequest",
     "AuthorizationCodeTokenResponse",
     "ClientCredentialsTokenRequest",
     "ClientCredentialsTokenResponse",
+    "RefreshTokenRequest",
+    "RefreshTokenResponse",
+    "refresh_token",
     "request_authorization_code_token",
     "request_client_credentials_token",
 ]
