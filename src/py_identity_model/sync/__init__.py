@@ -73,6 +73,11 @@ from .token_client import (
     request_authorization_code_token,
     request_client_credentials_token,
 )
+from .token_exchange import (
+    TokenExchangeRequest,
+    TokenExchangeResponse,
+    exchange_token,
+)
 from .token_validation import TokenValidationConfig, validate_token
 from .userinfo import UserInfoRequest, UserInfoResponse, get_userinfo
 
@@ -115,6 +120,9 @@ __all__ = [
     "RefreshTokenRequest",
     "RefreshTokenResponse",
     "StateValidationResult",
+    # Token Exchange
+    "TokenExchangeRequest",
+    "TokenExchangeResponse",
     # Token Introspection
     "TokenIntrospectionRequest",
     "TokenIntrospectionResponse",
@@ -132,6 +140,7 @@ __all__ = [
     "compute_ath",
     "create_dpop_proof",
     "create_request_object",
+    "exchange_token",
     "generate_code_challenge",
     "generate_code_verifier",
     "generate_dpop_key",
