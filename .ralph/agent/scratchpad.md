@@ -269,3 +269,46 @@ Phase set to pr. Next iteration pushes and creates PR.
 - Next iteration: execute `analyze` phase for T122
 - Read node-oidc-provider fixture, existing integration tests, introspection/revocation source
 - Plan integration tests for RFC 7662 (introspection) and RFC 7009 (revocation)
+
+## 2026-03-30 — Iteration: review-edge phase completed (T122)
+
+### Context
+- Task T122: Integration tests for Introspection (RFC 7662) and Revocation (RFC 7009)
+- Branch: test/integration-token-mgmt, worktree: /tmp/pim-T122
+- Phase: review-edge → review-acceptance
+
+### What happened this iteration
+- Executed `review-edge` phase as the Edge Case Hunter persona
+- Read all T122-specific source code: sync/async introspection, revocation, core logic, models, response processors, error handlers, conftest, test file
+- Performed exhaustive path analysis on all branching paths in changed code
+- Found 8 unhandled edge case paths:
+  - conftest JSON parsing: 2 fixtures lack ValueError guard on resp.json()
+  - Test assertions: custom claims test accesses nested dict keys without existence guard
+  - Async client lifecycle: close_async_http_client() in finally can mask test assertion errors
+  - Sync/async mixing: async test calls sync httpx.post blocking the event loop
+  - Source code inconsistency: revocation vs introspection use different client_secret emptiness checks
+  - Source code: sync introspection response.close() not in finally block (unlike revocation)
+  - Fixture: session-scoped opaque token fixture doesn't verify access_token key exists
+- Phase updated to `review-acceptance`
+
+### Next
+- Next iteration: execute `review-acceptance` phase (Acceptance Auditor persona)
+- Check each requirement has implementation + test coverage
+
+## 2026-03-30 — Iteration: review-acceptance phase completed (T122)
+
+### Context
+- Task T122: Integration tests for Introspection (RFC 7662) and Revocation (RFC 7009)
+- Branch: test/integration-token-mgmt, worktree: /tmp/pim-T122
+- Executed as Acceptance Auditor persona
+
+### What happened this iteration
+- Reviewed all T122 requirements against implementation and test coverage
+- 15 PASS items: both RFCs have comprehensive happy-path + error-path coverage, lifecycle test, async variants, proper test infrastructure
+- 1 FAIL: missing `test_revoke_wrong_client_credentials` (asymmetric error coverage)
+- 4 PARTIAL: weak error assertion in introspect wrong-creds test, incomplete custom claims verification (only checks 1 of 2 tenants), `revocation_endpoint` missing from discovery model, async singleton lifecycle hazard
+- Phase updated to `review-security`
+
+### Next
+- Next iteration: execute `review-security` phase (Sentinel persona)
+- Then: review-fix, pr, ci phases

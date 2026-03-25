@@ -5,6 +5,11 @@ from ..core.authorize_response import (
     parse_authorize_callback_response,
 )
 from ..core.authorize_url import build_authorization_url
+from ..core.discovery_policy import (
+    DiscoveryEndpoint,
+    DiscoveryPolicy,
+    parse_discovery_url,
+)
 from ..core.dpop import (
     DPoPKey,
     build_dpop_headers,
@@ -120,6 +125,9 @@ __all__ = [
     # Discovery
     "DiscoveryDocumentRequest",
     "DiscoveryDocumentResponse",
+    # Discovery Policy
+    "DiscoveryEndpoint",
+    "DiscoveryPolicy",
     "FAPIValidationResult",
     # HTTP Client
     "HTTPClient",
@@ -167,6 +175,7 @@ __all__ = [
     "introspect_token",
     "jwks_from_dict",
     "parse_authorize_callback_response",
+    "parse_discovery_url",
     "poll_device_token",
     "push_authorization_request",
     "refresh_token",

@@ -5,7 +5,9 @@ This module contains the common processing logic used by both sync and async
 discovery implementations, reducing code duplication.
 """
 
-import httpx
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from ..logging_config import logger
 from ..logging_utils import redact_url
@@ -15,6 +17,12 @@ from .response_processors import (
     build_discovery_response,
     validate_and_parse_discovery_response,
 )
+
+
+if TYPE_CHECKING:
+    import httpx
+
+    from .discovery_policy import DiscoveryPolicy
 
 
 def log_discovery_request(disco_doc_req: DiscoveryDocumentRequest) -> None:
@@ -46,14 +54,11 @@ def handle_unsuccessful_response(
 
 def process_successful_response(
     response: httpx.Response,
-    *,
-    require_https: bool = True,
+    policy: DiscoveryPolicy | None = None,
 ) -> DiscoveryDocumentResponse:
     """Process successful discovery response."""
     # Validate and parse response using shared logic
-    response_json = validate_and_parse_discovery_response(
-        response, require_https=require_https
-    )
+    response_json = validate_and_parse_discovery_response(response, policy)
 
     logger.info(
         f"Discovery document fetched successfully, issuer: {response_json.get('issuer')}",
@@ -69,15 +74,14 @@ def process_successful_response(
 
 def process_discovery_response(
     response: httpx.Response,
-    *,
-    require_https: bool = True,
+    policy: DiscoveryPolicy | None = None,
 ) -> DiscoveryDocumentResponse:
     """
     Process discovery document response.
 
     Args:
         response: HTTP response from discovery endpoint
-        require_https: Whether to enforce HTTPS on the issuer.
+        policy: Optional discovery policy for configurable validation.
 
     Returns:
         DiscoveryDocumentResponse with parsed data or error
@@ -88,8 +92,6 @@ def process_discovery_response(
         return handle_unsuccessful_response(response)
 
     try:
-        return process_successful_response(
-            response, require_https=require_https
-        )
+        return process_successful_response(response, policy)
     except Exception as e:
         return handle_discovery_error(e)

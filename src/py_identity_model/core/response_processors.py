@@ -5,7 +5,9 @@ This module provides common response validation and parsing logic used by both
 sync and async implementations.
 """
 
-import httpx
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from ..exceptions import DiscoveryException
 from .models import (
@@ -19,24 +21,30 @@ from .models import (
 )
 from .parsers import jwks_from_dict
 from .validators import (
-    validate_https_url,
-    validate_issuer,
+    validate_https_url_with_policy,
+    validate_issuer_with_policy,
     validate_parameter_values,
     validate_required_parameters,
 )
 
 
+if TYPE_CHECKING:
+    import httpx
+
+    from .discovery_policy import DiscoveryPolicy
+
+
 def validate_and_parse_discovery_response(
     response: httpx.Response,
-    *,
-    require_https: bool = True,
+    policy: DiscoveryPolicy | None = None,
 ) -> dict:
     """
     Validate and parse discovery document HTTP response.
 
     Args:
         response: HTTP response from discovery endpoint
-        require_https: Whether to enforce HTTPS on the issuer.
+        policy: Optional discovery policy for configurable validation.
+            When ``None``, strict defaults apply.
 
     Returns:
         dict: Parsed discovery document JSON
@@ -62,31 +70,35 @@ def validate_and_parse_discovery_response(
     # Validate required parameters
     validate_required_parameters(response_json)
 
-    # Validate issuer format
-    validate_issuer(
-        response_json.get("issuer", ""), require_https=require_https
-    )
+    # Validate issuer format (policy-aware)
+    validate_issuer_with_policy(response_json.get("issuer", ""), policy)
 
     # Validate parameter values
     validate_parameter_values(response_json)
 
-    # Validate endpoint URLs
-    validate_https_url(response_json.get("jwks_uri"), "jwks_uri")
-    validate_https_url(
+    # Validate endpoint URLs (policy-aware)
+    validate_https_url_with_policy(
+        response_json.get("jwks_uri"), "jwks_uri", policy
+    )
+    validate_https_url_with_policy(
         response_json.get("authorization_endpoint"),
         "authorization_endpoint",
+        policy,
     )
-    validate_https_url(
+    validate_https_url_with_policy(
         response_json.get("token_endpoint"),
         "token_endpoint",
+        policy,
     )
-    validate_https_url(
+    validate_https_url_with_policy(
         response_json.get("userinfo_endpoint"),
         "userinfo_endpoint",
+        policy,
     )
-    validate_https_url(
+    validate_https_url_with_policy(
         response_json.get("registration_endpoint"),
         "registration_endpoint",
+        policy,
     )
 
     return response_json
