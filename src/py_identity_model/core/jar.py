@@ -13,6 +13,20 @@ from urllib.parse import urlencode
 import jwt as pyjwt
 
 
+_RESERVED_CLAIMS = frozenset(
+    {
+        "iss",
+        "aud",
+        "iat",
+        "nbf",
+        "exp",
+        "client_id",
+        "response_type",
+        "redirect_uri",
+        "scope",
+    }
+)
+
 _SUPPORTED_ALGORITHMS = {
     "ES256",
     "ES384",
@@ -66,7 +80,8 @@ def create_request_object(
         The signed JWT string.
 
     Raises:
-        ValueError: If *algorithm* is not supported.
+        ValueError: If *algorithm* is not supported, *lifetime* is not
+            positive, or *extra_claims* contains a reserved claim name.
     """
     if algorithm not in _SUPPORTED_ALGORITHMS:
         msg = (
@@ -74,6 +89,16 @@ def create_request_object(
             f"Supported: {sorted(_SUPPORTED_ALGORITHMS)}"
         )
         raise ValueError(msg)
+
+    if lifetime <= 0:
+        raise ValueError(f"lifetime must be positive, got {lifetime}")
+
+    collisions = set(extra_claims) & _RESERVED_CLAIMS
+    if collisions:
+        raise ValueError(
+            f"extra_claims cannot override reserved claims: "
+            f"{sorted(collisions)}"
+        )
 
     now = int(time.time())
     claims: dict[str, str | int] = {

@@ -148,6 +148,54 @@ class TestCreateRequestObject:
                 redirect_uri="https://app.com/cb",
             )
 
+    def test_reserved_claim_rejected(self):
+        pem = _ec_private_key_pem()
+        with pytest.raises(ValueError, match="reserved claims"):
+            create_request_object(
+                private_key=pem,
+                algorithm="ES256",
+                client_id="app",
+                audience="https://auth.example.com",
+                redirect_uri="https://app.com/cb",
+                iss="evil-issuer",
+            )
+
+    def test_reserved_claim_exp_rejected(self):
+        pem = _ec_private_key_pem()
+        with pytest.raises(ValueError, match="reserved claims"):
+            create_request_object(
+                private_key=pem,
+                algorithm="ES256",
+                client_id="app",
+                audience="https://auth.example.com",
+                redirect_uri="https://app.com/cb",
+                exp="99999999999",
+            )
+
+    def test_zero_lifetime_rejected(self):
+        pem = _ec_private_key_pem()
+        with pytest.raises(ValueError, match="lifetime must be positive"):
+            create_request_object(
+                private_key=pem,
+                algorithm="ES256",
+                client_id="app",
+                audience="https://auth.example.com",
+                redirect_uri="https://app.com/cb",
+                lifetime=0,
+            )
+
+    def test_negative_lifetime_rejected(self):
+        pem = _ec_private_key_pem()
+        with pytest.raises(ValueError, match="lifetime must be positive"):
+            create_request_object(
+                private_key=pem,
+                algorithm="ES256",
+                client_id="app",
+                audience="https://auth.example.com",
+                redirect_uri="https://app.com/cb",
+                lifetime=-10,
+            )
+
     def test_optional_params_omitted_when_none(self):
         pem = _ec_private_key_pem()
         token = create_request_object(
