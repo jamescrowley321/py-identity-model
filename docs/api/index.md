@@ -27,6 +27,7 @@ from py_identity_model import DiscoveryDocumentRequest
 | [Introspection](introspection.md) | Token Introspection (RFC 7662) |
 | [Discovery](discovery.md) | OpenID Connect Discovery 1.0 document fetching |
 | [JWKS](jwks.md) | JSON Web Key Set (RFC 7517) operations |
+| [Refresh Token](refresh-token.md) | Refresh Token Grant (RFC 6749 Section 6) |
 | [Revocation](revocation.md) | Token Revocation (RFC 7009) |
 | [Token Client](token-client.md) | OAuth 2.0 token endpoint (client credentials) |
 | [Token Validation](token-validation.md) | JWT validation with auto-discovery |
