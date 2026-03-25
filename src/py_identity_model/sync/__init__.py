@@ -24,6 +24,14 @@ from ..core.state_validation import (
     StateValidationResult,
     validate_authorize_callback_state,
 )
+from .device_auth import (
+    DeviceAuthorizationRequest,
+    DeviceAuthorizationResponse,
+    DeviceTokenRequest,
+    DeviceTokenResponse,
+    poll_device_token,
+    request_device_authorization,
+)
 from .discovery import (
     DiscoveryDocumentRequest,
     DiscoveryDocumentResponse,
@@ -84,6 +92,11 @@ __all__ = [
     "ClientCredentialsTokenResponse",
     # DPoP
     "DPoPKey",
+    # Device Authorization Grant
+    "DeviceAuthorizationRequest",
+    "DeviceAuthorizationResponse",
+    "DeviceTokenRequest",
+    "DeviceTokenResponse",
     # Discovery
     "DiscoveryDocumentRequest",
     "DiscoveryDocumentResponse",
@@ -129,10 +142,12 @@ __all__ = [
     "introspect_token",
     "jwks_from_dict",
     "parse_authorize_callback_response",
+    "poll_device_token",
     "push_authorization_request",
     "refresh_token",
     "request_authorization_code_token",
     "request_client_credentials_token",
+    "request_device_authorization",
     "revoke_token",
     "validate_authorize_callback_state",
     "validate_token",
