@@ -34,7 +34,7 @@ def _request_token(
     url: str,
     data: dict,
     headers: dict,
-    auth: tuple[str, str],
+    auth: tuple[str, str] | None = None,
 ) -> httpx.Response:
     """
     Request token with retry logic.
@@ -42,7 +42,10 @@ def _request_token(
     Automatically retries on 429 (rate limiting) and 5xx errors with
     exponential backoff. Configuration is read from environment variables.
     """
-    return client.post(url, data=data, headers=headers, auth=auth)
+    kwargs: dict = {"data": data, "headers": headers}
+    if auth is not None:
+        kwargs["auth"] = auth
+    return client.post(url, **kwargs)
 
 
 def request_client_credentials_token(
@@ -99,7 +102,7 @@ def request_authorization_code_token(
     try:
         client = http_client.client if http_client else get_http_client()
         response = _request_token(
-            client, request.address, params, headers, auth or ("", "")
+            client, request.address, params, headers, auth
         )
         result = process_auth_code_token_response(response)
         response.close()

@@ -34,7 +34,7 @@ async def _request_token(
     url: str,
     data: dict,
     headers: dict,
-    auth: tuple[str, str],
+    auth: tuple[str, str] | None = None,
 ) -> httpx.Response:
     """
     Request token with retry logic.
@@ -42,7 +42,10 @@ async def _request_token(
     Automatically retries on 429 (rate limiting) and 5xx errors with
     exponential backoff. Configuration is read from environment variables.
     """
-    return await client.post(url, data=data, headers=headers, auth=auth)
+    kwargs: dict = {"data": data, "headers": headers}
+    if auth is not None:
+        kwargs["auth"] = auth
+    return await client.post(url, **kwargs)
 
 
 async def request_client_credentials_token(
@@ -96,7 +99,7 @@ async def request_authorization_code_token(
     try:
         client = http_client.client if http_client else get_async_http_client()
         response = await _request_token(
-            client, request.address, params, headers, auth or ("", "")
+            client, request.address, params, headers, auth
         )
         return process_auth_code_token_response(response)
     except Exception as e:
