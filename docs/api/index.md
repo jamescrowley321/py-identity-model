@@ -24,6 +24,7 @@ from py_identity_model import DiscoveryDocumentRequest
 | [Auth Code + PKCE](auth-code-pkce.md) | Authorization code grant with PKCE (RFC 7636) |
 | [Authorize Callback](authorize-callback.md) | Authorization callback parsing and state validation |
 | [Device Authorization](device-auth.md) | Device Authorization Grant (RFC 8628) |
+| [FAPI 2.0](fapi.md) | FAPI 2.0 Security Profile compliance validation |
 | [HTTP Client](http-client.md) | Dependency injection for HTTP client management |
 | [Introspection](introspection.md) | Token Introspection (RFC 7662) |
 | [JAR](jar.md) | JWT Secured Authorization Request (RFC 9101) |
