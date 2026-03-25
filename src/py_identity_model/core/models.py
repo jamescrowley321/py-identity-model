@@ -615,6 +615,45 @@ class AuthorizationCodeTokenResponse(BaseResponse):
 
 
 # ============================================================================
+# Token Introspection Models - RFC 7662
+# ============================================================================
+
+
+@dataclass
+class TokenIntrospectionRequest(BaseRequest):
+    """Request for OAuth 2.0 Token Introspection (RFC 7662).
+
+    Attributes:
+        address: The introspection endpoint URL.
+        token: The token to introspect.
+        client_id: The client identifier for authentication.
+        token_type_hint: Optional hint — ``"access_token"`` or ``"refresh_token"``.
+        client_secret: Client secret for authentication (optional for public clients).
+    """
+
+    token: str
+    client_id: str
+    token_type_hint: str | None = None
+    client_secret: str | None = None
+
+
+@dataclass
+class TokenIntrospectionResponse(BaseResponse):
+    """Response from a token introspection endpoint (RFC 7662).
+
+    Check ``is_successful`` before accessing ``claims``.
+    The ``claims`` dict contains at minimum ``active: bool``.
+    When ``active`` is ``True``, additional claims like ``scope``,
+    ``client_id``, ``username``, ``exp``, ``iat``, ``sub``, ``aud``,
+    ``iss``, and ``jti`` may be present.
+    """
+
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset({"claims"})
+
+    claims: dict | None = None
+
+
+# ============================================================================
 # UserInfo Models - OpenID Connect Core 1.0 Section 5.3
 # ============================================================================
 
@@ -721,11 +760,12 @@ __all__ = [
     "DiscoveryDocumentResponse",
     "JsonWebAlgorithmsKeyTypes",
     "JsonWebKey",
-    # Enums
     "JsonWebKeyParameterNames",
-    # JWKS
     "JwksRequest",
     "JwksResponse",
+    # Token Introspection
+    "TokenIntrospectionRequest",
+    "TokenIntrospectionResponse",
     # Token Validation
     "TokenValidationConfig",
     # UserInfo

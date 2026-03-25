@@ -14,6 +14,7 @@ from .models import (
     ClientCredentialsTokenResponse,
     DiscoveryDocumentResponse,
     JwksResponse,
+    TokenIntrospectionResponse,
     UserInfoResponse,
 )
 
@@ -142,6 +143,20 @@ def handle_auth_code_token_error(
     )
     logger.error(error_msg, exc_info=True)
     return AuthorizationCodeTokenResponse(is_successful=False, error=error_msg)
+
+
+def handle_introspection_error(
+    e: Exception,
+) -> TokenIntrospectionResponse:
+    """Handle errors during token introspection requests."""
+    if isinstance(e, httpx.RequestError):
+        error_msg = f"Network error during token introspection: {e!s}"
+        logger.error(error_msg, exc_info=True)
+        return TokenIntrospectionResponse(is_successful=False, error=error_msg)
+
+    error_msg = f"Unexpected error during token introspection: {e!s}"
+    logger.error(error_msg, exc_info=True)
+    return TokenIntrospectionResponse(is_successful=False, error=error_msg)
 
 
 def handle_userinfo_error(e: Exception) -> UserInfoResponse:

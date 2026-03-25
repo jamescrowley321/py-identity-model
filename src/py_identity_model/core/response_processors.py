@@ -13,6 +13,7 @@ from .models import (
     ClientCredentialsTokenResponse,
     DiscoveryDocumentResponse,
     JwksResponse,
+    TokenIntrospectionResponse,
     UserInfoResponse,
 )
 from .parsers import jwks_from_dict
@@ -257,6 +258,23 @@ def parse_auth_code_token_response(
         is_successful=False,
         error=error_msg,
     )
+
+
+def parse_introspection_response(
+    response: httpx.Response,
+) -> TokenIntrospectionResponse:
+    """Parse token introspection HTTP response (RFC 7662)."""
+    if response.is_success:
+        return TokenIntrospectionResponse(
+            is_successful=True,
+            claims=response.json(),
+        )
+
+    error_msg = (
+        f"Token introspection failed with status code: "
+        f"{response.status_code}. Response Content: {response.content}"
+    )
+    return TokenIntrospectionResponse(is_successful=False, error=error_msg)
 
 
 def parse_userinfo_response(response: httpx.Response) -> UserInfoResponse:
