@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import ClassVar
 from urllib.parse import parse_qs, urlparse
 
+from ..exceptions import AuthorizeCallbackException
 from ..oidc_constants import AuthorizeResponse as AuthorizeResponseParams
 from .models import _GuardedResponseMixin
 
@@ -24,6 +25,13 @@ class AuthorizeCallbackResponse(_GuardedResponseMixin):
     ``False``.  The ``state`` field is *not* guarded, per RFC 6749 Section
     4.1.2.1 which requires ``state`` in error responses so callers can
     correlate errors with the original request.
+
+    .. warning::
+
+       The ``raw`` field contains the full redirect URI and ``values``
+       contains all parsed parameters.  For implicit/hybrid flows these
+       may include ``access_token`` in cleartext.  Avoid logging,
+       serializing, or persisting these fields in production.
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset(
@@ -93,7 +101,16 @@ def parse_authorize_callback_response(
     Returns:
         An ``AuthorizeCallbackResponse`` with ``is_successful=False`` when the
         URL contains an ``error`` parameter, or ``True`` otherwise.
+
+    Raises:
+        AuthorizeCallbackException: If *redirect_uri* is ``None`` or an
+            empty string.
     """
+    if not redirect_uri:
+        raise AuthorizeCallbackException(
+            "redirect_uri must be a non-empty string"
+        )
+
     parsed = urlparse(redirect_uri)
     params_str = parsed.fragment or parsed.query
 
