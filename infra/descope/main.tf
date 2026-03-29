@@ -3,8 +3,8 @@ terraform {
 
   required_providers {
     descope = {
-      source  = "descope/descope"
-      version = "~> 0.3"
+      source  = "jamescrowley321/descope"
+      version = "~> 1.0"
     }
     github = {
       source  = "integrations/github"
