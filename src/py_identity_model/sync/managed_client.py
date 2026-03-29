@@ -29,43 +29,62 @@ class HTTPClient:
     exiting the context manager) will close it.
 
     When an existing *client* is provided, this instance acts as a
-    non-owning wrapper and :meth:`close` is a no-op.
+    non-owning wrapper and :meth:`close` is a no-op.  Passing *timeout*
+    or *verify* together with an existing *client* raises ``ValueError``
+    because those parameters only apply to newly created clients.
 
     Args:
         client: Existing ``httpx.Client`` to wrap.  If ``None``, a new
             client is created with the given *timeout* and *verify* settings.
         timeout: Request timeout in seconds.  Defaults to the
             ``HTTP_TIMEOUT`` environment variable or 30.0.
-        verify: SSL verification.  Defaults to environment-based
+        verify: SSL verification.  Pass ``True``/``False`` or a CA bundle
+            path.  Defaults to ``None`` which uses environment-based
             configuration (see :mod:`py_identity_model.ssl_config`).
+
+    Raises:
+        ValueError: If *timeout* or *verify* are provided alongside an
+            existing *client*.
+        RuntimeError: If the client is accessed after :meth:`close`.
     """
 
     def __init__(
         self,
         client: httpx.Client | None = None,
         timeout: float | None = None,
-        verify: bool | str = True,
+        verify: bool | str | None = None,
     ) -> None:
         if client is not None:
+            if timeout is not None or verify is not None:
+                raise ValueError(
+                    "timeout and verify cannot be specified when wrapping "
+                    "an existing client"
+                )
             self._client = client
             self._owned = False
         else:
             self._client = httpx.Client(
-                verify=verify if verify is not True else get_ssl_verify(),
+                verify=verify if verify is not None else get_ssl_verify(),
                 timeout=timeout if timeout is not None else get_timeout(),
                 follow_redirects=True,
             )
             self._owned = True
+        self._closed = False
 
     @property
     def client(self) -> httpx.Client:
         """The underlying ``httpx.Client``."""
+        if self._closed:
+            raise RuntimeError("HTTPClient has been closed")
         return self._client
 
     def close(self) -> None:
-        """Close the client if this instance owns it."""
+        """Close the client if this instance owns it.  Idempotent."""
+        if self._closed:
+            return
         if self._owned:
             self._client.close()
+        self._closed = True
 
     def __enter__(self) -> HTTPClient:
         return self
