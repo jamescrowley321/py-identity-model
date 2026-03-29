@@ -138,6 +138,20 @@ class TestParseAuthorizeCallbackResponse:
 
         assert response.raw == uri
 
+    def test_none_input_raises_exception(self):
+        """[M2] parse_authorize_callback_response(None) must not crash with TypeError."""
+        with pytest.raises(
+            AuthorizeCallbackException, match="non-empty string"
+        ):
+            parse_authorize_callback_response(None)  # type: ignore
+
+    def test_empty_string_raises_exception(self):
+        """[S1] Empty redirect_uri must raise, not return misleading success."""
+        with pytest.raises(
+            AuthorizeCallbackException, match="non-empty string"
+        ):
+            parse_authorize_callback_response("")
+
 
 @pytest.mark.unit
 class TestAuthorizeCallbackResponseGuards:
