@@ -106,12 +106,21 @@ def decode_with_config(
             "Token validation configuration must have key and algorithms set"
         )
 
+    # Warn when discovery issuer overrides a user-supplied multi-issuer list
+    if issuer is not None and isinstance(token_validation_config.issuer, list):
+        logger.warning(
+            "Discovery issuer overrides configured multi-issuer list; "
+            "multi-issuer is not supported in discovery mode"
+        )
+
     return decode_and_validate_jwt(
         jwt=jwt,
         key=token_validation_config.key,
         algorithms=token_validation_config.algorithms,
         audience=token_validation_config.audience,
-        issuer=issuer or token_validation_config.issuer,
+        issuer=issuer
+        if issuer is not None
+        else token_validation_config.issuer,
         options=token_validation_config.options,
         leeway=token_validation_config.leeway,
         subject=token_validation_config.subject,
@@ -207,7 +216,7 @@ def log_validation_success(decoded_token: dict) -> None:
         decoded_token: The decoded token claims
     """
     logger.info(
-        f"Token validation successful for subject: {decoded_token.get('sub', 'unknown')}",
+        f"Token validation successful, subject: {'[present]' if 'sub' in decoded_token else '[absent]'}",
     )
     logger.debug(f"Decoded token claims: {list(decoded_token.keys())}")
 

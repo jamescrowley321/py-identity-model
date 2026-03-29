@@ -247,3 +247,69 @@ class TestSubjectValidation:
             subject="expected_user",
         )
         assert config.subject == "expected_user"
+
+
+@pytest.mark.unit
+class TestCacheAliasing:
+    """Tests for cache aliasing protection (Security BLOCK fix)."""
+
+    def test_decoded_dict_mutation_does_not_corrupt_cache(self, rsa_keypair):
+        """Mutating a decoded dict must not affect subsequent decode calls."""
+        key_dict, pem = rsa_keypair
+        token = _sign_jwt(pem, {"sub": "user1", "iss": "https://idp.com"})
+
+        decoded1 = decode_and_validate_jwt(
+            token, key_dict, ["RS256"], None, "https://idp.com", None
+        )
+        # Simulate middleware enrichment that corrupts the cache
+        decoded1["roles"] = ["admin"]
+        decoded1["sub"] = "HIJACKED"
+
+        decoded2 = decode_and_validate_jwt(
+            token, key_dict, ["RS256"], None, "https://idp.com", None
+        )
+        # The second call must not see the mutations
+        assert "roles" not in decoded2
+        assert decoded2["sub"] == "user1"
+
+    def test_decoded_dicts_are_independent_objects(self, rsa_keypair):
+        """Two decodes of the same JWT must return distinct dict objects."""
+        key_dict, pem = rsa_keypair
+        token = _sign_jwt(pem, {"sub": "user1"})
+
+        decoded1 = decode_and_validate_jwt(
+            token, key_dict, ["RS256"], None, None, None
+        )
+        decoded2 = decode_and_validate_jwt(
+            token, key_dict, ["RS256"], None, None, None
+        )
+        assert decoded1 is not decoded2
+
+
+@pytest.mark.unit
+class TestDirectAPIGuards:
+    """Tests for guards on direct decode_and_validate_jwt calls."""
+
+    def test_empty_algorithms_rejected(self, rsa_keypair):
+        """Empty algorithms list must be rejected."""
+        key_dict, _pem = rsa_keypair
+        from py_identity_model.exceptions import ConfigurationException
+
+        with pytest.raises(
+            ConfigurationException, match="algorithms must not be empty"
+        ):
+            decode_and_validate_jwt(
+                "fake.token", key_dict, [], None, None, None
+            )
+
+    def test_empty_issuer_list_rejected(self, rsa_keypair):
+        """Empty issuer list must be rejected on direct API call."""
+        key_dict, _pem = rsa_keypair
+        from py_identity_model.exceptions import ConfigurationException
+
+        with pytest.raises(
+            ConfigurationException, match="issuer must not be an empty list"
+        ):
+            decode_and_validate_jwt(
+                "fake.token", key_dict, ["RS256"], None, [], None
+            )
