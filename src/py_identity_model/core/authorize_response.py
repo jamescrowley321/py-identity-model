@@ -7,13 +7,22 @@ supporting both query string (code flow) and fragment (implicit flow) parameters
 Reference: RFC 6749 Section 4.1.2, OpenID Connect Core Section 3.1.2.5
 """
 
-from dataclasses import dataclass
-from typing import ClassVar
+import contextlib
+from dataclasses import dataclass, fields
+import types
+from typing import Any, ClassVar
 from urllib.parse import parse_qs, urlparse
 
 from ..exceptions import AuthorizeCallbackException
 from ..oidc_constants import AuthorizeResponse as AuthorizeResponseParams
 from .models import _GuardedResponseMixin
+
+
+_ALLOWED_SCHEMES = frozenset({"https", "http"})
+
+_SENSITIVE_FIELDS = frozenset(
+    {"raw", "access_token", "code", "identity_token", "refresh_token"}
+)
 
 
 @dataclass
@@ -42,6 +51,7 @@ class AuthorizeCallbackResponse(_GuardedResponseMixin):
             "token_type",
             "expires_in",
             "scope",
+            "refresh_token",
             "session_state",
             "issuer",
         }
@@ -56,8 +66,9 @@ class AuthorizeCallbackResponse(_GuardedResponseMixin):
     access_token: str | None = None
     identity_token: str | None = None
     token_type: str | None = None
-    expires_in: str | None = None
+    expires_in: int | None = None
     scope: str | None = None
+    refresh_token: str | None = None
     state: str | None = None
     session_state: str | None = None
     issuer: str | None = None
@@ -66,22 +77,38 @@ class AuthorizeCallbackResponse(_GuardedResponseMixin):
     error: str | None = None
     error_description: str | None = None
 
+    def __repr__(self) -> str:
+        """Redact sensitive fields to prevent token leakage in logs."""
+        parts: list[str] = []
+        for f in fields(self):
+            val = object.__getattribute__(self, f.name)
+            if f.name in _SENSITIVE_FIELDS and val is not None:
+                parts.append(f"{f.name}='[REDACTED]'")
+            elif f.name == "values":
+                parts.append("values={...}")
+            else:
+                parts.append(f"{f.name}={val!r}")
+        return f"{self.__class__.__name__}({', '.join(parts)})"
+
 
 # Mapping from AuthorizeResponse enum values to dataclass field names.
 # Most map 1:1; only id_token differs (field is ``identity_token``).
-_PARAM_TO_FIELD: dict[str, str] = {
-    AuthorizeResponseParams.CODE.value: "code",
-    AuthorizeResponseParams.ACCESS_TOKEN.value: "access_token",
-    AuthorizeResponseParams.IDENTITY_TOKEN.value: "identity_token",
-    AuthorizeResponseParams.TOKEN_TYPE.value: "token_type",
-    AuthorizeResponseParams.EXPIRES_IN.value: "expires_in",
-    AuthorizeResponseParams.SCOPE.value: "scope",
-    AuthorizeResponseParams.STATE.value: "state",
-    AuthorizeResponseParams.SESSION_STATE.value: "session_state",
-    AuthorizeResponseParams.ISSUER.value: "issuer",
-    AuthorizeResponseParams.ERROR.value: "error",
-    AuthorizeResponseParams.ERROR_DESCRIPTION.value: "error_description",
-}
+_PARAM_TO_FIELD: types.MappingProxyType[str, str] = types.MappingProxyType(
+    {
+        AuthorizeResponseParams.CODE.value: "code",
+        AuthorizeResponseParams.ACCESS_TOKEN.value: "access_token",
+        AuthorizeResponseParams.IDENTITY_TOKEN.value: "identity_token",
+        AuthorizeResponseParams.TOKEN_TYPE.value: "token_type",
+        AuthorizeResponseParams.EXPIRES_IN.value: "expires_in",
+        AuthorizeResponseParams.SCOPE.value: "scope",
+        AuthorizeResponseParams.REFRESH_TOKEN.value: "refresh_token",
+        AuthorizeResponseParams.STATE.value: "state",
+        AuthorizeResponseParams.SESSION_STATE.value: "session_state",
+        AuthorizeResponseParams.ISSUER.value: "issuer",
+        AuthorizeResponseParams.ERROR.value: "error",
+        AuthorizeResponseParams.ERROR_DESCRIPTION.value: "error_description",
+    }
+)
 
 
 def parse_authorize_callback_response(
@@ -103,26 +130,44 @@ def parse_authorize_callback_response(
         URL contains an ``error`` parameter, or ``True`` otherwise.
 
     Raises:
-        AuthorizeCallbackException: If *redirect_uri* is ``None`` or an
-            empty string.
+        AuthorizeCallbackException: If *redirect_uri* is ``None``, not a
+            string, empty/whitespace-only, uses a non-HTTP(S) scheme, or
+            contains no callback parameters.
     """
-    if not redirect_uri:
+    if not isinstance(redirect_uri, str) or not redirect_uri.strip():
         raise AuthorizeCallbackException(
             "redirect_uri must be a non-empty string"
         )
 
     parsed = urlparse(redirect_uri)
+
+    if parsed.scheme and parsed.scheme not in _ALLOWED_SCHEMES:
+        raise AuthorizeCallbackException(
+            f"redirect_uri scheme must be http or https, got '{parsed.scheme}'"
+        )
+
     params_str = parsed.fragment or parsed.query
 
-    # parse_qs returns dict[str, list[str]]; flatten to first value
-    raw_params = parse_qs(params_str)
+    # parse_qs returns dict[str, list[str]]; flatten to first value.
+    # keep_blank_values=True preserves empty values (e.g. state=) so they
+    # are distinguishable from absent parameters.
+    raw_params = parse_qs(params_str, keep_blank_values=True)
     values: dict[str, str] = {k: v[0] for k, v in raw_params.items()}
 
+    if not values:
+        raise AuthorizeCallbackException(
+            "redirect_uri contains no callback parameters"
+        )
+
     # Map known parameters to dataclass fields
-    field_values: dict[str, str] = {}
+    field_values: dict[str, Any] = {}
     for param_name, field_name in _PARAM_TO_FIELD.items():
         if param_name in values:
-            field_values[field_name] = values[param_name]
+            if field_name == "expires_in":
+                with contextlib.suppress(ValueError, TypeError):
+                    field_values[field_name] = int(values[param_name])
+            else:
+                field_values[field_name] = values[param_name]
 
     has_error = "error" in field_values
 

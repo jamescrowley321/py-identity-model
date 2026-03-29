@@ -42,8 +42,9 @@ def validate_authorize_callback_state(
     1. **Error response** — if the authorization server returned an error,
        validation fails with ``ERROR_RESPONSE``.
     2. **Missing state** — if the callback or the caller-supplied
-       *expected_state* is ``None``, validation fails with
-       ``MISSING_STATE``.
+       *expected_state* is ``None`` or an empty string, validation fails
+       with ``MISSING_STATE``.  Non-string types are also treated as
+       missing.
     3. **State mismatch** — the received state is compared to
        *expected_state* using ``hmac.compare_digest`` (constant-time) to
        avoid timing side-channels.
@@ -65,15 +66,15 @@ def validate_authorize_callback_state(
             error_description=response.error_description,
         )
 
-    if expected_state is None:
+    if not isinstance(expected_state, str) or not expected_state:
         return StateValidationResult(
             is_valid=False,
             result=AuthorizeCallbackValidationResult.MISSING_STATE,
             error="missing_state",
-            error_description="Expected state is None (session may have expired)",
+            error_description="Expected state is missing or empty (session may have expired)",
         )
 
-    if response.state is None:
+    if not response.state:
         return StateValidationResult(
             is_valid=False,
             result=AuthorizeCallbackValidationResult.MISSING_STATE,

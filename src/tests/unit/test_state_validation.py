@@ -88,7 +88,7 @@ class TestValidateAuthorizeCallbackState:
         assert result.error == "missing_state"
 
     def test_empty_state_treated_as_missing(self):
-        """parse_qs drops empty values, so state='' becomes None."""
+        """Empty state value preserved by parse_qs but caught by validator."""
         result = validate_authorize_callback_state(
             _parse("code=c&state="), "expected"
         )
@@ -131,7 +131,39 @@ class TestValidateAuthorizeCallbackState:
         assert result.result is AuthorizeCallbackValidationResult.MISSING_STATE
         assert result.error == "missing_state"
         assert result.error_description is not None
-        assert "None" in result.error_description
+
+    def test_expected_state_empty_string_returns_missing_state(self):
+        """[BLOCK] Empty string expected_state must not pass hmac.compare_digest."""
+        result = validate_authorize_callback_state(
+            _parse("code=abc&state=valid"), ""
+        )
+
+        assert result.is_valid is False
+        assert result.result is AuthorizeCallbackValidationResult.MISSING_STATE
+        assert result.error == "missing_state"
+
+    def test_both_states_empty_string_rejected(self):
+        """[BLOCK] hmac.compare_digest('', '') bypass must be prevented."""
+        response = AuthorizeCallbackResponse(
+            is_successful=True,
+            raw="",
+            values={},
+            state="",
+        )
+        result = validate_authorize_callback_state(response, "")
+
+        assert result.is_valid is False
+        assert result.result is AuthorizeCallbackValidationResult.MISSING_STATE
+
+    def test_expected_state_non_string_type_returns_missing(self):
+        """Non-string expected_state must be treated as missing, not crash."""
+        result = validate_authorize_callback_state(
+            _parse("code=abc&state=valid"),
+            12345,  # type: ignore
+        )
+
+        assert result.is_valid is False
+        assert result.result is AuthorizeCallbackValidationResult.MISSING_STATE
 
     def test_result_dataclass_fields(self):
         """Verify StateValidationResult exposes all documented fields."""
