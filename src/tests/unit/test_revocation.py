@@ -203,6 +203,43 @@ class TestRevocation:
         )
 
     @respx.mock
+    def test_unexpected_error_returns_error_response(self):
+        """Non-RequestError exceptions are caught and returned as error responses."""
+        respx.post(REVOKE_URL).mock(side_effect=RuntimeError("unexpected"))
+
+        response = revoke_token(
+            TokenRevocationRequest(
+                address=REVOKE_URL,
+                token="tok",
+                client_id="app1",
+                client_secret="secret",
+            )
+        )
+
+        assert response.is_successful is False
+        assert response.error is not None
+        assert "unexpected" in response.error
+
+    @respx.mock
+    def test_whitespace_client_secret_uses_public_client_flow(self):
+        """Whitespace-only client_secret should use public client flow."""
+        route = respx.post(REVOKE_URL).mock(return_value=httpx.Response(200))
+
+        revoke_token(
+            TokenRevocationRequest(
+                address=REVOKE_URL,
+                token="tok",
+                client_id="app1",
+                client_secret="   ",
+            )
+        )
+
+        request = route.calls[0].request
+        body = request.content.decode()
+        assert "client_id=app1" in body
+        assert request.headers.get("authorization") is None
+
+    @respx.mock
     def test_empty_client_secret_uses_public_client_flow(self):
         """Empty client_secret should use public client flow, not Basic auth."""
         route = respx.post(REVOKE_URL).mock(return_value=httpx.Response(200))
