@@ -5,6 +5,8 @@ This module provides synchronous HTTP layer for OAuth 2.0 Token
 Introspection (RFC 7662).
 """
 
+import httpx
+
 from ..core.error_handlers import handle_introspection_error
 from ..core.introspection_logic import (
     log_introspection_request,
@@ -18,12 +20,12 @@ from .managed_client import HTTPClient
 
 @retry_with_backoff()
 def _introspect_token(
-    client,
+    client: httpx.Client,
     url: str,
     data: dict,
     headers: dict,
     auth: tuple[str, str] | None = None,
-):
+) -> httpx.Response:
     """Make introspection request with retry logic."""
     kwargs: dict = {"data": data, "headers": headers}
     if auth is not None:

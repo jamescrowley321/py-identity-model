@@ -637,7 +637,7 @@ class TokenIntrospectionRequest(BaseRequest):
     client_secret: str | None = None
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class TokenIntrospectionResponse(BaseResponse):
     """Response from a token introspection endpoint (RFC 7662).
 
