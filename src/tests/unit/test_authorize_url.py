@@ -89,3 +89,68 @@ class TestBuildAuthorizationUrl:
         assert "state" not in params
         assert "nonce" not in params
         assert "code_challenge" not in params
+
+    def test_reserved_params_guard_exists(self):
+        """MF-1: _RESERVED_PARAMS set covers all security-critical params."""
+        from py_identity_model.core.authorize_url import _RESERVED_PARAMS
+
+        expected = {
+            "client_id",
+            "redirect_uri",
+            "scope",
+            "response_type",
+            "state",
+            "nonce",
+            "code_challenge",
+            "code_challenge_method",
+        }
+        assert expected == _RESERVED_PARAMS
+
+    def test_extra_params_do_not_clobber_required_params(self):
+        """MF-1: extra_params are additive, required params always present."""
+        url = build_authorization_url(
+            AUTHZ_ENDPOINT,
+            client_id="app1",
+            redirect_uri="https://app.com/cb",
+            login_hint="user@example.com",
+            prompt="consent",
+        )
+        params = parse_qs(urlparse(url).query)
+        # Required params intact
+        assert params["client_id"] == ["app1"]
+        assert params["redirect_uri"] == ["https://app.com/cb"]
+        assert params["response_type"] == ["code"]
+        # Extra params present
+        assert params["login_hint"] == ["user@example.com"]
+        assert params["prompt"] == ["consent"]
+
+    def test_code_challenge_without_method_rejected(self):
+        """SF-2: code_challenge without code_challenge_method raises ValueError."""
+        with pytest.raises(ValueError, match="RFC 7636"):
+            build_authorization_url(
+                AUTHZ_ENDPOINT,
+                client_id="app1",
+                redirect_uri="https://app.com/cb",
+                code_challenge="challenge123",
+            )
+
+    def test_code_challenge_method_without_challenge_rejected(self):
+        """SF-2: code_challenge_method without code_challenge raises ValueError."""
+        with pytest.raises(ValueError, match="RFC 7636"):
+            build_authorization_url(
+                AUTHZ_ENDPOINT,
+                client_id="app1",
+                redirect_uri="https://app.com/cb",
+                code_challenge_method="S256",
+            )
+
+    def test_endpoint_fragment_stripped(self):
+        """SF-7: URI fragment on authorization_endpoint is stripped."""
+        url = build_authorization_url(
+            "https://auth.example.com/authorize#fragment",
+            client_id="app1",
+            redirect_uri="https://app.com/cb",
+        )
+        assert "#fragment" not in url
+        params = parse_qs(urlparse(url).query)
+        assert params["client_id"] == ["app1"]
