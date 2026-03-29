@@ -30,6 +30,10 @@ class _GuardedResponseMixin:
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset()
 
+    _error_fields: ClassVar[frozenset[str]] = frozenset(
+        {"error", "error_description"}
+    )
+
     def __getattribute__(self, name: str):
         guarded = object.__getattribute__(self, "_guarded_fields")
         if name in guarded:
@@ -39,7 +43,7 @@ class _GuardedResponseMixin:
                 from ..exceptions import FailedResponseAccessError
 
                 raise FailedResponseAccessError(name, error)
-        elif name == "error":
+        elif name in object.__getattribute__(self, "_error_fields"):
             is_successful = object.__getattribute__(self, "is_successful")
             if is_successful:
                 from ..exceptions import SuccessfulResponseAccessError
