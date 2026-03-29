@@ -8,7 +8,9 @@ passing authorization parameters as signed JWTs.
 from __future__ import annotations
 
 import time
+from typing import Any
 from urllib.parse import urlencode
+import uuid
 
 import jwt as pyjwt
 
@@ -20,10 +22,15 @@ _RESERVED_CLAIMS = frozenset(
         "iat",
         "nbf",
         "exp",
+        "jti",
         "client_id",
         "response_type",
         "redirect_uri",
         "scope",
+        "state",
+        "nonce",
+        "code_challenge",
+        "code_challenge_method",
     }
 )
 
@@ -53,7 +60,8 @@ def create_request_object(
     code_challenge: str | None = None,
     code_challenge_method: str | None = None,
     lifetime: int = 300,
-    **extra_claims: str,
+    kid: str | None = None,
+    **extra_claims: Any,
 ) -> str:
     """Create a signed JWT request object per RFC 9101.
 
@@ -74,6 +82,7 @@ def create_request_object(
         code_challenge: PKCE code challenge.
         code_challenge_method: PKCE method (``"S256"`` or ``"plain"``).
         lifetime: JWT validity in seconds (default 300).
+        kid: Key ID to include in the JWT header for key lookup.
         **extra_claims: Additional claims to include in the request object.
 
     Returns:
@@ -81,7 +90,9 @@ def create_request_object(
 
     Raises:
         ValueError: If *algorithm* is not supported, *lifetime* is not
-            positive, or *extra_claims* contains a reserved claim name.
+            positive, *code_challenge* and *code_challenge_method* are
+            not both provided, or *extra_claims* contains a reserved
+            claim name.
     """
     if algorithm not in _SUPPORTED_ALGORITHMS:
         msg = (
@@ -93,6 +104,12 @@ def create_request_object(
     if lifetime <= 0:
         raise ValueError(f"lifetime must be positive, got {lifetime}")
 
+    if (code_challenge is None) != (code_challenge_method is None):
+        raise ValueError(
+            "code_challenge and code_challenge_method must both be "
+            "provided or both omitted"
+        )
+
     collisions = set(extra_claims) & _RESERVED_CLAIMS
     if collisions:
         raise ValueError(
@@ -101,12 +118,13 @@ def create_request_object(
         )
 
     now = int(time.time())
-    claims: dict[str, str | int] = {
+    claims: dict[str, Any] = {
         "iss": client_id,
         "aud": audience,
         "iat": now,
         "nbf": now,
         "exp": now + lifetime,
+        "jti": str(uuid.uuid4()),
         "client_id": client_id,
         "response_type": response_type,
         "redirect_uri": redirect_uri,
@@ -124,7 +142,13 @@ def create_request_object(
 
     claims.update(extra_claims)
 
-    return pyjwt.encode(claims, private_key, algorithm=algorithm)
+    headers: dict[str, str] = {}
+    if kid is not None:
+        headers["kid"] = kid
+
+    return pyjwt.encode(
+        claims, private_key, algorithm=algorithm, headers=headers or None
+    )
 
 
 def build_jar_authorization_url(
