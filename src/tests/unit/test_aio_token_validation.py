@@ -74,6 +74,86 @@ class TestAsyncTokenValidation:
                 token_validation_config=validation_config,
             )
 
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_missing_jwks_uri_cached_path_raises(self):
+        """Test that missing jwks_uri in discovery doc raises ConfigurationException (cached path)."""
+        from py_identity_model.aio.token_validation import (
+            _get_disco_response,
+            validate_token,
+        )
+
+        # Discovery response without jwks_uri
+        respx.get("https://example.com/.well-known/openid-configuration").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "issuer": "https://example.com",
+                    "authorization_endpoint": "https://example.com/authorize",
+                    "token_endpoint": "https://example.com/token",
+                    "response_types_supported": ["code"],
+                    "subject_types_supported": ["public"],
+                    "id_token_signing_alg_values_supported": ["RS256"],
+                },
+            )
+        )
+
+        _get_disco_response.cache_clear()
+
+        validation_config = TokenValidationConfig(
+            perform_disco=True,
+            audience="test-audience",
+        )
+
+        with pytest.raises(
+            ConfigurationException,
+            match="Discovery document missing jwks_uri",
+        ):
+            await validate_token(
+                jwt="fake.jwt.token",
+                token_validation_config=validation_config,
+                disco_doc_address="https://example.com/.well-known/openid-configuration",
+            )
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_missing_jwks_uri_di_path_raises(self):
+        """Test that missing jwks_uri in discovery doc raises ConfigurationException (DI path)."""
+        from py_identity_model.aio.managed_client import AsyncHTTPClient
+        from py_identity_model.aio.token_validation import validate_token
+
+        # Discovery response without jwks_uri
+        respx.get("https://example.com/.well-known/openid-configuration").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "issuer": "https://example.com",
+                    "authorization_endpoint": "https://example.com/authorize",
+                    "token_endpoint": "https://example.com/token",
+                    "response_types_supported": ["code"],
+                    "subject_types_supported": ["public"],
+                    "id_token_signing_alg_values_supported": ["RS256"],
+                },
+            )
+        )
+
+        validation_config = TokenValidationConfig(
+            perform_disco=True,
+            audience="test-audience",
+        )
+
+        async with AsyncHTTPClient() as client:
+            with pytest.raises(
+                ConfigurationException,
+                match="Discovery document missing jwks_uri",
+            ):
+                await validate_token(
+                    jwt="fake.jwt.token",
+                    token_validation_config=validation_config,
+                    disco_doc_address="https://example.com/.well-known/openid-configuration",
+                    http_client=client,
+                )
+
 
 # ============================================================================
 # Async enhanced feature tests (S4: parity with sync tests)

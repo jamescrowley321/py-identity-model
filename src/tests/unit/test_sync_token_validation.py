@@ -173,3 +173,77 @@ class TestSyncTokenValidation:
         assert key1 == key2
         assert alg1 == alg2
         assert alg1 == "RS256"
+
+    @respx.mock
+    def test_missing_jwks_uri_cached_path_raises(self):
+        """Test that missing jwks_uri in discovery doc raises ConfigurationException (cached path)."""
+        # Discovery response without jwks_uri
+        respx.get("https://example.com/.well-known/openid-configuration").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "issuer": "https://example.com",
+                    "authorization_endpoint": "https://example.com/authorize",
+                    "token_endpoint": "https://example.com/token",
+                    "response_types_supported": ["code"],
+                    "subject_types_supported": ["public"],
+                    "id_token_signing_alg_values_supported": ["RS256"],
+                },
+            )
+        )
+
+        _get_disco_response.cache_clear()
+
+        validation_config = TokenValidationConfig(
+            perform_disco=True,
+            audience="test-audience",
+        )
+
+        with pytest.raises(
+            ConfigurationException,
+            match="Discovery document missing jwks_uri",
+        ):
+            validate_token(
+                jwt="fake.jwt.token",
+                token_validation_config=validation_config,
+                disco_doc_address="https://example.com/.well-known/openid-configuration",
+            )
+
+    @respx.mock
+    def test_missing_jwks_uri_di_path_raises(self):
+        """Test that missing jwks_uri in discovery doc raises ConfigurationException (DI path)."""
+        from py_identity_model.sync.managed_client import HTTPClient
+
+        # Discovery response without jwks_uri
+        respx.get("https://example.com/.well-known/openid-configuration").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "issuer": "https://example.com",
+                    "authorization_endpoint": "https://example.com/authorize",
+                    "token_endpoint": "https://example.com/token",
+                    "response_types_supported": ["code"],
+                    "subject_types_supported": ["public"],
+                    "id_token_signing_alg_values_supported": ["RS256"],
+                },
+            )
+        )
+
+        validation_config = TokenValidationConfig(
+            perform_disco=True,
+            audience="test-audience",
+        )
+
+        with (
+            HTTPClient() as client,
+            pytest.raises(
+                ConfigurationException,
+                match="Discovery document missing jwks_uri",
+            ),
+        ):
+            validate_token(
+                jwt="fake.jwt.token",
+                token_validation_config=validation_config,
+                disco_doc_address="https://example.com/.well-known/openid-configuration",
+                http_client=client,
+            )
