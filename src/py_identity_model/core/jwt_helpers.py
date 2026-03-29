@@ -79,8 +79,9 @@ def _decode_jwt_cached(
     options = json.loads(options_json) if options_json else None
 
     # PyJWT accepts issuer as str or sequence
-    issuer_param: str | list[str] | None = None
-    issuer_param = list(issuer) if isinstance(issuer, tuple) else issuer
+    issuer_param: str | list[str] | None = (
+        list(issuer) if isinstance(issuer, tuple) else issuer
+    )
 
     kwargs: dict = {
         "audience": audience,
@@ -134,8 +135,9 @@ def decode_and_validate_jwt(
         options_json = json.dumps(options, sort_keys=True) if options else None
 
         # Convert issuer list to tuple for hashability
-        issuer_hashable: str | tuple[str, ...] | None = None
-        issuer_hashable = tuple(issuer) if isinstance(issuer, list) else issuer
+        issuer_hashable: str | tuple[str, ...] | None = (
+            tuple(issuer) if isinstance(issuer, list) else issuer
+        )
 
         decoded = _decode_jwt_cached(
             jwt,
@@ -150,8 +152,7 @@ def decode_and_validate_jwt(
         # Validate subject claim (PyJWT doesn't do this natively)
         if subject is not None and decoded.get("sub") != subject:
             raise TokenValidationException(
-                f"Invalid subject: expected '{subject}', "
-                f"got '{decoded.get('sub')}'",
+                "Invalid subject: token sub does not match expected value",
                 token_part="payload",
             )
 

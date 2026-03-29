@@ -81,7 +81,7 @@ def validate_config_for_manual_validation(
 def decode_with_config(
     jwt: str,
     token_validation_config: TokenValidationConfig,
-    issuer: str | None = None,
+    issuer: str | list[str] | None = None,
 ) -> dict:
     """
     Decode and validate JWT using the token validation configuration.

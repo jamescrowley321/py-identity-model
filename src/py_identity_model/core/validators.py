@@ -133,6 +133,30 @@ def validate_token_config(
     Raises:
         ConfigurationException: If configuration is invalid
     """
+    import math
+
+    # Validate issuer: empty list is a fail-open security defect
+    if (
+        isinstance(token_validation_config.issuer, list)
+        and len(token_validation_config.issuer) == 0
+    ):
+        raise ConfigurationException(
+            "issuer must not be an empty list; omit or set to None to skip issuer validation",
+        )
+
+    # Validate leeway: must be non-negative and finite
+    if token_validation_config.leeway is not None:
+        if token_validation_config.leeway < 0:
+            raise ConfigurationException(
+                "leeway must be non-negative",
+            )
+        if math.isinf(token_validation_config.leeway) or math.isnan(
+            token_validation_config.leeway
+        ):
+            raise ConfigurationException(
+                "leeway must be a finite number",
+            )
+
     if token_validation_config.perform_disco:
         return
 
