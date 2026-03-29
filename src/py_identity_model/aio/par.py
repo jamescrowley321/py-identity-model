@@ -2,12 +2,14 @@
 Pushed Authorization Requests (asynchronous implementation, RFC 9126).
 """
 
+import httpx
+
+from ..core.error_handlers import handle_par_error
 from ..core.models import (
     PushedAuthorizationRequest,
     PushedAuthorizationResponse,
 )
 from ..core.par_logic import (
-    handle_par_error,
     log_par_request,
     prepare_par_request_data,
     process_par_response,
@@ -17,7 +19,13 @@ from .managed_client import AsyncHTTPClient
 
 
 @retry_with_backoff_async()
-async def _push_authorization_request(client, url, data, headers, auth=None):
+async def _push_authorization_request(
+    client: httpx.AsyncClient,
+    url: str,
+    data: dict,
+    headers: dict,
+    auth: tuple[str, str] | None = None,
+) -> httpx.Response:
     """Make PAR request with retry logic (async)."""
     kwargs: dict = {"data": data, "headers": headers}
     if auth is not None:
@@ -39,9 +47,10 @@ async def push_authorization_request(
         PushedAuthorizationResponse with ``request_uri`` and ``expires_in``.
     """
     log_par_request(request)
-    params, headers, auth = prepare_par_request_data(request)
 
+    response = None
     try:
+        params, headers, auth = prepare_par_request_data(request)
         client = http_client.client if http_client else get_async_http_client()
         response = await _push_authorization_request(
             client, request.address, params, headers, auth
@@ -49,6 +58,9 @@ async def push_authorization_request(
         return process_par_response(response)
     except Exception as e:
         return handle_par_error(e)
+    finally:
+        if response is not None:
+            await response.aclose()
 
 
 __all__ = [

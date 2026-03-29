@@ -4,11 +4,12 @@ Pushed Authorization Request (PAR) business logic per RFC 9126.
 Pure functions for preparing PAR requests and processing responses.
 """
 
+import json
+
 import httpx
 
 from ..logging_config import logger
 from ..logging_utils import redact_url
-from .error_handlers import handle_par_error
 from .models import PushedAuthorizationRequest, PushedAuthorizationResponse
 
 
@@ -28,9 +29,7 @@ def prepare_par_request_data(
     Returns:
         ``(data, headers, auth)`` where *auth* is ``None`` for public clients.
     """
-    if (request.code_challenge is None) != (
-        request.code_challenge_method is None
-    ):
+    if bool(request.code_challenge) != bool(request.code_challenge_method):
         raise ValueError(
             "code_challenge and code_challenge_method must both be set or both be absent"
         )
@@ -40,19 +39,19 @@ def prepare_par_request_data(
         "scope": request.scope,
         "response_type": request.response_type,
     }
-    if request.state is not None:
+    if request.state:
         params["state"] = request.state
-    if request.nonce is not None:
+    if request.nonce:
         params["nonce"] = request.nonce
-    if request.code_challenge is not None:
+    if request.code_challenge:
         params["code_challenge"] = request.code_challenge
-    if request.code_challenge_method is not None:
+    if request.code_challenge_method:
         params["code_challenge_method"] = request.code_challenge_method
 
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
     auth: tuple[str, str] | None = None
-    if request.client_secret is not None:
+    if request.client_secret:
         auth = (request.client_id, request.client_secret)
     else:
         params["client_id"] = request.client_id
@@ -67,15 +66,23 @@ def process_par_response(
     logger.debug(f"PAR response status: {response.status_code}")
 
     if response.is_success:
-        data = response.json()
+        try:
+            data = response.json()
+        except (json.JSONDecodeError, ValueError):
+            error_msg = "PAR response has invalid JSON body"
+            logger.error(error_msg)
+            return PushedAuthorizationResponse(
+                is_successful=False, error=error_msg
+            )
         request_uri = data.get("request_uri")
         expires_in = data.get("expires_in")
-        if not request_uri or expires_in is None:
-            missing = []
-            if not request_uri:
-                missing.append("request_uri")
-            if expires_in is None:
-                missing.append("expires_in")
+
+        missing: list[str] = []
+        if not request_uri:
+            missing.append("request_uri")
+        if not isinstance(expires_in, int) or expires_in <= 0:
+            missing.append("expires_in")
+        if missing:
             error_msg = (
                 f"PAR response missing required fields per RFC 9126 "
                 f"Section 2.2: {', '.join(missing)}"
@@ -93,13 +100,12 @@ def process_par_response(
 
     error_msg = (
         f"Pushed authorization request failed with status code: "
-        f"{response.status_code}. Response Content: {response.content}"
+        f"{response.status_code}. Response Content: {response.text}"
     )
     return PushedAuthorizationResponse(is_successful=False, error=error_msg)
 
 
 __all__ = [
-    "handle_par_error",
     "log_par_request",
     "prepare_par_request_data",
     "process_par_response",
