@@ -5,6 +5,8 @@ Demonstrates creating signed request objects and building
 authorization URLs with the `request` parameter.
 """
 
+import secrets
+
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import (
     Encoding,
@@ -39,8 +41,8 @@ def jar_basic_example():
         audience="https://auth.example.com",
         redirect_uri="https://myapp.com/callback",
         scope="openid profile email",
-        state="random-csrf-state",
-        nonce="random-nonce",
+        state=secrets.token_urlsafe(),
+        nonce=secrets.token_urlsafe(),
     )
 
     print(f"\n  Request object (first 80 chars): {request_jwt[:80]}...")

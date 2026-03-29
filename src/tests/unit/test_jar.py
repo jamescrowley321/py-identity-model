@@ -279,6 +279,138 @@ class TestCreateRequestObject:
                 code_challenge_method="S256",
             )
 
+    def test_typ_header_oauth_authz_req_jwt(self):
+        """Security: typ header prevents JWT type confusion per RFC 9101 §10.2."""
+        pem = _ec_private_key_pem()
+        token = create_request_object(
+            private_key=pem,
+            algorithm="ES256",
+            client_id="app",
+            audience="https://auth.example.com",
+            redirect_uri="https://app.com/cb",
+        )
+        header = pyjwt.get_unverified_header(token)
+        assert header["typ"] == "oauth-authz-req+jwt"
+
+    def test_typ_header_present_with_kid(self):
+        """typ header is set even when kid is provided."""
+        pem = _ec_private_key_pem()
+        token = create_request_object(
+            private_key=pem,
+            algorithm="ES256",
+            client_id="app",
+            audience="https://auth.example.com",
+            redirect_uri="https://app.com/cb",
+            kid="key-1",
+        )
+        header = pyjwt.get_unverified_header(token)
+        assert header["typ"] == "oauth-authz-req+jwt"
+        assert header["kid"] == "key-1"
+
+    def test_empty_client_id_rejected(self):
+        pem = _ec_private_key_pem()
+        with pytest.raises(ValueError, match="client_id must not be empty"):
+            create_request_object(
+                private_key=pem,
+                algorithm="ES256",
+                client_id="",
+                audience="https://auth.example.com",
+                redirect_uri="https://app.com/cb",
+            )
+
+    def test_empty_audience_rejected(self):
+        pem = _ec_private_key_pem()
+        with pytest.raises(ValueError, match="audience must not be empty"):
+            create_request_object(
+                private_key=pem,
+                algorithm="ES256",
+                client_id="app",
+                audience="",
+                redirect_uri="https://app.com/cb",
+            )
+
+    def test_empty_redirect_uri_rejected(self):
+        pem = _ec_private_key_pem()
+        with pytest.raises(ValueError, match="redirect_uri must not be empty"):
+            create_request_object(
+                private_key=pem,
+                algorithm="ES256",
+                client_id="app",
+                audience="https://auth.example.com",
+                redirect_uri="",
+            )
+
+    def test_empty_private_key_rejected(self):
+        with pytest.raises(ValueError, match="private_key must not be empty"):
+            create_request_object(
+                private_key=b"",
+                algorithm="ES256",
+                client_id="app",
+                audience="https://auth.example.com",
+                redirect_uri="https://app.com/cb",
+            )
+
+    def test_empty_response_type_rejected(self):
+        pem = _ec_private_key_pem()
+        with pytest.raises(
+            ValueError, match="response_type must not be empty"
+        ):
+            create_request_object(
+                private_key=pem,
+                algorithm="ES256",
+                client_id="app",
+                audience="https://auth.example.com",
+                redirect_uri="https://app.com/cb",
+                response_type="",
+            )
+
+    def test_empty_kid_rejected(self):
+        pem = _ec_private_key_pem()
+        with pytest.raises(ValueError, match="kid must be non-empty"):
+            create_request_object(
+                private_key=pem,
+                algorithm="ES256",
+                client_id="app",
+                audience="https://auth.example.com",
+                redirect_uri="https://app.com/cb",
+                kid="",
+            )
+
+    def test_empty_code_challenge_rejected(self):
+        pem = _ec_private_key_pem()
+        with pytest.raises(
+            ValueError, match="code_challenge must be non-empty"
+        ):
+            create_request_object(
+                private_key=pem,
+                algorithm="ES256",
+                client_id="app",
+                audience="https://auth.example.com",
+                redirect_uri="https://app.com/cb",
+                code_challenge="",
+                code_challenge_method="S256",
+            )
+
+    def test_empty_code_challenge_method_rejected(self):
+        pem = _ec_private_key_pem()
+        with pytest.raises(
+            ValueError, match="code_challenge_method must be non-empty"
+        ):
+            create_request_object(
+                private_key=pem,
+                algorithm="ES256",
+                client_id="app",
+                audience="https://auth.example.com",
+                redirect_uri="https://app.com/cb",
+                code_challenge="abc123",
+                code_challenge_method="",
+            )
+
+    def test_eddsa_algorithm_accepted(self):
+        from py_identity_model.core.jar import _SUPPORTED_ALGORITHMS
+
+        assert "EdDSA" in _SUPPORTED_ALGORITHMS
+
     def test_zero_lifetime_rejected(self):
         pem = _ec_private_key_pem()
         with pytest.raises(ValueError, match="lifetime must be positive"):
@@ -329,7 +461,7 @@ class TestCreateRequestObject:
         )
         header = pyjwt.get_unverified_header(token)
         assert header["alg"] == "ES256"
-        assert header["typ"] == "JWT"
+        assert header["typ"] == "oauth-authz-req+jwt"
 
 
 @pytest.mark.unit
@@ -369,6 +501,16 @@ class TestBuildJARAuthorizationUrl:
             request_object="eyJ...",
         )
         assert "?foo=bar&client_id=" in url
+
+    def test_endpoint_with_fragment_containing_question_mark(self):
+        """URL separator uses urlparse, not naive '?' string check."""
+        url = build_jar_authorization_url(
+            authorization_endpoint="https://auth.example.com/authorize#section?ref",
+            client_id="app",
+            request_object="jwt",
+        )
+        # Should use '?' since there's no query string, only a fragment
+        assert "authorize#section?ref?client_id=" in url
 
     def test_url_starts_with_endpoint(self):
         url = build_jar_authorization_url(

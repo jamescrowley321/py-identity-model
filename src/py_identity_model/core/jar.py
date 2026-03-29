@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 import uuid
 
 import jwt as pyjwt
@@ -38,6 +38,7 @@ _SUPPORTED_ALGORITHMS = {
     "ES256",
     "ES384",
     "ES512",
+    "EdDSA",
     "RS256",
     "RS384",
     "RS512",
@@ -47,8 +48,64 @@ _SUPPORTED_ALGORITHMS = {
 }
 
 
+def _validate_request_params(
+    private_key: str | bytes,
+    algorithm: str,
+    client_id: str,
+    audience: str,
+    redirect_uri: str,
+    response_type: str,
+    lifetime: int,
+    code_challenge: str | None,
+    code_challenge_method: str | None,
+    kid: str | None,
+    extra_claims: dict[str, Any],
+) -> None:
+    """Validate all inputs for :func:`create_request_object`."""
+    for name, value in (
+        ("private_key", private_key),
+        ("client_id", client_id),
+        ("audience", audience),
+        ("redirect_uri", redirect_uri),
+        ("response_type", response_type),
+    ):
+        if not value:
+            raise ValueError(f"{name} must not be empty")
+
+    if algorithm not in _SUPPORTED_ALGORITHMS:
+        msg = (
+            f"Unsupported JAR algorithm: {algorithm}. "
+            f"Supported: {sorted(_SUPPORTED_ALGORITHMS)}"
+        )
+        raise ValueError(msg)
+
+    if lifetime <= 0:
+        raise ValueError(f"lifetime must be positive, got {lifetime}")
+
+    if (code_challenge is None) != (code_challenge_method is None):
+        raise ValueError(
+            "code_challenge and code_challenge_method must both be "
+            "provided or both omitted"
+        )
+
+    for name, value in (
+        ("code_challenge", code_challenge),
+        ("code_challenge_method", code_challenge_method),
+        ("kid", kid),
+    ):
+        if value is not None and not value:
+            raise ValueError(f"{name} must be non-empty when provided")
+
+    collisions = set(extra_claims) & _RESERVED_CLAIMS
+    if collisions:
+        raise ValueError(
+            f"extra_claims cannot override reserved claims: "
+            f"{sorted(collisions)}"
+        )
+
+
 def create_request_object(
-    private_key: bytes,
+    private_key: str | bytes,
     algorithm: str,
     client_id: str,
     audience: str,
@@ -66,11 +123,13 @@ def create_request_object(
     """Create a signed JWT request object per RFC 9101.
 
     The request object contains authorization parameters as JWT claims,
-    ensuring request integrity through signing.
+    ensuring request integrity through signing.  The JWT ``typ`` header
+    is set to ``"oauth-authz-req+jwt"`` per RFC 9101 Section 10.2.
 
     Args:
-        private_key: PEM-encoded private key bytes for signing.
-        algorithm: Signing algorithm (e.g. ``"ES256"``, ``"RS256"``).
+        private_key: PEM-encoded private key for signing (bytes or str).
+        algorithm: Signing algorithm (e.g. ``"ES256"``, ``"RS256"``,
+            ``"EdDSA"``).
         client_id: Client identifier - becomes both ``iss`` and
             ``client_id`` claims.
         audience: Authorization server issuer - becomes ``aud`` claim.
@@ -89,33 +148,24 @@ def create_request_object(
         The signed JWT string.
 
     Raises:
-        ValueError: If *algorithm* is not supported, *lifetime* is not
-            positive, *code_challenge* and *code_challenge_method* are
-            not both provided, or *extra_claims* contains a reserved
-            claim name.
+        ValueError: If *algorithm* is not supported, required parameters
+            are empty, *lifetime* is not positive, *code_challenge* and
+            *code_challenge_method* are not both provided, or
+            *extra_claims* contains a reserved claim name.
     """
-    if algorithm not in _SUPPORTED_ALGORITHMS:
-        msg = (
-            f"Unsupported JAR algorithm: {algorithm}. "
-            f"Supported: {sorted(_SUPPORTED_ALGORITHMS)}"
-        )
-        raise ValueError(msg)
-
-    if lifetime <= 0:
-        raise ValueError(f"lifetime must be positive, got {lifetime}")
-
-    if (code_challenge is None) != (code_challenge_method is None):
-        raise ValueError(
-            "code_challenge and code_challenge_method must both be "
-            "provided or both omitted"
-        )
-
-    collisions = set(extra_claims) & _RESERVED_CLAIMS
-    if collisions:
-        raise ValueError(
-            f"extra_claims cannot override reserved claims: "
-            f"{sorted(collisions)}"
-        )
+    _validate_request_params(
+        private_key,
+        algorithm,
+        client_id,
+        audience,
+        redirect_uri,
+        response_type,
+        lifetime,
+        code_challenge,
+        code_challenge_method,
+        kid,
+        extra_claims,
+    )
 
     now = int(time.time())
     claims: dict[str, Any] = {
@@ -131,23 +181,23 @@ def create_request_object(
         "scope": scope,
     }
 
-    if state is not None:
-        claims["state"] = state
-    if nonce is not None:
-        claims["nonce"] = nonce
-    if code_challenge is not None:
-        claims["code_challenge"] = code_challenge
-    if code_challenge_method is not None:
-        claims["code_challenge_method"] = code_challenge_method
+    for name, value in (
+        ("state", state),
+        ("nonce", nonce),
+        ("code_challenge", code_challenge),
+        ("code_challenge_method", code_challenge_method),
+    ):
+        if value is not None:
+            claims[name] = value
 
     claims.update(extra_claims)
 
-    headers: dict[str, str] = {}
+    headers: dict[str, str] = {"typ": "oauth-authz-req+jwt"}
     if kid is not None:
         headers["kid"] = kid
 
     return pyjwt.encode(
-        claims, private_key, algorithm=algorithm, headers=headers or None
+        claims, private_key, algorithm=algorithm, headers=headers
     )
 
 
@@ -183,7 +233,8 @@ def build_jar_authorization_url(
     if response_type is not None:
         params["response_type"] = response_type
 
-    separator = "&" if "?" in authorization_endpoint else "?"
+    parsed = urlparse(authorization_endpoint)
+    separator = "&" if parsed.query else "?"
     return f"{authorization_endpoint}{separator}{urlencode(params)}"
 
 

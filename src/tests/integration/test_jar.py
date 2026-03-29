@@ -85,6 +85,9 @@ class TestJARIntegration:
         pem = key.private_bytes(
             Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
         )
+        pub_pem = key.public_key().public_bytes(
+            Encoding.PEM, PublicFormat.SubjectPublicKeyInfo
+        )
         _verifier, challenge = generate_pkce_pair()
 
         request_jwt = create_request_object(
@@ -98,7 +101,10 @@ class TestJARIntegration:
         )
 
         decoded = pyjwt.decode(
-            request_jwt, options={"verify_signature": False}
+            request_jwt,
+            pub_pem,
+            algorithms=["ES256"],
+            audience="https://auth.example.com",
         )
         assert decoded["code_challenge"] == challenge
         assert decoded["code_challenge_method"] == "S256"
@@ -108,6 +114,9 @@ class TestJARIntegration:
         key = ec.generate_private_key(ec.SECP256R1())
         pem = key.private_bytes(
             Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
+        )
+        pub_pem = key.public_key().public_bytes(
+            Encoding.PEM, PublicFormat.SubjectPublicKeyInfo
         )
 
         request_jwt = create_request_object(
@@ -130,10 +139,13 @@ class TestJARIntegration:
         params = parse_qs(parsed.query)
         assert params["client_id"] == ["url-app"]
 
-        # Extract and verify JWT from URL
+        # Extract and verify JWT signature from URL
         extracted_jwt = params["request"][0]
         decoded = pyjwt.decode(
-            extracted_jwt, options={"verify_signature": False}
+            extracted_jwt,
+            pub_pem,
+            algorithms=["ES256"],
+            audience="https://auth.example.com",
         )
         assert decoded["client_id"] == "url-app"
         assert decoded["redirect_uri"] == "https://app.com/cb"
