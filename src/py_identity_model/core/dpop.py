@@ -11,6 +11,7 @@ from base64 import urlsafe_b64encode
 import hashlib
 import json
 import time
+from urllib.parse import urlparse, urlunparse
 import uuid
 
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
@@ -106,7 +107,7 @@ class DPoPKey:
         return {
             "kty": "RSA",
             "n": _int_to_b64url(numbers.n, (numbers.n.bit_length() + 7) // 8),
-            "e": _int_to_b64url(numbers.e, 3),
+            "e": _int_to_b64url(numbers.e, (numbers.e.bit_length() + 7) // 8),
         }
 
     @property
@@ -159,7 +160,12 @@ def compute_ath(access_token: str) -> str:
 
     Returns:
         Base64url-encoded SHA-256 hash of the access token.
+
+    Raises:
+        ValueError: If *access_token* is empty.
     """
+    if not access_token:
+        raise ValueError("access_token must not be empty")
     digest = hashlib.sha256(access_token.encode("ascii")).digest()
     return urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
@@ -184,7 +190,19 @@ def create_dpop_proof(
 
     Returns:
         The signed DPoP proof JWT string.
+
+    Raises:
+        ValueError: If *method* or *uri* is empty.
     """
+    if not method or not method.strip():
+        raise ValueError("method must not be empty")
+    if not uri or not uri.strip():
+        raise ValueError("uri must not be empty")
+
+    # RFC 9449 §4.2: htu must not include query or fragment components
+    parsed = urlparse(uri)
+    htu = urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+
     headers = {
         "typ": "dpop+jwt",
         "alg": key.algorithm,
@@ -194,7 +212,7 @@ def create_dpop_proof(
     payload: dict = {
         "jti": str(uuid.uuid4()),
         "htm": method.upper(),
-        "htu": uri,
+        "htu": htu,
         "iat": int(time.time()),
     }
 
@@ -227,7 +245,7 @@ def build_dpop_headers(
         Dict of HTTP headers to include in the request.
     """
     headers: dict[str, str] = {"DPoP": proof}
-    if access_token is not None:
+    if access_token:
         headers["Authorization"] = f"DPoP {access_token}"
     return headers
 
