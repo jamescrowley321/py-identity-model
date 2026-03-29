@@ -135,7 +135,9 @@ async def refresh_token(
         response = await _request_token(
             client, request.address, params, headers, auth
         )
-        return process_refresh_token_response(response)
+        result = process_refresh_token_response(response)
+        await response.aclose()
+        return result
     except Exception as e:
         return handle_refresh_token_error(e)
 
