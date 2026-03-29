@@ -5,6 +5,8 @@ This module provides asynchronous HTTP layer for OAuth 2.0 Token
 Introspection (RFC 7662).
 """
 
+import httpx
+
 from ..core.error_handlers import handle_introspection_error
 from ..core.introspection_logic import (
     log_introspection_request,
@@ -18,12 +20,12 @@ from .managed_client import AsyncHTTPClient
 
 @retry_with_backoff_async()
 async def _introspect_token(
-    client,
+    client: httpx.AsyncClient,
     url: str,
     data: dict,
     headers: dict,
     auth: tuple[str, str] | None = None,
-):
+) -> httpx.Response:
     """Make introspection request with retry logic (async)."""
     kwargs: dict = {"data": data, "headers": headers}
     if auth is not None:
@@ -52,7 +54,9 @@ async def introspect_token(
         response = await _introspect_token(
             client, request.address, params, headers, auth
         )
-        return process_introspection_response(response)
+        result = process_introspection_response(response)
+        await response.aclose()
+        return result
     except Exception as e:
         return handle_introspection_error(e)
 

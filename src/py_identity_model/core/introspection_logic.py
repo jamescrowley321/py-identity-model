@@ -18,7 +18,7 @@ def log_introspection_request(request: TokenIntrospectionRequest) -> None:
     """Log token introspection request."""
     logger.info(f"Introspecting token at {redact_url(request.address)}")
     logger.debug(f"Client ID: {request.client_id}")
-    if request.token_type_hint:
+    if request.token_type_hint is not None:
         logger.debug(f"Token type hint: {request.token_type_hint}")
 
 
@@ -58,7 +58,7 @@ def process_introspection_response(
 
     try:
         result = parse_introspection_response(response)
-        if result.is_successful and result.claims:
+        if result.is_successful and result.claims is not None:
             active = result.claims.get("active", False)
             logger.info(f"Token introspection complete: active={active}")
         return result

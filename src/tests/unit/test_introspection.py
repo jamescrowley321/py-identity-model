@@ -157,3 +157,33 @@ class TestIntrospection:
     def test_response_inherits_base(self):
         resp = TokenIntrospectionResponse(is_successful=True, claims={})
         assert isinstance(resp, BaseResponse)
+
+    def test_failed_response_repr_does_not_crash(self):
+        resp = TokenIntrospectionResponse(is_successful=False, error="fail")
+        text = repr(resp)
+        assert "TokenIntrospectionResponse" in text
+
+    def test_failed_response_eq_does_not_crash(self):
+        resp1 = TokenIntrospectionResponse(is_successful=False, error="fail")
+        resp2 = TokenIntrospectionResponse(is_successful=False, error="fail")
+        # Should not raise FailedResponseAccessError
+        assert resp1 is not resp2
+
+    @respx.mock
+    def test_non_dict_json_response(self):
+        respx.post(INTROSPECT_URL).mock(
+            return_value=httpx.Response(200, json=["not", "a", "dict"])
+        )
+
+        response = introspect_token(
+            TokenIntrospectionRequest(
+                address=INTROSPECT_URL,
+                token="token",
+                client_id="app1",
+                client_secret="secret",
+            )
+        )
+
+        assert response.is_successful is False
+        assert response.error is not None
+        assert "not a JSON object" in response.error

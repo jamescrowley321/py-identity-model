@@ -270,9 +270,15 @@ def parse_introspection_response(
 ) -> TokenIntrospectionResponse:
     """Parse token introspection HTTP response (RFC 7662)."""
     if response.is_success:
+        data = response.json()
+        if not isinstance(data, dict):
+            return TokenIntrospectionResponse(
+                is_successful=False,
+                error=f"Introspection response is not a JSON object: {type(data).__name__}",
+            )
         return TokenIntrospectionResponse(
             is_successful=True,
-            claims=response.json(),
+            claims=data,
         )
 
     error_msg = (
