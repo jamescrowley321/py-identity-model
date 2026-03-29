@@ -161,8 +161,8 @@ def process_auth_code_token_response(
 
 def log_refresh_token_request(request: RefreshTokenRequest) -> None:
     """Log refresh token request."""
-    logger.info(f"Refreshing token at {redact_url(request.address)}")
-    logger.debug(f"Client ID: {request.client_id}")
+    logger.info("Refreshing token at %s", redact_url(request.address))
+    logger.debug("Client ID: %s", request.client_id)
 
 
 def prepare_refresh_token_request_data(
@@ -172,7 +172,6 @@ def prepare_refresh_token_request_data(
     params: dict[str, str] = {
         "grant_type": "refresh_token",
         "refresh_token": request.refresh_token,
-        "client_id": request.client_id,
     }
     if request.scope is not None:
         params["scope"] = request.scope
@@ -181,7 +180,12 @@ def prepare_refresh_token_request_data(
 
     auth: tuple[str, str] | None = None
     if request.client_secret is not None:
+        # RFC 6749 §2.3.1: use Basic auth for confidential clients;
+        # client_id is carried in the auth header, not the body.
         auth = (request.client_id, request.client_secret)
+    else:
+        # Public client: include client_id in the request body
+        params["client_id"] = request.client_id
 
     return params, headers, auth
 

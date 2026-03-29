@@ -63,7 +63,9 @@ class TestRefreshToken:
         assert response.is_successful is True
         request = route.calls[0].request
         body = request.content.decode()
-        assert "scope=openid" in body
+        assert (
+            "scope=openid+profile" in body or "scope=openid%20profile" in body
+        )
 
     @respx.mock
     def test_expired_refresh_token(self):
@@ -121,6 +123,28 @@ class TestRefreshToken:
         assert response.is_successful is False
         with pytest.raises(FailedResponseAccessError):
             _ = response.token
+
+    @respx.mock
+    def test_confidential_client_uses_basic_auth(self):
+        """RFC 6749 §2.3.1: Confidential clients use Basic Auth, no client_id in body."""
+        route = respx.post(TOKEN_URL).mock(
+            return_value=httpx.Response(200, json=TOKEN_JSON)
+        )
+
+        refresh_token(
+            RefreshTokenRequest(
+                address=TOKEN_URL,
+                client_id="app1",
+                refresh_token="rt",
+                client_secret="secret",
+            )
+        )
+
+        request = route.calls[0].request
+        assert request.headers.get("authorization") is not None
+        assert request.headers["authorization"].startswith("Basic ")
+        body = request.content.decode()
+        assert "client_id=" not in body
 
     @respx.mock
     def test_network_error(self):

@@ -123,6 +123,8 @@ class TestAsyncRefreshToken:
         request = route.calls[0].request
         assert request.headers.get("authorization") is not None
         assert request.headers["authorization"].startswith("Basic ")
+        body = request.content.decode()
+        assert "client_id=" not in body
 
     @respx.mock
     async def test_public_client_sends_client_id_in_body(self):
@@ -163,7 +165,9 @@ class TestAsyncRefreshToken:
 
         request = route.calls[0].request
         body = request.content.decode()
-        assert "scope=openid" in body
+        assert (
+            "scope=openid+profile" in body or "scope=openid%20profile" in body
+        )
 
     @respx.mock
     async def test_content_type_header(self):
