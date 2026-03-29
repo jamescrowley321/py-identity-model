@@ -314,3 +314,191 @@ class TestExchangeToken:
         assert response.is_successful is False
         assert response.error is not None
         assert "Connection refused" in response.error
+
+    @respx.mock
+    def test_missing_access_token_returns_error(self):
+        """BH M1: Success response missing access_token is rejected."""
+        respx.post(TOKEN_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "token_type": "Bearer",
+                    "issued_token_type": ACCESS_TOKEN,
+                },
+            )
+        )
+        response = exchange_token(
+            TokenExchangeRequest(
+                address=TOKEN_URL,
+                client_id="service-a",
+                subject_token="tok",
+                subject_token_type=ACCESS_TOKEN,
+                client_secret="secret",
+            )
+        )
+        assert response.is_successful is False
+        assert response.error is not None
+        assert "access_token" in response.error
+
+    @respx.mock
+    def test_missing_token_type_returns_error(self):
+        """BH M1: Success response missing token_type is rejected."""
+        respx.post(TOKEN_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "access_token": "tok",
+                    "issued_token_type": ACCESS_TOKEN,
+                },
+            )
+        )
+        response = exchange_token(
+            TokenExchangeRequest(
+                address=TOKEN_URL,
+                client_id="service-a",
+                subject_token="tok",
+                subject_token_type=ACCESS_TOKEN,
+                client_secret="secret",
+            )
+        )
+        assert response.is_successful is False
+        assert response.error is not None
+        assert "token_type" in response.error
+
+    @respx.mock
+    def test_empty_success_response_returns_error(self):
+        """BH M1: Empty dict success response is rejected."""
+        respx.post(TOKEN_URL).mock(return_value=httpx.Response(200, json={}))
+        response = exchange_token(
+            TokenExchangeRequest(
+                address=TOKEN_URL,
+                client_id="service-a",
+                subject_token="tok",
+                subject_token_type=ACCESS_TOKEN,
+                client_secret="secret",
+            )
+        )
+        assert response.is_successful is False
+        assert response.error is not None
+        assert "access_token" in response.error
+        assert "token_type" in response.error
+
+    def test_validation_error_label(self):
+        """BH M2: ValueError gives 'Validation error' label, not 'Unexpected'."""
+        response = exchange_token(
+            TokenExchangeRequest(
+                address=TOKEN_URL,
+                client_id="service-a",
+                subject_token="",
+                subject_token_type=ACCESS_TOKEN,
+            )
+        )
+        assert response.is_successful is False
+        assert response.error is not None
+        assert "Validation error" in response.error
+        assert "Unexpected" not in response.error
+
+    @respx.mock
+    def test_error_response_parses_rfc6749(self):
+        """BH M3: Error response extracts RFC 6749 §5.2 fields."""
+        respx.post(TOKEN_URL).mock(
+            return_value=httpx.Response(
+                400,
+                json={
+                    "error": "invalid_grant",
+                    "error_description": "Subject token expired",
+                },
+            )
+        )
+        response = exchange_token(
+            TokenExchangeRequest(
+                address=TOKEN_URL,
+                client_id="service-a",
+                subject_token="tok",
+                subject_token_type=ACCESS_TOKEN,
+                client_secret="secret",
+            )
+        )
+        assert response.is_successful is False
+        assert response.error is not None
+        assert "invalid_grant" in response.error
+        assert "Subject token expired" in response.error
+
+    def test_actor_token_type_without_actor_token_returns_error(self):
+        """WARN #4/S5: actor_token_type without actor_token is rejected."""
+        response = exchange_token(
+            TokenExchangeRequest(
+                address=TOKEN_URL,
+                client_id="service-a",
+                subject_token="user-token",
+                subject_token_type=ACCESS_TOKEN,
+                actor_token_type=JWT,
+            )
+        )
+        assert response.is_successful is False
+        assert response.error is not None
+        assert (
+            "actor_token_type has no meaning without actor_token"
+            in response.error
+        )
+
+    def test_empty_client_id_returns_error(self):
+        """S4: Empty client_id returns error response."""
+        response = exchange_token(
+            TokenExchangeRequest(
+                address=TOKEN_URL,
+                client_id="",
+                subject_token="tok",
+                subject_token_type=ACCESS_TOKEN,
+            )
+        )
+        assert response.is_successful is False
+        assert response.error is not None
+        assert "client_id must not be empty" in response.error
+
+    @respx.mock
+    def test_empty_optional_fields_not_sent(self):
+        """S6: Empty optional string fields are not included in request."""
+        route = respx.post(TOKEN_URL).mock(
+            return_value=httpx.Response(200, json=TOKEN_EXCHANGE_RESPONSE)
+        )
+        exchange_token(
+            TokenExchangeRequest(
+                address=TOKEN_URL,
+                client_id="service-a",
+                subject_token="tok",
+                subject_token_type=ACCESS_TOKEN,
+                resource="",
+                audience="",
+                scope="",
+                requested_token_type="",
+                client_secret="secret",
+            )
+        )
+        body = route.calls[0].request.content.decode()
+        assert "resource=" not in body
+        assert "audience=" not in body
+        assert "scope=" not in body
+        assert "requested_token_type=" not in body
+
+    @respx.mock
+    def test_non_string_issued_token_type_ignored(self):
+        """S8: Non-string issued_token_type is set to None."""
+        resp_data = {
+            **TOKEN_EXCHANGE_RESPONSE,
+            "issued_token_type": 123,
+        }
+        respx.post(TOKEN_URL).mock(
+            return_value=httpx.Response(200, json=resp_data)
+        )
+        response = exchange_token(
+            TokenExchangeRequest(
+                address=TOKEN_URL,
+                client_id="service-a",
+                subject_token="tok",
+                subject_token_type=ACCESS_TOKEN,
+                client_secret="secret",
+            )
+        )
+        assert response.is_successful is True
+        assert response.issued_token_type is None
