@@ -10,6 +10,7 @@ from py_identity_model import (
     RefreshTokenRequest,
     RefreshTokenResponse,
 )
+from py_identity_model.exceptions import FailedResponseAccessError
 from py_identity_model.sync.token_client import refresh_token
 
 
@@ -45,7 +46,7 @@ class TestRefreshToken:
 
     @respx.mock
     def test_refresh_with_scope(self):
-        respx.post(TOKEN_URL).mock(
+        route = respx.post(TOKEN_URL).mock(
             return_value=httpx.Response(200, json=TOKEN_JSON)
         )
 
@@ -60,6 +61,9 @@ class TestRefreshToken:
         )
 
         assert response.is_successful is True
+        request = route.calls[0].request
+        body = request.content.decode()
+        assert "scope=openid" in body
 
     @respx.mock
     def test_expired_refresh_token(self):
@@ -95,6 +99,48 @@ class TestRefreshToken:
         )
 
         assert response.is_successful is True
+
+    @respx.mock
+    def test_failed_response_guard(self):
+        """Accessing .token on failed response raises FailedResponseAccessError."""
+        respx.post(TOKEN_URL).mock(
+            return_value=httpx.Response(
+                401, content=b'{"error": "invalid_client"}'
+            )
+        )
+
+        response = refresh_token(
+            RefreshTokenRequest(
+                address=TOKEN_URL,
+                client_id="app1",
+                refresh_token="rt",
+                client_secret="wrong",
+            )
+        )
+
+        assert response.is_successful is False
+        with pytest.raises(FailedResponseAccessError):
+            _ = response.token
+
+    @respx.mock
+    def test_network_error(self):
+        """Network errors are caught and returned as error responses."""
+        respx.post(TOKEN_URL).mock(
+            side_effect=httpx.ConnectError("Connection refused")
+        )
+
+        response = refresh_token(
+            RefreshTokenRequest(
+                address=TOKEN_URL,
+                client_id="app1",
+                refresh_token="rt",
+                client_secret="secret",
+            )
+        )
+
+        assert response.is_successful is False
+        assert response.error is not None
+        assert "Connection refused" in response.error
 
     def test_request_inherits_base(self):
         req = RefreshTokenRequest(
