@@ -166,6 +166,7 @@ def validate_token(
                 subject=token_validation_config.subject,
                 options=token_validation_config.options,
                 claims_validator=token_validation_config.claims_validator,
+                leeway=token_validation_config.leeway,
             ),
             disco_doc_response.issuer,
         )
