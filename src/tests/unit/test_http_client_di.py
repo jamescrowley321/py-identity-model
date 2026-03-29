@@ -12,6 +12,9 @@ from py_identity_model.aio.managed_client import AsyncHTTPClient
 from py_identity_model.aio.token_client import (
     request_client_credentials_token as aio_request_token,
 )
+from py_identity_model.aio.token_validation import (
+    validate_token as aio_validate_token,
+)
 from py_identity_model.aio.userinfo import get_userinfo as aio_get_userinfo
 from py_identity_model.core.models import (
     ClientCredentialsTokenRequest,
@@ -249,3 +252,60 @@ class TestAsyncDI:
                 http_client=client,
             )
         assert response.is_successful
+
+    @pytest.mark.asyncio
+    async def test_validate_token_di_requires_disco_address(self):
+        """validate_token with http_client raises if disco_doc_address is None."""
+        config = TokenValidationConfig(perform_disco=True)
+        async with AsyncHTTPClient() as client:
+            with pytest.raises(
+                ConfigurationException, match="disco_doc_address"
+            ):
+                await aio_validate_token(
+                    jwt="fake.jwt.token",
+                    token_validation_config=config,
+                    disco_doc_address=None,
+                    http_client=client,
+                )
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_validate_token_di_bypasses_cache(self):
+        """validate_token with http_client hits discovery directly (no cache)."""
+        respx.get(DISCO_URL).mock(
+            return_value=httpx.Response(200, json=DISCO_JSON)
+        )
+        respx.get(JWKS_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "keys": [
+                        {
+                            "kty": "RSA",
+                            "kid": "k1",
+                            "use": "sig",
+                            "alg": "RS256",
+                            "n": "test",
+                            "e": "AQAB",
+                        }
+                    ]
+                },
+            )
+        )
+        config = TokenValidationConfig(perform_disco=True)
+        fake_jwt = (
+            "eyJhbGciOiAiUlMyNTYiLCAia2lkIjogImsxIiwgInR5cCI6ICJKV1QifQ"
+            ".eyJzdWIiOiAidGVzdCJ9.invalid_signature"
+        )
+        import contextlib
+
+        async with AsyncHTTPClient() as client:
+            with contextlib.suppress(Exception):
+                await aio_validate_token(
+                    jwt=fake_jwt,
+                    token_validation_config=config,
+                    disco_doc_address=DISCO_URL,
+                    http_client=client,
+                )
+        # Verify discovery and JWKS were called via injected client
+        assert respx.calls.call_count >= 2

@@ -60,6 +60,29 @@ class TestHTTPClient:
         assert isinstance(client.client, httpx.Client)
         client.close()
 
+    def test_access_after_close_raises(self):
+        client = HTTPClient()
+        client.close()
+        with pytest.raises(RuntimeError, match="has been closed"):
+            _ = client.client
+
+    def test_double_close_is_idempotent(self):
+        client = HTTPClient()
+        client.close()
+        client.close()  # Should not raise
+
+    def test_reject_timeout_with_existing_client(self):
+        raw = httpx.Client()
+        with pytest.raises(ValueError, match="cannot be specified"):
+            HTTPClient(client=raw, timeout=5.0)
+        raw.close()
+
+    def test_reject_verify_with_existing_client(self):
+        raw = httpx.Client()
+        with pytest.raises(ValueError, match="cannot be specified"):
+            HTTPClient(client=raw, verify=False)
+        raw.close()
+
 
 @pytest.mark.unit
 class TestAsyncHTTPClient:
@@ -111,3 +134,26 @@ class TestAsyncHTTPClient:
     def test_custom_verify_false(self):
         client = AsyncHTTPClient(verify=False)
         assert isinstance(client.client, httpx.AsyncClient)
+
+    @pytest.mark.asyncio
+    async def test_access_after_close_raises(self):
+        client = AsyncHTTPClient()
+        await client.close()
+        with pytest.raises(RuntimeError, match="has been closed"):
+            _ = client.client
+
+    @pytest.mark.asyncio
+    async def test_double_close_is_idempotent(self):
+        client = AsyncHTTPClient()
+        await client.close()
+        await client.close()  # Should not raise
+
+    def test_reject_timeout_with_existing_client(self):
+        raw = httpx.AsyncClient()
+        with pytest.raises(ValueError, match="cannot be specified"):
+            AsyncHTTPClient(client=raw, timeout=5.0)
+
+    def test_reject_verify_with_existing_client(self):
+        raw = httpx.AsyncClient()
+        with pytest.raises(ValueError, match="cannot be specified"):
+            AsyncHTTPClient(client=raw, verify=False)
