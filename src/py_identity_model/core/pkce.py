@@ -50,8 +50,20 @@ def generate_code_challenge(
         The code challenge string.
 
     Raises:
-        ValueError: If *method* is not ``"S256"`` or ``"plain"``.
+        ValueError: If *method* is not ``"S256"`` or ``"plain"``, or
+            if *verifier* length is outside the 43-128 range (RFC 7636).
     """
+    if (
+        len(verifier) < _MIN_VERIFIER_LENGTH
+        or len(verifier) > _MAX_VERIFIER_LENGTH
+    ):
+        msg = (
+            f"Code verifier length must be between "
+            f"{_MIN_VERIFIER_LENGTH} and {_MAX_VERIFIER_LENGTH}, "
+            f"got {len(verifier)}"
+        )
+        raise ValueError(msg)
+
     if method == "S256":
         digest = hashlib.sha256(verifier.encode("ascii")).digest()
         return urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")

@@ -112,7 +112,6 @@ def prepare_auth_code_token_request_data(
         "grant_type": "authorization_code",
         "code": request.code,
         "redirect_uri": request.redirect_uri,
-        "client_id": request.client_id,
     }
     if request.code_verifier is not None:
         params["code_verifier"] = request.code_verifier
@@ -123,7 +122,12 @@ def prepare_auth_code_token_request_data(
 
     auth: tuple[str, str] | None = None
     if request.client_secret is not None:
+        # RFC 6749 §2.3.1: use Basic auth for confidential clients;
+        # client_id is carried in the auth header, not the body.
         auth = (request.client_id, request.client_secret)
+    else:
+        # Public client: include client_id in the request body
+        params["client_id"] = request.client_id
 
     return params, headers, auth
 
