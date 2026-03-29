@@ -188,6 +188,7 @@ def handle_userinfo_error(e: Exception) -> UserInfoResponse:
 __all__ = [
     "handle_auth_code_token_error",
     "handle_discovery_error",
+    "handle_introspection_error",
     "handle_jwks_error",
     "handle_token_error",
     "handle_userinfo_error",
