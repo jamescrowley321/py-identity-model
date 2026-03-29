@@ -68,18 +68,48 @@ def process_device_auth_response(
 
     if response.is_success:
         data = response.json()
-        logger.info(
-            f"Device authorization successful, "
-            f"user_code: {data.get('user_code')}"
+
+        # RFC 8628 Section 3.2: validate REQUIRED fields
+        device_code = data.get("device_code")
+        user_code = data.get("user_code")
+        verification_uri = data.get("verification_uri")
+        expires_in = data.get("expires_in")
+
+        missing: list[str] = []
+        if not device_code:
+            missing.append("device_code")
+        if not user_code:
+            missing.append("user_code")
+        if not verification_uri:
+            missing.append("verification_uri")
+        if not isinstance(expires_in, int) or expires_in <= 0:
+            missing.append("expires_in")
+        if missing:
+            error_msg = (
+                f"Device authorization response missing required fields "
+                f"per RFC 8628 Section 3.2: {', '.join(missing)}"
+            )
+            logger.error(error_msg)
+            return DeviceAuthorizationResponse(
+                is_successful=False, error=error_msg
+            )
+
+        raw_interval = data.get("interval")
+        interval = (
+            int(raw_interval)
+            if isinstance(raw_interval, (int, float))
+            else None
         )
+
+        logger.info(f"Device authorization successful, user_code: {user_code}")
         return DeviceAuthorizationResponse(
             is_successful=True,
-            device_code=data.get("device_code"),
-            user_code=data.get("user_code"),
-            verification_uri=data.get("verification_uri"),
+            device_code=device_code,
+            user_code=user_code,
+            verification_uri=verification_uri,
             verification_uri_complete=data.get("verification_uri_complete"),
-            expires_in=data.get("expires_in"),
-            interval=data.get("interval"),
+            expires_in=int(expires_in),
+            interval=interval,
         )
 
     error_msg = (
@@ -164,7 +194,12 @@ def process_device_token_response(
 
     error_code = data.get("error")
     if error_code in _POLLING_ERROR_CODES:
-        interval = data.get("interval")
+        raw_interval = data.get("interval")
+        interval = (
+            int(raw_interval)
+            if isinstance(raw_interval, (int, float))
+            else None
+        )
         error_description = data.get(
             "error_description", f"Device flow: {error_code}"
         )
