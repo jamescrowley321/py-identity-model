@@ -24,6 +24,17 @@ from py_identity_model.exceptions import (
 )
 
 
+# Shared discovery response without jwks_uri for testing missing-jwks_uri guards
+_DISCO_RESPONSE_NO_JWKS = {
+    "issuer": "https://example.com",
+    "authorization_endpoint": "https://example.com/authorize",
+    "token_endpoint": "https://example.com/token",
+    "response_types_supported": ["code"],
+    "subject_types_supported": ["public"],
+    "id_token_signing_alg_values_supported": ["RS256"],
+}
+
+
 class TestAsyncTokenValidation:
     """Test async token validation functionality."""
 
@@ -83,19 +94,8 @@ class TestAsyncTokenValidation:
             validate_token,
         )
 
-        # Discovery response without jwks_uri
         respx.get("https://example.com/.well-known/openid-configuration").mock(
-            return_value=httpx.Response(
-                200,
-                json={
-                    "issuer": "https://example.com",
-                    "authorization_endpoint": "https://example.com/authorize",
-                    "token_endpoint": "https://example.com/token",
-                    "response_types_supported": ["code"],
-                    "subject_types_supported": ["public"],
-                    "id_token_signing_alg_values_supported": ["RS256"],
-                },
-            )
+            return_value=httpx.Response(200, json=_DISCO_RESPONSE_NO_JWKS)
         )
 
         _get_disco_response.cache_clear()
@@ -122,19 +122,8 @@ class TestAsyncTokenValidation:
         from py_identity_model.aio.managed_client import AsyncHTTPClient
         from py_identity_model.aio.token_validation import validate_token
 
-        # Discovery response without jwks_uri
         respx.get("https://example.com/.well-known/openid-configuration").mock(
-            return_value=httpx.Response(
-                200,
-                json={
-                    "issuer": "https://example.com",
-                    "authorization_endpoint": "https://example.com/authorize",
-                    "token_endpoint": "https://example.com/token",
-                    "response_types_supported": ["code"],
-                    "subject_types_supported": ["public"],
-                    "id_token_signing_alg_values_supported": ["RS256"],
-                },
-            )
+            return_value=httpx.Response(200, json=_DISCO_RESPONSE_NO_JWKS)
         )
 
         validation_config = TokenValidationConfig(
@@ -153,6 +142,37 @@ class TestAsyncTokenValidation:
                     disco_doc_address="https://example.com/.well-known/openid-configuration",
                     http_client=client,
                 )
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_empty_string_jwks_uri_cached_path_raises(self):
+        """Test that empty-string jwks_uri raises ConfigurationException (cached path)."""
+        from py_identity_model.aio.token_validation import (
+            _get_disco_response,
+            validate_token,
+        )
+
+        disco_with_empty_jwks = {**_DISCO_RESPONSE_NO_JWKS, "jwks_uri": ""}
+        respx.get("https://example.com/.well-known/openid-configuration").mock(
+            return_value=httpx.Response(200, json=disco_with_empty_jwks)
+        )
+
+        _get_disco_response.cache_clear()
+
+        validation_config = TokenValidationConfig(
+            perform_disco=True,
+            audience="test-audience",
+        )
+
+        with pytest.raises(
+            ConfigurationException,
+            match="Discovery document missing jwks_uri",
+        ):
+            await validate_token(
+                jwt="fake.jwt.token",
+                token_validation_config=validation_config,
+                disco_doc_address="https://example.com/.well-known/openid-configuration",
+            )
 
 
 # ============================================================================

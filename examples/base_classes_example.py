@@ -8,27 +8,41 @@ interface across all API operations.
 from py_identity_model import (
     BaseRequest,
     BaseResponse,
+    ClientCredentialsTokenRequest,
     DiscoveryDocumentRequest,
     JwksRequest,
+    UserInfoRequest,
     get_discovery_document,
     get_jwks,
 )
+from py_identity_model.sync.token_client import (
+    request_client_credentials_token,
+)
+from py_identity_model.sync.userinfo import get_userinfo
+
+
+# Dispatch table mapping request types to their handler functions
+_REQUEST_HANDLERS: dict = {
+    DiscoveryDocumentRequest: get_discovery_document,
+    JwksRequest: get_jwks,
+    ClientCredentialsTokenRequest: request_client_credentials_token,
+    UserInfoRequest: get_userinfo,
+}
 
 
 def polymorphic_fetch(request: BaseRequest) -> BaseResponse:
     """Demonstrate polymorphic request handling.
 
-    Any request that inherits from BaseRequest can be inspected
-    for its target endpoint.
+    Any request that inherits from BaseRequest can be dispatched
+    to its corresponding handler.
     """
     print(f"  Fetching: {request.address}")
 
-    if isinstance(request, DiscoveryDocumentRequest):
-        return get_discovery_document(request)
-    if isinstance(request, JwksRequest):
-        return get_jwks(request)
-    msg = f"Unknown request type: {type(request).__name__}"
-    raise TypeError(msg)
+    handler = _REQUEST_HANDLERS.get(type(request))
+    if handler is None:
+        msg = f"Unknown request type: {type(request).__name__}"
+        raise TypeError(msg)
+    return handler(request)
 
 
 def check_response(response: BaseResponse, label: str) -> None:
