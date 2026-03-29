@@ -203,6 +203,7 @@ __all__ = [
     "handle_discovery_error",
     "handle_introspection_error",
     "handle_jwks_error",
+    "handle_revocation_error",
     "handle_token_error",
     "handle_userinfo_error",
 ]
