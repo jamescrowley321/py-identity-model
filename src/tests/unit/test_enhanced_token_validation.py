@@ -205,6 +205,24 @@ class TestSubjectValidation:
                 subject="different_user",
             )
 
+    def test_subject_mismatch_does_not_leak_claim_value(self, rsa_keypair):
+        """S1: Error message must NOT contain the actual sub claim value."""
+        key_dict, pem = rsa_keypair
+        secret_sub = "sensitive-user-id-12345"
+        token = _sign_jwt(pem, {"sub": secret_sub, "iss": "https://test.com"})
+
+        with pytest.raises(TokenValidationException) as exc_info:
+            decode_and_validate_jwt(
+                token,
+                key_dict,
+                ["RS256"],
+                None,
+                None,
+                None,
+                subject="different_user",
+            )
+        assert secret_sub not in str(exc_info.value)
+
     def test_missing_sub_claim_raises(self, rsa_keypair):
         key_dict, pem = rsa_keypair
         token = _sign_jwt(pem, {"iss": "https://test.com"})
