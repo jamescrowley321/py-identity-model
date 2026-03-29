@@ -121,6 +121,18 @@ class TestValidateAuthorizeCallbackState:
             result.result is AuthorizeCallbackValidationResult.ERROR_RESPONSE
         )
 
+    def test_expected_state_none_returns_missing_state(self):
+        """[M1] expected_state=None must not crash with TypeError in hmac.compare_digest."""
+        result = validate_authorize_callback_state(
+            _parse("code=abc&state=valid"), None
+        )
+
+        assert result.is_valid is False
+        assert result.result is AuthorizeCallbackValidationResult.MISSING_STATE
+        assert result.error == "missing_state"
+        assert result.error_description is not None
+        assert "None" in result.error_description
+
     def test_result_dataclass_fields(self):
         """Verify StateValidationResult exposes all documented fields."""
         r = StateValidationResult(
