@@ -169,6 +169,11 @@ def parse_authorize_callback_response(
             else:
                 field_values[field_name] = values[param_name]
 
+    if not field_values:
+        raise AuthorizeCallbackException(
+            "redirect_uri contains no recognized OAuth callback parameters"
+        )
+
     has_error = "error" in field_values
 
     return AuthorizeCallbackResponse(

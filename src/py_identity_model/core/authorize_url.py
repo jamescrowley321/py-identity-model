@@ -5,7 +5,21 @@ Constructs the authorization endpoint URL with all required and optional
 query parameters for the authorization code flow.
 """
 
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
+
+
+_RESERVED_PARAMS = frozenset(
+    {
+        "client_id",
+        "redirect_uri",
+        "scope",
+        "response_type",
+        "state",
+        "nonce",
+        "code_challenge",
+        "code_challenge_method",
+    }
+)
 
 
 def build_authorization_url(
@@ -41,7 +55,33 @@ def build_authorization_url(
 
     Returns:
         The full authorization URL ready for redirect.
+
+    Raises:
+        ValueError: If *extra_params* contains a reserved OAuth parameter,
+            if *code_challenge* is given without *code_challenge_method*
+            (or vice versa per RFC 7636 §4.3), or if *authorization_endpoint*
+            contains a URI fragment.
     """
+    # Reject extra_params that collide with reserved OAuth parameters
+    collisions = _RESERVED_PARAMS & extra_params.keys()
+    if collisions:
+        raise ValueError(
+            f"extra_params must not override reserved OAuth parameters: "
+            f"{', '.join(sorted(collisions))}"
+        )
+
+    # RFC 7636 §4.3: code_challenge and code_challenge_method must be paired
+    if (code_challenge is None) != (code_challenge_method is None):
+        raise ValueError(
+            "code_challenge and code_challenge_method must both be provided "
+            "or both be omitted (RFC 7636 §4.3)"
+        )
+
+    # Strip fragment — query params after #fragment are ignored by browsers
+    parsed = urlparse(authorization_endpoint)
+    if parsed.fragment:
+        authorization_endpoint = authorization_endpoint.split("#", 1)[0]
+
     params: dict[str, str] = {
         "client_id": client_id,
         "redirect_uri": redirect_uri,
