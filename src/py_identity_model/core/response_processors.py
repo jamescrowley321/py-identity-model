@@ -122,6 +122,7 @@ def build_discovery_response(
         # Common optional properties
         userinfo_endpoint=response_json.get("userinfo_endpoint"),
         registration_endpoint=response_json.get("registration_endpoint"),
+        introspection_endpoint=response_json.get("introspection_endpoint"),
         scopes_supported=response_json.get("scopes_supported"),
         response_modes_supported=response_json.get(
             "response_modes_supported",
