@@ -326,6 +326,7 @@ def parse_userinfo_response(response: httpx.Response) -> UserInfoResponse:
 __all__ = [
     "build_discovery_response",
     "parse_auth_code_token_response",
+    "parse_introspection_response",
     "parse_jwks_response",
     "parse_token_response",
     "parse_userinfo_response",

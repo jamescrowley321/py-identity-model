@@ -1,26 +1,24 @@
-"""Unit tests for OAuth 2.0 Token Introspection (RFC 7662)."""
+"""Async tests for aio.introspection module (NFR-9 parity)."""
 
 import httpx
 import pytest
 import respx
 
 from py_identity_model import (
-    BaseRequest,
-    BaseResponse,
     TokenIntrospectionRequest,
     TokenIntrospectionResponse,
 )
+from py_identity_model.aio.introspection import introspect_token
 from py_identity_model.exceptions import FailedResponseAccessError
-from py_identity_model.sync.introspection import introspect_token
 
 
 INTROSPECT_URL = "https://auth.example.com/introspect"
 
 
-@pytest.mark.unit
-class TestIntrospection:
+@pytest.mark.asyncio
+class TestAsyncIntrospection:
     @respx.mock
-    def test_active_token(self):
+    async def test_active_token(self):
         respx.post(INTROSPECT_URL).mock(
             return_value=httpx.Response(
                 200,
@@ -39,7 +37,7 @@ class TestIntrospection:
             )
         )
 
-        response = introspect_token(
+        response = await introspect_token(
             TokenIntrospectionRequest(
                 address=INTROSPECT_URL,
                 token="access_token_here",
@@ -55,12 +53,12 @@ class TestIntrospection:
         assert response.claims["sub"] == "user123"
 
     @respx.mock
-    def test_inactive_token(self):
+    async def test_inactive_token(self):
         respx.post(INTROSPECT_URL).mock(
             return_value=httpx.Response(200, json={"active": False})
         )
 
-        response = introspect_token(
+        response = await introspect_token(
             TokenIntrospectionRequest(
                 address=INTROSPECT_URL,
                 token="expired_token",
@@ -74,12 +72,12 @@ class TestIntrospection:
         assert response.claims["active"] is False
 
     @respx.mock
-    def test_error_response(self):
+    async def test_error_response(self):
         respx.post(INTROSPECT_URL).mock(
             return_value=httpx.Response(401, content=b"Unauthorized")
         )
 
-        response = introspect_token(
+        response = await introspect_token(
             TokenIntrospectionRequest(
                 address=INTROSPECT_URL,
                 token="token",
@@ -94,31 +92,12 @@ class TestIntrospection:
         assert response.error is not None
 
     @respx.mock
-    def test_network_error(self):
-        respx.post(INTROSPECT_URL).mock(
-            side_effect=httpx.ConnectError("Connection refused")
-        )
-
-        response = introspect_token(
-            TokenIntrospectionRequest(
-                address=INTROSPECT_URL,
-                token="token",
-                client_id="app1",
-                client_secret="secret",
-            )
-        )
-
-        assert response.is_successful is False
-        assert response.error is not None
-        assert "Connection refused" in response.error
-
-    @respx.mock
-    def test_with_token_type_hint(self):
+    async def test_with_token_type_hint(self):
         respx.post(INTROSPECT_URL).mock(
             return_value=httpx.Response(200, json={"active": True})
         )
 
-        response = introspect_token(
+        response = await introspect_token(
             TokenIntrospectionRequest(
                 address=INTROSPECT_URL,
                 token="refresh_token_here",
@@ -131,12 +110,12 @@ class TestIntrospection:
         assert response.is_successful is True
 
     @respx.mock
-    def test_public_client_no_auth_header(self):
+    async def test_public_client_no_auth_header(self):
         respx.post(INTROSPECT_URL).mock(
             return_value=httpx.Response(200, json={"active": True})
         )
 
-        response = introspect_token(
+        response = await introspect_token(
             TokenIntrospectionRequest(
                 address=INTROSPECT_URL,
                 token="token",
@@ -146,14 +125,27 @@ class TestIntrospection:
 
         assert response.is_successful is True
 
-    def test_request_inherits_base(self):
-        req = TokenIntrospectionRequest(
-            address=INTROSPECT_URL,
-            token="tok",
-            client_id="app",
+    @respx.mock
+    async def test_network_error(self):
+        respx.post(INTROSPECT_URL).mock(
+            side_effect=httpx.ConnectError("Connection refused")
         )
-        assert isinstance(req, BaseRequest)
 
-    def test_response_inherits_base(self):
+        response = await introspect_token(
+            TokenIntrospectionRequest(
+                address=INTROSPECT_URL,
+                token="token",
+                client_id="app1",
+                client_secret="secret",
+            )
+        )
+
+        assert response.is_successful is False
+        assert response.error is not None
+        assert "Connection refused" in response.error
+
+    async def test_response_inherits_base(self):
+        from py_identity_model import BaseResponse
+
         resp = TokenIntrospectionResponse(is_successful=True, claims={})
         assert isinstance(resp, BaseResponse)
