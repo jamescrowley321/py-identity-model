@@ -150,6 +150,10 @@ async def validate_token(
             )
             validate_disco_response(disco_doc_response)
 
+            if disco_doc_response.jwks_uri is None:
+                raise ConfigurationException(
+                    "Discovery document missing jwks_uri"
+                )
             jwks_response = await _get_jwks_response(
                 disco_doc_response.jwks_uri
             )
