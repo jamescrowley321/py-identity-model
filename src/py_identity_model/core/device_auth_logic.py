@@ -5,6 +5,8 @@ Pure functions for preparing device authorization requests,
 processing responses, and handling device token polling.
 """
 
+import json
+
 import httpx
 
 from ..logging_config import logger
@@ -23,6 +25,22 @@ _POLLING_ERROR_CODES = frozenset(
 )
 
 _DEVICE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
+
+
+def _coerce_int(value: object) -> int | None:
+    """Coerce a JSON numeric value to int, or None if not numeric/finite.
+
+    Handles float-to-int coercion (JSON has no int/float distinction),
+    rejects bool, and safely handles float('inf')/float('nan').
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        try:
+            return int(value)
+        except (OverflowError, ValueError):
+            return None
+    return None
 
 
 # ============================================================================
@@ -46,15 +64,14 @@ def prepare_device_auth_request_data(
     Returns:
         ``(data, headers, auth)`` where *auth* is ``None`` for public clients.
     """
-    params: dict[str, str] = {
-        "client_id": request.client_id,
-        "scope": request.scope,
-    }
+    params: dict[str, str] = {"client_id": request.client_id}
+    if request.scope:
+        params["scope"] = request.scope
 
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
     auth: tuple[str, str] | None = None
-    if request.client_secret is not None:
+    if request.client_secret:
         auth = (request.client_id, request.client_secret)
 
     return params, headers, auth
@@ -67,13 +84,29 @@ def process_device_auth_response(
     logger.debug(f"Device auth response status: {response.status_code}")
 
     if response.is_success:
-        data = response.json()
+        try:
+            data = response.json()
+        except (json.JSONDecodeError, ValueError):
+            error_msg = "Device authorization response has invalid JSON body"
+            logger.error(error_msg)
+            return DeviceAuthorizationResponse(
+                is_successful=False, error=error_msg
+            )
+
+        if not isinstance(data, dict):
+            error_msg = (
+                f"Device authorization response is not a JSON object: "
+                f"{type(data).__name__}"
+            )
+            logger.error(error_msg)
+            return DeviceAuthorizationResponse(
+                is_successful=False, error=error_msg
+            )
 
         # RFC 8628 Section 3.2: validate REQUIRED fields
         device_code = data.get("device_code")
         user_code = data.get("user_code")
         verification_uri = data.get("verification_uri")
-        expires_in = data.get("expires_in")
 
         missing: list[str] = []
         if not device_code:
@@ -82,8 +115,11 @@ def process_device_auth_response(
             missing.append("user_code")
         if not verification_uri:
             missing.append("verification_uri")
-        if not isinstance(expires_in, int) or expires_in <= 0:
+
+        expires_in = _coerce_int(data.get("expires_in"))
+        if expires_in is None or expires_in <= 0:
             missing.append("expires_in")
+
         if missing:
             error_msg = (
                 f"Device authorization response missing required fields "
@@ -94,12 +130,7 @@ def process_device_auth_response(
                 is_successful=False, error=error_msg
             )
 
-        raw_interval = data.get("interval")
-        interval = (
-            int(raw_interval)
-            if isinstance(raw_interval, (int, float))
-            else None
-        )
+        interval = _coerce_int(data.get("interval"))
 
         logger.info(f"Device authorization successful, user_code: {user_code}")
         return DeviceAuthorizationResponse(
@@ -108,7 +139,7 @@ def process_device_auth_response(
             user_code=user_code,
             verification_uri=verification_uri,
             verification_uri_complete=data.get("verification_uri_complete"),
-            expires_in=int(expires_in),
+            expires_in=expires_in,
             interval=interval,
         )
 
@@ -160,7 +191,7 @@ def prepare_device_token_request_data(
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
     auth: tuple[str, str] | None = None
-    if request.client_secret is not None:
+    if request.client_secret:
         auth = (request.client_id, request.client_secret)
 
     return params, headers, auth
@@ -178,7 +209,21 @@ def process_device_token_response(
     logger.debug(f"Device token response status: {response.status_code}")
 
     if response.is_success:
-        data = response.json()
+        try:
+            data = response.json()
+        except (json.JSONDecodeError, ValueError):
+            error_msg = "Device token response has invalid JSON body"
+            logger.error(error_msg)
+            return DeviceTokenResponse(is_successful=False, error=error_msg)
+
+        if not isinstance(data, dict):
+            error_msg = (
+                f"Device token response is not a JSON object: "
+                f"{type(data).__name__}"
+            )
+            logger.error(error_msg)
+            return DeviceTokenResponse(is_successful=False, error=error_msg)
+
         logger.info("Device token request successful")
         return DeviceTokenResponse(is_successful=True, token=data)
 
@@ -192,14 +237,16 @@ def process_device_token_response(
         )
         return DeviceTokenResponse(is_successful=False, error=error_msg)
 
+    if not isinstance(data, dict):
+        error_msg = (
+            f"Device token request failed with status code: "
+            f"{response.status_code}. Response Content: {response.content}"
+        )
+        return DeviceTokenResponse(is_successful=False, error=error_msg)
+
     error_code = data.get("error")
     if error_code in _POLLING_ERROR_CODES:
-        raw_interval = data.get("interval")
-        interval = (
-            int(raw_interval)
-            if isinstance(raw_interval, (int, float))
-            else None
-        )
+        interval = _coerce_int(data.get("interval"))
         error_description = data.get(
             "error_description", f"Device flow: {error_code}"
         )

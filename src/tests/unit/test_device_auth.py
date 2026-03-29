@@ -203,6 +203,57 @@ class TestRequestDeviceAuthorization:
         assert response.is_successful is True
         assert response.interval is None
 
+    @respx.mock
+    def test_non_json_success_returns_error(self):
+        """M1: Non-JSON body on 200 returns error instead of crashing."""
+        respx.post(DEVICE_AUTH_URL).mock(
+            return_value=httpx.Response(
+                200, content=b"<html>Gateway Error</html>"
+            )
+        )
+        response = request_device_authorization(
+            DeviceAuthorizationRequest(
+                address=DEVICE_AUTH_URL,
+                client_id="app1",
+            )
+        )
+        assert response.is_successful is False
+        assert response.error is not None
+        assert "invalid JSON" in response.error
+
+    @respx.mock
+    def test_non_dict_json_success_returns_error(self):
+        """Edge: Non-dict JSON on 200 returns error instead of AttributeError."""
+        respx.post(DEVICE_AUTH_URL).mock(
+            return_value=httpx.Response(200, json=["not", "a", "dict"])
+        )
+        response = request_device_authorization(
+            DeviceAuthorizationRequest(
+                address=DEVICE_AUTH_URL,
+                client_id="app1",
+            )
+        )
+        assert response.is_successful is False
+        assert response.error is not None
+        assert "not a JSON object" in response.error
+
+    @respx.mock
+    def test_expires_in_float_coerced_to_int(self):
+        """M2: float expires_in is coerced to int (JSON has no int/float distinction)."""
+        float_response = {**DEVICE_AUTH_RESPONSE, "expires_in": 1800.0}
+        respx.post(DEVICE_AUTH_URL).mock(
+            return_value=httpx.Response(200, json=float_response)
+        )
+        response = request_device_authorization(
+            DeviceAuthorizationRequest(
+                address=DEVICE_AUTH_URL,
+                client_id="app1",
+            )
+        )
+        assert response.is_successful is True
+        assert response.expires_in == 1800
+        assert isinstance(response.expires_in, int)
+
 
 @pytest.mark.unit
 class TestPollDeviceToken:
@@ -341,6 +392,56 @@ class TestPollDeviceToken:
     def test_non_json_error_response(self):
         respx.post(TOKEN_URL).mock(
             return_value=httpx.Response(500, content=b"Internal Server Error")
+        )
+        response = poll_device_token(
+            DeviceTokenRequest(
+                address=TOKEN_URL,
+                client_id="app1",
+                device_code="device123",
+            )
+        )
+        assert response.is_successful is False
+        assert response.error_code is None
+
+    @respx.mock
+    def test_non_json_token_success_returns_error(self):
+        """M1: Non-JSON body on 200 token response returns error."""
+        respx.post(TOKEN_URL).mock(
+            return_value=httpx.Response(200, content=b"<html>Error</html>")
+        )
+        response = poll_device_token(
+            DeviceTokenRequest(
+                address=TOKEN_URL,
+                client_id="app1",
+                device_code="device123",
+            )
+        )
+        assert response.is_successful is False
+        assert response.error is not None
+        assert "invalid JSON" in response.error
+
+    @respx.mock
+    def test_non_dict_json_token_success_returns_error(self):
+        """WARN3: Non-dict JSON on 200 token response returns error."""
+        respx.post(TOKEN_URL).mock(
+            return_value=httpx.Response(200, json=["not", "a", "dict"])
+        )
+        response = poll_device_token(
+            DeviceTokenRequest(
+                address=TOKEN_URL,
+                client_id="app1",
+                device_code="device123",
+            )
+        )
+        assert response.is_successful is False
+        assert response.error is not None
+        assert "not a JSON object" in response.error
+
+    @respx.mock
+    def test_non_dict_json_error_response(self):
+        """WARN4: Non-dict JSON on error response handled gracefully."""
+        respx.post(TOKEN_URL).mock(
+            return_value=httpx.Response(400, json=["error_array"])
         )
         response = poll_device_token(
             DeviceTokenRequest(

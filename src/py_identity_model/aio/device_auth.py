@@ -48,6 +48,7 @@ async def request_device_authorization(
     log_device_auth_request(request)
     params, headers, auth = prepare_device_auth_request_data(request)
 
+    response = None
     try:
         client = http_client.client if http_client else get_async_http_client()
         response = await _request_device_auth(
@@ -56,6 +57,9 @@ async def request_device_authorization(
         return process_device_auth_response(response)
     except Exception as e:
         return handle_device_auth_error(e)
+    finally:
+        if response is not None:
+            await response.aclose()
 
 
 @retry_with_backoff_async()
@@ -87,6 +91,7 @@ async def poll_device_token(
     log_device_token_request(request)
     params, headers, auth = prepare_device_token_request_data(request)
 
+    response = None
     try:
         client = http_client.client if http_client else get_async_http_client()
         response = await _poll_device_token(
@@ -95,6 +100,9 @@ async def poll_device_token(
         return process_device_token_response(response)
     except Exception as e:
         return handle_device_token_error(e)
+    finally:
+        if response is not None:
+            await response.aclose()
 
 
 __all__ = [

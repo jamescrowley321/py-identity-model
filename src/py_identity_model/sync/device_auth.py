@@ -48,16 +48,18 @@ def request_device_authorization(
     log_device_auth_request(request)
     params, headers, auth = prepare_device_auth_request_data(request)
 
+    response = None
     try:
         client = http_client.client if http_client else get_http_client()
         response = _request_device_auth(
             client, request.address, params, headers, auth
         )
-        result = process_device_auth_response(response)
-        response.close()
-        return result
+        return process_device_auth_response(response)
     except Exception as e:
         return handle_device_auth_error(e)
+    finally:
+        if response is not None:
+            response.close()
 
 
 @retry_with_backoff()
@@ -93,16 +95,18 @@ def poll_device_token(
     log_device_token_request(request)
     params, headers, auth = prepare_device_token_request_data(request)
 
+    response = None
     try:
         client = http_client.client if http_client else get_http_client()
         response = _poll_device_token(
             client, request.address, params, headers, auth
         )
-        result = process_device_token_response(response)
-        response.close()
-        return result
+        return process_device_token_response(response)
     except Exception as e:
         return handle_device_token_error(e)
+    finally:
+        if response is not None:
+            response.close()
 
 
 __all__ = [
