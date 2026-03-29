@@ -459,6 +459,7 @@ class DiscoveryDocumentResponse(BaseResponse):
             "service_documentation",
             "op_policy_uri",
             "op_tos_uri",
+            "introspection_endpoint",
         }
     )
 
@@ -476,6 +477,7 @@ class DiscoveryDocumentResponse(BaseResponse):
     # Common optional properties
     userinfo_endpoint: str | None = None
     registration_endpoint: str | None = None
+    introspection_endpoint: str | None = None
     scopes_supported: list[str] | None = None
     response_modes_supported: list[str] | None = None
     grant_types_supported: list[str] | None = None
