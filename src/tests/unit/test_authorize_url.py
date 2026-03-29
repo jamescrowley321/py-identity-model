@@ -154,3 +154,40 @@ class TestBuildAuthorizationUrl:
         assert "#fragment" not in url
         params = parse_qs(urlparse(url).query)
         assert params["client_id"] == ["app1"]
+
+    def test_empty_endpoint_raises(self):
+        with pytest.raises(ValueError, match="empty"):
+            build_authorization_url(
+                "",
+                client_id="app1",
+                redirect_uri="https://app.com/cb",
+            )
+
+    def test_whitespace_endpoint_raises(self):
+        with pytest.raises(ValueError, match="empty"):
+            build_authorization_url(
+                "   ",
+                client_id="app1",
+                redirect_uri="https://app.com/cb",
+            )
+
+    def test_invalid_code_challenge_method_raises(self):
+        with pytest.raises(ValueError, match="S256.*plain"):
+            build_authorization_url(
+                AUTHZ_ENDPOINT,
+                client_id="app1",
+                redirect_uri="https://app.com/cb",
+                code_challenge="challenge123",
+                code_challenge_method="foo",
+            )
+
+    def test_plain_code_challenge_method_accepted(self):
+        url = build_authorization_url(
+            AUTHZ_ENDPOINT,
+            client_id="app1",
+            redirect_uri="https://app.com/cb",
+            code_challenge="challenge123",
+            code_challenge_method="plain",
+        )
+        params = parse_qs(urlparse(url).query)
+        assert params["code_challenge_method"] == ["plain"]

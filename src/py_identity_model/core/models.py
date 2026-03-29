@@ -600,7 +600,7 @@ class AuthorizationCodeTokenRequest(BaseRequest):
     scope: str | None = None
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class AuthorizationCodeTokenResponse(BaseResponse):
     """Response from an authorization code token exchange.
 

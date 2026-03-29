@@ -69,18 +69,31 @@ class TestGenerateCodeChallenge:
         assert challenge == expected
 
     def test_plain_method(self):
-        verifier = "some_verifier_string"
+        verifier = generate_code_verifier(43)
         assert generate_code_challenge(verifier, "plain") == verifier
 
     def test_unsupported_method_raises(self):
+        verifier = generate_code_verifier(43)
         with pytest.raises(ValueError, match="Unsupported"):
-            generate_code_challenge("verifier", "SHA512")
+            generate_code_challenge(verifier, "SHA512")
 
     def test_default_method_is_s256(self):
         v = generate_code_verifier()
         c_default = generate_code_challenge(v)
         c_explicit = generate_code_challenge(v, "S256")
         assert c_default == c_explicit
+
+    def test_empty_verifier_raises(self):
+        with pytest.raises(ValueError, match="43 and 128"):
+            generate_code_challenge("")
+
+    def test_short_verifier_raises(self):
+        with pytest.raises(ValueError, match="43 and 128"):
+            generate_code_challenge("too_short")
+
+    def test_long_verifier_raises(self):
+        with pytest.raises(ValueError, match="43 and 128"):
+            generate_code_challenge("x" * 129)
 
 
 @pytest.mark.unit
