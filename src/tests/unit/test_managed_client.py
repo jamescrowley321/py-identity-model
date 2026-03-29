@@ -83,6 +83,15 @@ class TestHTTPClient:
             HTTPClient(client=raw, verify=False)
         raw.close()
 
+    def test_unowned_close_blocks_further_access(self):
+        raw = httpx.Client()
+        client = HTTPClient(client=raw)
+        client.close()
+        with pytest.raises(RuntimeError, match="has been closed"):
+            _ = client.client
+        assert not raw.is_closed
+        raw.close()
+
 
 @pytest.mark.unit
 class TestAsyncHTTPClient:
@@ -157,3 +166,13 @@ class TestAsyncHTTPClient:
         raw = httpx.AsyncClient()
         with pytest.raises(ValueError, match="cannot be specified"):
             AsyncHTTPClient(client=raw, verify=False)
+
+    @pytest.mark.asyncio
+    async def test_unowned_close_blocks_further_access(self):
+        raw = httpx.AsyncClient()
+        client = AsyncHTTPClient(client=raw)
+        await client.close()
+        with pytest.raises(RuntimeError, match="has been closed"):
+            _ = client.client
+        assert not raw.is_closed
+        await raw.aclose()
