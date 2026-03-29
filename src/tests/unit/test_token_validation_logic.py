@@ -4,6 +4,8 @@ Unit tests for core token validation logic.
 These tests verify the shared validation logic used by both sync and async implementations.
 """
 
+from unittest.mock import patch
+
 import pytest
 
 from py_identity_model.core.models import (
@@ -237,6 +239,54 @@ class TestValidateTokenConfig:
         # Should not raise
         validate_token_config(config)
 
+    def test_boolean_leeway_rejected(self):
+        """Boolean leeway must be rejected (not silently treated as 0/1)."""
+        from py_identity_model.core.validators import validate_token_config
+
+        config = TokenValidationConfig(perform_disco=True, leeway=True)
+        with pytest.raises(
+            ConfigurationException,
+            match="leeway must be a number, not a boolean",
+        ):
+            validate_token_config(config)
+
+    def test_string_leeway_rejected(self):
+        """String leeway must be rejected."""
+        from py_identity_model.core.validators import validate_token_config
+
+        config = TokenValidationConfig(perform_disco=True, leeway="30")  # type: ignore
+        with pytest.raises(
+            ConfigurationException, match="leeway must be a number"
+        ):
+            validate_token_config(config)
+
+    def test_issuer_list_with_empty_string_rejected(self):
+        """Issuer list containing empty strings must be rejected."""
+        from py_identity_model.core.validators import validate_token_config
+
+        config = TokenValidationConfig(
+            perform_disco=True, issuer=["https://good.com", ""]
+        )
+        with pytest.raises(
+            ConfigurationException,
+            match="issuer list must contain only non-empty strings",
+        ):
+            validate_token_config(config)
+
+    def test_issuer_list_with_non_string_rejected(self):
+        """Issuer list containing non-string items must be rejected."""
+        from py_identity_model.core.validators import validate_token_config
+
+        config = TokenValidationConfig(
+            perform_disco=True,
+            issuer=["https://good.com", 123],  # type: ignore
+        )
+        with pytest.raises(
+            ConfigurationException,
+            match="issuer list must contain only non-empty strings",
+        ):
+            validate_token_config(config)
+
 
 class TestDecodeWithConfig:
     """Test JWT decoding with configuration."""
@@ -264,3 +314,53 @@ class TestDecodeWithConfig:
             match="Token validation configuration must have key and algorithms set",
         ):
             decode_with_config("fake.jwt.token", config)
+
+    def test_empty_string_issuer_not_replaced_by_config(self):
+        """Empty-string discovery issuer must be passed through, not replaced by config issuer."""
+        from unittest.mock import patch
+
+        config = TokenValidationConfig(
+            perform_disco=False,
+            key={"kty": "RSA", "n": "test", "e": "AQAB"},
+            algorithms=["RS256"],
+            issuer="https://config-issuer.com",
+        )
+        with patch(
+            "py_identity_model.core.token_validation_logic.decode_and_validate_jwt"
+        ) as mock_decode:
+            mock_decode.return_value = {"sub": "user1"}
+            decode_with_config("fake.jwt.token", config, issuer="")
+            # The empty-string issuer from discovery must be passed through
+            call_kwargs = mock_decode.call_args
+            assert call_kwargs.kwargs["issuer"] == ""
+
+
+class TestLogValidationSuccess:
+    """Tests for success log redaction."""
+
+    def test_success_log_does_not_expose_sub(self):
+        """Success log must not expose the actual sub claim value."""
+        from py_identity_model.core.token_validation_logic import (
+            log_validation_success,
+        )
+
+        with patch(
+            "py_identity_model.core.token_validation_logic.logger"
+        ) as mock_logger:
+            log_validation_success({"sub": "secret-user-id-123"})
+            log_call = mock_logger.info.call_args[0][0]
+            assert "secret-user-id-123" not in log_call
+            assert "[present]" in log_call
+
+    def test_success_log_absent_sub(self):
+        """Success log must indicate when sub is absent."""
+        from py_identity_model.core.token_validation_logic import (
+            log_validation_success,
+        )
+
+        with patch(
+            "py_identity_model.core.token_validation_logic.logger"
+        ) as mock_logger:
+            log_validation_success({"iss": "https://example.com"})
+            log_call = mock_logger.info.call_args[0][0]
+            assert "[absent]" in log_call

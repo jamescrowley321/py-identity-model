@@ -4,6 +4,7 @@ Validation functions for py-identity-model.
 This module contains all validation logic used by both sync and async implementations.
 """
 
+import math
 from urllib.parse import urlparse
 
 from ..exceptions import ConfigurationException, DiscoveryException
@@ -148,19 +149,30 @@ def validate_token_config(
     Raises:
         ConfigurationException: If configuration is invalid
     """
-    import math
-
     # Validate issuer: empty list is a fail-open security defect
-    if (
-        isinstance(token_validation_config.issuer, list)
-        and len(token_validation_config.issuer) == 0
-    ):
-        raise ConfigurationException(
-            "issuer must not be an empty list; omit or set to None to skip issuer validation",
-        )
+    if isinstance(token_validation_config.issuer, list):
+        if len(token_validation_config.issuer) == 0:
+            raise ConfigurationException(
+                "issuer must not be an empty list; omit or set to None to skip issuer validation",
+            )
+        # Validate list items are non-empty strings
+        if not all(
+            isinstance(i, str) and i for i in token_validation_config.issuer
+        ):
+            raise ConfigurationException(
+                "issuer list must contain only non-empty strings",
+            )
 
-    # Validate leeway: must be non-negative and finite
+    # Validate leeway: must be numeric (not bool), non-negative, and finite
     if token_validation_config.leeway is not None:
+        if isinstance(token_validation_config.leeway, bool):
+            raise ConfigurationException(
+                "leeway must be a number, not a boolean",
+            )
+        if not isinstance(token_validation_config.leeway, (int, float)):
+            raise ConfigurationException(
+                "leeway must be a number",
+            )
         if token_validation_config.leeway < 0:
             raise ConfigurationException(
                 "leeway must be non-negative",

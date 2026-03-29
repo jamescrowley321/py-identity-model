@@ -88,9 +88,8 @@ def _decode_jwt_cached(
         "algorithms": list(algorithms_tuple),
         "issuer": issuer_param,
         "options": options,
+        "leeway": leeway if leeway is not None else 0,
     }
-    if leeway is not None:
-        kwargs["leeway"] = leeway
 
     return decode(jwt, pyjwk, **kwargs)
 
@@ -129,9 +128,23 @@ def decode_and_validate_jwt(
         TokenValidationException: For other token validation errors
     """
     try:
+        # Guard against empty algorithms on direct API calls
+        if not algorithms:
+            from ..exceptions import ConfigurationException
+
+            raise ConfigurationException("algorithms must not be empty")
+
+        # Guard against empty issuer list on direct API calls
+        if isinstance(issuer, list) and len(issuer) == 0:
+            from ..exceptions import ConfigurationException
+
+            raise ConfigurationException(
+                "issuer must not be an empty list; omit or set to None to skip issuer validation"
+            )
+
         # Convert to hashable types for caching
         key_json = json.dumps(key, sort_keys=True)
-        algorithms_tuple = tuple(algorithms) if algorithms else ()
+        algorithms_tuple = tuple(algorithms)
         options_json = json.dumps(options, sort_keys=True) if options else None
 
         # Convert issuer list to tuple for hashability
@@ -148,6 +161,11 @@ def decode_and_validate_jwt(
             options_json,
             leeway=leeway,
         )
+
+        # Return a shallow copy to prevent cache aliasing —
+        # lru_cache returns the same dict reference on cache hits,
+        # so callers mutating the returned dict would corrupt the cache.
+        decoded = decoded.copy()
 
         # Validate subject claim (PyJWT doesn't do this natively)
         if subject is not None and decoded.get("sub") != subject:
