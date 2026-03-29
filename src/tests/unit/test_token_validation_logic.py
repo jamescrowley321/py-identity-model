@@ -152,6 +152,92 @@ class TestValidateConfigForManualValidation:
         validate_config_for_manual_validation(config)
 
 
+class TestValidateTokenConfig:
+    """Test token validation configuration checks (validate_token_config)."""
+
+    def test_empty_issuer_list_rejected(self):
+        """M2: Empty issuer list must be rejected as fail-open security defect."""
+        from py_identity_model.core.validators import validate_token_config
+
+        config = TokenValidationConfig(perform_disco=True, issuer=[])
+        with pytest.raises(
+            ConfigurationException,
+            match="issuer must not be an empty list",
+        ):
+            validate_token_config(config)
+
+    def test_non_empty_issuer_list_accepted(self):
+        """Issuer list with values should be accepted."""
+        from py_identity_model.core.validators import validate_token_config
+
+        config = TokenValidationConfig(
+            perform_disco=True,
+            issuer=["https://idp1.com", "https://idp2.com"],
+        )
+        # Should not raise
+        validate_token_config(config)
+
+    def test_negative_leeway_rejected(self):
+        """S2: Negative leeway must be rejected."""
+        from py_identity_model.core.validators import validate_token_config
+
+        config = TokenValidationConfig(perform_disco=True, leeway=-5)
+        with pytest.raises(
+            ConfigurationException, match="leeway must be non-negative"
+        ):
+            validate_token_config(config)
+
+    def test_infinite_leeway_rejected(self):
+        """S2: Infinite leeway must be rejected."""
+        import math
+
+        from py_identity_model.core.validators import validate_token_config
+
+        config = TokenValidationConfig(perform_disco=True, leeway=math.inf)
+        with pytest.raises(
+            ConfigurationException, match="leeway must be a finite number"
+        ):
+            validate_token_config(config)
+
+    def test_nan_leeway_rejected(self):
+        """S2: NaN leeway must be rejected."""
+        import math
+
+        from py_identity_model.core.validators import validate_token_config
+
+        config = TokenValidationConfig(perform_disco=True, leeway=math.nan)
+        with pytest.raises(
+            ConfigurationException, match="leeway must be a finite number"
+        ):
+            validate_token_config(config)
+
+    def test_negative_infinity_leeway_rejected(self):
+        """S2: Negative infinity leeway must be rejected."""
+        import math
+
+        from py_identity_model.core.validators import validate_token_config
+
+        config = TokenValidationConfig(perform_disco=True, leeway=-math.inf)
+        with pytest.raises(ConfigurationException):
+            validate_token_config(config)
+
+    def test_zero_leeway_accepted(self):
+        """S2: Zero leeway should be accepted."""
+        from py_identity_model.core.validators import validate_token_config
+
+        config = TokenValidationConfig(perform_disco=True, leeway=0)
+        # Should not raise
+        validate_token_config(config)
+
+    def test_none_leeway_accepted(self):
+        """S2: None leeway (default) should be accepted."""
+        from py_identity_model.core.validators import validate_token_config
+
+        config = TokenValidationConfig(perform_disco=True, leeway=None)
+        # Should not raise
+        validate_token_config(config)
+
+
 class TestDecodeWithConfig:
     """Test JWT decoding with configuration."""
 
