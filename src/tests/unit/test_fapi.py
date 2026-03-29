@@ -94,6 +94,53 @@ class TestValidateFAPIAuthorizationRequest:
         assert result.is_compliant is False
         assert any("RS256" in v for v in result.violations)
 
+    def test_empty_code_challenge_rejected(self):
+        result = validate_fapi_authorization_request(
+            response_type="code",
+            code_challenge="",
+            code_challenge_method="S256",
+            redirect_uri="https://app.example.com/cb",
+            use_par=True,
+        )
+        assert result.is_compliant is False
+        assert any("code_challenge" in v for v in result.violations)
+
+    def test_none_code_challenge_method_message(self):
+        result = validate_fapi_authorization_request(
+            response_type="code",
+            code_challenge="challenge",
+            code_challenge_method=None,
+            redirect_uri="https://app.example.com/cb",
+            use_par=True,
+        )
+        assert result.is_compliant is False
+        assert any(
+            "code_challenge_method is required" in v for v in result.violations
+        )
+        # Must NOT contain Python repr 'None'
+        assert not any("'None'" in v for v in result.violations)
+
+    def test_redirect_uri_case_insensitive_https(self):
+        result = validate_fapi_authorization_request(
+            response_type="code",
+            code_challenge="challenge",
+            code_challenge_method="S256",
+            redirect_uri="HTTPS://app.example.com/cb",
+            use_par=True,
+        )
+        assert result.is_compliant is True
+
+    def test_redirect_uri_no_host_rejected(self):
+        result = validate_fapi_authorization_request(
+            response_type="code",
+            code_challenge="challenge",
+            code_challenge_method="S256",
+            redirect_uri="https://",
+            use_par=True,
+        )
+        assert result.is_compliant is False
+        assert any("host" in v for v in result.violations)
+
     def test_algorithm_none_is_ok(self):
         result = validate_fapi_authorization_request(
             response_type="code",
@@ -208,6 +255,14 @@ class TestValidateFAPIDiscovery:
         result = validate_fapi_discovery(disco)
         assert result.is_compliant is False
         assert any("signing algorithms" in v for v in result.violations)
+
+    def test_failed_discovery_returns_non_compliant(self):
+        disco = DiscoveryDocumentResponse(
+            is_successful=False,
+        )
+        result = validate_fapi_discovery(disco)
+        assert result.is_compliant is False
+        assert any("fetch failed" in v for v in result.violations)
 
     def test_none_fields_pass(self):
         disco = DiscoveryDocumentResponse(

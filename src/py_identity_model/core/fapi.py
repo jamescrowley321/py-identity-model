@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 
 if TYPE_CHECKING:
@@ -72,10 +73,12 @@ def validate_fapi_authorization_request(
             f"response_type must be 'code', got '{response_type}'"
         )
 
-    if code_challenge is None:
+    if not code_challenge:
         violations.append("PKCE code_challenge is required")
 
-    if code_challenge_method != FAPI2_REQUIRED_PKCE_METHOD:
+    if code_challenge_method is None:
+        violations.append("PKCE code_challenge_method is required")
+    elif code_challenge_method != FAPI2_REQUIRED_PKCE_METHOD:
         violations.append(
             f"PKCE method must be 'S256', got '{code_challenge_method}'"
         )
@@ -83,8 +86,13 @@ def validate_fapi_authorization_request(
     if not use_par:
         violations.append("PAR (Pushed Authorization Requests) is required")
 
-    if not redirect_uri.startswith("https://"):
+    parsed_uri = urlparse(redirect_uri)
+    if parsed_uri.scheme.lower() != "https":
         violations.append(f"redirect_uri must use HTTPS, got '{redirect_uri}'")
+    elif not parsed_uri.hostname:
+        violations.append(
+            f"redirect_uri must have a host, got '{redirect_uri}'"
+        )
 
     if (
         algorithm is not None
@@ -111,7 +119,7 @@ def validate_fapi_client_config(
 
     Args:
         has_client_authentication: Whether client authentication is configured
-            (e.g. client_secret, private_key_jwt, or tls_client_auth).
+            (e.g. private_key_jwt or tls_client_auth).
         use_dpop: Whether DPoP sender-constraining is enabled.
         use_mtls: Whether mTLS sender-constraining is enabled.
 
@@ -150,6 +158,12 @@ def validate_fapi_discovery(
     Returns:
         FAPIValidationResult with compliance status and any violations.
     """
+    if not discovery.is_successful:
+        return FAPIValidationResult(
+            is_compliant=False,
+            violations=["Discovery document fetch failed"],
+        )
+
     violations: list[str] = []
 
     # Check supported grant types include authorization_code
