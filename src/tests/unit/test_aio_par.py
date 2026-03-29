@@ -1,16 +1,15 @@
-"""Unit tests for Pushed Authorization Requests (RFC 9126)."""
+"""Async tests for aio.par module (NFR-9 parity)."""
 
 import httpx
 import pytest
 import respx
 
 from py_identity_model import (
-    BaseRequest,
     BaseResponse,
     PushedAuthorizationRequest,
     PushedAuthorizationResponse,
 )
-from py_identity_model.sync.par import push_authorization_request
+from py_identity_model.aio.par import push_authorization_request
 
 
 PAR_URL = "https://auth.example.com/par"
@@ -20,14 +19,14 @@ PAR_RESPONSE = {
 }
 
 
-@pytest.mark.unit
-class TestPAR:
+@pytest.mark.asyncio
+class TestAsyncPAR:
     @respx.mock
-    def test_successful_par(self):
+    async def test_successful_par(self):
         respx.post(PAR_URL).mock(
             return_value=httpx.Response(201, json=PAR_RESPONSE)
         )
-        response = push_authorization_request(
+        response = await push_authorization_request(
             PushedAuthorizationRequest(
                 address=PAR_URL,
                 client_id="app1",
@@ -42,11 +41,11 @@ class TestPAR:
         assert response.expires_in == 60
 
     @respx.mock
-    def test_par_with_pkce(self):
+    async def test_par_with_pkce(self):
         respx.post(PAR_URL).mock(
             return_value=httpx.Response(201, json=PAR_RESPONSE)
         )
-        response = push_authorization_request(
+        response = await push_authorization_request(
             PushedAuthorizationRequest(
                 address=PAR_URL,
                 client_id="app1",
@@ -58,13 +57,13 @@ class TestPAR:
         assert response.is_successful is True
 
     @respx.mock
-    def test_par_error(self):
+    async def test_par_error(self):
         respx.post(PAR_URL).mock(
             return_value=httpx.Response(
                 400, content=b'{"error":"invalid_request"}'
             )
         )
-        response = push_authorization_request(
+        response = await push_authorization_request(
             PushedAuthorizationRequest(
                 address=PAR_URL,
                 client_id="app1",
@@ -74,19 +73,13 @@ class TestPAR:
         )
         assert response.is_successful is False
 
-    def test_request_inherits_base(self):
-        req = PushedAuthorizationRequest(
-            address=PAR_URL, client_id="app", redirect_uri="https://app.com/cb"
-        )
-        assert isinstance(req, BaseRequest)
-
     @respx.mock
-    def test_confidential_client_uses_basic_auth_not_body(self):
+    async def test_confidential_client_uses_basic_auth_not_body(self):
         """M1: client_id must NOT appear in body when using Basic Auth."""
         route = respx.post(PAR_URL).mock(
             return_value=httpx.Response(201, json=PAR_RESPONSE)
         )
-        push_authorization_request(
+        await push_authorization_request(
             PushedAuthorizationRequest(
                 address=PAR_URL,
                 client_id="app1",
@@ -100,12 +93,12 @@ class TestPAR:
         assert "client_id" not in request.content.decode()
 
     @respx.mock
-    def test_public_client_sends_client_id_in_body(self):
+    async def test_public_client_sends_client_id_in_body(self):
         """M1: public clients send client_id in POST body, no Basic Auth."""
         route = respx.post(PAR_URL).mock(
             return_value=httpx.Response(201, json=PAR_RESPONSE)
         )
-        push_authorization_request(
+        await push_authorization_request(
             PushedAuthorizationRequest(
                 address=PAR_URL,
                 client_id="public_app",
@@ -118,12 +111,12 @@ class TestPAR:
         assert request.headers.get("authorization") is None
 
     @respx.mock
-    def test_missing_request_uri_returns_error(self):
+    async def test_missing_request_uri_returns_error(self):
         """M2: Missing request_uri in successful response fails per RFC 9126 §2.2."""
         respx.post(PAR_URL).mock(
             return_value=httpx.Response(201, json={"expires_in": 60})
         )
-        response = push_authorization_request(
+        response = await push_authorization_request(
             PushedAuthorizationRequest(
                 address=PAR_URL,
                 client_id="app1",
@@ -136,7 +129,7 @@ class TestPAR:
         assert "request_uri" in response.error
 
     @respx.mock
-    def test_missing_expires_in_returns_error(self):
+    async def test_missing_expires_in_returns_error(self):
         """M2: Missing expires_in in successful response fails per RFC 9126 §2.2."""
         respx.post(PAR_URL).mock(
             return_value=httpx.Response(
@@ -146,7 +139,7 @@ class TestPAR:
                 },
             )
         )
-        response = push_authorization_request(
+        response = await push_authorization_request(
             PushedAuthorizationRequest(
                 address=PAR_URL,
                 client_id="app1",
@@ -158,11 +151,10 @@ class TestPAR:
         assert response.error is not None
         assert "expires_in" in response.error
 
-    @respx.mock
-    def test_pkce_requires_both_challenge_and_method(self):
+    async def test_pkce_requires_both_challenge_and_method(self):
         """S4: code_challenge and code_challenge_method must be paired."""
         with pytest.raises(ValueError, match="code_challenge"):
-            push_authorization_request(
+            await push_authorization_request(
                 PushedAuthorizationRequest(
                     address=PAR_URL,
                     client_id="app1",
@@ -172,11 +164,11 @@ class TestPAR:
             )
 
     @respx.mock
-    def test_network_error(self):
+    async def test_network_error(self):
         respx.post(PAR_URL).mock(
             side_effect=httpx.ConnectError("Connection refused")
         )
-        response = push_authorization_request(
+        response = await push_authorization_request(
             PushedAuthorizationRequest(
                 address=PAR_URL,
                 client_id="app1",
@@ -188,8 +180,28 @@ class TestPAR:
         assert response.error is not None
         assert "Connection refused" in response.error
 
-    def test_response_inherits_base(self):
+    async def test_response_inherits_base(self):
         resp = PushedAuthorizationResponse(
             is_successful=True, request_uri="urn:...", expires_in=60
         )
         assert isinstance(resp, BaseResponse)
+
+    @respx.mock
+    async def test_content_type_header(self):
+        """RFC 9126: PAR uses form-urlencoded content type."""
+        route = respx.post(PAR_URL).mock(
+            return_value=httpx.Response(201, json=PAR_RESPONSE)
+        )
+        await push_authorization_request(
+            PushedAuthorizationRequest(
+                address=PAR_URL,
+                client_id="app1",
+                redirect_uri="https://app.com/cb",
+                client_secret="secret",
+            )
+        )
+        request = route.calls[0].request
+        assert (
+            request.headers["content-type"]
+            == "application/x-www-form-urlencoded"
+        )
