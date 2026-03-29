@@ -8,7 +8,6 @@ import httpx
 
 from ..logging_config import logger
 from ..logging_utils import redact_url
-from .error_handlers import handle_revocation_error
 from .models import TokenRevocationRequest, TokenRevocationResponse
 
 
@@ -35,7 +34,7 @@ def prepare_revocation_request_data(
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
     auth: tuple[str, str] | None = None
-    if request.client_secret is not None:
+    if request.client_secret:
         auth = (request.client_id, request.client_secret)
     else:
         params["client_id"] = request.client_id
@@ -57,14 +56,11 @@ def process_revocation_response(
         logger.info("Token revocation successful")
         return TokenRevocationResponse(is_successful=True)
 
-    try:
-        error_msg = (
-            f"Token revocation failed with status code: "
-            f"{response.status_code}. Response Content: {response.content}"
-        )
-        return TokenRevocationResponse(is_successful=False, error=error_msg)
-    except Exception as e:
-        return handle_revocation_error(e)
+    error_msg = (
+        f"Token revocation failed with status code: "
+        f"{response.status_code}. Response Content: {response.text[:200]}"
+    )
+    return TokenRevocationResponse(is_successful=False, error=error_msg)
 
 
 __all__ = [

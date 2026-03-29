@@ -678,7 +678,7 @@ class TokenRevocationRequest(BaseRequest):
     client_secret: str | None = None
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class TokenRevocationResponse(BaseResponse):
     """Response from a token revocation endpoint (RFC 7009).
 

@@ -5,6 +5,8 @@ This module provides asynchronous HTTP layer for OAuth 2.0 Token
 Revocation (RFC 7009).
 """
 
+import httpx
+
 from ..core.error_handlers import handle_revocation_error
 from ..core.models import TokenRevocationRequest, TokenRevocationResponse
 from ..core.revocation_logic import (
@@ -17,7 +19,13 @@ from .managed_client import AsyncHTTPClient
 
 
 @retry_with_backoff_async()
-async def _revoke_token(client, url, data, headers, auth=None):
+async def _revoke_token(
+    client: httpx.AsyncClient,
+    url: str,
+    data: dict,
+    headers: dict,
+    auth: tuple[str, str] | None = None,
+) -> httpx.Response:
     """Make revocation request with retry logic (async)."""
     kwargs: dict = {"data": data, "headers": headers}
     if auth is not None:
@@ -41,12 +49,15 @@ async def revoke_token(
     log_revocation_request(request)
     params, headers, auth = prepare_revocation_request_data(request)
 
+    response = None
     try:
         client = http_client.client if http_client else get_async_http_client()
         response = await _revoke_token(
             client, request.address, params, headers, auth
         )
-        return process_revocation_response(response)
+        result = process_revocation_response(response)
+        await response.aclose()
+        return result
     except Exception as e:
         return handle_revocation_error(e)
 
