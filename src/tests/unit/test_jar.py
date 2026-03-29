@@ -172,6 +172,113 @@ class TestCreateRequestObject:
                 exp="99999999999",
             )
 
+    def test_reserved_claims_includes_oauth_params(self):
+        """M1: _RESERVED_CLAIMS guards state/nonce/code_challenge/code_challenge_method.
+
+        These are explicit keyword args so Python routing prevents them from
+        entering extra_claims in normal usage. The frozenset is defense-in-depth
+        against programmatic dict construction.
+        """
+        from py_identity_model.core.jar import _RESERVED_CLAIMS
+
+        for claim in (
+            "state",
+            "nonce",
+            "code_challenge",
+            "code_challenge_method",
+            "jti",
+        ):
+            assert claim in _RESERVED_CLAIMS, (
+                f"{claim} missing from _RESERVED_CLAIMS"
+            )
+
+    def test_kid_included_in_header(self):
+        """M2: kid parameter appears in JWT header for key lookup."""
+        pem = _ec_private_key_pem()
+        token = create_request_object(
+            private_key=pem,
+            algorithm="ES256",
+            client_id="app",
+            audience="https://auth.example.com",
+            redirect_uri="https://app.com/cb",
+            kid="my-key-id-123",
+        )
+        header = pyjwt.get_unverified_header(token)
+        assert header["kid"] == "my-key-id-123"
+
+    def test_kid_absent_when_not_provided(self):
+        """M2: kid is not in header when omitted."""
+        pem = _ec_private_key_pem()
+        token = create_request_object(
+            private_key=pem,
+            algorithm="ES256",
+            client_id="app",
+            audience="https://auth.example.com",
+            redirect_uri="https://app.com/cb",
+        )
+        header = pyjwt.get_unverified_header(token)
+        assert "kid" not in header
+
+    def test_jti_claim_present(self):
+        """S2: jti claim included by default for replay protection."""
+        pem = _ec_private_key_pem()
+        token = create_request_object(
+            private_key=pem,
+            algorithm="ES256",
+            client_id="app",
+            audience="https://auth.example.com",
+            redirect_uri="https://app.com/cb",
+        )
+        decoded = pyjwt.decode(token, options={"verify_signature": False})
+        assert "jti" in decoded
+        assert len(decoded["jti"]) == 36  # UUID format
+
+    def test_jti_unique_per_call(self):
+        """S2: each request object gets a unique jti."""
+        pem = _ec_private_key_pem()
+        kwargs = {
+            "private_key": pem,
+            "algorithm": "ES256",
+            "client_id": "app",
+            "audience": "https://auth.example.com",
+            "redirect_uri": "https://app.com/cb",
+        }
+        t1 = pyjwt.decode(
+            create_request_object(**kwargs),
+            options={"verify_signature": False},
+        )
+        t2 = pyjwt.decode(
+            create_request_object(**kwargs),
+            options={"verify_signature": False},
+        )
+        assert t1["jti"] != t2["jti"]
+
+    def test_pkce_requires_both_challenge_and_method(self):
+        """S3: code_challenge without code_challenge_method raises ValueError."""
+        pem = _ec_private_key_pem()
+        with pytest.raises(ValueError, match="code_challenge.*both"):
+            create_request_object(
+                private_key=pem,
+                algorithm="ES256",
+                client_id="app",
+                audience="https://auth.example.com",
+                redirect_uri="https://app.com/cb",
+                code_challenge="abc",
+            )
+
+    def test_pkce_requires_both_method_and_challenge(self):
+        """S3: code_challenge_method without code_challenge raises ValueError."""
+        pem = _ec_private_key_pem()
+        with pytest.raises(ValueError, match="code_challenge.*both"):
+            create_request_object(
+                private_key=pem,
+                algorithm="ES256",
+                client_id="app",
+                audience="https://auth.example.com",
+                redirect_uri="https://app.com/cb",
+                code_challenge_method="S256",
+            )
+
     def test_zero_lifetime_rejected(self):
         pem = _ec_private_key_pem()
         with pytest.raises(ValueError, match="lifetime must be positive"):
