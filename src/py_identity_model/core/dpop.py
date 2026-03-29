@@ -11,6 +11,7 @@ from base64 import urlsafe_b64encode
 import hashlib
 import json
 import time
+import types
 from urllib.parse import urlparse, urlunparse
 import uuid
 
@@ -23,14 +24,20 @@ from cryptography.hazmat.primitives.serialization import (
 import jwt as pyjwt
 
 
-# Mapping from JWT algorithm to EC curve
-_EC_CURVES: dict[str, ec.EllipticCurve] = {
-    "ES256": ec.SECP256R1(),
-    "ES384": ec.SECP384R1(),
-    "ES512": ec.SECP521R1(),
-}
+# Mapping from JWT algorithm to EC curve (immutable to prevent curve confusion)
+_EC_CURVES: types.MappingProxyType[str, ec.EllipticCurve] = (
+    types.MappingProxyType(
+        {
+            "ES256": ec.SECP256R1(),
+            "ES384": ec.SECP384R1(),
+            "ES512": ec.SECP521R1(),
+        }
+    )
+)
 
-_SUPPORTED_ALGORITHMS = {"ES256", "ES384", "ES512", "RS256"}
+_SUPPORTED_ALGORITHMS: frozenset[str] = frozenset(
+    {"ES256", "ES384", "ES512", "RS256"}
+)
 
 
 def _int_to_b64url(n: int, length: int) -> str:
@@ -51,6 +58,8 @@ class DPoPKey:
     Args:
         algorithm: The signing algorithm (``"ES256"``, ``"RS256"``, etc.).
     """
+
+    __slots__ = ("_algorithm", "_private_key")
 
     def __init__(self, algorithm: str = "ES256") -> None:
         if algorithm not in _SUPPORTED_ALGORITHMS:
@@ -89,11 +98,14 @@ class DPoPKey:
 
         if isinstance(pub, ec.EllipticCurvePublicKey):
             numbers = pub.public_numbers()
-            curve_name = {
+            _curve_names = {
                 "secp256r1": "P-256",
                 "secp384r1": "P-384",
                 "secp521r1": "P-521",
-            }[pub.curve.name]
+            }
+            curve_name = _curve_names.get(pub.curve.name)
+            if curve_name is None:
+                raise ValueError(f"Unsupported EC curve: {pub.curve.name}")
             key_size = (pub.curve.key_size + 7) // 8
             return {
                 "kty": "EC",
@@ -164,9 +176,15 @@ def compute_ath(access_token: str) -> str:
     Raises:
         ValueError: If *access_token* is empty.
     """
-    if not access_token:
+    if not access_token or not access_token.strip():
         raise ValueError("access_token must not be empty")
-    digest = hashlib.sha256(access_token.encode("ascii")).digest()
+    try:
+        token_bytes = access_token.encode("ascii")
+    except UnicodeEncodeError:
+        raise ValueError(
+            "access_token must contain only ASCII characters"
+        ) from None
+    digest = hashlib.sha256(token_bytes).digest()
     return urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
@@ -192,16 +210,20 @@ def create_dpop_proof(
         The signed DPoP proof JWT string.
 
     Raises:
-        ValueError: If *method* or *uri* is empty.
+        ValueError: If *method* or *uri* is empty, or *uri* is not absolute.
     """
     if not method or not method.strip():
         raise ValueError("method must not be empty")
     if not uri or not uri.strip():
         raise ValueError("uri must not be empty")
 
-    # RFC 9449 §4.2: htu must not include query or fragment components
+    # RFC 9449 §4.2: htu must be an absolute HTTP URI without query or fragment
     parsed = urlparse(uri)
-    htu = urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+    if not parsed.scheme or not parsed.netloc:
+        raise ValueError("uri must be an absolute HTTP URI")
+    htu = urlunparse(
+        (parsed.scheme, parsed.netloc, parsed.path, parsed.params, "", "")
+    )
 
     headers = {
         "typ": "dpop+jwt",
@@ -216,10 +238,10 @@ def create_dpop_proof(
         "iat": int(time.time()),
     }
 
-    if access_token is not None:
+    if access_token:
         payload["ath"] = compute_ath(access_token)
 
-    if nonce is not None:
+    if nonce:
         payload["nonce"] = nonce
 
     return pyjwt.encode(
@@ -243,9 +265,14 @@ def build_dpop_headers(
 
     Returns:
         Dict of HTTP headers to include in the request.
+
+    Raises:
+        ValueError: If *proof* is empty.
     """
+    if not proof or not proof.strip():
+        raise ValueError("proof must not be empty")
     headers: dict[str, str] = {"DPoP": proof}
-    if access_token:
+    if access_token and access_token.strip():
         headers["Authorization"] = f"DPoP {access_token}"
     return headers
 
