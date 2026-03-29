@@ -12,4 +12,10 @@ OAuth 2.0 Token Revocation (RFC 7009) for revoking access and refresh tokens.
 
 ## Functions
 
+### Synchronous
+
 ::: py_identity_model.sync.revocation.revoke_token
+
+### Asynchronous
+
+::: py_identity_model.aio.revocation.revoke_token

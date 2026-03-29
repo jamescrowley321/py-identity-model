@@ -55,11 +55,12 @@ async def revoke_token(
         response = await _revoke_token(
             client, request.address, params, headers, auth
         )
-        result = process_revocation_response(response)
-        await response.aclose()
-        return result
+        return process_revocation_response(response)
     except Exception as e:
         return handle_revocation_error(e)
+    finally:
+        if response is not None:
+            await response.aclose()
 
 
 __all__ = [

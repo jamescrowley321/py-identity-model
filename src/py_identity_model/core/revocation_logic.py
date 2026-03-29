@@ -1,7 +1,7 @@
 """
 Token revocation business logic (RFC 7009).
 
-Pure functions for preparing revocation requests and processing responses.
+Shared helpers for preparing revocation requests and processing responses.
 """
 
 import httpx
@@ -15,7 +15,7 @@ def log_revocation_request(request: TokenRevocationRequest) -> None:
     """Log token revocation request."""
     logger.info(f"Revoking token at {redact_url(request.address)}")
     logger.debug(f"Client ID: {request.client_id}")
-    if request.token_type_hint:
+    if request.token_type_hint is not None:
         logger.debug(f"Token type hint: {request.token_type_hint}")
 
 
@@ -34,7 +34,7 @@ def prepare_revocation_request_data(
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
     auth: tuple[str, str] | None = None
-    if request.client_secret:
+    if request.client_secret and request.client_secret.strip():
         auth = (request.client_id, request.client_secret)
     else:
         params["client_id"] = request.client_id
@@ -58,7 +58,8 @@ def process_revocation_response(
 
     error_msg = (
         f"Token revocation failed with status code: "
-        f"{response.status_code}. Response Content: {response.text[:200]}"
+        f"{response.status_code}. Response Content: "
+        f"{response.text[:200] or '(empty)'}"
     )
     return TokenRevocationResponse(is_successful=False, error=error_msg)
 

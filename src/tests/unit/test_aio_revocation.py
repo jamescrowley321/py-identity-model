@@ -126,3 +126,116 @@ class TestAsyncRevocation:
         body = request.content.decode()
         assert "client_id=app1" in body
         assert request.headers.get("authorization") is None
+
+    @respx.mock
+    async def test_confidential_client_uses_basic_auth(self):
+        """RFC 7009: Confidential clients authenticate via HTTP Basic."""
+        route = respx.post(REVOKE_URL).mock(return_value=httpx.Response(200))
+
+        await revoke_token(
+            TokenRevocationRequest(
+                address=REVOKE_URL,
+                token="tok",
+                client_id="app1",
+                client_secret="secret",
+            )
+        )
+
+        request = route.calls[0].request
+        assert request.headers.get("authorization") is not None
+        assert request.headers["authorization"].startswith("Basic ")
+        assert "client_id" not in request.content.decode()
+
+    @respx.mock
+    async def test_public_client_sends_client_id_in_body(self):
+        """RFC 7009: Public clients send client_id in POST body."""
+        route = respx.post(REVOKE_URL).mock(return_value=httpx.Response(200))
+
+        await revoke_token(
+            TokenRevocationRequest(
+                address=REVOKE_URL,
+                token="tok",
+                client_id="public_app",
+            )
+        )
+
+        request = route.calls[0].request
+        body = request.content.decode()
+        assert "client_id=public_app" in body
+        assert request.headers.get("authorization") is None
+
+    @respx.mock
+    async def test_token_type_hint_sent_in_body(self):
+        """RFC 7009: token_type_hint included in POST body when provided."""
+        route = respx.post(REVOKE_URL).mock(return_value=httpx.Response(200))
+
+        await revoke_token(
+            TokenRevocationRequest(
+                address=REVOKE_URL,
+                token="tok",
+                client_id="app1",
+                client_secret="secret",
+                token_type_hint="refresh_token",
+            )
+        )
+
+        request = route.calls[0].request
+        body = request.content.decode()
+        assert "token_type_hint=refresh_token" in body
+
+    @respx.mock
+    async def test_content_type_header(self):
+        """RFC 7009: Revocation uses form-urlencoded content type."""
+        route = respx.post(REVOKE_URL).mock(return_value=httpx.Response(200))
+
+        await revoke_token(
+            TokenRevocationRequest(
+                address=REVOKE_URL,
+                token="tok",
+                client_id="app1",
+                client_secret="secret",
+            )
+        )
+
+        request = route.calls[0].request
+        assert (
+            request.headers["content-type"]
+            == "application/x-www-form-urlencoded"
+        )
+
+    @respx.mock
+    async def test_unexpected_error_returns_error_response(self):
+        """Non-RequestError exceptions are caught and returned as error responses."""
+        respx.post(REVOKE_URL).mock(side_effect=RuntimeError("unexpected"))
+
+        response = await revoke_token(
+            TokenRevocationRequest(
+                address=REVOKE_URL,
+                token="tok",
+                client_id="app1",
+                client_secret="secret",
+            )
+        )
+
+        assert response.is_successful is False
+        assert response.error is not None
+        assert "unexpected" in response.error
+
+    @respx.mock
+    async def test_whitespace_client_secret_uses_public_client_flow(self):
+        """Whitespace-only client_secret should use public client flow."""
+        route = respx.post(REVOKE_URL).mock(return_value=httpx.Response(200))
+
+        await revoke_token(
+            TokenRevocationRequest(
+                address=REVOKE_URL,
+                token="tok",
+                client_id="app1",
+                client_secret="   ",
+            )
+        )
+
+        request = route.calls[0].request
+        body = request.content.decode()
+        assert "client_id=app1" in body
+        assert request.headers.get("authorization") is None
