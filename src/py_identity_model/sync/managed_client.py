@@ -82,9 +82,11 @@ class HTTPClient:
         """Close the client if this instance owns it.  Idempotent."""
         if self._closed:
             return
-        if self._owned:
-            self._client.close()
-        self._closed = True
+        try:
+            if self._owned:
+                self._client.close()
+        finally:
+            self._closed = True
 
     def __enter__(self) -> HTTPClient:
         return self

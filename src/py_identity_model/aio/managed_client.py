@@ -82,9 +82,11 @@ class AsyncHTTPClient:
         """Close the client if this instance owns it.  Idempotent."""
         if self._closed:
             return
-        if self._owned:
-            await self._client.aclose()
-        self._closed = True
+        try:
+            if self._owned:
+                await self._client.aclose()
+        finally:
+            self._closed = True
 
     async def __aenter__(self) -> AsyncHTTPClient:
         return self

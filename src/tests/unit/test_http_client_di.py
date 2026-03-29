@@ -1,5 +1,7 @@
 """Unit tests for HTTP client dependency injection on public API functions."""
 
+import contextlib
+
 import httpx
 import pytest
 import respx
@@ -177,8 +179,6 @@ class TestSyncDI:
             "eyJhbGciOiAiUlMyNTYiLCAia2lkIjogImsxIiwgInR5cCI6ICJKV1QifQ"
             ".eyJzdWIiOiAidGVzdCJ9.invalid_signature"
         )
-        import contextlib
-
         with HTTPClient() as client, contextlib.suppress(Exception):
             sync_validate_token(
                 jwt=fake_jwt,
@@ -297,8 +297,6 @@ class TestAsyncDI:
             "eyJhbGciOiAiUlMyNTYiLCAia2lkIjogImsxIiwgInR5cCI6ICJKV1QifQ"
             ".eyJzdWIiOiAidGVzdCJ9.invalid_signature"
         )
-        import contextlib
-
         async with AsyncHTTPClient() as client:
             with contextlib.suppress(Exception):
                 await aio_validate_token(
