@@ -68,19 +68,42 @@ class BaseRequest:
     address: str
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class BaseResponse(_GuardedResponseMixin):
     """Base class for all API responses with success/error state.
 
     Inherits field-access guarding from ``_GuardedResponseMixin``.
     Subclasses override ``_guarded_fields`` and add data fields.
     Check ``is_successful`` before accessing data or error fields.
+
+    .. note::
+
+       ``dataclasses.asdict()`` and ``astuple()`` trigger the field-access
+       guards and will raise.  Use ``vars(response)`` instead for dict
+       conversion.
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset()
 
     is_successful: bool
     error: str | None = None
+
+    __hash__ = None  # type: ignore[assignment]  # mutable dataclass
+
+    def __repr__(self) -> str:
+        """Safe repr that bypasses field-access guards."""
+        cls_name = type(self).__name__
+        parts: list[str] = []
+        for f in fields(self):
+            val = object.__getattribute__(self, f.name)
+            parts.append(f"{f.name}={val!r}")
+        return f"{cls_name}({', '.join(parts)})"
+
+    def __eq__(self, other: object) -> bool:
+        """Safe equality that bypasses field-access guards."""
+        if type(self) is not type(other):
+            return NotImplemented
+        return self.__dict__ == other.__dict__
 
 
 # ============================================================================
@@ -396,7 +419,7 @@ class DiscoveryDocumentRequest(BaseRequest):
     require_https: bool = True
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class DiscoveryDocumentResponse(BaseResponse):
     """Response from an OpenID Connect discovery document fetch.
 
@@ -511,7 +534,7 @@ class JwksRequest(BaseRequest):
     """
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class JwksResponse(BaseResponse):
     """Response from a JWKS endpoint fetch.
 
@@ -544,7 +567,7 @@ class ClientCredentialsTokenRequest(BaseRequest):
     scope: str
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class ClientCredentialsTokenResponse(BaseResponse):
     """Response from a client credentials token request.
 
@@ -573,7 +596,7 @@ class UserInfoRequest(BaseRequest):
     token: str
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class UserInfoResponse(BaseResponse):
     """Response from the UserInfo endpoint.
 

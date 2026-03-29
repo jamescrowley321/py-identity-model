@@ -22,6 +22,17 @@ from py_identity_model.sync.token_validation import (
 )
 
 
+# Shared discovery response without jwks_uri for testing missing-jwks_uri guards
+_DISCO_RESPONSE_NO_JWKS = {
+    "issuer": "https://example.com",
+    "authorization_endpoint": "https://example.com/authorize",
+    "token_endpoint": "https://example.com/token",
+    "response_types_supported": ["code"],
+    "subject_types_supported": ["public"],
+    "id_token_signing_alg_values_supported": ["RS256"],
+}
+
+
 class TestSyncTokenValidation:
     """Test sync token validation functionality."""
 
@@ -177,19 +188,8 @@ class TestSyncTokenValidation:
     @respx.mock
     def test_missing_jwks_uri_cached_path_raises(self):
         """Test that missing jwks_uri in discovery doc raises ConfigurationException (cached path)."""
-        # Discovery response without jwks_uri
         respx.get("https://example.com/.well-known/openid-configuration").mock(
-            return_value=httpx.Response(
-                200,
-                json={
-                    "issuer": "https://example.com",
-                    "authorization_endpoint": "https://example.com/authorize",
-                    "token_endpoint": "https://example.com/token",
-                    "response_types_supported": ["code"],
-                    "subject_types_supported": ["public"],
-                    "id_token_signing_alg_values_supported": ["RS256"],
-                },
-            )
+            return_value=httpx.Response(200, json=_DISCO_RESPONSE_NO_JWKS)
         )
 
         _get_disco_response.cache_clear()
@@ -214,19 +214,8 @@ class TestSyncTokenValidation:
         """Test that missing jwks_uri in discovery doc raises ConfigurationException (DI path)."""
         from py_identity_model.sync.managed_client import HTTPClient
 
-        # Discovery response without jwks_uri
         respx.get("https://example.com/.well-known/openid-configuration").mock(
-            return_value=httpx.Response(
-                200,
-                json={
-                    "issuer": "https://example.com",
-                    "authorization_endpoint": "https://example.com/authorize",
-                    "token_endpoint": "https://example.com/token",
-                    "response_types_supported": ["code"],
-                    "subject_types_supported": ["public"],
-                    "id_token_signing_alg_values_supported": ["RS256"],
-                },
-            )
+            return_value=httpx.Response(200, json=_DISCO_RESPONSE_NO_JWKS)
         )
 
         validation_config = TokenValidationConfig(
@@ -246,4 +235,29 @@ class TestSyncTokenValidation:
                 token_validation_config=validation_config,
                 disco_doc_address="https://example.com/.well-known/openid-configuration",
                 http_client=client,
+            )
+
+    @respx.mock
+    def test_empty_string_jwks_uri_cached_path_raises(self):
+        """Test that empty-string jwks_uri raises ConfigurationException (cached path)."""
+        disco_with_empty_jwks = {**_DISCO_RESPONSE_NO_JWKS, "jwks_uri": ""}
+        respx.get("https://example.com/.well-known/openid-configuration").mock(
+            return_value=httpx.Response(200, json=disco_with_empty_jwks)
+        )
+
+        _get_disco_response.cache_clear()
+
+        validation_config = TokenValidationConfig(
+            perform_disco=True,
+            audience="test-audience",
+        )
+
+        with pytest.raises(
+            ConfigurationException,
+            match="Discovery document missing jwks_uri",
+        ):
+            validate_token(
+                jwt="fake.jwt.token",
+                token_validation_config=validation_config,
+                disco_doc_address="https://example.com/.well-known/openid-configuration",
             )
