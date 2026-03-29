@@ -41,16 +41,18 @@ def push_authorization_request(
     log_par_request(request)
     params, headers, auth = prepare_par_request_data(request)
 
+    response = None
     try:
         client = http_client.client if http_client else get_http_client()
         response = _push_authorization_request(
             client, request.address, params, headers, auth
         )
-        result = process_par_response(response)
-        response.close()
-        return result
+        return process_par_response(response)
     except Exception as e:
         return handle_par_error(e)
+    finally:
+        if response is not None:
+            response.close()
 
 
 __all__ = [

@@ -8,6 +8,7 @@ import httpx
 
 from ..logging_config import logger
 from ..logging_utils import redact_url
+from .error_handlers import handle_par_error
 from .models import PushedAuthorizationRequest, PushedAuthorizationResponse
 
 
@@ -27,8 +28,14 @@ def prepare_par_request_data(
     Returns:
         ``(data, headers, auth)`` where *auth* is ``None`` for public clients.
     """
+    if (request.code_challenge is None) != (
+        request.code_challenge_method is None
+    ):
+        raise ValueError(
+            "code_challenge and code_challenge_method must both be set or both be absent"
+        )
+
     params: dict[str, str] = {
-        "client_id": request.client_id,
         "redirect_uri": request.redirect_uri,
         "scope": request.scope,
         "response_type": request.response_type,
@@ -47,6 +54,8 @@ def prepare_par_request_data(
     auth: tuple[str, str] | None = None
     if request.client_secret is not None:
         auth = (request.client_id, request.client_secret)
+    else:
+        params["client_id"] = request.client_id
 
     return params, headers, auth
 
@@ -59,31 +68,33 @@ def process_par_response(
 
     if response.is_success:
         data = response.json()
+        request_uri = data.get("request_uri")
+        expires_in = data.get("expires_in")
+        if not request_uri or expires_in is None:
+            missing = []
+            if not request_uri:
+                missing.append("request_uri")
+            if expires_in is None:
+                missing.append("expires_in")
+            error_msg = (
+                f"PAR response missing required fields per RFC 9126 "
+                f"Section 2.2: {', '.join(missing)}"
+            )
+            logger.error(error_msg)
+            return PushedAuthorizationResponse(
+                is_successful=False, error=error_msg
+            )
         logger.info("Pushed authorization request successful")
         return PushedAuthorizationResponse(
             is_successful=True,
-            request_uri=data.get("request_uri"),
-            expires_in=data.get("expires_in"),
+            request_uri=request_uri,
+            expires_in=expires_in,
         )
 
     error_msg = (
         f"Pushed authorization request failed with status code: "
         f"{response.status_code}. Response Content: {response.content}"
     )
-    return PushedAuthorizationResponse(is_successful=False, error=error_msg)
-
-
-def handle_par_error(e: Exception) -> PushedAuthorizationResponse:
-    """Handle errors during pushed authorization requests."""
-    if isinstance(e, httpx.RequestError):
-        error_msg = f"Network error during PAR: {e!s}"
-        logger.error(error_msg, exc_info=True)
-        return PushedAuthorizationResponse(
-            is_successful=False, error=error_msg
-        )
-
-    error_msg = f"Unexpected error during PAR: {e!s}"
-    logger.error(error_msg, exc_info=True)
     return PushedAuthorizationResponse(is_successful=False, error=error_msg)
 
 
