@@ -137,6 +137,10 @@ def validate_token(
             disco_doc_response = _get_disco_response(disco_doc_address)
             validate_disco_response(disco_doc_response)
 
+            if disco_doc_response.jwks_uri is None:
+                raise ConfigurationException(
+                    "Discovery document missing jwks_uri"
+                )
             jwks_response = _get_jwks_response(disco_doc_response.jwks_uri)
             validate_jwks_response(jwks_response)
 
