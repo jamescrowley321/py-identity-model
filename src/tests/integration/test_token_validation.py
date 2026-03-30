@@ -1,4 +1,5 @@
 import datetime
+from unittest.mock import patch
 
 import pytest
 
@@ -189,6 +190,114 @@ def test_claim_validation_function_succeeds(
 
     assert decoded_token
     assert decoded_token["iss"]
+
+
+@pytest.mark.integration
+class TestManualKeyValidation:
+    """Test JWT validation with manually-provided keys.
+
+    These tests use jwt_access_token and jwt_signing_key fixtures
+    to validate tokens without auto-discovery. They work against
+    any provider that returns JWT-format access tokens.
+    """
+
+    def test_validate_jwt_manual_key(
+        self, jwt_access_token, jwt_signing_key, issuer
+    ):
+        """Validate JWT with manually-provided key."""
+        key_dict, alg = jwt_signing_key
+        config = TokenValidationConfig(
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer=issuer,
+            options={"verify_aud": False, "require_aud": False},
+        )
+        decoded = validate_token(jwt_access_token["access_token"], config)
+        assert "iss" in decoded
+        assert decoded["iss"] == issuer
+
+    def test_validate_wrong_issuer(self, jwt_access_token, jwt_signing_key):
+        """Token with wrong issuer config fails."""
+        key_dict, alg = jwt_signing_key
+        config = TokenValidationConfig(
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer="https://wrong-issuer.example.com",
+            options={"verify_aud": False, "require_aud": False},
+        )
+        with pytest.raises(TokenValidationException):
+            validate_token(jwt_access_token["access_token"], config)
+
+    def test_validate_wrong_audience(
+        self, jwt_access_token, jwt_signing_key, issuer
+    ):
+        """Token with wrong audience claim is rejected."""
+        key_dict, alg = jwt_signing_key
+        config = TokenValidationConfig(
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer=issuer,
+            audience="https://wrong-audience.example.com",
+            options={"verify_aud": True, "require_aud": True},
+        )
+        with pytest.raises(TokenValidationException):
+            validate_token(jwt_access_token["access_token"], config)
+
+    def test_validate_expired_token_time_patch(
+        self, jwt_access_token, jwt_signing_key, issuer
+    ):
+        """Expired token raises TokenExpiredException.
+
+        Patches time forward so PyJWT sees the fresh token as
+        expired. Validates the exp->TokenExpiredException mapping
+        end-to-end with a real provider-issued token.
+        """
+        key_dict, alg = jwt_signing_key
+        config = TokenValidationConfig(
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer=issuer,
+            leeway=0,
+            options={
+                "verify_aud": False,
+                "require_aud": False,
+                "verify_exp": True,
+            },
+        )
+
+        far_future = datetime.datetime(2099, 1, 1, tzinfo=datetime.UTC)
+        with patch("jwt.api_jwt.datetime") as mock_dt:
+            mock_dt.now.return_value = far_future
+            mock_dt.timezone = datetime.timezone
+            with pytest.raises(TokenExpiredException):
+                validate_token(jwt_access_token["access_token"], config)
+
+    def test_validate_auth_code_jwt_token(
+        self, auth_code_result, jwt_signing_key, issuer
+    ):
+        """Validate JWT obtained from auth code flow."""
+        token_response = auth_code_result["token_response"]
+        access_token = token_response.token["access_token"]
+
+        assert access_token.count(".") == 2, (
+            "Expected JWT but got opaque token"
+        )
+
+        key_dict, alg = jwt_signing_key
+        config = TokenValidationConfig(
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer=issuer,
+            options={"verify_aud": False, "require_aud": False},
+        )
+        decoded = validate_token(access_token, config)
+        assert decoded["iss"] == issuer
+        assert "sub" in decoded
 
 
 def test_claim_validation_function_fails(

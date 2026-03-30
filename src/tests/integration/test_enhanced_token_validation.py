@@ -3,6 +3,7 @@
 import pytest
 
 from py_identity_model import TokenValidationConfig, validate_token
+from py_identity_model.exceptions import TokenValidationException
 
 
 @pytest.mark.integration
@@ -88,3 +89,95 @@ class TestEnhancedTokenValidation:
             disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
         )
         assert decoded["iss"] == issuer
+
+
+@pytest.mark.integration
+class TestManualKeyEnhancedValidation:
+    """Enhanced validation tests using manually-provided keys.
+
+    These complement the discovery-based tests above by testing
+    the same features with manual key configuration.
+    """
+
+    def test_leeway_with_manual_key(
+        self, jwt_access_token, jwt_signing_key, issuer
+    ):
+        """Token validation with clock skew tolerance."""
+        key_dict, alg = jwt_signing_key
+        config = TokenValidationConfig(
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer=issuer,
+            leeway=60,
+            options={"verify_aud": False, "require_aud": False},
+        )
+        decoded = validate_token(jwt_access_token["access_token"], config)
+        assert "exp" in decoded
+        assert "iat" in decoded
+
+    def test_custom_claims_validator_with_manual_key(
+        self, jwt_access_token, jwt_signing_key, issuer
+    ):
+        """Custom claims validator checks dct/tenants.
+
+        Skips if provider does not inject custom claims.
+        """
+
+        def validate_descope_claims(claims: dict) -> None:
+            if "dct" not in claims:
+                raise ValueError("Missing dct claim")
+            if "tenants" not in claims:
+                raise ValueError("Missing tenants claim")
+            tenant_id = claims["dct"]
+            if tenant_id not in claims["tenants"]:
+                raise ValueError(f"dct tenant {tenant_id} not in tenants")
+
+        key_dict, alg = jwt_signing_key
+        # First decode without validator to check for claims
+        check_config = TokenValidationConfig(
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer=issuer,
+            options={"verify_aud": False, "require_aud": False},
+        )
+        decoded = validate_token(
+            jwt_access_token["access_token"], check_config
+        )
+        if "dct" not in decoded or "tenants" not in decoded:
+            pytest.skip("Provider does not include custom dct/tenants claims")
+
+        config = TokenValidationConfig(
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer=issuer,
+            claims_validator=validate_descope_claims,
+            options={"verify_aud": False, "require_aud": False},
+        )
+        decoded = validate_token(jwt_access_token["access_token"], config)
+        assert decoded["dct"] == "test-tenant-1"
+
+    def test_claims_validator_rejects_with_manual_key(
+        self, jwt_access_token, jwt_signing_key, issuer
+    ):
+        """Claims validator raises -> TokenValidationException."""
+
+        def reject_all(claims: dict) -> None:
+            raise ValueError("Rejected by policy")
+
+        key_dict, alg = jwt_signing_key
+        config = TokenValidationConfig(
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer=issuer,
+            claims_validator=reject_all,
+            options={"verify_aud": False, "require_aud": False},
+        )
+        with pytest.raises(
+            TokenValidationException,
+            match="Rejected by policy",
+        ):
+            validate_token(jwt_access_token["access_token"], config)

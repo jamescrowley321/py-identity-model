@@ -1,14 +1,14 @@
 """Shared fixtures for integration tests.
 
 Includes:
-- Generic provider fixtures (Ory, Descope, etc.) with retry/caching logic
-- Node-oidc-provider fixtures for local conformance testing
+- Generic provider fixtures with retry/caching logic
+- Discovery-driven capability detection (RFC 8414)
+- Auth code flow helpers for providers with devInteractions
 """
 
 from contextlib import suppress
 import secrets
-import time
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from filelock import FileLock
 import httpx
@@ -44,10 +44,11 @@ from .test_utils import get_config
 
 
 # ============================================================================
-# Generic provider fixtures (Ory, Descope, etc.)
+# Generic provider fixtures
 # ============================================================================
 
 RATE_LIMIT_ERROR_MESSAGE = "Rate limited"
+MAX_REDIRECTS = 20
 
 
 def retry_with_backoff():
@@ -75,7 +76,9 @@ def discovery_document(test_config):
 
     @retry_with_backoff()
     def fetch_discovery():
-        from py_identity_model.core.discovery_policy import DiscoveryPolicy
+        from py_identity_model.core.discovery_policy import (
+            DiscoveryPolicy,
+        )
 
         require_https = test_config.get("TEST_REQUIRE_HTTPS", True)
         policy = DiscoveryPolicy(require_https=require_https)
@@ -99,6 +102,82 @@ def discovery_document(test_config):
     if not response.is_successful:
         pytest.fail(f"Failed to fetch discovery document: {response.error}")
     return response
+
+
+@pytest.fixture(scope="session")
+def raw_discovery(test_config):
+    """Raw discovery JSON for capability detection.
+
+    Provides access to all RFC 8414 fields, including those not yet
+    in the typed DiscoveryDocumentResponse model.
+    """
+    try:
+        resp = httpx.get(test_config["TEST_DISCO_ADDRESS"], timeout=10.0)
+        if resp.status_code == 200:
+            return resp.json()
+    except (httpx.TransportError, ValueError):
+        pass
+    return {}
+
+
+def _detect_grant_capabilities(raw_discovery: dict, grants: set) -> set[str]:
+    """Detect grant type and endpoint capabilities."""
+    caps = set()
+    if raw_discovery.get("authorization_endpoint"):
+        caps.add("authorization_code")
+    if "client_credentials" in grants:
+        caps.add("client_credentials")
+    if "refresh_token" in grants:
+        caps.add("refresh_token")
+    if "urn:ietf:params:oauth:grant-type:device_code" in grants:
+        caps.add("device_authorization")
+    if "urn:ietf:params:oauth:grant-type:token-exchange" in grants:
+        caps.add("token_exchange")
+    for endpoint, cap in (
+        ("introspection_endpoint", "introspection"),
+        ("revocation_endpoint", "revocation"),
+        ("userinfo_endpoint", "userinfo"),
+        ("device_authorization_endpoint", "device_authorization_endpoint"),
+        ("pushed_authorization_request_endpoint", "par"),
+    ):
+        if raw_discovery.get(endpoint):
+            caps.add(cap)
+    return caps
+
+
+def _detect_feature_capabilities(raw_discovery: dict) -> set[str]:
+    """Detect feature capabilities from discovery metadata."""
+    caps = set()
+    challenge_methods = raw_discovery.get(
+        "code_challenge_methods_supported", []
+    )
+    if "S256" in challenge_methods:
+        caps.add("pkce")
+    if raw_discovery.get("dpop_signing_alg_values_supported"):
+        caps.add("dpop")
+    if raw_discovery.get("request_parameter_supported"):
+        caps.add("jar")
+
+    # devInteractions: only local fixtures support automated
+    # browser-like auth code flows
+    issuer = raw_discovery.get("issuer", "")
+    if issuer.startswith(("http://localhost", "http://127.0.0.1")):
+        caps.add("dev_interactions")
+
+    return caps
+
+
+@pytest.fixture(scope="session")
+def provider_capabilities(raw_discovery):
+    """Detect provider capabilities from discovery document (RFC 8414).
+
+    Capabilities are derived entirely from the discovery document —
+    no TEST_PROVIDER env var needed.
+    """
+    grants = set(raw_discovery.get("grant_types_supported", []))
+    caps = _detect_grant_capabilities(raw_discovery, grants)
+    caps |= _detect_feature_capabilities(raw_discovery)
+    return caps
 
 
 @pytest.fixture(scope="session")
@@ -187,6 +266,54 @@ def client_credentials_token(test_config, token_endpoint):
     return response
 
 
+@pytest.fixture(scope="session")
+def jwt_access_token(client_credentials_token, test_config, token_endpoint):
+    """JWT-format access token for manual key validation tests.
+
+    Uses the standard client_credentials token if it's already a JWT.
+    Falls back to requesting with resource param for providers that
+    need it for JWT format (e.g., node-oidc without defaultResource).
+    Skips if no JWT token can be obtained.
+    """
+    # Check if standard token is already JWT
+    token = client_credentials_token.token
+    access_token = token.get("access_token", "")
+    if access_token.count(".") == 2:
+        return token
+
+    # Fallback: request with resource param to force JWT format
+    resp = httpx.post(
+        token_endpoint,
+        data={
+            "grant_type": "client_credentials",
+            "scope": test_config.get("TEST_SCOPE", "openid"),
+            "resource": "urn:test:api",
+        },
+        auth=(
+            test_config["TEST_CLIENT_ID"],
+            test_config["TEST_CLIENT_SECRET"],
+        ),
+        timeout=10.0,
+    )
+    if resp.status_code == 200:
+        data = resp.json()
+        if data.get("access_token", "").count(".") == 2:
+            return data
+
+    pytest.skip("Provider does not return JWT-format access tokens")
+
+
+@pytest.fixture(scope="session")
+def jwt_signing_key(jwks_response, jwt_access_token):
+    """Extract the signing key and algorithm for a JWT from JWKS."""
+    jwt_token = jwt_access_token["access_token"]
+    kid = extract_kid_from_jwt(jwt_token)
+    result = find_key_by_kid(kid, jwks_response.keys or [])
+    if result is None:
+        pytest.skip(f"Key {kid} not found in JWKS")
+    return result
+
+
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_http_client():
     """Close the persistent HTTP client after all tests complete."""
@@ -196,63 +323,31 @@ def cleanup_http_client():
 
 
 # ============================================================================
-# Node-oidc-provider fixtures (local conformance testing)
+# Auth code flow helpers (capability-gated)
 # ============================================================================
 
-NODE_OIDC_BASE_URL = "http://localhost:9010"
-NODE_OIDC_DISCO_URL = f"{NODE_OIDC_BASE_URL}/.well-known/openid-configuration"
-NODE_OIDC_ISSUER = NODE_OIDC_BASE_URL
 
-CC_CLIENT_ID = "test-client-credentials"
-CC_CLIENT_SECRET = "test-client-credentials-secret"
-
-AUTH_CODE_CLIENT_ID = "test-auth-code"
-AUTH_CODE_CLIENT_SECRET = "test-auth-code-secret"
-AUTH_CODE_REDIRECT_URI = "http://localhost:8080/callback"
-
-PKCE_PUBLIC_CLIENT_ID = "test-pkce-public"
-PKCE_PUBLIC_REDIRECT_URI = "http://localhost:8080/callback"
-
-MAX_REDIRECTS = 20
-
-
-def _wait_for_provider(base_url: str, timeout: float = 30.0) -> None:
-    """Wait for the node-oidc-provider container to become healthy."""
-    deadline = time.monotonic() + timeout
-    disco_url = f"{base_url}/.well-known/openid-configuration"
-    while time.monotonic() < deadline:
-        try:
-            resp = httpx.get(disco_url, timeout=2.0)
-            if resp.status_code == 200:
-                return
-        except httpx.TransportError:
-            pass
-        time.sleep(0.5)
-    pytest.fail(
-        f"node-oidc-provider at {base_url} did not become healthy "
-        f"within {timeout}s"
-    )
+def _resolve_location(resp: httpx.Response) -> str | None:
+    """Extract and resolve the Location header from a redirect."""
+    location = resp.headers.get("location")
+    if location is None:
+        return None
+    if not location.startswith("http"):
+        parsed = urlparse(str(resp.url))
+        base = f"{parsed.scheme}://{parsed.netloc}"
+        if location.startswith("//"):
+            location = f"{parsed.scheme}:{location}"
+        else:
+            location = f"{base}{location}"
+    return location
 
 
 def is_redirect(status_code: int) -> bool:
     return status_code in (301, 302, 303, 307, 308)
 
 
-def _resolve_location(resp: httpx.Response) -> str | None:
-    """Extract and resolve the Location header from a redirect response."""
-    location = resp.headers.get("location")
-    if location is None:
-        return None
-    if not location.startswith("http"):
-        if location.startswith("//"):
-            location = "http:" + location
-        else:
-            location = f"{NODE_OIDC_BASE_URL}{location}"
-    return location
-
-
 def _matches_redirect_uri(location: str, redirect_uri: str) -> bool:
-    """Check if location matches the redirect_uri (exact or with query/fragment)."""
+    """Check if location matches the redirect_uri."""
     return location == redirect_uri or location.startswith(
         (redirect_uri + "?", redirect_uri + "#")
     )
@@ -263,7 +358,7 @@ def follow_redirects_to_callback(
     resp: httpx.Response,
     redirect_uri: str,
 ) -> tuple[str | None, httpx.Response]:
-    """Follow redirects until we reach the redirect_uri or run out of redirects."""
+    """Follow redirects until we reach the redirect_uri."""
     redirects = 0
     while is_redirect(resp.status_code):
         location = _resolve_location(resp)
@@ -292,7 +387,8 @@ def perform_auth_code_flow(
 ) -> dict:
     """Perform a full auth code + PKCE flow using devInteractions.
 
-    Returns dict with token_response, state, callback, state_result, code_verifier.
+    Returns dict with token_response, state, callback,
+    state_result, code_verifier.
     """
     code_verifier, code_challenge = generate_pkce_pair()
     state = secrets.token_urlsafe(32)
@@ -358,7 +454,7 @@ def perform_auth_code_flow(
 
         if callback_url is None:
             pytest.fail(
-                f"Auth code flow did not reach redirect_uri. "
+                "Auth code flow did not reach redirect_uri. "
                 f"Last: {resp.status_code} at {resp.url}"
             )
 
@@ -392,123 +488,68 @@ def perform_auth_code_flow(
 
 
 @pytest.fixture(scope="session")
-def node_oidc_provider():
-    """Ensure the node-oidc-provider container is running and healthy."""
-    _wait_for_provider(NODE_OIDC_BASE_URL)
-    return NODE_OIDC_BASE_URL
+def auth_code_result(provider_capabilities, discovery_document, test_config):
+    """Perform auth code + PKCE flow with confidential client.
 
-
-@pytest.fixture(scope="session")
-def node_oidc_discovery(node_oidc_provider):
-    """Fetch and cache the discovery document from node-oidc-provider."""
-    resp = httpx.get(NODE_OIDC_DISCO_URL, timeout=10.0)
-    if resp.status_code != 200:
-        pytest.fail(
-            f"Failed to fetch node-oidc discovery: HTTP {resp.status_code}"
-        )
-    try:
-        data = resp.json()
-    except ValueError:
-        pytest.fail(f"Discovery returned non-JSON: {resp.text[:200]}")
-    return DiscoveryDocumentResponse(
-        is_successful=True,
-        issuer=data.get("issuer"),
-        jwks_uri=data.get("jwks_uri"),
-        authorization_endpoint=data.get("authorization_endpoint"),
-        token_endpoint=data.get("token_endpoint"),
-        response_types_supported=data.get("response_types_supported"),
-        subject_types_supported=data.get("subject_types_supported"),
-        id_token_signing_alg_values_supported=data.get(
-            "id_token_signing_alg_values_supported"
-        ),
-        userinfo_endpoint=data.get("userinfo_endpoint"),
-        registration_endpoint=data.get("registration_endpoint"),
-        introspection_endpoint=data.get("introspection_endpoint"),
-        scopes_supported=data.get("scopes_supported"),
-        response_modes_supported=data.get("response_modes_supported"),
-        grant_types_supported=data.get("grant_types_supported"),
-    )
-
-
-@pytest.fixture(scope="session")
-def node_oidc_jwks(node_oidc_discovery):
-    """Fetch and cache JWKS from node-oidc-provider."""
-    response = get_jwks(JwksRequest(address=node_oidc_discovery.jwks_uri))
-    if not response.is_successful:
-        pytest.fail(f"Failed to fetch node-oidc JWKS: {response.error}")
-    return response
-
-
-@pytest.fixture(scope="session")
-def node_oidc_jwt_key(node_oidc_jwks, node_oidc_cc_jwt_token):
-    """Extract the signing key+algorithm for a JWT from the JWKS."""
-    jwt_token = node_oidc_cc_jwt_token["access_token"]
-    kid = extract_kid_from_jwt(jwt_token)
-    result = find_key_by_kid(kid, node_oidc_jwks.keys or [])
-    assert result is not None, f"Key {kid} not found in JWKS"
-    return result
-
-
-@pytest.fixture(scope="session")
-def node_oidc_cc_jwt_token(node_oidc_provider, node_oidc_discovery):
-    """Get a JWT client_credentials token (with resource=urn:test:api).
-
-    Uses raw httpx because ClientCredentialsTokenRequest does not support
-    the ``resource`` parameter needed for JWT access tokens.
+    Skips if provider lacks dev_interactions or authorization_code.
     """
-    resp = httpx.post(
-        node_oidc_discovery.token_endpoint,
-        data={
-            "grant_type": "client_credentials",
-            "scope": "openid api",
-            "resource": "urn:test:api",
-        },
-        auth=(CC_CLIENT_ID, CC_CLIENT_SECRET),
-        timeout=10.0,
-    )
-    if resp.status_code != 200:
-        pytest.fail(f"Failed to get JWT client_credentials token: {resp.text}")
-    return resp.json()
-
-
-@pytest.fixture(scope="session")
-def node_oidc_cc_opaque_token(node_oidc_provider, node_oidc_discovery):
-    """Get an opaque client_credentials token (no resource param)."""
-    response = request_client_credentials_token(
-        ClientCredentialsTokenRequest(
-            address=node_oidc_discovery.token_endpoint,
-            client_id=CC_CLIENT_ID,
-            client_secret=CC_CLIENT_SECRET,
-            scope="openid api",
+    if "dev_interactions" not in provider_capabilities:
+        pytest.skip(
+            "Provider does not support automated auth code "
+            "flow (no devInteractions)"
         )
-    )
-    if not response.is_successful:
-        pytest.fail(
-            f"Failed to get opaque client_credentials token: {response.error}"
+    if "authorization_code" not in provider_capabilities:
+        pytest.skip("Provider does not advertise authorization_endpoint")
+
+    client_id = test_config.get("TEST_AUTH_CODE_CLIENT_ID")
+    redirect_uri = test_config.get("TEST_AUTH_CODE_REDIRECT_URI")
+    client_secret = test_config.get("TEST_AUTH_CODE_CLIENT_SECRET")
+    if not client_id or not redirect_uri:
+        pytest.skip(
+            "TEST_AUTH_CODE_CLIENT_ID and "
+            "TEST_AUTH_CODE_REDIRECT_URI required "
+            "for auth code flow tests"
         )
-    return response
 
-
-@pytest.fixture(scope="session")
-def node_oidc_auth_code_result(node_oidc_provider, node_oidc_discovery):
-    """Perform auth code + PKCE flow with confidential client."""
     return perform_auth_code_flow(
-        discovery=node_oidc_discovery,
-        client_id=AUTH_CODE_CLIENT_ID,
-        redirect_uri=AUTH_CODE_REDIRECT_URI,
-        client_secret=AUTH_CODE_CLIENT_SECRET,
+        discovery=discovery_document,
+        client_id=client_id,
+        redirect_uri=redirect_uri,
+        client_secret=client_secret,
         scope="openid profile email offline_access",
         resource="urn:test:api",
     )
 
 
 @pytest.fixture(scope="session")
-def node_oidc_public_auth_code_result(node_oidc_provider, node_oidc_discovery):
-    """Perform auth code + PKCE flow with public client (no client_secret)."""
+def public_auth_code_result(
+    provider_capabilities, discovery_document, test_config
+):
+    """Perform auth code + PKCE flow with public client.
+
+    Skips if provider lacks dev_interactions or authorization_code.
+    """
+    if "dev_interactions" not in provider_capabilities:
+        pytest.skip(
+            "Provider does not support automated auth code "
+            "flow (no devInteractions)"
+        )
+    if "authorization_code" not in provider_capabilities:
+        pytest.skip("Provider does not advertise authorization_endpoint")
+
+    client_id = test_config.get("TEST_PKCE_PUBLIC_CLIENT_ID")
+    redirect_uri = test_config.get("TEST_PKCE_PUBLIC_REDIRECT_URI")
+    if not client_id or not redirect_uri:
+        pytest.skip(
+            "TEST_PKCE_PUBLIC_CLIENT_ID and "
+            "TEST_PKCE_PUBLIC_REDIRECT_URI required "
+            "for public client auth code flow tests"
+        )
+
     return perform_auth_code_flow(
-        discovery=node_oidc_discovery,
-        client_id=PKCE_PUBLIC_CLIENT_ID,
-        redirect_uri=PKCE_PUBLIC_REDIRECT_URI,
+        discovery=discovery_document,
+        client_id=client_id,
+        redirect_uri=redirect_uri,
         scope="openid profile email offline_access",
         resource="urn:test:api",
     )

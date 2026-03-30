@@ -2,7 +2,9 @@ import pytest
 
 from py_identity_model import (
     ClientCredentialsTokenRequest,
+    TokenValidationConfig,
     request_client_credentials_token,
+    validate_token,
 )
 from py_identity_model.exceptions import FailedResponseAccessError
 
@@ -94,3 +96,46 @@ def test_request_client_credentials_token_fails_invalid_endpoint(
     assert client_creds_token
     assert client_creds_token.is_successful is False
     assert client_creds_token.error
+
+
+@pytest.mark.integration
+class TestJwtAccessToken:
+    """Test JWT-format access token features."""
+
+    def test_jwt_access_token_structure(self, jwt_access_token):
+        """JWT access token has correct structure."""
+        assert "access_token" in jwt_access_token
+        access_token = jwt_access_token["access_token"]
+        assert access_token.count(".") == 2, "Expected JWT format"
+
+    def test_jwt_access_token_custom_claims(
+        self, jwt_access_token, jwt_signing_key, issuer
+    ):
+        """JWT contains Descope-style dct/tenants claims.
+
+        Skips if provider does not inject custom claims.
+        """
+        key_dict, alg = jwt_signing_key
+        config = TokenValidationConfig(
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer=issuer,
+            options={
+                "verify_aud": False,
+                "require_aud": False,
+            },
+        )
+        decoded = validate_token(jwt_access_token["access_token"], config)
+
+        if "dct" not in decoded or "tenants" not in decoded:
+            pytest.skip("Provider does not include custom dct/tenants claims")
+
+        assert decoded["dct"] == "test-tenant-1"
+        assert "test-tenant-1" in decoded["tenants"]
+        assert "test-tenant-2" in decoded["tenants"]
+        assert "admin" in decoded["tenants"]["test-tenant-1"]["roles"]
+        assert (
+            "projects.read"
+            in decoded["tenants"]["test-tenant-2"]["permissions"]
+        )
