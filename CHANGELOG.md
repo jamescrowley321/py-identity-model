@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.6.0 (2026-03-30)
+
+### Features
+
+- **auth-code**: Implement Authorization Code Grant with PKCE
+  ([#225](https://github.com/jamescrowley321/py-identity-model/pull/225),
+  [`f3ea096`](https://github.com/jamescrowley321/py-identity-model/commit/f3ea0966930a5408e4d6c581790637f4c49b041d))
+
+
 ## v2.5.0 (2026-03-30)
 
 ### Features
