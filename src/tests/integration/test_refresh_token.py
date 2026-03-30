@@ -130,23 +130,17 @@ class TestLiveRefreshToken:
         provider_capabilities,
     ):
         """Invalid refresh token returns invalid_grant error."""
+        if "dev_interactions" not in provider_capabilities:
+            pytest.skip("Provider does not support devInteractions")
         if "refresh_token" not in provider_capabilities:
             pytest.skip("Provider does not support refresh_token grant")
 
-        client_id = test_config.get(
-            "TEST_AUTH_CODE_CLIENT_ID",
-            test_config["TEST_CLIENT_ID"],
-        )
-        client_secret = test_config.get(
-            "TEST_AUTH_CODE_CLIENT_SECRET",
-            test_config.get("TEST_CLIENT_SECRET"),
-        )
         response = refresh_token(
             RefreshTokenRequest(
                 address=discovery_document.token_endpoint,
-                client_id=client_id,
+                client_id=test_config["TEST_AUTH_CODE_CLIENT_ID"],
                 refresh_token="invalid-refresh-token-value",
-                client_secret=client_secret,
+                client_secret=test_config.get("TEST_AUTH_CODE_CLIENT_SECRET"),
             )
         )
         assert response.is_successful is False

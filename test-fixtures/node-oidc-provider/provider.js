@@ -113,18 +113,8 @@ async function startProvider() {
         scope: "openid api",
         token_endpoint_auth_method: "client_secret_basic",
       },
-      {
-        // FAPI 2.0 client — further configuration needed in T125
-        // (private_key_jwt, signed request objects, PAR-required)
-        client_id: "test-fapi",
-        client_secret: "test-fapi-secret",
-        grant_types: ["authorization_code"],
-        response_types: ["code"],
-        redirect_uris: ["http://localhost:8080/callback"],
-        scope: "openid profile email api",
-        token_endpoint_auth_method: "client_secret_basic",
-        id_token_signed_response_alg: "PS256",
-      },
+      // FAPI 2.0 client deferred to T125 — requires private_key_jwt,
+      // signed request objects, and PAR enforcement.
     ],
 
     // JWKS
