@@ -323,6 +323,7 @@ When adding new protocol features (introspection, revocation, etc.):
 9. **Add exception type in `exceptions.py`** inheriting from `NetworkException`
 10. **Add unit tests** for both sync (`test_sync_*.py`) and async (`test_aio_*.py`) using `respx` mocks
 11. **Add integration tests** in `src/tests/integration/` testing against real identity providers
+12. **Add examples** demonstrating the feature in `examples/` — follow the shared base code pattern (see Examples and Code Reuse section below)
 
 Example structure:
 ```python

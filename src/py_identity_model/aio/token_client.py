@@ -17,6 +17,7 @@ from ..core.token_client_logic import (
     process_token_response,
 )
 from .http_client import get_async_http_client, retry_with_backoff_async
+from .managed_client import AsyncHTTPClient
 
 
 @retry_with_backoff_async()
@@ -38,12 +39,15 @@ async def _request_token(
 
 async def request_client_credentials_token(
     request: ClientCredentialsTokenRequest,
+    http_client: AsyncHTTPClient | None = None,
 ) -> ClientCredentialsTokenResponse:
     """
     Request an access token using client credentials flow (async).
 
     Args:
         request: Client credentials token request
+        http_client: Optional managed HTTP client.  When ``None``, uses the
+            module-level singleton.
 
     Returns:
         ClientCredentialsTokenResponse: Token response
@@ -52,7 +56,7 @@ async def request_client_credentials_token(
     params, headers = prepare_token_request_data(request)
 
     try:
-        client = get_async_http_client()
+        client = http_client.client if http_client else get_async_http_client()
         response = await _request_token(
             client,
             request.address,

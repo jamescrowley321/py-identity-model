@@ -17,6 +17,7 @@ from ..core.models import (
 )
 from ..core.parsers import jwks_from_dict
 from .http_client import get_http_client, retry_with_backoff
+from .managed_client import HTTPClient
 
 
 @retry_with_backoff()
@@ -30,19 +31,24 @@ def _fetch_jwks(client: httpx.Client, url: str) -> httpx.Response:
     return client.get(url)
 
 
-def get_jwks(jwks_request: JwksRequest) -> JwksResponse:
+def get_jwks(
+    jwks_request: JwksRequest,
+    http_client: HTTPClient | None = None,
+) -> JwksResponse:
     """
     Fetch JWKS from the specified address.
 
     Args:
         jwks_request: JWKS request configuration
+        http_client: Optional managed HTTP client.  When ``None``, uses the
+            thread-local default.
 
     Returns:
         JwksResponse: JWKS response with keys
     """
     log_jwks_request(jwks_request)
     try:
-        client = get_http_client()
+        client = http_client.client if http_client else get_http_client()
         response = _fetch_jwks(client, jwks_request.address)
         result = process_jwks_response(response)
         # Explicitly close the response to ensure the connection is released

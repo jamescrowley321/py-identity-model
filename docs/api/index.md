@@ -22,6 +22,7 @@ from py_identity_model import DiscoveryDocumentRequest
 | Module | Description |
 |--------|-------------|
 | [Authorize Callback](authorize-callback.md) | Authorization callback parsing and state validation |
+| [HTTP Client](http-client.md) | Dependency injection for HTTP client management |
 | [Discovery](discovery.md) | OpenID Connect Discovery 1.0 document fetching |
 | [JWKS](jwks.md) | JSON Web Key Set (RFC 7517) operations |
 | [Token Client](token-client.md) | OAuth 2.0 token endpoint (client credentials) |

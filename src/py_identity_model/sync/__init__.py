@@ -23,6 +23,7 @@ from .jwks import (
     get_jwks,
     jwks_from_dict,
 )
+from .managed_client import HTTPClient
 from .token_client import (
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
@@ -42,6 +43,8 @@ __all__ = [
     # Discovery
     "DiscoveryDocumentRequest",
     "DiscoveryDocumentResponse",
+    # HTTP Client
+    "HTTPClient",
     # JWKS
     "JsonWebAlgorithmsKeyTypes",
     "JsonWebKey",

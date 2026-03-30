@@ -35,6 +35,7 @@ from .sync import (
     ClientCredentialsTokenResponse,
     DiscoveryDocumentRequest,
     DiscoveryDocumentResponse,
+    HTTPClient,
     JsonWebAlgorithmsKeyTypes,
     JsonWebKey,
     JsonWebKeyParameterNames,
@@ -72,6 +73,8 @@ __all__ = [
     "DiscoveryDocumentResponse",
     "DiscoveryException",
     "FailedResponseAccessError",
+    # HTTP Client
+    "HTTPClient",
     "InvalidAudienceException",
     "InvalidIssuerException",
     "JsonWebAlgorithmsKeyTypes",
