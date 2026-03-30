@@ -184,9 +184,12 @@ class TestCacheIsolationBetweenProviders:
         if not expired_token or not _is_valid_jwt_format(expired_token):
             pytest.skip("TEST_EXPIRED_TOKEN not configured or not a valid JWT")
 
+        # Descope session tokens use a different issuer format than OIDC discovery.
+        # Disable issuer verification so we test expiration, not issuer mismatch.
+        expired_options = {**DEFAULT_OPTIONS, "verify_iss": False}
         validation_config = TokenValidationConfig(
             perform_disco=True,
-            options=DEFAULT_OPTIONS,
+            options=expired_options,
             require_https=require_https,
         )
 

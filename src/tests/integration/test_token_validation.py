@@ -33,13 +33,18 @@ def test_token_validation_expired_token(test_config, require_https):
     if not expired_token or not _is_valid_jwt_format(expired_token):
         pytest.skip("TEST_EXPIRED_TOKEN not configured or not a valid JWT")
 
+    # Descope session tokens use issuer format https://api.descope.com/v1/apps/{id}
+    # which differs from the OIDC discovery issuer https://api.descope.com/{id}.
+    # Disable issuer verification so we test expiration, not issuer mismatch.
+    expired_options = {**DEFAULT_OPTIONS, "verify_iss": False}
+
     with pytest.raises(TokenExpiredException):
         validate_token(
             jwt=test_config["TEST_EXPIRED_TOKEN"],
             disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
             token_validation_config=TokenValidationConfig(
                 perform_disco=True,
-                options=DEFAULT_OPTIONS,
+                options=expired_options,
                 require_https=require_https,
             ),
         )
