@@ -13,6 +13,7 @@ from ..core.discovery_logic import (
 from ..core.error_handlers import handle_discovery_error
 from ..core.models import DiscoveryDocumentRequest, DiscoveryDocumentResponse
 from .http_client import get_http_client, retry_with_backoff
+from .managed_client import HTTPClient
 
 
 @retry_with_backoff()
@@ -30,19 +31,22 @@ def _fetch_discovery_document(
 
 def get_discovery_document(
     disco_doc_req: DiscoveryDocumentRequest,
+    http_client: HTTPClient | None = None,
 ) -> DiscoveryDocumentResponse:
     """
     Fetch discovery document from the specified address.
 
     Args:
         disco_doc_req: Discovery document request configuration
+        http_client: Optional managed HTTP client.  When ``None``, uses the
+            thread-local default.
 
     Returns:
         DiscoveryDocumentResponse: Discovery document response
     """
     log_discovery_request(disco_doc_req)
     try:
-        client = get_http_client()
+        client = http_client.client if http_client else get_http_client()
         response = _fetch_discovery_document(client, disco_doc_req.address)
         result = process_discovery_response(response)
         # Explicitly close the response to ensure the connection is released

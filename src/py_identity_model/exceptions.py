@@ -78,6 +78,10 @@ class InvalidIssuerException(TokenValidationException):
         super().__init__(message, token_part="payload", details=details)
 
 
+class AuthorizeCallbackException(ValidationException):
+    """Raised when authorization callback validation fails."""
+
+
 class NetworkException(PyIdentityModelException):
     """Raised when network operations fail."""
 
@@ -148,6 +152,7 @@ class SuccessfulResponseAccessError(PyIdentityModelException):
 
 
 __all__ = [
+    "AuthorizeCallbackException",
     "ConfigurationException",
     "DiscoveryException",
     "FailedResponseAccessError",

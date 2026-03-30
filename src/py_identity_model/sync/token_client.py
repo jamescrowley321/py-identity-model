@@ -17,6 +17,7 @@ from ..core.token_client_logic import (
     process_token_response,
 )
 from .http_client import get_http_client, retry_with_backoff
+from .managed_client import HTTPClient
 
 
 @retry_with_backoff()
@@ -38,12 +39,15 @@ def _request_token(
 
 def request_client_credentials_token(
     request: ClientCredentialsTokenRequest,
+    http_client: HTTPClient | None = None,
 ) -> ClientCredentialsTokenResponse:
     """
     Request an access token using client credentials flow.
 
     Args:
         request: Client credentials token request
+        http_client: Optional managed HTTP client.  When ``None``, uses the
+            thread-local default.
 
     Returns:
         ClientCredentialsTokenResponse: Token response
@@ -52,7 +56,7 @@ def request_client_credentials_token(
     params, headers = prepare_token_request_data(request)
 
     try:
-        client = get_http_client()
+        client = http_client.client if http_client else get_http_client()
         response = _request_token(
             client,
             request.address,

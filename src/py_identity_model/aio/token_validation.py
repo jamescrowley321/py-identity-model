@@ -24,8 +24,10 @@ from ..core.token_validation_logic import (
     validate_jwks_response,
 )
 from ..core.validators import validate_token_config
+from ..exceptions import ConfigurationException
 from .discovery import get_discovery_document
 from .jwks import get_jwks
+from .managed_client import AsyncHTTPClient
 
 
 # ============================================================================
@@ -87,6 +89,7 @@ async def validate_token(
     jwt: str,
     token_validation_config: TokenValidationConfig,
     disco_doc_address: str | None = None,
+    http_client: AsyncHTTPClient | None = None,
 ) -> dict:
     """
     Validate a JWT token (async).
@@ -95,6 +98,9 @@ async def validate_token(
         jwt: The JWT token to validate
         token_validation_config: Token validation configuration
         disco_doc_address: Discovery document address (required if perform_disco=True)
+        http_client: Optional managed HTTP client.  When ``None``, uses the
+            module-level singleton with response caching.  When provided,
+            caching is bypassed and the injected client is used directly.
 
     Returns:
         dict: Decoded token claims
@@ -107,17 +113,44 @@ async def validate_token(
     validate_token_config(token_validation_config)
 
     if token_validation_config.perform_disco:
-        disco_doc_response = await _get_disco_response(disco_doc_address)
-        validate_disco_response(disco_doc_response)
+        if http_client is not None:
+            # Bypass cache — use injected client directly
+            if disco_doc_address is None:
+                raise ConfigurationException(
+                    "disco_doc_address is required when perform_disco is True"
+                )
+            disco_doc_response = await get_discovery_document(
+                DiscoveryDocumentRequest(address=disco_doc_address),
+                http_client=http_client,
+            )
+            validate_disco_response(disco_doc_response)
 
-        jwks_response = await _get_jwks_response(disco_doc_response.jwks_uri)
-        validate_jwks_response(jwks_response)
+            if disco_doc_response.jwks_uri is None:
+                raise ConfigurationException(
+                    "Discovery document missing jwks_uri"
+                )
+            jwks_response = await get_jwks(
+                JwksRequest(address=disco_doc_response.jwks_uri),
+                http_client=http_client,
+            )
+            validate_jwks_response(jwks_response)
 
-        # Extract kid from JWT and use cached public key lookup for performance
-        kid = extract_kid_from_jwt(jwt)
-        key_dict, alg = await _get_public_key_by_kid(
-            kid, disco_doc_response.jwks_uri
-        )
+            kid = extract_kid_from_jwt(jwt)
+            key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [])
+        else:
+            # Cached path (existing behavior)
+            disco_doc_response = await _get_disco_response(disco_doc_address)
+            validate_disco_response(disco_doc_response)
+
+            jwks_response = await _get_jwks_response(
+                disco_doc_response.jwks_uri
+            )
+            validate_jwks_response(jwks_response)
+
+            kid = extract_kid_from_jwt(jwt)
+            key_dict, alg = await _get_public_key_by_kid(
+                kid, disco_doc_response.jwks_uri
+            )
 
         # Use local variables instead of mutating the config object
         decoded_token = decode_with_config(
@@ -131,6 +164,7 @@ async def validate_token(
                 subject=token_validation_config.subject,
                 options=token_validation_config.options,
                 claims_validator=token_validation_config.claims_validator,
+                leeway=token_validation_config.leeway,
             ),
             disco_doc_response.issuer,
         )

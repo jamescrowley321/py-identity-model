@@ -1,5 +1,14 @@
 """Synchronous implementations of py-identity-model."""
 
+from ..core.authorize_response import (
+    AuthorizeCallbackResponse,
+    parse_authorize_callback_response,
+)
+from ..core.state_validation import (
+    AuthorizeCallbackValidationResult,
+    StateValidationResult,
+    validate_authorize_callback_state,
+)
 from .discovery import (
     DiscoveryDocumentRequest,
     DiscoveryDocumentResponse,
@@ -14,6 +23,7 @@ from .jwks import (
     get_jwks,
     jwks_from_dict,
 )
+from .managed_client import HTTPClient
 from .token_client import (
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
@@ -24,18 +34,24 @@ from .userinfo import UserInfoRequest, UserInfoResponse, get_userinfo
 
 
 __all__ = [
+    # Authorize Callback
+    "AuthorizeCallbackResponse",
+    "AuthorizeCallbackValidationResult",
     # Token Client
     "ClientCredentialsTokenRequest",
     "ClientCredentialsTokenResponse",
     # Discovery
     "DiscoveryDocumentRequest",
     "DiscoveryDocumentResponse",
+    # HTTP Client
+    "HTTPClient",
     # JWKS
     "JsonWebAlgorithmsKeyTypes",
     "JsonWebKey",
     "JsonWebKeyParameterNames",
     "JwksRequest",
     "JwksResponse",
+    "StateValidationResult",
     # Token Validation
     "TokenValidationConfig",
     # UserInfo
@@ -45,6 +61,8 @@ __all__ = [
     "get_jwks",
     "get_userinfo",
     "jwks_from_dict",
+    "parse_authorize_callback_response",
     "request_client_credentials_token",
+    "validate_authorize_callback_state",
     "validate_token",
 ]

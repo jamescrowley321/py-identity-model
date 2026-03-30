@@ -8,6 +8,7 @@ from . import ssl_config  # noqa: F401
 
 # Backward compatible sync exports (default)
 from .exceptions import (
+    AuthorizeCallbackException,
     ConfigurationException,
     DiscoveryException,
     FailedResponseAccessError,
@@ -28,15 +29,19 @@ from .exceptions import (
 # Identity models (shared)
 from .identity import Claim, ClaimsIdentity, ClaimsPrincipal, to_principal
 from .sync import (
+    AuthorizeCallbackResponse,
+    AuthorizeCallbackValidationResult,
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
     DiscoveryDocumentRequest,
     DiscoveryDocumentResponse,
+    HTTPClient,
     JsonWebAlgorithmsKeyTypes,
     JsonWebKey,
     JsonWebKeyParameterNames,
     JwksRequest,
     JwksResponse,
+    StateValidationResult,
     TokenValidationConfig,
     UserInfoRequest,
     UserInfoResponse,
@@ -44,12 +49,18 @@ from .sync import (
     get_jwks,
     get_userinfo,
     jwks_from_dict,
+    parse_authorize_callback_response,
     request_client_credentials_token,
+    validate_authorize_callback_state,
     validate_token,
 )
 
 
 __all__ = [
+    # Authorize Callback
+    "AuthorizeCallbackException",
+    "AuthorizeCallbackResponse",
+    "AuthorizeCallbackValidationResult",
     # Identity models
     "Claim",
     "ClaimsIdentity",
@@ -62,6 +73,8 @@ __all__ = [
     "DiscoveryDocumentResponse",
     "DiscoveryException",
     "FailedResponseAccessError",
+    # HTTP Client
+    "HTTPClient",
     "InvalidAudienceException",
     "InvalidIssuerException",
     "JsonWebAlgorithmsKeyTypes",
@@ -74,6 +87,7 @@ __all__ = [
     # Exceptions
     "PyIdentityModelException",
     "SignatureVerificationException",
+    "StateValidationResult",
     "SuccessfulResponseAccessError",
     "TokenExpiredException",
     "TokenRequestException",
@@ -88,7 +102,9 @@ __all__ = [
     "get_jwks",
     "get_userinfo",
     "jwks_from_dict",
+    "parse_authorize_callback_response",
     "request_client_credentials_token",
     "to_principal",
+    "validate_authorize_callback_state",
     "validate_token",
 ]
