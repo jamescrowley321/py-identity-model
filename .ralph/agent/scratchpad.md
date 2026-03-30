@@ -312,3 +312,26 @@ Phase set to pr. Next iteration pushes and creates PR.
 ### Next
 - Next iteration: execute `review-security` phase (Sentinel persona)
 - Then: review-fix, pr, ci phases
+
+## 2026-03-30 — Iteration: review-security phase completed (T122)
+
+### Context
+- Task T122: Integration tests for Introspection (RFC 7662) and Revocation (RFC 7009)
+- Branch: test/integration-token-mgmt, worktree: /tmp/pim-T122
+- Executed as Sentinel (Security Auditor) persona
+
+### What happened this iteration
+- Red-teamed the full PR diff through the auth/infra security lens
+- Checked: credential exposure, Docker security, token handling in tests, CI supply chain, response lifecycle, client auth consistency
+- Found 0 BLOCK, 4 WARN, 5 INFO:
+  - **WARN**: sync introspection response.close() not in finally block (connection leak risk)
+  - **WARN**: client_secret emptiness check inconsistency between introspection (is not None) and revocation (truthy + strip)
+  - **WARN**: caret version ranges in package.json (^6.0.11, ^9.7.1) — mitigated by npm ci + lockfile
+  - **WARN**: error messages include raw response.content (information exposure)
+- Positive findings: container runs as non-root, port localhost-bound, test credentials clearly scoped, proper healthchecks
+- Phase updated to `review-fix`
+
+### Next
+- Next iteration: execute `review-fix` phase (Amelia developer persona)
+- Triage all review findings across 4 review phases and fix
+- Then: pr, ci phases

@@ -1,7 +1,7 @@
 task_id: T122
 branch: test/integration-token-mgmt
 worktree: /tmp/pim-T122
-phase: review-security
+phase: review-fix
 
 ## Plan
 
@@ -138,3 +138,27 @@ A previous iteration implemented and committed the integration tests (commits f9
 - **[RFC 7662] Custom claims verification incomplete.** `test_introspect_custom_claims` checks only `test-tenant-1`. The provider emits two tenants (`test-tenant-1` admin, `test-tenant-2` viewer); a provider bug dropping `test-tenant-2` goes undetected.
 - **[RFC 8414] `revocation_endpoint` missing from `DiscoveryDocumentResponse`.** The model has `introspection_endpoint` but not `revocation_endpoint` (defined in RFC 8414 §2). This forces the conftest into a raw HTTP workaround and means production callers can't discover the revocation endpoint through the library.
 - **[Async] Singleton lifecycle hazard.** Both async tests close the global `async_http_client` singleton in `finally`. This kills the client for any subsequent async tests in the process. Should use `contextlib.suppress` or per-test client scope.
+
+## Review: Security (Sentinel)
+
+### BLOCK
+
+None.
+
+### WARN
+
+- [sync/introspection.py:57-58] **response.close() not in finally block.** If `process_introspection_response` raises, `response.close()` is never called — leaking the HTTP connection back to the pool in an unread state. The sync revocation module correctly uses `finally` for cleanup. Inconsistency between the two modules.
+
+- [core/introspection_logic.py:40 vs core/revocation_logic.py:37] **Client secret emptiness check inconsistency.** Introspection uses `if request.client_secret is not None:` — an empty string `""` would be sent as HTTP Basic auth with empty password. Revocation uses `if request.client_secret and request.client_secret.strip():` — an empty string falls through to putting `client_id` in the POST body. Different auth behavior for the same edge case across the two modules.
+
+- [test-fixtures/node-oidc-provider/package.json] **Caret version ranges for dependencies.** `jose: ^6.0.11` and `oidc-provider: ^9.7.1` allow minor/patch bumps. While `npm ci` with the lockfile mitigates this for reproducible builds, `npm install` (first lock generation or lock refresh) pulls latest in range. Pin exact versions for CI reproducibility.
+
+- [core/response_processors.py] **Error messages include raw response content.** `parse_introspection_response`, `parse_token_response`, and `parse_auth_code_token_response` embed `response.content` (bytes) in error messages. If the auth server returns a stack trace or internal details on error, these propagate to callers via the `error` field. Not exploitable, but information exposure if error messages are logged at higher verbosity.
+
+### INFO
+
+- [Dockerfile:11] **Container runs as non-root** — `USER node` correctly drops privileges. Good.
+- [docker-compose.yml] **Port bound to localhost only** — `127.0.0.1:9010:9010` prevents external access. Good.
+- [conftest_node_oidc.py] **Test credentials clearly test-scoped** — All client IDs/secrets prefixed with `test-` (e.g., `test-client-credentials`, `test-auth-code-secret`). No risk of confusion with real credentials.
+- [provider.js:263] **HTTP-only fixture with `provider.proxy = true`** — Acceptable for local testing per project conventions. Would be a vulnerability in any non-local context.
+- [provider.js:140-157] **Raw HTML interpolation in `userCodeInputSource`** — Template literal embeds `form` and `err.message` without escaping. Documented with comment as intentional for test fixture. Not exploitable since only localhost-bound, but a footgun if fixture scope changes.

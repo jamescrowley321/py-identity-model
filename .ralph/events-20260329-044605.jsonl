@@ -10,3 +10,4 @@
 {"payload":"T121 complete, T122 setup done, phase=analyze","topic":"task.done","ts":"2026-03-30T06:24:50.273767173+00:00"}
 {"payload":"T122: 8 unhandled edge cases found across test fixtures, async lifecycle, and source code consistency","topic":"review.edge.done","ts":"2026-03-30T07:34:27.042736377+00:00"}
 {"payload":"T122: 15 PASS, 1 FAIL (missing revoke wrong-creds test), 4 PARTIAL. Phase set to review-security.","topic":"review.acceptance.done","ts":"2026-03-30T07:36:44.556367453+00:00"}
+{"payload":"T122 review-security complete: 0 BLOCK, 4 WARN, 5 INFO. Phase set to review-fix.","topic":"review.done","ts":"2026-03-30T07:40:26.965360639+00:00"}

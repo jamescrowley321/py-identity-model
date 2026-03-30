@@ -21,7 +21,6 @@ class TestSyncDIIntegration:
             response = get_discovery_document(
                 DiscoveryDocumentRequest(
                     address=test_config["TEST_DISCO_ADDRESS"],
-                    require_https=test_config.get("TEST_REQUIRE_HTTPS", True),
                 ),
                 http_client=client,
             )
@@ -35,7 +34,6 @@ class TestSyncDIIntegration:
             disco = get_discovery_document(
                 DiscoveryDocumentRequest(
                     address=test_config["TEST_DISCO_ADDRESS"],
-                    require_https=test_config.get("TEST_REQUIRE_HTTPS", True),
                 ),
                 http_client=client,
             )
@@ -53,7 +51,6 @@ class TestSyncDIIntegration:
             response = get_discovery_document(
                 DiscoveryDocumentRequest(
                     address=test_config["TEST_DISCO_ADDRESS"],
-                    require_https=test_config.get("TEST_REQUIRE_HTTPS", True),
                 ),
                 http_client=client,
             )
