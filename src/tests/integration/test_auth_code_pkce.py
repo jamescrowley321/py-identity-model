@@ -117,13 +117,13 @@ class TestLiveAuthCodePKCE:
         assert "access_token" in token
         assert token["token_type"] == "Bearer"
 
-    def test_auth_code_invalid_code_verifier(
+    def test_auth_code_invalid_code_rejected(
         self,
         discovery_document,
         test_config,
         provider_capabilities,
     ):
-        """Wrong code_verifier fails with invalid_grant."""
+        """Invalid authorization code is rejected with invalid_grant."""
         if "dev_interactions" not in provider_capabilities:
             pytest.skip("Provider does not support devInteractions")
         if "authorization_code" not in provider_capabilities:

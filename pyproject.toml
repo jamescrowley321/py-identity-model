@@ -147,6 +147,7 @@ ignore = [
     "S104",      # possible binding to all interfaces
     "S105",      # possible hardcoded password
     "S106",      # possible hardcoded password
+    "S107",      # possible hardcoded password in function default
     "S113",      # probable use of requests call without timeout
     "B008",      # function calls in argument defaults (FastAPI pattern)
     "PLR0911",   # too many return statements

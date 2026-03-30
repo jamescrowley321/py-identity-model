@@ -8,6 +8,7 @@ Includes:
 
 from contextlib import suppress
 import secrets
+from types import MappingProxyType
 from urllib.parse import urlencode, urlparse
 
 from filelock import FileLock
@@ -110,14 +111,21 @@ def raw_discovery(test_config):
 
     Provides access to all RFC 8414 fields, including those not yet
     in the typed DiscoveryDocumentResponse model.
+
+    Fails hard if the discovery endpoint is unreachable — consistent
+    with the discovery_document fixture's behavior.
     """
+    address = test_config["TEST_DISCO_ADDRESS"]
     try:
-        resp = httpx.get(test_config["TEST_DISCO_ADDRESS"], timeout=10.0)
-        if resp.status_code == 200:
-            return resp.json()
-    except (httpx.TransportError, ValueError):
-        pass
-    return {}
+        resp = httpx.get(address, timeout=10.0)
+    except httpx.TransportError as exc:
+        pytest.fail(f"raw_discovery: cannot reach {address}: {exc}")
+    if resp.status_code != 200:
+        pytest.fail(f"raw_discovery: HTTP {resp.status_code} from {address}")
+    try:
+        return resp.json()
+    except ValueError as exc:
+        pytest.fail(f"raw_discovery: invalid JSON from {address}: {exc}")
 
 
 def _detect_grant_capabilities(raw_discovery: dict, grants: set) -> set[str]:
@@ -282,19 +290,30 @@ def jwt_access_token(client_credentials_token, test_config, token_endpoint):
         return token
 
     # Fallback: request with resource param to force JWT format
-    resp = httpx.post(
-        token_endpoint,
-        data={
-            "grant_type": "client_credentials",
-            "scope": test_config.get("TEST_SCOPE", "openid"),
-            "resource": "urn:test:api",
-        },
-        auth=(
-            test_config["TEST_CLIENT_ID"],
-            test_config["TEST_CLIENT_SECRET"],
-        ),
-        timeout=10.0,
-    )
+    @retry_with_backoff()
+    def fetch_jwt_with_resource():
+        r = httpx.post(
+            token_endpoint,
+            data={
+                "grant_type": "client_credentials",
+                "scope": test_config.get("TEST_SCOPE", "openid"),
+                "resource": "urn:test:api",
+            },
+            auth=(
+                test_config["TEST_CLIENT_ID"],
+                test_config["TEST_CLIENT_SECRET"],
+            ),
+            timeout=10.0,
+        )
+        if r.status_code == 429:
+            raise httpx.HTTPStatusError(
+                RATE_LIMIT_ERROR_MESSAGE,
+                request=r.request,
+                response=r,
+            )
+        return r
+
+    resp = fetch_jwt_with_resource()
     if resp.status_code == 200:
         data = resp.json()
         if data.get("access_token", "").count(".") == 2:
@@ -306,12 +325,14 @@ def jwt_access_token(client_credentials_token, test_config, token_endpoint):
 @pytest.fixture(scope="session")
 def jwt_signing_key(jwks_response, jwt_access_token):
     """Extract the signing key and algorithm for a JWT from JWKS."""
+    from py_identity_model.exceptions import TokenValidationException
+
     jwt_token = jwt_access_token["access_token"]
     kid = extract_kid_from_jwt(jwt_token)
-    result = find_key_by_kid(kid, jwks_response.keys or [])
-    if result is None:
+    try:
+        return find_key_by_kid(kid, jwks_response.keys or [])
+    except TokenValidationException:
         pytest.skip(f"Key {kid} not found in JWKS")
-    return result
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -328,7 +349,11 @@ def cleanup_http_client():
 
 
 def _resolve_location(resp: httpx.Response) -> str | None:
-    """Extract and resolve the Location header from a redirect."""
+    """Extract and resolve the Location header from a redirect.
+
+    Handles absolute URLs, protocol-relative (//), absolute paths (/),
+    and bare relative paths per RFC 7231 section 7.1.2.
+    """
     location = resp.headers.get("location")
     if location is None:
         return None
@@ -337,8 +362,13 @@ def _resolve_location(resp: httpx.Response) -> str | None:
         base = f"{parsed.scheme}://{parsed.netloc}"
         if location.startswith("//"):
             location = f"{parsed.scheme}:{location}"
-        else:
+        elif location.startswith("/"):
             location = f"{base}{location}"
+        else:
+            # Bare relative path (no leading slash) — resolve
+            # against the current URL's directory
+            parent = parsed.path.rsplit("/", 1)[0]
+            location = f"{base}{parent}/{location}"
     return location
 
 
@@ -377,6 +407,31 @@ def follow_redirects_to_callback(
     return None, resp
 
 
+def _follow_redirects_counted(
+    client: httpx.Client,
+    resp: httpx.Response,
+    redirect_uri: str,
+    prior_redirects: int,
+) -> tuple[str | None, httpx.Response]:
+    """Follow redirects with a shared counter across the flow."""
+    total = prior_redirects
+    while is_redirect(resp.status_code):
+        location = _resolve_location(resp)
+        if location is None:
+            return None, resp
+
+        if _matches_redirect_uri(location, redirect_uri):
+            return location, resp
+
+        total += 1
+        if total > MAX_REDIRECTS:
+            pytest.fail(f"Too many redirects (>{MAX_REDIRECTS})")
+
+        resp = client.get(location)
+
+    return None, resp
+
+
 def perform_auth_code_flow(
     discovery: DiscoveryDocumentResponse,
     client_id: str,
@@ -384,8 +439,14 @@ def perform_auth_code_flow(
     client_secret: str | None = None,
     scope: str = "openid profile email offline_access",
     resource: str | None = None,
-) -> dict:
+    login_hint: str = "test-user",
+    login_password: str = "test",
+) -> MappingProxyType:
     """Perform a full auth code + PKCE flow using devInteractions.
+
+    Args:
+        login_hint: Username for devInteractions login form.
+        login_password: Password for devInteractions login form.
 
     Returns dict with token_response, state, callback,
     state_result, code_verifier.
@@ -411,17 +472,19 @@ def perform_auth_code_flow(
 
     auth_url = f"{discovery.authorization_endpoint}?{urlencode(auth_params)}"
 
+    # Use a single redirect counter across the entire flow
+    total_redirects = 0
+
     with httpx.Client(follow_redirects=False, timeout=10.0) as client:
         resp = client.get(auth_url)
-        redirects = 0
         while is_redirect(resp.status_code):
             location = _resolve_location(resp)
             if location is None:
                 pytest.fail(f"Redirect without Location header at {resp.url}")
             if _matches_redirect_uri(location, redirect_uri):
                 break
-            redirects += 1
-            if redirects > MAX_REDIRECTS:
+            total_redirects += 1
+            if total_redirects > MAX_REDIRECTS:
                 pytest.fail(f"Too many redirects (>{MAX_REDIRECTS})")
             resp = client.get(location)
 
@@ -435,21 +498,21 @@ def perform_auth_code_flow(
             interaction_url,
             data={
                 "prompt": "login",
-                "login": "test-user",
-                "password": "test",
+                "login": login_hint,
+                "password": login_password,
             },
         )
 
-        callback_url, resp = follow_redirects_to_callback(
-            client, resp, redirect_uri
+        callback_url, resp = _follow_redirects_counted(
+            client, resp, redirect_uri, total_redirects
         )
 
         if callback_url is None:
             consent_url = str(resp.url)
             if "/interaction/" in consent_url:
                 resp = client.post(consent_url, data={"prompt": "consent"})
-                callback_url, resp = follow_redirects_to_callback(
-                    client, resp, redirect_uri
+                callback_url, resp = _follow_redirects_counted(
+                    client, resp, redirect_uri, total_redirects
                 )
 
         if callback_url is None:
@@ -478,13 +541,15 @@ def perform_auth_code_flow(
     )
     token_response = request_authorization_code_token(token_request)
 
-    return {
-        "token_response": token_response,
-        "state": state,
-        "callback": callback,
-        "state_result": state_result,
-        "code_verifier": code_verifier,
-    }
+    return MappingProxyType(
+        {
+            "token_response": token_response,
+            "state": state,
+            "callback": callback,
+            "state_result": state_result,
+            "code_verifier": code_verifier,
+        }
+    )
 
 
 @pytest.fixture(scope="session")

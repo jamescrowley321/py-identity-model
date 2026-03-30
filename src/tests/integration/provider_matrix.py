@@ -155,6 +155,18 @@ def _print_matrix(
             row += f"{cell:<{col_width + 2}}"
         print(row)
 
+    # Summary: count missing capabilities per provider
+    total = len(all_caps)
+    print()
+    summary = f"{'Unsupported':<{label_width + 2}}"
+    for _, caps in providers:
+        if caps is None:
+            cell = "[offline]"
+        else:
+            missing = sum(1 for c in all_caps if not caps.get(c, False))
+            cell = f"{missing}/{total}"
+        summary += f"{cell:<{col_width + 2}}"
+    print(summary)
     print()
 
 
