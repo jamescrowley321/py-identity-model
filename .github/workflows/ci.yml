@@ -153,6 +153,40 @@ jobs:
           TEST_EXPIRED_TOKEN: ${{ secrets.DESCOPE_EXPIRED_TOKEN }}
           TEST_AUDIENCE: ${{ secrets.DESCOPE_AUDIENCE }}
 
+  integration-tests-node-oidc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.13
+
+      - name: Cache uv dependencies
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: make ci-setup
+
+      - name: Start node-oidc-provider fixture
+        run: docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml up -d --build --wait
+
+      - name: Integration Tests (node-oidc-provider)
+        run: uv run pytest src/tests -m integration --env-file=.env.node-oidc -v
+
+      - name: Tear down node-oidc-provider fixture
+        if: always()
+        run: docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
+
   example-tests:
     if: inputs.run-example-tests
     runs-on: ubuntu-latest
@@ -214,7 +248,7 @@ jobs:
 
   ci-complete:
     if: always()
-    needs: [lint, unit-tests, integration-tests-ory, integration-tests-descope, example-tests, build]
+    needs: [lint, unit-tests, integration-tests-ory, integration-tests-descope, integration-tests-node-oidc, example-tests, build]
     runs-on: ubuntu-latest
     steps:
       - name: Check CI results
@@ -224,6 +258,7 @@ jobs:
             "${{ needs.unit-tests.result }}" \
             "${{ needs.integration-tests-ory.result }}" \
             "${{ needs.integration-tests-descope.result }}" \
+            "${{ needs.integration-tests-node-oidc.result }}" \
             "${{ needs.example-tests.result }}" \
             "${{ needs.build.result }}" \
           )

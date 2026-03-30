@@ -54,12 +54,13 @@ def clear_validation_caches():
 
 
 @pytest.fixture
-def validation_config(test_config):
+def validation_config(test_config, require_https):
     """Create standard validation config for tests."""
     return TokenValidationConfig(
         perform_disco=True,
         audience=test_config["TEST_AUDIENCE"],
         options=DEFAULT_OPTIONS,
+        require_https=require_https,
     )
 
 
@@ -170,7 +171,9 @@ class TestCacheIsolationBetweenProviders:
             f"Expected kid/key mismatch error, got: {exc_info.value}"
         )
 
-    def test_expired_token_from_same_provider_fails(self, test_config):
+    def test_expired_token_from_same_provider_fails(
+        self, test_config, require_https
+    ):
         """
         Test that an expired token from the same provider fails with
         the correct error (expiration, not cache issues).
@@ -184,6 +187,7 @@ class TestCacheIsolationBetweenProviders:
         validation_config = TokenValidationConfig(
             perform_disco=True,
             options=DEFAULT_OPTIONS,
+            require_https=require_https,
         )
 
         with pytest.raises(TokenExpiredException):

@@ -48,7 +48,9 @@ def get_discovery_document(
     try:
         client = http_client.client if http_client else get_http_client()
         response = _fetch_discovery_document(client, disco_doc_req.address)
-        result = process_discovery_response(response)
+        result = process_discovery_response(
+            response, require_https=disco_doc_req.require_https
+        )
         # Explicitly close the response to ensure the connection is released
         response.close()
         return result

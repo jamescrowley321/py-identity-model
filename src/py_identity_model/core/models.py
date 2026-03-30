@@ -410,7 +410,13 @@ class DiscoveryDocumentRequest(BaseRequest):
         address: The base URL of the identity provider
             (e.g. ``https://example.com``). The well-known path is
             appended automatically.
+        require_https: Whether to enforce HTTPS on the issuer and endpoints.
+            Defaults to ``True`` per the OpenID Connect Discovery specification.
+            Set to ``False`` only for local development/testing with HTTP
+            providers.
     """
+
+    require_https: bool = True
 
 
 @dataclass(repr=False, eq=False)
@@ -815,6 +821,7 @@ class TokenValidationConfig:
     options: dict | None = None
     claims_validator: Callable | None = None
     leeway: float | None = None
+    require_https: bool = True
 
 
 __all__ = [

@@ -27,7 +27,7 @@ class TestAsyncTokenValidation:
 
     @pytest.mark.asyncio
     async def test_async_claims_validator_success(
-        self, test_config, client_credentials_token
+        self, test_config, client_credentials_token, require_https
     ):
         """Test async claims validator that succeeds."""
         from py_identity_model.aio.http_client import close_async_http_client
@@ -44,6 +44,7 @@ class TestAsyncTokenValidation:
             audience=test_config["TEST_AUDIENCE"],
             options=DEFAULT_OPTIONS,
             claims_validator=async_validate_claims,
+            require_https=require_https,
         )
 
         try:
@@ -60,7 +61,7 @@ class TestAsyncTokenValidation:
 
     @pytest.mark.asyncio
     async def test_async_claims_validator_failure(
-        self, test_config, client_credentials_token
+        self, test_config, client_credentials_token, require_https
     ):
         """Test async claims validator that fails."""
         from py_identity_model.aio.http_client import close_async_http_client
@@ -77,6 +78,7 @@ class TestAsyncTokenValidation:
             audience=test_config["TEST_AUDIENCE"],
             options=DEFAULT_OPTIONS,
             claims_validator=async_validate_claims,
+            require_https=require_https,
         )
 
         try:
@@ -93,7 +95,7 @@ class TestAsyncTokenValidation:
 
     @pytest.mark.asyncio
     async def test_sync_claims_validator_in_async_context(
-        self, test_config, client_credentials_token
+        self, test_config, client_credentials_token, require_https
     ):
         """Test that sync claims validator works in async validation."""
         from py_identity_model.aio.http_client import close_async_http_client
@@ -110,6 +112,7 @@ class TestAsyncTokenValidation:
             audience=test_config["TEST_AUDIENCE"],
             options=DEFAULT_OPTIONS,
             claims_validator=sync_validate_claims,
+            require_https=require_https,
         )
 
         try:

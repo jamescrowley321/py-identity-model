@@ -69,7 +69,8 @@ def discovery_document(test_config):
     @retry_with_backoff()
     def fetch_discovery():
         disco_doc_req = DiscoveryDocumentRequest(
-            address=test_config["TEST_DISCO_ADDRESS"]
+            address=test_config["TEST_DISCO_ADDRESS"],
+            require_https=test_config.get("TEST_REQUIRE_HTTPS", True),
         )
         response = get_discovery_document(disco_doc_req)
 
@@ -143,6 +144,12 @@ def issuer(discovery_document):
 def userinfo_endpoint(discovery_document):
     """Provide the UserInfo endpoint from cached discovery document."""
     return discovery_document.userinfo_endpoint
+
+
+@pytest.fixture(scope="session")
+def require_https(test_config):
+    """Provide whether HTTPS is required for the current provider."""
+    return test_config.get("TEST_REQUIRE_HTTPS", True)
 
 
 @pytest.fixture(scope="session")

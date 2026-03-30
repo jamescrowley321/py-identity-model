@@ -27,7 +27,7 @@ DEFAULT_OPTIONS = {
 }
 
 
-def test_token_validation_expired_token(test_config):
+def test_token_validation_expired_token(test_config, require_https):
     """Test expired token validation using cached config."""
     expired_token = test_config.get("TEST_EXPIRED_TOKEN", "")
     if not expired_token or not _is_valid_jwt_format(expired_token):
@@ -40,11 +40,14 @@ def test_token_validation_expired_token(test_config):
             token_validation_config=TokenValidationConfig(
                 perform_disco=True,
                 options=DEFAULT_OPTIONS,
+                require_https=require_https,
             ),
         )
 
 
-def test_token_validation_succeeds(test_config, client_credentials_token):
+def test_token_validation_succeeds(
+    test_config, client_credentials_token, require_https
+):
     """Test token validation using cached fixtures."""
     assert client_credentials_token.token is not None
 
@@ -52,6 +55,7 @@ def test_token_validation_succeeds(test_config, client_credentials_token):
         perform_disco=True,
         audience=test_config["TEST_AUDIENCE"],
         options=DEFAULT_OPTIONS,
+        require_https=require_https,
     )
 
     claims = validate_token(
@@ -66,7 +70,7 @@ def test_token_validation_succeeds(test_config, client_credentials_token):
 
 
 def test_token_validation_with_invalid_config_throws_exception(
-    test_config, client_credentials_token
+    test_config, client_credentials_token, require_https
 ):
     """Test invalid config using cached fixtures."""
     assert client_credentials_token.token is not None
@@ -75,6 +79,7 @@ def test_token_validation_with_invalid_config_throws_exception(
         perform_disco=False,
         audience=test_config["TEST_AUDIENCE"],
         options=DEFAULT_OPTIONS,
+        require_https=require_https,
     )
 
     with pytest.raises(ConfigurationException):
@@ -85,7 +90,7 @@ def test_token_validation_with_invalid_config_throws_exception(
         )
 
 
-def test_cache_succeeds(test_config, client_credentials_token):
+def test_cache_succeeds(test_config, client_credentials_token, require_https):
     """Test caching using cached fixtures."""
     assert client_credentials_token.token is not None
 
@@ -93,6 +98,7 @@ def test_cache_succeeds(test_config, client_credentials_token):
         perform_disco=True,
         audience=test_config["TEST_AUDIENCE"],
         options=DEFAULT_OPTIONS,
+        require_https=require_https,
     )
 
     for _ in range(5):
@@ -113,13 +119,16 @@ def test_cache_succeeds(test_config, client_credentials_token):
     assert cache_info[0] > 0
 
 
-def test_benchmark_validation(test_config, client_credentials_token):
+def test_benchmark_validation(
+    test_config, client_credentials_token, require_https
+):
     """Test benchmark using cached fixtures."""
     assert client_credentials_token.token is not None
     validation_config = TokenValidationConfig(
         perform_disco=True,
         audience=test_config["TEST_AUDIENCE"],
         options=DEFAULT_OPTIONS,
+        require_https=require_https,
     )
 
     # Warm the lru_cache (discovery + JWKS) before benchmarking.
@@ -149,7 +158,7 @@ def test_benchmark_validation(test_config, client_credentials_token):
 
 
 def test_claim_validation_function_succeeds(
-    test_config, client_credentials_token
+    test_config, client_credentials_token, require_https
 ):
     """Test claim validation success using cached fixtures."""
     assert client_credentials_token.token is not None
@@ -164,6 +173,7 @@ def test_claim_validation_function_succeeds(
         audience=test_config["TEST_AUDIENCE"],
         options=DEFAULT_OPTIONS,
         claims_validator=validate_claims,
+        require_https=require_https,
     )
 
     decoded_token = validate_token(
@@ -177,7 +187,7 @@ def test_claim_validation_function_succeeds(
 
 
 def test_claim_validation_function_fails(
-    test_config, client_credentials_token
+    test_config, client_credentials_token, require_https
 ):
     """Test claim validation failure using cached fixtures."""
     assert client_credentials_token.token is not None
@@ -190,6 +200,7 @@ def test_claim_validation_function_fails(
         audience=test_config["TEST_AUDIENCE"],
         options=DEFAULT_OPTIONS,
         claims_validator=validate_claims,
+        require_https=require_https,
     )
 
     with pytest.raises(TokenValidationException):

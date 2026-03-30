@@ -37,7 +37,9 @@ from .managed_client import HTTPClient
 
 
 @lru_cache
-def _get_disco_response(disco_doc_address: str) -> DiscoveryDocumentResponse:
+def _get_disco_response(
+    disco_doc_address: str, require_https: bool = True
+) -> DiscoveryDocumentResponse:
     """
     Cached discovery document fetching.
 
@@ -47,7 +49,9 @@ def _get_disco_response(disco_doc_address: str) -> DiscoveryDocumentResponse:
     are only fetched once per address, making the connection overhead minimal.
     """
     return get_discovery_document(
-        DiscoveryDocumentRequest(address=disco_doc_address),
+        DiscoveryDocumentRequest(
+            address=disco_doc_address, require_https=require_https
+        ),
     )
 
 
@@ -132,7 +136,9 @@ def validate_token(
             key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [])
         else:
             # Cached path (existing behavior)
-            disco_doc_response = _get_disco_response(disco_doc_address)
+            disco_doc_response = _get_disco_response(
+                disco_doc_address, token_validation_config.require_https
+            )
             validate_disco_response(disco_doc_response)
             jwks_uri = validate_jwks_uri(disco_doc_response)
 

@@ -2,6 +2,83 @@
 
 <!-- version list -->
 
+## v2.3.0 (2026-03-30)
+
+### Bug Fixes
+
+- **authorize**: Address code review and security findings
+  ([`1976416`](https://github.com/jamescrowley321/py-identity-model/commit/197641689b20b4b6236cc6c9a66c958397598035))
+
+- **authorize**: Guard against None inputs in callback parsing and state validation
+  ([`2e696c5`](https://github.com/jamescrowley321/py-identity-model/commit/2e696c50d733aef2bfd528470b4c7c61ef8039bc))
+
+- **authorize**: Make state accessible on error responses per RFC 6749
+  ([`1a77957`](https://github.com/jamescrowley321/py-identity-model/commit/1a77957654c8f6241a115e000b13ee500bbc8eba))
+
+- **test**: Make authorization_endpoint HTTPS assertion conditional on require_https
+  ([`2cd2801`](https://github.com/jamescrowley321/py-identity-model/commit/2cd2801c55021e3ad47248d3dddf2c1950f11c79))
+
+### Chores
+
+- Auto-commit before merge (loop primary)
+  ([`7e42771`](https://github.com/jamescrowley321/py-identity-model/commit/7e42771145d9a7781e5a42fce16bcf69781e23b3))
+
+- Exclude __init__.py from SonarCloud duplication analysis
+  ([`7886657`](https://github.com/jamescrowley321/py-identity-model/commit/78866576731b343f917e08aa8d4c375d175224c9))
+
+- **deps**: Automated dependency update
+  ([`244735d`](https://github.com/jamescrowley321/py-identity-model/commit/244735da8b1e988e1cef909ba82c892f61e8831e))
+
+- **deps**: Automated dependency update
+  ([`b0ed1fe`](https://github.com/jamescrowley321/py-identity-model/commit/b0ed1fef76bb3af607dd8fadb393485f68bcd63f))
+
+- **deps**: Automated dependency update
+  ([`104cb62`](https://github.com/jamescrowley321/py-identity-model/commit/104cb62ffcc74e27c05553a80809e525d0d67584))
+
+### Continuous Integration
+
+- Add pull_request trigger to build workflow
+  ([`30399f9`](https://github.com/jamescrowley321/py-identity-model/commit/30399f9225db4d4fb5e68404359c823aaebf0a62))
+
+### Documentation
+
+- **authorize**: Add API docs for callback response and state validation
+  ([`41b63b6`](https://github.com/jamescrowley321/py-identity-model/commit/41b63b6463880cdc61e5bb9f552234bf46582ec5))
+
+- **authorize**: Add authorization callback usage examples
+  ([`530cec6`](https://github.com/jamescrowley321/py-identity-model/commit/530cec6c65ab305d83cae416446ba7b18c9e2bf0))
+
+### Features
+
+- **authorize**: Add AuthorizeCallbackResponse model and parser
+  ([`4d8351f`](https://github.com/jamescrowley321/py-identity-model/commit/4d8351f1024a534ad95963a4e5bbac180312baea))
+
+- **authorize**: Add state parameter validation
+  ([`2f4f826`](https://github.com/jamescrowley321/py-identity-model/commit/2f4f826c5144990ae6c528fef77ab2ff21025d5e))
+
+- **authorize**: Export callback response and state validation API
+  ([`6c3ddd9`](https://github.com/jamescrowley321/py-identity-model/commit/6c3ddd93fcf359eb3b339c67de440e7eb7f94f7f))
+
+- **exceptions**: Add AuthorizeCallbackException
+  ([`4804ae2`](https://github.com/jamescrowley321/py-identity-model/commit/4804ae25c728238f259968b07ac318296faa4f58))
+
+### Refactoring
+
+- **test**: Reduce code duplication in authorize callback tests
+  ([`76dfc6c`](https://github.com/jamescrowley321/py-identity-model/commit/76dfc6c69f35026cd9caa06346fdfa71ad77a819))
+
+### Testing
+
+- Add coverage for review fix findings
+  ([`e4a396a`](https://github.com/jamescrowley321/py-identity-model/commit/e4a396a2bf6193ba340a614a4229aff2e294da3e))
+
+- **authorize**: Add integration tests for callback parsing and state validation
+  ([`02a9f94`](https://github.com/jamescrowley321/py-identity-model/commit/02a9f94b9491bc35780ab46ffcf080c8e18c8c65))
+
+- **authorize**: Add unit tests for callback response and state validation
+  ([`1b83e10`](https://github.com/jamescrowley321/py-identity-model/commit/1b83e10f7e5c2247d34da4c2772a6ebd51484598))
+
+
 ## v2.2.0 (2026-03-14)
 
 ### Features
