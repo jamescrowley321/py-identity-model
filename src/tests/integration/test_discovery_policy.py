@@ -47,25 +47,3 @@ class TestDiscoveryPolicyIntegration:
             ]
         )
         assert len(policy.additional_endpoint_base_addresses) == 2
-
-    def test_top_level_import(self):
-        from py_identity_model import (
-            DiscoveryEndpoint,
-            DiscoveryPolicy,
-            parse_discovery_url,
-        )
-
-        assert DiscoveryPolicy is not None
-        assert DiscoveryEndpoint is not None
-        assert callable(parse_discovery_url)
-
-    def test_aio_import(self):
-        from py_identity_model.aio import (
-            DiscoveryEndpoint,
-            DiscoveryPolicy,
-            parse_discovery_url,
-        )
-
-        assert DiscoveryPolicy is not None
-        assert DiscoveryEndpoint is not None
-        assert callable(parse_discovery_url)

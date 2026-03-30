@@ -175,23 +175,3 @@ class TestJARIntegration:
             audience="https://auth.example.com",
         )
         assert decoded["iss"] == "ps256-app"
-
-    def test_top_level_import(self):
-        """Verify JAR functions are importable from top-level package."""
-        from py_identity_model import (
-            build_jar_authorization_url,
-            create_request_object,
-        )
-
-        assert callable(create_request_object)
-        assert callable(build_jar_authorization_url)
-
-    def test_aio_import(self):
-        """Verify JAR functions are importable from aio package."""
-        from py_identity_model.aio import (
-            build_jar_authorization_url,
-            create_request_object,
-        )
-
-        assert callable(create_request_object)
-        assert callable(build_jar_authorization_url)

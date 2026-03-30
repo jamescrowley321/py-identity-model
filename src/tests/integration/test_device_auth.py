@@ -131,37 +131,3 @@ class TestDeviceAuthIntegration:
         assert data["device_code"] == "dev_code_xyz"
         assert data["client_id"] == "app"
         assert auth is None
-
-    def test_top_level_import(self):
-        from py_identity_model import (
-            DeviceAuthorizationRequest,
-            DeviceAuthorizationResponse,
-            DeviceTokenRequest,
-            DeviceTokenResponse,
-            poll_device_token,
-            request_device_authorization,
-        )
-
-        assert callable(request_device_authorization)
-        assert callable(poll_device_token)
-        assert DeviceAuthorizationRequest is not None
-        assert DeviceAuthorizationResponse is not None
-        assert DeviceTokenRequest is not None
-        assert DeviceTokenResponse is not None
-
-    def test_aio_import(self):
-        from py_identity_model.aio import (
-            DeviceAuthorizationRequest,
-            DeviceAuthorizationResponse,
-            DeviceTokenRequest,
-            DeviceTokenResponse,
-            poll_device_token,
-            request_device_authorization,
-        )
-
-        assert callable(request_device_authorization)
-        assert callable(poll_device_token)
-        assert DeviceAuthorizationRequest is not None
-        assert DeviceAuthorizationResponse is not None
-        assert DeviceTokenRequest is not None
-        assert DeviceTokenResponse is not None

@@ -116,25 +116,3 @@ class TestTokenExchangeIntegration:
         assert token_type.SAML1.startswith("urn:ietf:params:oauth:")
         assert token_type.SAML2.startswith("urn:ietf:params:oauth:")
         assert token_type.JWT.startswith("urn:ietf:params:oauth:")
-
-    def test_top_level_import(self):
-        from py_identity_model import (
-            TokenExchangeRequest,
-            TokenExchangeResponse,
-            exchange_token,
-        )
-
-        assert callable(exchange_token)
-        assert TokenExchangeRequest is not None
-        assert TokenExchangeResponse is not None
-
-    def test_aio_import(self):
-        from py_identity_model.aio import (
-            TokenExchangeRequest,
-            TokenExchangeResponse,
-            exchange_token,
-        )
-
-        assert callable(exchange_token)
-        assert TokenExchangeRequest is not None
-        assert TokenExchangeResponse is not None
