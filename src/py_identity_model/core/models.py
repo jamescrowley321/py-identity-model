@@ -459,6 +459,7 @@ class DiscoveryDocumentResponse(BaseResponse):
             "service_documentation",
             "op_policy_uri",
             "op_tos_uri",
+            "introspection_endpoint",
         }
     )
 
@@ -476,6 +477,7 @@ class DiscoveryDocumentResponse(BaseResponse):
     # Common optional properties
     userinfo_endpoint: str | None = None
     registration_endpoint: str | None = None
+    introspection_endpoint: str | None = None
     scopes_supported: list[str] | None = None
     response_modes_supported: list[str] | None = None
     grant_types_supported: list[str] | None = None
@@ -615,6 +617,115 @@ class AuthorizationCodeTokenResponse(BaseResponse):
 
 
 # ============================================================================
+# Refresh Token Models - RFC 6749 Section 6
+# ============================================================================
+
+
+@dataclass
+class RefreshTokenRequest(BaseRequest):
+    """Request for refreshing an OAuth 2.0 access token.
+
+    Attributes:
+        address: The token endpoint URL.
+        client_id: The client identifier.
+        refresh_token: The refresh token received from a prior authorization.
+        scope: Optional space-delimited scopes (must be subset of original grant).
+        client_secret: Client secret (optional for public clients).
+    """
+
+    client_id: str
+    refresh_token: str
+    scope: str | None = None
+    client_secret: str | None = None
+
+
+@dataclass
+class RefreshTokenResponse(BaseResponse):
+    """Response from a refresh token grant.
+
+    Check ``is_successful`` before accessing ``token``.
+    The token dict typically contains a new ``access_token`` and may
+    include a new ``refresh_token``.
+    """
+
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
+
+    token: dict | None = None
+
+
+# ============================================================================
+# Token Introspection Models - RFC 7662
+# ============================================================================
+
+
+@dataclass
+class TokenIntrospectionRequest(BaseRequest):
+    """Request for OAuth 2.0 Token Introspection (RFC 7662).
+
+    Attributes:
+        address: The introspection endpoint URL.
+        token: The token to introspect.
+        client_id: The client identifier for authentication.
+        token_type_hint: Optional hint — ``"access_token"`` or ``"refresh_token"``.
+        client_secret: Client secret for authentication (optional for public clients).
+    """
+
+    token: str
+    client_id: str
+    token_type_hint: str | None = None
+    client_secret: str | None = None
+
+
+@dataclass(repr=False, eq=False)
+class TokenIntrospectionResponse(BaseResponse):
+    """Response from a token introspection endpoint (RFC 7662).
+
+    Check ``is_successful`` before accessing ``claims``.
+    The ``claims`` dict contains at minimum ``active: bool``.
+    When ``active`` is ``True``, additional claims like ``scope``,
+    ``client_id``, ``username``, ``exp``, ``iat``, ``sub``, ``aud``,
+    ``iss``, and ``jti`` may be present.
+    """
+
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset({"claims"})
+
+    claims: dict | None = None
+
+
+# ============================================================================
+# Token Revocation Models - RFC 7009
+# ============================================================================
+
+
+@dataclass
+class TokenRevocationRequest(BaseRequest):
+    """Request for OAuth 2.0 Token Revocation (RFC 7009).
+
+    Attributes:
+        address: The revocation endpoint URL.
+        token: The token to revoke.
+        client_id: The client identifier for authentication.
+        token_type_hint: Optional hint — ``"access_token"`` or ``"refresh_token"``.
+        client_secret: Client secret for authentication (optional for public clients).
+    """
+
+    token: str
+    client_id: str
+    token_type_hint: str | None = None
+    client_secret: str | None = None
+
+
+@dataclass(repr=False, eq=False)
+class TokenRevocationResponse(BaseResponse):
+    """Response from a token revocation endpoint (RFC 7009).
+
+    A successful revocation returns ``is_successful=True`` with no data
+    fields.  Per RFC 7009, the server responds with 200 even if the token
+    was already invalid.
+    """
+
+
+# ============================================================================
 # UserInfo Models - OpenID Connect Core 1.0 Section 5.3
 # ============================================================================
 
@@ -721,11 +832,18 @@ __all__ = [
     "DiscoveryDocumentResponse",
     "JsonWebAlgorithmsKeyTypes",
     "JsonWebKey",
-    # Enums
     "JsonWebKeyParameterNames",
-    # JWKS
     "JwksRequest",
     "JwksResponse",
+    # Refresh Token
+    "RefreshTokenRequest",
+    "RefreshTokenResponse",
+    # Token Introspection
+    "TokenIntrospectionRequest",
+    "TokenIntrospectionResponse",
+    # Token Revocation
+    "TokenRevocationRequest",
+    "TokenRevocationResponse",
     # Token Validation
     "TokenValidationConfig",
     # UserInfo

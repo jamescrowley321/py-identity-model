@@ -21,6 +21,11 @@ from .discovery import (
     DiscoveryDocumentResponse,
     get_discovery_document,
 )
+from .introspection import (
+    TokenIntrospectionRequest,
+    TokenIntrospectionResponse,
+    introspect_token,
+)
 from .jwks import (
     JsonWebAlgorithmsKeyTypes,
     JsonWebKey,
@@ -31,11 +36,19 @@ from .jwks import (
     jwks_from_dict,
 )
 from .managed_client import HTTPClient
+from .revocation import (
+    TokenRevocationRequest,
+    TokenRevocationResponse,
+    revoke_token,
+)
 from .token_client import (
     AuthorizationCodeTokenRequest,
     AuthorizationCodeTokenResponse,
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
+    RefreshTokenRequest,
+    RefreshTokenResponse,
+    refresh_token,
     request_authorization_code_token,
     request_client_credentials_token,
 )
@@ -67,7 +80,16 @@ __all__ = [
     "JsonWebKeyParameterNames",
     "JwksRequest",
     "JwksResponse",
+    # Refresh Token
+    "RefreshTokenRequest",
+    "RefreshTokenResponse",
     "StateValidationResult",
+    # Token Introspection
+    "TokenIntrospectionRequest",
+    "TokenIntrospectionResponse",
+    # Token Revocation
+    "TokenRevocationRequest",
+    "TokenRevocationResponse",
     # Token Validation
     "TokenValidationConfig",
     # UserInfo
@@ -80,10 +102,13 @@ __all__ = [
     "get_discovery_document",
     "get_jwks",
     "get_userinfo",
+    "introspect_token",
     "jwks_from_dict",
     "parse_authorize_callback_response",
+    "refresh_token",
     "request_authorization_code_token",
     "request_client_credentials_token",
+    "revoke_token",
     "validate_authorize_callback_state",
     "validate_token",
 ]
