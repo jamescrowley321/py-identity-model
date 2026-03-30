@@ -4,10 +4,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 
-# Global variable to store the current env file path
-_current_env_file: str | None = None
-
-
 def set_env_file(env_file_path: str | None) -> None:
     """
     Set the environment file to use for configuration.
@@ -15,9 +11,6 @@ def set_env_file(env_file_path: str | None) -> None:
     Args:
         env_file_path: Path to the environment file, or None to use default
     """
-    global _current_env_file
-    _current_env_file = env_file_path
-
     if env_file_path and Path(env_file_path).is_file():
         # Load the specified env file only if it exists
         load_dotenv(env_file_path, override=True)

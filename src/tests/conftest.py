@@ -47,15 +47,6 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.integration)
 
 
-# Session-scoped fixture to ensure proper test isolation
-@pytest.fixture(scope="session", autouse=True)
-def setup_test_environment():
-    """Setup test environment before running tests."""
-    # This fixture runs automatically for all tests
-    # Can be used for global setup/teardown if needed
-    # Cleanup code can go here if needed
-
-
 @pytest.fixture(autouse=True)
 def _clear_async_caches():
     """Clear async LRU caches between tests.
