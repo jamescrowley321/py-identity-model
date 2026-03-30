@@ -46,7 +46,9 @@ async def get_discovery_document(
         response = await _fetch_discovery_document(
             client, disco_doc_req.address
         )
-        return process_discovery_response(response)
+        return process_discovery_response(
+            response, require_https=disco_doc_req.require_https
+        )
     except Exception as e:
         return handle_discovery_error(e)
 

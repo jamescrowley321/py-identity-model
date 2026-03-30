@@ -165,9 +165,10 @@ async function startProvider() {
       },
       resourceIndicators: {
         enabled: true,
-        // Tokens default to opaque (introspectable/revocable).
-        // To get JWT access tokens, include resource=urn:test:api in the token request.
-        defaultResource: () => undefined,
+        // Default to urn:test:api so tokens are issued as JWTs.
+        // This allows integration tests to validate tokens without
+        // explicitly passing a resource parameter.
+        defaultResource: () => "urn:test:api",
         getResourceServerInfo: (ctx, resourceIndicator) => {
           if (resourceIndicator !== "urn:test:api") {
             return undefined;

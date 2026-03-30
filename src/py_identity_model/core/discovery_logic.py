@@ -46,10 +46,14 @@ def handle_unsuccessful_response(
 
 def process_successful_response(
     response: httpx.Response,
+    *,
+    require_https: bool = True,
 ) -> DiscoveryDocumentResponse:
     """Process successful discovery response."""
     # Validate and parse response using shared logic
-    response_json = validate_and_parse_discovery_response(response)
+    response_json = validate_and_parse_discovery_response(
+        response, require_https=require_https
+    )
 
     logger.info(
         f"Discovery document fetched successfully, issuer: {response_json.get('issuer')}",
@@ -65,12 +69,15 @@ def process_successful_response(
 
 def process_discovery_response(
     response: httpx.Response,
+    *,
+    require_https: bool = True,
 ) -> DiscoveryDocumentResponse:
     """
     Process discovery document response.
 
     Args:
         response: HTTP response from discovery endpoint
+        require_https: Whether to enforce HTTPS on the issuer.
 
     Returns:
         DiscoveryDocumentResponse with parsed data or error
@@ -81,6 +88,8 @@ def process_discovery_response(
         return handle_unsuccessful_response(response)
 
     try:
-        return process_successful_response(response)
+        return process_successful_response(
+            response, require_https=require_https
+        )
     except Exception as e:
         return handle_discovery_error(e)

@@ -103,4 +103,8 @@ def get_config(env_file: str | None = None) -> dict:
         "TEST_SCOPE": os.environ.get("TEST_SCOPE", ""),
         "TEST_EXPIRED_TOKEN": os.environ.get("TEST_EXPIRED_TOKEN", ""),
         "TEST_AUDIENCE": os.environ.get("TEST_AUDIENCE", ""),
+        "TEST_REQUIRE_HTTPS": os.environ.get(
+            "TEST_REQUIRE_HTTPS", "true"
+        ).lower()
+        not in ("false", "0", "no"),
     }

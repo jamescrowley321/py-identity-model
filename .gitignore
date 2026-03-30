@@ -132,6 +132,8 @@ dmypy.json
 .idea
 
 *.env*
+# Allow test fixture env files (no secrets — local Docker only)
+!.env.node-oidc
 *.crt
 *.key
 *.pfx

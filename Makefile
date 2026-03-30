@@ -32,6 +32,15 @@ test-integration-descope:
 	@echo "Running integration tests against Descope..."
 	uv run pytest src/tests -m integration $(if $(wildcard .env.descope),--env-file=.env.descope) -v -n auto
 
+.PHONY: test-integration-node-oidc
+test-integration-node-oidc: ## Run integration tests against node-oidc-provider
+	@echo "Starting node-oidc-provider fixture..."
+	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml up -d --build --wait
+	@echo "Running integration tests against node-oidc-provider..."
+	uv run pytest src/tests -m integration --env-file=.env.node-oidc -v || \
+		(docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down && exit 1)
+	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
+
 .PHONY: generate-token
 generate-token:
 	uv run python examples/generate_token.py
