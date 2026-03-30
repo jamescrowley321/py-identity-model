@@ -210,3 +210,9 @@ def cleanup_http_client():
     # Ignore errors during cleanup (e.g., if client was never created)
     with suppress(Exception):
         close_http_client()
+
+
+# Import node-oidc-provider fixtures so pytest discovers them.
+# This file uses conftest_ prefix convention to keep provider-specific
+# fixtures separate from the shared base fixtures above.
+from .conftest_node_oidc import *  # noqa: F403, E402
