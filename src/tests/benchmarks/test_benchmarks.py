@@ -133,7 +133,7 @@ def test_bench_validate_fapi_request(benchmark):
 def test_bench_validate_fapi_client(benchmark):
     result = benchmark(
         validate_fapi_client_config,
-        has_client_authentication=True,
+        auth_method="private_key_jwt",
         use_dpop=True,
     )
     assert result is not None
