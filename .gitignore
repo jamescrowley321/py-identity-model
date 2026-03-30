@@ -141,6 +141,7 @@ dmypy.json
 
 # Claude Code MCP configuration (may contain tokens)
 .claude/mcp.json
+.claude/worktrees/
 
 # Terraform
 infra/**/.terraform/
