@@ -221,6 +221,7 @@ markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
     "unit: marks tests as unit tests",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "node_oidc: marks tests requiring node-oidc-provider Docker container on localhost:9010",
 ]
 # Async test configuration
 asyncio_mode = "auto"
