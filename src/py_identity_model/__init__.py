@@ -29,6 +29,8 @@ from .exceptions import (
 # Identity models (shared)
 from .identity import Claim, ClaimsIdentity, ClaimsPrincipal, to_principal
 from .sync import (
+    AuthorizationCodeTokenRequest,
+    AuthorizationCodeTokenResponse,
     AuthorizeCallbackResponse,
     AuthorizeCallbackValidationResult,
     BaseRequest,
@@ -47,11 +49,16 @@ from .sync import (
     TokenValidationConfig,
     UserInfoRequest,
     UserInfoResponse,
+    build_authorization_url,
+    generate_code_challenge,
+    generate_code_verifier,
+    generate_pkce_pair,
     get_discovery_document,
     get_jwks,
     get_userinfo,
     jwks_from_dict,
     parse_authorize_callback_response,
+    request_authorization_code_token,
     request_client_credentials_token,
     validate_authorize_callback_state,
     validate_token,
@@ -59,6 +66,9 @@ from .sync import (
 
 
 __all__ = [
+    # Auth Code + PKCE
+    "AuthorizationCodeTokenRequest",
+    "AuthorizationCodeTokenResponse",
     # Authorize Callback
     "AuthorizeCallbackException",
     "AuthorizeCallbackResponse",
@@ -102,12 +112,17 @@ __all__ = [
     "UserInfoRequest",
     "UserInfoResponse",
     "ValidationException",
+    "build_authorization_url",
+    "generate_code_challenge",
+    "generate_code_verifier",
+    "generate_pkce_pair",
     # Sync API (default)
     "get_discovery_document",
     "get_jwks",
     "get_userinfo",
     "jwks_from_dict",
     "parse_authorize_callback_response",
+    "request_authorization_code_token",
     "request_client_credentials_token",
     "to_principal",
     "validate_authorize_callback_state",

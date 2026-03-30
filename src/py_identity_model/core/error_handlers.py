@@ -10,6 +10,7 @@ import httpx
 from ..exceptions import ConfigurationException, DiscoveryException
 from ..logging_config import logger
 from .models import (
+    AuthorizationCodeTokenResponse,
     ClientCredentialsTokenResponse,
     DiscoveryDocumentResponse,
     JwksResponse,
@@ -123,6 +124,26 @@ def handle_token_error(e: Exception) -> ClientCredentialsTokenResponse:
     )
 
 
+def handle_auth_code_token_error(
+    e: Exception,
+) -> AuthorizationCodeTokenResponse:
+    """Handle errors during authorization code token exchange."""
+    if isinstance(e, httpx.RequestError):
+        error_msg = (
+            f"Network error during authorization code token exchange: {e!s}"
+        )
+        logger.error(error_msg, exc_info=True)
+        return AuthorizationCodeTokenResponse(
+            is_successful=False, error=error_msg
+        )
+
+    error_msg = (
+        f"Unexpected error during authorization code token exchange: {e!s}"
+    )
+    logger.error(error_msg, exc_info=True)
+    return AuthorizationCodeTokenResponse(is_successful=False, error=error_msg)
+
+
 def handle_userinfo_error(e: Exception) -> UserInfoResponse:
     """
     Handle errors during UserInfo requests.
@@ -150,6 +171,7 @@ def handle_userinfo_error(e: Exception) -> UserInfoResponse:
 
 
 __all__ = [
+    "handle_auth_code_token_error",
     "handle_discovery_error",
     "handle_jwks_error",
     "handle_token_error",
