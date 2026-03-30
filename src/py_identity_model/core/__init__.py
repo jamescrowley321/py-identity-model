@@ -5,6 +5,10 @@ This module contains shared business logic, models, validators, and utilities
 that are used by both sync and async implementations.
 """
 
+from .authorize_response import (
+    AuthorizeCallbackResponse,
+    parse_authorize_callback_response,
+)
 from .http_utils import (
     DEFAULT_HTTP_TIMEOUT,
     DEFAULT_RETRY_BASE_DELAY,
@@ -24,6 +28,11 @@ from .models import (
     TokenValidationConfig,
 )
 from .parsers import get_public_key_from_jwk, jwks_from_dict
+from .state_validation import (
+    AuthorizeCallbackValidationResult,
+    StateValidationResult,
+    validate_authorize_callback_state,
+)
 from .validators import (
     validate_https_url,
     validate_issuer,
@@ -38,6 +47,10 @@ __all__ = [
     "DEFAULT_HTTP_TIMEOUT",
     "DEFAULT_RETRY_BASE_DELAY",
     "DEFAULT_RETRY_MAX_ATTEMPTS",
+    # From authorize_response
+    "AuthorizeCallbackResponse",
+    # From state_validation
+    "AuthorizeCallbackValidationResult",
     # From models
     "ClientCredentialsTokenRequest",
     "ClientCredentialsTokenResponse",
@@ -48,12 +61,15 @@ __all__ = [
     "JsonWebKeyParameterNames",
     "JwksRequest",
     "JwksResponse",
+    "StateValidationResult",
     "TokenValidationConfig",
     # From jwt_helpers
     "decode_and_validate_jwt",
     # From parsers
     "get_public_key_from_jwk",
     "jwks_from_dict",
+    "parse_authorize_callback_response",
+    "validate_authorize_callback_state",
     # From validators
     "validate_https_url",
     "validate_issuer",
