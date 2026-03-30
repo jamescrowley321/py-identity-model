@@ -12,6 +12,7 @@ from ..core.dpop import (
     create_dpop_proof,
     generate_dpop_key,
 )
+from ..core.jar import build_jar_authorization_url, create_request_object
 from ..core.models import BaseRequest, BaseResponse
 from ..core.pkce import (
     generate_code_challenge,
@@ -114,8 +115,10 @@ __all__ = [
     "UserInfoResponse",
     "build_authorization_url",
     "build_dpop_headers",
+    "build_jar_authorization_url",
     "compute_ath",
     "create_dpop_proof",
+    "create_request_object",
     "generate_code_challenge",
     "generate_code_verifier",
     "generate_dpop_key",
