@@ -56,7 +56,7 @@ async def get_discovery_document(
         response = await _fetch_discovery_document(
             client, disco_doc_req.address
         )
-        return process_discovery_response(response, disco_doc_req.policy)
+        return process_discovery_response(response, policy)
     except Exception as e:
         return handle_discovery_error(e)
 

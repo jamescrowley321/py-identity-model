@@ -109,9 +109,17 @@ def parse_discovery_url(url: str) -> DiscoveryEndpoint:
         raise ConfigurationException(
             f"Discovery URL must include a scheme: {url}"
         )
+    if parsed.scheme not in ("http", "https"):
+        raise ConfigurationException(
+            f"Discovery URL must use HTTP or HTTPS scheme, got: {parsed.scheme}"
+        )
     if not parsed.netloc:
         raise ConfigurationException(
             f"Discovery URL must include a host: {url}"
+        )
+    if parsed.query or parsed.fragment:
+        raise ConfigurationException(
+            "Discovery URL must not contain query or fragment components"
         )
 
     authority = f"{parsed.scheme}://{parsed.netloc}"
@@ -128,7 +136,7 @@ def parse_discovery_url(url: str) -> DiscoveryEndpoint:
 
 
 def validate_url_scheme(
-    url: str,
+    url: str | None,
     policy: DiscoveryPolicy,
 ) -> None:
     """Validate a URL's scheme against the discovery policy.
@@ -140,7 +148,20 @@ def validate_url_scheme(
     Raises:
         ConfigurationException: If the URL scheme violates the policy.
     """
+    if not url:
+        raise ConfigurationException("URL cannot be empty")
+
     parsed = urlparse(url)
+
+    if not parsed.scheme:
+        raise ConfigurationException(f"URL must include a scheme: {url}")
+
+    # Always restrict to HTTP/HTTPS regardless of require_https setting
+    # to prevent SSRF via ftp://, file://, gopher://, etc.
+    if parsed.scheme not in ("http", "https"):
+        raise ConfigurationException(
+            f"URL must use HTTP or HTTPS scheme, got: {parsed.scheme}"
+        )
 
     if not policy.require_https:
         return

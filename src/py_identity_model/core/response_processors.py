@@ -8,8 +8,10 @@ sync and async implementations.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 from ..exceptions import DiscoveryException
+from .discovery_policy import DiscoveryPolicy
 from .models import (
     AuthorizationCodeTokenResponse,
     ClientCredentialsTokenResponse,
@@ -31,15 +33,13 @@ from .validators import (
 if TYPE_CHECKING:
     import httpx
 
-    from .discovery_policy import DiscoveryPolicy
-
 
 def _get_url_authority(url: str) -> str:
-    """Extract scheme://host from a URL."""
-    from urllib.parse import urlparse
-
+    """Extract scheme://host from a URL, lowercased per RFC 3986 §3.2.2."""
+    if not url:
+        return ""
     parsed = urlparse(url)
-    return f"{parsed.scheme}://{parsed.netloc}"
+    return f"{parsed.scheme}://{parsed.netloc}".lower()
 
 
 def _validate_endpoint_authority(
@@ -60,18 +60,25 @@ def _validate_endpoint_authority(
 
     ep_authority = _get_url_authority(url)
 
-    # Build allowed authorities set
+    # Build allowed authorities set (case-insensitive per RFC 3986 §3.2.2)
     if policy.authority:
-        allowed = {policy.authority.rstrip("/")}
+        allowed = {_get_url_authority(policy.authority)}
     else:
         issuer = response_json.get("issuer", "")
         allowed = {_get_url_authority(issuer)} if issuer else set()
 
-    for addr in policy.additional_endpoint_base_addresses:
-        allowed.add(addr.rstrip("/"))
+    for addr in policy.additional_endpoint_base_addresses or []:
+        allowed.add(_get_url_authority(addr))
+
+    # Discard empty string from set (from empty URLs)
+    allowed.discard("")
 
     if not allowed:
-        return
+        raise DiscoveryException(
+            f"Cannot validate {parameter_name} authority: "
+            f"no authority constraint available (issuer is empty and "
+            f"no policy.authority or additional_endpoint_base_addresses set)"
+        )
 
     if ep_authority not in allowed:
         raise DiscoveryException(
@@ -131,6 +138,9 @@ def validate_and_parse_discovery_response(
             "required by policy (require_key_set=True)"
         )
 
+    # Normalize policy for endpoint validation: treat None as strict defaults
+    effective_policy = policy if policy is not None else DiscoveryPolicy()
+
     # Validate endpoint URLs (policy-aware)
     _endpoint_names = [
         "jwks_uri",
@@ -138,14 +148,15 @@ def validate_and_parse_discovery_response(
         "token_endpoint",
         "userinfo_endpoint",
         "registration_endpoint",
+        "introspection_endpoint",
     ]
     for ep_name in _endpoint_names:
         ep_url = response_json.get(ep_name)
         validate_https_url_with_policy(ep_url, ep_name, policy)
         # Validate endpoint authority when policy.validate_endpoints is enabled
-        if ep_url and policy is not None and policy.validate_endpoints:
+        if ep_url and effective_policy.validate_endpoints:
             _validate_endpoint_authority(
-                ep_url, ep_name, response_json, policy
+                ep_url, ep_name, response_json, effective_policy
             )
 
     return response_json

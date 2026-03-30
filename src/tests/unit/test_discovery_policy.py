@@ -112,6 +112,21 @@ class TestParseDiscoveryUrl:
             == "https://auth.example.com/.well-known/openid-configuration"
         )
 
+    def test_query_string_rejected(self):
+        """URLs with query strings are rejected (WARN-8)."""
+        with pytest.raises(ConfigurationException, match="query or fragment"):
+            parse_discovery_url("https://auth.example.com?evil=1")
+
+    def test_fragment_rejected(self):
+        """URLs with fragments are rejected (WARN-8)."""
+        with pytest.raises(ConfigurationException, match="query or fragment"):
+            parse_discovery_url("https://auth.example.com#fragment")
+
+    def test_non_http_scheme_rejected(self):
+        """Non-HTTP(S) schemes are rejected."""
+        with pytest.raises(ConfigurationException, match="HTTP or HTTPS"):
+            parse_discovery_url("ftp://evil.com")
+
 
 @pytest.mark.unit
 class TestValidateUrlScheme:
@@ -137,6 +152,30 @@ class TestValidateUrlScheme:
     def test_http_allowed_when_https_not_required(self):
         policy = DiscoveryPolicy(require_https=False)
         validate_url_scheme("http://auth.example.com", policy)
+
+    def test_ftp_rejected_even_when_https_not_required(self):
+        """Non-HTTP(S) schemes rejected regardless of require_https (BLOCK-1)."""
+        policy = DiscoveryPolicy(require_https=False)
+        with pytest.raises(ConfigurationException, match="HTTP or HTTPS"):
+            validate_url_scheme("ftp://evil.com/keys", policy)
+
+    def test_file_rejected_even_when_https_not_required(self):
+        """file:// scheme rejected regardless of require_https (BLOCK-1)."""
+        policy = DiscoveryPolicy(require_https=False)
+        with pytest.raises(ConfigurationException, match="HTTP or HTTPS"):
+            validate_url_scheme("file:///etc/passwd", policy)
+
+    def test_empty_url_rejected(self):
+        """Empty URL raises ConfigurationException."""
+        policy = DiscoveryPolicy()
+        with pytest.raises(ConfigurationException, match="empty"):
+            validate_url_scheme("", policy)
+
+    def test_none_url_rejected(self):
+        """None URL raises ConfigurationException."""
+        policy = DiscoveryPolicy()
+        with pytest.raises(ConfigurationException, match="empty"):
+            validate_url_scheme(None, policy)
 
 
 @pytest.mark.unit
@@ -319,12 +358,39 @@ class TestValidateEndpointAuthority:
             policy,
         )
 
-    def test_empty_issuer_no_allowed_set(self):
-        """When no issuer and no authority, validation passes (no constraint)."""
+    def test_empty_issuer_no_allowed_set_raises(self):
+        """Empty issuer with no authority constraint raises DiscoveryException."""
         policy = DiscoveryPolicy(validate_endpoints=True)
+        with pytest.raises(
+            DiscoveryException, match="no authority constraint available"
+        ):
+            _validate_endpoint_authority(
+                "https://anything.com/keys",
+                "jwks_uri",
+                {"issuer": ""},
+                policy,
+            )
+
+    def test_case_insensitive_authority_comparison(self):
+        """Authority comparison is case-insensitive per RFC 3986 §3.2.2."""
+        policy = DiscoveryPolicy(validate_endpoints=True)
+        # Mixed-case issuer should match lowercase endpoint
         _validate_endpoint_authority(
-            "https://anything.com/keys",
+            "https://auth.example.com/token",
+            "token_endpoint",
+            {"issuer": "HTTPS://AUTH.EXAMPLE.COM"},
+            policy,
+        )
+
+    def test_case_insensitive_additional_addresses(self):
+        """additional_endpoint_base_addresses comparison is case-insensitive."""
+        policy = DiscoveryPolicy(
+            validate_endpoints=True,
+            additional_endpoint_base_addresses=["HTTPS://CDN.EXAMPLE.COM"],
+        )
+        _validate_endpoint_authority(
+            "https://cdn.example.com/keys",
             "jwks_uri",
-            {"issuer": ""},
+            self._make_response(),
             policy,
         )

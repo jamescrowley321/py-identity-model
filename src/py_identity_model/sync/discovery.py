@@ -54,7 +54,7 @@ def get_discovery_document(
 
         client = http_client.client if http_client else get_http_client()
         response = _fetch_discovery_document(client, disco_doc_req.address)
-        result = process_discovery_response(response, disco_doc_req.policy)
+        result = process_discovery_response(response, policy)
         # Explicitly close the response to ensure the connection is released
         response.close()
         return result

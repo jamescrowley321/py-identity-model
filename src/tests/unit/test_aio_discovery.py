@@ -105,22 +105,57 @@ class TestAsyncDiscoveryPreFlightSchemeValidation:
         assert result.error is not None
         assert "HTTPS" in result.error
 
+    @respx.mock
     async def test_http_loopback_allowed_by_default(self):
         """HTTP to loopback is allowed by default policy (no pre-flight block)."""
-        request = DiscoveryDocumentRequest(
-            address="http://127.0.0.1:9999/.well-known/openid-configuration",
+        url = "http://127.0.0.1:9999/.well-known/openid-configuration"
+        route = respx.get(url).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "issuer": "http://127.0.0.1:9999",
+                    "jwks_uri": "http://127.0.0.1:9999/jwks",
+                    "authorization_endpoint": "http://127.0.0.1:9999/auth",
+                    "token_endpoint": "http://127.0.0.1:9999/token",
+                    "response_types_supported": ["code"],
+                    "subject_types_supported": ["public"],
+                    "id_token_signing_alg_values_supported": ["RS256"],
+                },
+                headers={"Content-Type": "application/json"},
+            )
         )
+        request = DiscoveryDocumentRequest(address=url)
         result = await get_discovery_document(request)
-        assert result.is_successful is False
-        assert "HTTPS" not in (result.error or "")
+        # Pre-flight passes for loopback — mock was actually called
+        assert route.called
+        # Post-flight issuer validation rejects HTTP issuer (OIDC spec
+        # requires HTTPS), but the error is NOT from the pre-flight check
+        assert "HTTPS is required by discovery policy" not in (
+            result.error or ""
+        )
 
+    @respx.mock
     async def test_relaxed_policy_allows_http(self):
-        """Relaxed policy skips pre-flight check for HTTP URLs."""
-        policy = DiscoveryPolicy(require_https=False)
-        request = DiscoveryDocumentRequest(
-            address="http://auth.example.com:9999/.well-known/openid-configuration",
-            policy=policy,
+        """Relaxed policy allows HTTP URLs and validates full response."""
+        url = "http://auth.example.com:9999/.well-known/openid-configuration"
+        route = respx.get(url).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "issuer": "http://auth.example.com:9999",
+                    "jwks_uri": "http://auth.example.com:9999/jwks",
+                    "authorization_endpoint": "http://auth.example.com:9999/auth",
+                    "token_endpoint": "http://auth.example.com:9999/token",
+                    "response_types_supported": ["code"],
+                    "subject_types_supported": ["public"],
+                    "id_token_signing_alg_values_supported": ["RS256"],
+                },
+                headers={"Content-Type": "application/json"},
+            )
         )
+        policy = DiscoveryPolicy(require_https=False, validate_issuer=False)
+        request = DiscoveryDocumentRequest(address=url, policy=policy)
         result = await get_discovery_document(request)
-        assert result.is_successful is False
-        assert "HTTPS" not in (result.error or "")
+        # Pre-flight and post-flight both pass with relaxed policy
+        assert route.called
+        assert result.is_successful is True
