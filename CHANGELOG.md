@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.7.0 (2026-03-30)
+
+### Features
+
+- **introspection**: Implement OAuth 2.0 Token Introspection (RFC 7662)
+  ([#226](https://github.com/jamescrowley321/py-identity-model/pull/226),
+  [`6870781`](https://github.com/jamescrowley321/py-identity-model/commit/6870781318a6163e1e2f8dc1add185ec7eee85d2))
+
+
 ## v2.6.0 (2026-03-30)
 
 ### Features
