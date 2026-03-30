@@ -145,7 +145,7 @@ dmypy.json
 
 # Terraform
 infra/**/.terraform/
-infra/**/*.tfstate
+infra/**/*.tfstate*
 infra/**/*.tfstate.backup
 infra/**/*.tfvars
 infra/**/access_key.json
