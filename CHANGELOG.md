@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.10.0 (2026-03-30)
+
+### Features
+
+- **dpop**: Implement DPoP proof creation and key management (RFC 9449)
+  ([#229](https://github.com/jamescrowley321/py-identity-model/pull/229),
+  [`994012e`](https://github.com/jamescrowley321/py-identity-model/commit/994012ed746bd5e6ee6ef4f59f298ee34f7bb830))
+
+
 ## v2.9.0 (2026-03-30)
 
 ### Features
