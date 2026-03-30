@@ -9,15 +9,22 @@ import httpx
 
 from ..logging_config import logger
 from ..logging_utils import redact_url
-from .error_handlers import handle_auth_code_token_error, handle_token_error
+from .error_handlers import (
+    handle_auth_code_token_error,
+    handle_refresh_token_error,
+    handle_token_error,
+)
 from .models import (
     AuthorizationCodeTokenRequest,
     AuthorizationCodeTokenResponse,
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
+    RefreshTokenRequest,
+    RefreshTokenResponse,
 )
 from .response_processors import (
     parse_auth_code_token_response,
+    parse_refresh_token_response,
     parse_token_response,
 )
 
@@ -145,3 +152,54 @@ def process_auth_code_token_response(
         return token_response
     except Exception as e:
         return handle_auth_code_token_error(e)
+
+
+# ============================================================================
+# Refresh Token Grant
+# ============================================================================
+
+
+def log_refresh_token_request(request: RefreshTokenRequest) -> None:
+    """Log refresh token request."""
+    logger.info("Refreshing token at %s", redact_url(request.address))
+    logger.debug("Client ID: %s", request.client_id)
+
+
+def prepare_refresh_token_request_data(
+    request: RefreshTokenRequest,
+) -> tuple[dict, dict, tuple[str, str] | None]:
+    """Prepare request data, headers, and optional auth for refresh grant."""
+    params: dict[str, str] = {
+        "grant_type": "refresh_token",
+        "refresh_token": request.refresh_token,
+    }
+    if request.scope is not None:
+        params["scope"] = request.scope
+
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
+    auth: tuple[str, str] | None = None
+    if request.client_secret is not None:
+        # RFC 6749 §2.3.1: use Basic auth for confidential clients;
+        # client_id is carried in the auth header, not the body.
+        auth = (request.client_id, request.client_secret)
+    else:
+        # Public client: include client_id in the request body
+        params["client_id"] = request.client_id
+
+    return params, headers, auth
+
+
+def process_refresh_token_response(
+    response: httpx.Response,
+) -> RefreshTokenResponse:
+    """Process refresh token grant response."""
+    log_token_status(response.status_code)
+
+    try:
+        token_response = parse_refresh_token_response(response)
+        if token_response.is_successful and token_response.token:
+            logger.info("Token refresh successful")
+        return token_response
+    except Exception as e:
+        return handle_refresh_token_error(e)

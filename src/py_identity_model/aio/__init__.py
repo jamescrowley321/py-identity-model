@@ -67,6 +67,9 @@ from .token_client import (
     AuthorizationCodeTokenResponse,
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
+    RefreshTokenRequest,
+    RefreshTokenResponse,
+    refresh_token,
     request_authorization_code_token,
     request_client_credentials_token,
 )
@@ -98,6 +101,9 @@ __all__ = [
     "JsonWebKeyParameterNames",
     "JwksRequest",
     "JwksResponse",
+    # Refresh Token
+    "RefreshTokenRequest",
+    "RefreshTokenResponse",
     "StateValidationResult",
     # Token Introspection
     "TokenIntrospectionRequest",
@@ -120,6 +126,7 @@ __all__ = [
     "introspect_token",
     "jwks_from_dict",
     "parse_authorize_callback_response",
+    "refresh_token",
     "request_authorization_code_token",
     "request_client_credentials_token",
     "revoke_token",

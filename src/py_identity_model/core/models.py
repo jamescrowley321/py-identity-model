@@ -623,6 +623,43 @@ class AuthorizationCodeTokenResponse(BaseResponse):
 
 
 # ============================================================================
+# Refresh Token Models - RFC 6749 Section 6
+# ============================================================================
+
+
+@dataclass
+class RefreshTokenRequest(BaseRequest):
+    """Request for refreshing an OAuth 2.0 access token.
+
+    Attributes:
+        address: The token endpoint URL.
+        client_id: The client identifier.
+        refresh_token: The refresh token received from a prior authorization.
+        scope: Optional space-delimited scopes (must be subset of original grant).
+        client_secret: Client secret (optional for public clients).
+    """
+
+    client_id: str
+    refresh_token: str
+    scope: str | None = None
+    client_secret: str | None = None
+
+
+@dataclass
+class RefreshTokenResponse(BaseResponse):
+    """Response from a refresh token grant.
+
+    Check ``is_successful`` before accessing ``token``.
+    The token dict typically contains a new ``access_token`` and may
+    include a new ``refresh_token``.
+    """
+
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
+
+    token: dict | None = None
+
+
+# ============================================================================
 # Token Introspection Models - RFC 7662
 # ============================================================================
 
@@ -805,6 +842,9 @@ __all__ = [
     "JsonWebKeyParameterNames",
     "JwksRequest",
     "JwksResponse",
+    # Refresh Token
+    "RefreshTokenRequest",
+    "RefreshTokenResponse",
     # Token Introspection
     "TokenIntrospectionRequest",
     "TokenIntrospectionResponse",

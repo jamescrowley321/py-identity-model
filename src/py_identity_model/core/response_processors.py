@@ -13,6 +13,7 @@ from .models import (
     ClientCredentialsTokenResponse,
     DiscoveryDocumentResponse,
     JwksResponse,
+    RefreshTokenResponse,
     TokenIntrospectionResponse,
     UserInfoResponse,
 )
@@ -264,6 +265,20 @@ def parse_auth_code_token_response(
         is_successful=False,
         error=error_msg,
     )
+
+
+def parse_refresh_token_response(
+    response: httpx.Response,
+) -> RefreshTokenResponse:
+    """Parse refresh token grant HTTP response."""
+    if response.is_success:
+        return RefreshTokenResponse(is_successful=True, token=response.json())
+
+    error_msg = (
+        f"Token refresh failed with status code: "
+        f"{response.status_code}. Response Content: {response.content}"
+    )
+    return RefreshTokenResponse(is_successful=False, error=error_msg)
 
 
 def parse_introspection_response(
