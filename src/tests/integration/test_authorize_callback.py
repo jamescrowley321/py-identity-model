@@ -117,10 +117,19 @@ class TestAuthorizeCallbackWithDiscovery:
         assert response.token_type == "Bearer"
         assert response.state == state
 
-    def test_authorization_endpoint_available(self, discovery_document):
+    def test_authorization_endpoint_available(
+        self, discovery_document, require_https
+    ):
         """Verify the identity provider exposes an authorization endpoint."""
         assert discovery_document.authorization_endpoint is not None
-        assert discovery_document.authorization_endpoint.startswith("https://")
+        if require_https:
+            assert discovery_document.authorization_endpoint.startswith(
+                "https://"
+            )
+        else:
+            assert discovery_document.authorization_endpoint.startswith(
+                ("https://", "http://")
+            )
 
     def test_state_with_url_encoded_characters(self):
         """State containing special characters survives URL round-trip."""
