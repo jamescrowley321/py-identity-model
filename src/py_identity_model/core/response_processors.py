@@ -153,8 +153,8 @@ def validate_and_parse_discovery_response(
     for ep_name in _endpoint_names:
         ep_url = response_json.get(ep_name)
         validate_https_url_with_policy(ep_url, ep_name, policy)
-        # Validate endpoint authority when policy.validate_endpoints is enabled
-        if ep_url and effective_policy.validate_endpoints:
+        # Validate endpoint authority when explicitly configured
+        if ep_url and effective_policy.authority:
             _validate_endpoint_authority(
                 ep_url, ep_name, response_json, effective_policy
             )
