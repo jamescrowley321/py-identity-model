@@ -839,6 +839,60 @@ class DeviceTokenResponse(BaseResponse):
 
 
 # ============================================================================
+# Token Exchange Models - RFC 8693
+# ============================================================================
+
+
+@dataclass
+class TokenExchangeRequest(BaseRequest):
+    """Request for OAuth 2.0 Token Exchange (RFC 8693).
+
+    Attributes:
+        address: The token endpoint URL.
+        client_id: The client identifier.
+        subject_token: Token representing the subject of the exchange.
+        subject_token_type: URI indicating the subject token type
+            (use constants from :mod:`py_identity_model.core.token_type`).
+        actor_token: Token representing the actor (for delegation).
+        actor_token_type: URI indicating the actor token type
+            (required when ``actor_token`` is provided).
+        resource: Target service URI.
+        audience: Logical name of the target service.
+        scope: Space-delimited requested scopes.
+        requested_token_type: Desired type of the issued token.
+        client_secret: Client secret (optional for public clients).
+    """
+
+    client_id: str
+    subject_token: str
+    subject_token_type: str
+    actor_token: str | None = None
+    actor_token_type: str | None = None
+    resource: str | None = None
+    audience: str | None = None
+    scope: str | None = None
+    requested_token_type: str | None = None
+    client_secret: str | None = None
+
+
+@dataclass
+class TokenExchangeResponse(BaseResponse):
+    """Response from a token exchange request (RFC 8693).
+
+    Check ``is_successful`` before accessing ``token`` or
+    ``issued_token_type``.  The ``token`` dict contains standard
+    OAuth 2.0 token fields (``access_token``, ``token_type``, etc.).
+    """
+
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset(
+        {"token", "issued_token_type"}
+    )
+
+    token: dict | None = None
+    issued_token_type: str | None = None
+
+
+# ============================================================================
 # Token Revocation Models - RFC 7009
 # ============================================================================
 
@@ -993,6 +1047,9 @@ __all__ = [
     # Refresh Token
     "RefreshTokenRequest",
     "RefreshTokenResponse",
+    # Token Exchange
+    "TokenExchangeRequest",
+    "TokenExchangeResponse",
     # Token Introspection
     "TokenIntrospectionRequest",
     "TokenIntrospectionResponse",
