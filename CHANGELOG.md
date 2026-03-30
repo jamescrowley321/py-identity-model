@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.11.0 (2026-03-30)
+
+### Features
+
+- **par**: Implement Pushed Authorization Requests (RFC 9126)
+  ([#230](https://github.com/jamescrowley321/py-identity-model/pull/230),
+  [`aa655ba`](https://github.com/jamescrowley321/py-identity-model/commit/aa655bae0d1f5230895dcb453903e923bcf1ab79))
+
+
 ## v2.10.0 (2026-03-30)
 
 ### Features
