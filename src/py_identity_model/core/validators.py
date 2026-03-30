@@ -224,9 +224,7 @@ def validate_issuer_with_policy(
             and policy.allow_http_on_loopback
         ):
             parsed = urlparse(issuer)
-            if parsed.scheme == "http" and is_loopback(
-                parsed.hostname or ""
-            ):
+            if parsed.scheme == "http" and is_loopback(parsed.hostname or ""):
                 effective_require_https = False
 
         validate_issuer(issuer, require_https=effective_require_https)

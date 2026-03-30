@@ -63,7 +63,14 @@ def get_access_token() -> tuple[str | None, str | None]:
 
     try:
         # Get discovery document using py-identity-model
-        disco_request = DiscoveryDocumentRequest(address=DISCOVERY_URL)
+        # Disable endpoint validation for Docker: the identity server's
+        # internal hostname differs from the external discovery URL.
+        from py_identity_model.core.discovery_policy import DiscoveryPolicy
+
+        policy = DiscoveryPolicy(validate_endpoints=False)
+        disco_request = DiscoveryDocumentRequest(
+            address=DISCOVERY_URL, policy=policy
+        )
         disco_response = get_discovery_document(disco_request)
 
         if not disco_response.is_successful:
