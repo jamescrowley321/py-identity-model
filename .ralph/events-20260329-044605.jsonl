@@ -8,3 +8,7 @@
 {"ts":"2026-03-29T05:28:35.234828390+00:00","iteration":8,"hat":"loop","topic":"loop.terminate","payload":"## Reason\ncompleted\n\n## Status\nAll tasks completed successfully.\n\n## Summary\n- Iterations: 8\n- Duration: 42m 29s\n- Exit code: 0"}
 {"payload":"all 9 CI checks green for PR #279 (T121 integration-core-flows)","topic":"ci.done","ts":"2026-03-30T06:23:27.921512750+00:00"}
 {"payload":"T121 complete, T122 setup done, phase=analyze","topic":"task.done","ts":"2026-03-30T06:24:50.273767173+00:00"}
+{"payload":"T122: 8 unhandled edge cases found across test fixtures, async lifecycle, and source code consistency","topic":"review.edge.done","ts":"2026-03-30T07:34:27.042736377+00:00"}
+{"payload":"T122: 15 PASS, 1 FAIL (missing revoke wrong-creds test), 4 PARTIAL. Phase set to review-security.","topic":"review.acceptance.done","ts":"2026-03-30T07:36:44.556367453+00:00"}
+{"payload":"T122 review-security complete: 0 BLOCK, 4 WARN, 5 INFO. Phase set to review-fix.","topic":"review.done","ts":"2026-03-30T07:40:26.965360639+00:00"}
+{"payload":"T122 review-fix committed 1c3960c: 3 source fixes, 7 test fixes, 4 deferred. 562 unit tests pass, 94.32% coverage. Phase set to pr.","topic":"review-fix.done","ts":"2026-03-30T07:52:10.065789438+00:00"}

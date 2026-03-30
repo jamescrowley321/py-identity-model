@@ -1,8 +1,8 @@
 # Loop Summary
 
-**Status:** Completed successfully
-**Iterations:** 8
-**Duration:** 42m 29s
+**Status:** Stopped: max runtime exceeded
+**Iterations:** 39
+**Duration:** 4h 4m 21s
 
 ## Tasks
 
@@ -14,4 +14,4 @@ _No events recorded._
 
 ## Final Commit
 
-5c83ff1: fix(authorize): address code review and security findings
+17ef3f6: fix(test): pass DiscoveryPolicy to integration tests for HTTP provider support

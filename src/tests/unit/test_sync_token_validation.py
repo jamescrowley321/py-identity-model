@@ -187,7 +187,11 @@ class TestSyncTokenValidation:
 
     @respx.mock
     def test_missing_jwks_uri_cached_path_raises(self):
-        """Test that missing jwks_uri in discovery doc raises ConfigurationException (cached path)."""
+        """Test that missing jwks_uri in discovery doc raises TokenValidationException (cached path).
+
+        With require_key_set policy enforcement, missing jwks_uri is caught
+        at the discovery level and surfaced as a TokenValidationException.
+        """
         respx.get("https://example.com/.well-known/openid-configuration").mock(
             return_value=httpx.Response(200, json=_DISCO_RESPONSE_NO_JWKS)
         )
@@ -200,8 +204,8 @@ class TestSyncTokenValidation:
         )
 
         with pytest.raises(
-            ConfigurationException,
-            match="Discovery document missing jwks_uri",
+            TokenValidationException,
+            match="does not contain a jwks_uri.*require_key_set",
         ):
             validate_token(
                 jwt="fake.jwt.token",
@@ -211,7 +215,7 @@ class TestSyncTokenValidation:
 
     @respx.mock
     def test_missing_jwks_uri_di_path_raises(self):
-        """Test that missing jwks_uri in discovery doc raises ConfigurationException (DI path)."""
+        """Test that missing jwks_uri in discovery doc raises TokenValidationException (DI path)."""
         from py_identity_model.sync.managed_client import HTTPClient
 
         respx.get("https://example.com/.well-known/openid-configuration").mock(
@@ -226,8 +230,8 @@ class TestSyncTokenValidation:
         with (
             HTTPClient() as client,
             pytest.raises(
-                ConfigurationException,
-                match="Discovery document missing jwks_uri",
+                TokenValidationException,
+                match="does not contain a jwks_uri.*require_key_set",
             ),
         ):
             validate_token(
@@ -239,7 +243,7 @@ class TestSyncTokenValidation:
 
     @respx.mock
     def test_empty_string_jwks_uri_cached_path_raises(self):
-        """Test that empty-string jwks_uri raises ConfigurationException (cached path)."""
+        """Test that empty-string jwks_uri raises TokenValidationException (cached path)."""
         disco_with_empty_jwks = {**_DISCO_RESPONSE_NO_JWKS, "jwks_uri": ""}
         respx.get("https://example.com/.well-known/openid-configuration").mock(
             return_value=httpx.Response(200, json=disco_with_empty_jwks)
@@ -253,8 +257,8 @@ class TestSyncTokenValidation:
         )
 
         with pytest.raises(
-            ConfigurationException,
-            match="Discovery document missing jwks_uri",
+            TokenValidationException,
+            match="does not contain a jwks_uri.*require_key_set",
         ):
             validate_token(
                 jwt="fake.jwt.token",

@@ -68,9 +68,13 @@ def discovery_document(test_config):
 
     @retry_with_backoff()
     def fetch_discovery():
+        from py_identity_model.core.discovery_policy import DiscoveryPolicy
+
+        require_https = test_config.get("TEST_REQUIRE_HTTPS", True)
+        policy = DiscoveryPolicy(require_https=require_https)
         disco_doc_req = DiscoveryDocumentRequest(
             address=test_config["TEST_DISCO_ADDRESS"],
-            require_https=test_config.get("TEST_REQUIRE_HTTPS", True),
+            policy=policy,
         )
         response = get_discovery_document(disco_doc_req)
 

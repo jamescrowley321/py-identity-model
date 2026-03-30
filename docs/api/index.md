@@ -31,6 +31,7 @@ from py_identity_model import DiscoveryDocumentRequest
 | [PAR](par.md) | Pushed Authorization Requests (RFC 9126) |
 | [DPoP](dpop.md) | Demonstrating Proof of Possession (RFC 9449) |
 | [Discovery](discovery.md) | OpenID Connect Discovery 1.0 document fetching |
+| [Discovery Policy](discovery-policy.md) | Configurable security policy for discovery validation |
 | [JWKS](jwks.md) | JSON Web Key Set (RFC 7517) operations |
 | [Refresh Token](refresh-token.md) | Refresh Token Grant (RFC 6749 Section 6) |
 | [Revocation](revocation.md) | Token Revocation (RFC 7009) |

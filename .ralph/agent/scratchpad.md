@@ -269,3 +269,107 @@ Phase set to pr. Next iteration pushes and creates PR.
 - Next iteration: execute `analyze` phase for T122
 - Read node-oidc-provider fixture, existing integration tests, introspection/revocation source
 - Plan integration tests for RFC 7662 (introspection) and RFC 7009 (revocation)
+
+## 2026-03-30 — Iteration: review-edge phase completed (T122)
+
+### Context
+- Task T122: Integration tests for Introspection (RFC 7662) and Revocation (RFC 7009)
+- Branch: test/integration-token-mgmt, worktree: /tmp/pim-T122
+- Phase: review-edge → review-acceptance
+
+### What happened this iteration
+- Executed `review-edge` phase as the Edge Case Hunter persona
+- Read all T122-specific source code: sync/async introspection, revocation, core logic, models, response processors, error handlers, conftest, test file
+- Performed exhaustive path analysis on all branching paths in changed code
+- Found 8 unhandled edge case paths:
+  - conftest JSON parsing: 2 fixtures lack ValueError guard on resp.json()
+  - Test assertions: custom claims test accesses nested dict keys without existence guard
+  - Async client lifecycle: close_async_http_client() in finally can mask test assertion errors
+  - Sync/async mixing: async test calls sync httpx.post blocking the event loop
+  - Source code inconsistency: revocation vs introspection use different client_secret emptiness checks
+  - Source code: sync introspection response.close() not in finally block (unlike revocation)
+  - Fixture: session-scoped opaque token fixture doesn't verify access_token key exists
+- Phase updated to `review-acceptance`
+
+### Next
+- Next iteration: execute `review-acceptance` phase (Acceptance Auditor persona)
+- Check each requirement has implementation + test coverage
+
+## 2026-03-30 — Iteration: review-acceptance phase completed (T122)
+
+### Context
+- Task T122: Integration tests for Introspection (RFC 7662) and Revocation (RFC 7009)
+- Branch: test/integration-token-mgmt, worktree: /tmp/pim-T122
+- Executed as Acceptance Auditor persona
+
+### What happened this iteration
+- Reviewed all T122 requirements against implementation and test coverage
+- 15 PASS items: both RFCs have comprehensive happy-path + error-path coverage, lifecycle test, async variants, proper test infrastructure
+- 1 FAIL: missing `test_revoke_wrong_client_credentials` (asymmetric error coverage)
+- 4 PARTIAL: weak error assertion in introspect wrong-creds test, incomplete custom claims verification (only checks 1 of 2 tenants), `revocation_endpoint` missing from discovery model, async singleton lifecycle hazard
+- Phase updated to `review-security`
+
+### Next
+- Next iteration: execute `review-security` phase (Sentinel persona)
+- Then: review-fix, pr, ci phases
+
+## 2026-03-30 — Iteration: review-security phase completed (T122)
+
+### Context
+- Task T122: Integration tests for Introspection (RFC 7662) and Revocation (RFC 7009)
+- Branch: test/integration-token-mgmt, worktree: /tmp/pim-T122
+- Executed as Sentinel (Security Auditor) persona
+
+### What happened this iteration
+- Red-teamed the full PR diff through the auth/infra security lens
+- Checked: credential exposure, Docker security, token handling in tests, CI supply chain, response lifecycle, client auth consistency
+- Found 0 BLOCK, 4 WARN, 5 INFO:
+  - **WARN**: sync introspection response.close() not in finally block (connection leak risk)
+  - **WARN**: client_secret emptiness check inconsistency between introspection (is not None) and revocation (truthy + strip)
+  - **WARN**: caret version ranges in package.json (^6.0.11, ^9.7.1) — mitigated by npm ci + lockfile
+  - **WARN**: error messages include raw response.content (information exposure)
+- Positive findings: container runs as non-root, port localhost-bound, test credentials clearly scoped, proper healthchecks
+- Phase updated to `review-fix`
+
+### Next
+- Next iteration: execute `review-fix` phase (Amelia developer persona)
+- Triage all review findings across 4 review phases and fix
+- Then: pr, ci phases
+
+## 2026-03-30 — Iteration: review-fix phase completed (T122)
+
+### Context
+- Task T122: Integration tests for Introspection (RFC 7662) and Revocation (RFC 7009)
+- Branch: test/integration-token-mgmt, worktree: /tmp/pim-T122
+- Executed as Amelia (Developer Agent)
+
+### Fixes Applied (committed 1c3960c)
+
+**Source code fixes (3):**
+1. sync/introspection.py: response.close() moved to finally block (aligned with revocation)
+2. core/introspection_logic.py: client_secret emptiness check aligned with revocation_logic (truthy + strip)
+3. models.py + response_processors.py: added revocation_endpoint to DiscoveryDocumentResponse (RFC 8414)
+
+**Test fixes (7):**
+1. Added test_revoke_wrong_client_credentials (Acceptance FAIL — symmetric error coverage)
+2. Used contextlib.suppress in async test finally blocks (MUST FIX — avoid masking assertions)
+3. Replaced sync httpx.post with async_get_fresh_cc_opaque_token in async test (SHOULD FIX — no sync/async mixing)
+4. Asserted 401 status in wrong-credentials tests (SHOULD FIX — error specificity)
+5. Verified both tenants in custom claims test (SHOULD FIX — complete coverage)
+6. Added JSON parsing guards and access_token assertion in conftest helpers (Edge Case)
+7. Simplified revocation_endpoint fixture to use model (leveraging model fix)
+
+**Deferred (4):**
+- Session-scoped token expiry: tests run in <1s, not realistic
+- Token acquisition consistency (library vs raw httpx): intentional separation
+- Caret version ranges in package.json: mitigated by lockfile
+- Error messages with raw response content: not exploitable, broader refactor
+
+### Verification
+- 562/562 unit tests pass (94.32% coverage)
+- All lint checks pass (ruff, format, pyrefly, coverage)
+- Phase set to `pr`
+
+### Next
+- Next iteration: execute `pr` phase (push branch, create PR)
+- Then: ci phase

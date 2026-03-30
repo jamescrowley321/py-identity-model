@@ -4,13 +4,20 @@ Shared data models for py-identity-model.
 This module contains all dataclasses and models used by both sync and async implementations.
 """
 
-from collections.abc import Callable
+from __future__ import annotations
+
 from dataclasses import dataclass, fields
 from enum import Enum
 import json
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from ..exceptions import ConfigurationException
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from .discovery_policy import DiscoveryPolicy
 
 
 # ============================================================================
@@ -293,7 +300,7 @@ class JsonWebKey:
             )
 
     @classmethod
-    def from_json(cls, json_str: str) -> "JsonWebKey":
+    def from_json(cls, json_str: str) -> JsonWebKey:
         """Create a JWK from a JSON string"""
         if not json_str or not json_str.strip():
             raise ConfigurationException("JSON string cannot be empty")
@@ -410,13 +417,11 @@ class DiscoveryDocumentRequest(BaseRequest):
         address: The base URL of the identity provider
             (e.g. ``https://example.com``). The well-known path is
             appended automatically.
-        require_https: Whether to enforce HTTPS on the issuer and endpoints.
-            Defaults to ``True`` per the OpenID Connect Discovery specification.
-            Set to ``False`` only for local development/testing with HTTP
-            providers.
+        policy: Optional discovery policy for configuring validation
+            behavior. When ``None``, strict defaults apply.
     """
 
-    require_https: bool = True
+    policy: DiscoveryPolicy | None = None
 
 
 @dataclass(repr=False, eq=False)

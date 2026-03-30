@@ -4,11 +4,18 @@ Validation functions for py-identity-model.
 This module contains all validation logic used by both sync and async implementations.
 """
 
+from __future__ import annotations
+
 import math
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from ..exceptions import ConfigurationException, DiscoveryException
-from .models import TokenValidationConfig
+from .discovery_policy import DiscoveryPolicy, is_loopback
+
+
+if TYPE_CHECKING:
+    from .models import TokenValidationConfig
 
 
 # ============================================================================
@@ -196,9 +203,93 @@ def validate_token_config(
         )
 
 
+def validate_issuer_with_policy(
+    issuer: str, policy: DiscoveryPolicy | None
+) -> None:
+    """Validate issuer, respecting the discovery policy.
+
+    When *policy* is ``None`` or ``policy.validate_issuer`` is ``True``,
+    delegates to :func:`validate_issuer`. When validation is disabled
+    by the policy, only checks that the issuer is non-empty.
+
+    The ``allow_http_on_loopback`` policy flag is respected: if the
+    issuer is an HTTP URL on a loopback address, HTTPS is not required.
+    """
+    if policy is None or policy.validate_issuer:
+        # Determine effective require_https: allow HTTP on loopback
+        effective_require_https = policy.require_https if policy else True
+        if (
+            effective_require_https
+            and policy is not None
+            and policy.allow_http_on_loopback
+        ):
+            parsed = urlparse(issuer)
+            if parsed.scheme == "http" and is_loopback(parsed.hostname or ""):
+                effective_require_https = False
+
+        validate_issuer(issuer, require_https=effective_require_https)
+        return
+
+    if not issuer:
+        raise ConfigurationException("Issuer parameter is required")
+
+
+def validate_https_url_with_policy(
+    url: str, parameter_name: str, policy: DiscoveryPolicy | None
+) -> None:
+    """Validate a URL, respecting the discovery policy.
+
+    When *policy* is ``None``, delegates to :func:`validate_https_url`.
+    When ``policy.require_https`` is ``False``, only checks URL structure.
+    When ``policy.allow_http_on_loopback`` is ``True``, permits HTTP
+    on loopback addresses.
+    """
+    if policy is None:
+        validate_https_url(url, parameter_name)
+        return
+
+    if not policy.validate_endpoints:
+        return
+
+    if not url:
+        return
+
+    parsed = urlparse(url)
+    if not parsed.netloc:
+        raise ConfigurationException(
+            f"{parameter_name} must be an absolute URL with host",
+        )
+
+    # Even when HTTPS is not required, only allow HTTP/HTTPS schemes
+    # to prevent SSRF via ftp://, file://, etc.
+    if parsed.scheme not in ("http", "https"):
+        raise ConfigurationException(
+            f"{parameter_name} must use HTTP or HTTPS scheme, got: {parsed.scheme}",
+        )
+
+    if not policy.require_https:
+        return
+
+    if parsed.scheme == "https":
+        return
+
+    if (
+        parsed.scheme == "http"
+        and policy.allow_http_on_loopback
+        and is_loopback(parsed.hostname or "")
+    ):
+        return
+
+    raise ConfigurationException(
+        f"{parameter_name} must use HTTPS (policy: require_https=True)",
+    )
+
+
 __all__ = [
     "validate_https_url",
+    "validate_https_url_with_policy",
     "validate_issuer",
+    "validate_issuer_with_policy",
     "validate_parameter_values",
     "validate_required_parameters",
     "validate_token_config",
