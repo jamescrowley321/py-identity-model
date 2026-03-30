@@ -7,7 +7,6 @@ The node-oidc-provider container must be running before tests start:
     docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml up -d
 """
 
-from contextlib import suppress
 import secrets
 import time
 from urllib.parse import urlencode
@@ -31,12 +30,12 @@ from py_identity_model.core.parsers import (
     find_key_by_kid,
 )
 from py_identity_model.core.pkce import generate_pkce_pair
-from py_identity_model.sync.http_client import close_http_client
 
 
 # Node OIDC provider fixture constants
 NODE_OIDC_BASE_URL = "http://localhost:9010"
 NODE_OIDC_DISCO_URL = f"{NODE_OIDC_BASE_URL}/.well-known/openid-configuration"
+NODE_OIDC_ISSUER = NODE_OIDC_BASE_URL
 
 # Client credentials
 CC_CLIENT_ID = "test-client-credentials"
@@ -49,6 +48,9 @@ AUTH_CODE_REDIRECT_URI = "http://localhost:8080/callback"
 PKCE_PUBLIC_CLIENT_ID = "test-pkce-public"
 PKCE_PUBLIC_REDIRECT_URI = "http://localhost:8080/callback"
 
+# Redirect loop protection
+MAX_REDIRECTS = 20
+
 
 def _wait_for_provider(base_url: str, timeout: float = 30.0) -> None:
     """Wait for the node-oidc-provider to become healthy."""
@@ -59,7 +61,7 @@ def _wait_for_provider(base_url: str, timeout: float = 30.0) -> None:
             resp = httpx.get(disco_url, timeout=2.0)
             if resp.status_code == 200:
                 return
-        except httpx.ConnectError:
+        except httpx.TransportError:
             pass
         time.sleep(0.5)
     pytest.fail(
@@ -68,22 +70,32 @@ def _wait_for_provider(base_url: str, timeout: float = 30.0) -> None:
     )
 
 
-def _follow_redirect(
-    client: httpx.Client, resp: httpx.Response
-) -> httpx.Response:
-    """Follow a single HTTP redirect, handling relative URLs."""
-    location = resp.headers["location"]
-    if not location.startswith("http"):
-        location = f"{NODE_OIDC_BASE_URL}{location}"
-    return client.get(location)
-
-
-def _is_redirect(status_code: int) -> bool:
+def is_redirect(status_code: int) -> bool:
     return status_code in (301, 302, 303, 307, 308)
 
 
+def _resolve_location(resp: httpx.Response) -> str | None:
+    """Extract and resolve the Location header from a redirect response."""
+    location = resp.headers.get("location")
+    if location is None:
+        return None
+    if not location.startswith("http"):
+        if location.startswith("//"):
+            location = "http:" + location
+        else:
+            location = f"{NODE_OIDC_BASE_URL}{location}"
+    return location
+
+
+def _matches_redirect_uri(location: str, redirect_uri: str) -> bool:
+    """Check if location matches the redirect_uri (exact or with query/fragment)."""
+    return location == redirect_uri or location.startswith(
+        (redirect_uri + "?", redirect_uri + "#")
+    )
+
+
 def perform_auth_code_flow(
-    discovery,
+    discovery: DiscoveryDocumentResponse,
     client_id: str,
     redirect_uri: str,
     client_secret: str | None = None,
@@ -97,6 +109,10 @@ def perform_auth_code_flow(
     """
     code_verifier, code_challenge = generate_pkce_pair()
     state = secrets.token_urlsafe(32)
+
+    assert discovery.authorization_endpoint, (
+        "Missing authorization_endpoint in discovery"
+    )
 
     # Build authorization URL
     auth_params: dict[str, str] = {
@@ -116,17 +132,24 @@ def perform_auth_code_flow(
     with httpx.Client(follow_redirects=False, timeout=10.0) as client:
         # Step 1: GET authorization URL → redirects to interaction
         resp = client.get(auth_url)
-        while _is_redirect(resp.status_code):
-            location = resp.headers["location"]
-            if not location.startswith("http"):
-                location = f"{NODE_OIDC_BASE_URL}{location}"
-            if location.startswith(redirect_uri):
+        redirects = 0
+        while is_redirect(resp.status_code):
+            location = _resolve_location(resp)
+            if location is None:
+                pytest.fail(f"Redirect without Location header at {resp.url}")
+            if _matches_redirect_uri(location, redirect_uri):
                 break
+            redirects += 1
+            if redirects > MAX_REDIRECTS:
+                pytest.fail(f"Too many redirects (>{MAX_REDIRECTS})")
             resp = client.get(location)
 
+        if resp.status_code >= 400:
+            pytest.fail(
+                f"Auth request failed: {resp.status_code} at {resp.url}"
+            )
+
         # Step 2: POST login to the interaction URL (devInteractions form)
-        # node-oidc-provider devInteractions POSTs to the interaction URL
-        # with prompt=login, login=<user>, password=<pass>
         interaction_url = str(resp.url)
         resp = client.post(
             interaction_url,
@@ -138,7 +161,7 @@ def perform_auth_code_flow(
         )
 
         # Step 3: Follow redirects — may reach callback or consent page
-        callback_url, resp = _follow_redirects_to_callback(
+        callback_url, resp = follow_redirects_to_callback(
             client, resp, redirect_uri
         )
 
@@ -147,7 +170,7 @@ def perform_auth_code_flow(
             consent_url = str(resp.url)
             if "/interaction/" in consent_url:
                 resp = client.post(consent_url, data={"prompt": "consent"})
-                callback_url, resp = _follow_redirects_to_callback(
+                callback_url, resp = follow_redirects_to_callback(
                     client, resp, redirect_uri
                 )
 
@@ -168,6 +191,7 @@ def perform_auth_code_flow(
 
     # Exchange code for tokens
     assert callback.code is not None
+    assert discovery.token_endpoint is not None
     token_request = AuthorizationCodeTokenRequest(
         address=discovery.token_endpoint,
         client_id=client_id,
@@ -187,7 +211,7 @@ def perform_auth_code_flow(
     }
 
 
-def _follow_redirects_to_callback(
+def follow_redirects_to_callback(
     client: httpx.Client,
     resp: httpx.Response,
     redirect_uri: str,
@@ -197,13 +221,18 @@ def _follow_redirects_to_callback(
     Returns (callback_url, final_response) where callback_url is None if
     we stopped at a non-redirect page (e.g. consent interaction).
     """
-    while _is_redirect(resp.status_code):
-        location = resp.headers["location"]
-        if not location.startswith("http"):
-            location = f"{NODE_OIDC_BASE_URL}{location}"
+    redirects = 0
+    while is_redirect(resp.status_code):
+        location = _resolve_location(resp)
+        if location is None:
+            return None, resp
 
-        if location.startswith(redirect_uri):
+        if _matches_redirect_uri(location, redirect_uri):
             return location, resp
+
+        redirects += 1
+        if redirects > MAX_REDIRECTS:
+            pytest.fail(f"Too many redirects (>{MAX_REDIRECTS})")
 
         resp = client.get(location)
 
@@ -234,7 +263,10 @@ def node_oidc_discovery(node_oidc_provider):
         pytest.fail(
             f"Failed to fetch node-oidc discovery: HTTP {resp.status_code}"
         )
-    data = resp.json()
+    try:
+        data = resp.json()
+    except ValueError:
+        pytest.fail(f"Discovery returned non-JSON: {resp.text[:200]}")
     return DiscoveryDocumentResponse(
         is_successful=True,
         issuer=data.get("issuer"),
@@ -272,7 +304,9 @@ def node_oidc_jwt_key(node_oidc_jwks, node_oidc_cc_jwt_token):
     """
     jwt_token = node_oidc_cc_jwt_token["access_token"]
     kid = extract_kid_from_jwt(jwt_token)
-    return find_key_by_kid(kid, node_oidc_jwks.keys or [])
+    result = find_key_by_kid(kid, node_oidc_jwks.keys or [])
+    assert result is not None, f"Key {kid} not found in JWKS"
+    return result
 
 
 @pytest.fixture(scope="session")
@@ -341,11 +375,3 @@ def node_oidc_public_auth_code_result(node_oidc_provider, node_oidc_discovery):
         scope="openid profile email offline_access",
         resource="urn:test:api",
     )
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _cleanup_node_oidc_http_client():
-    """Ensure HTTP client is closed after node-oidc tests."""
-    yield
-    with suppress(Exception):
-        close_http_client()

@@ -201,5 +201,16 @@ def cleanup_http_client():
         close_http_client()
 
 
-# Import node-oidc-provider fixtures into conftest namespace for pytest discovery
-from .conftest_node_oidc import *  # noqa: E402, F403
+# Import node-oidc-provider fixtures into conftest namespace for pytest discovery.
+# Explicit imports instead of star import to avoid leaking autouse fixtures
+# (like cleanup hooks) to non-node-oidc integration tests.
+from .conftest_node_oidc import (  # noqa: E402, F401
+    node_oidc_auth_code_result,
+    node_oidc_cc_jwt_token,
+    node_oidc_cc_opaque_token,
+    node_oidc_discovery,
+    node_oidc_jwks,
+    node_oidc_jwt_key,
+    node_oidc_provider,
+    node_oidc_public_auth_code_result,
+)

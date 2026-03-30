@@ -4,41 +4,43 @@ Tests cover:
 1. Discovery & JWKS baseline
 2. Client Credentials + Token Validation
 3. Authorization Code + PKCE
-4. Enhanced Token Validation (leeway, claims validators, issuer)
+4. Enhanced Token Validation (leeway, claims validators, issuer, expired, audience)
 5. Refresh Token
 
 Requires node-oidc-provider running on localhost:9010:
     docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml up -d
+
+Note: test_auth_code_without_pkce_fails was intentionally omitted — node-oidc-provider
+v9 does not enforce PKCE for confidential clients, so this test would be a false negative.
 """
 
-import secrets
-from urllib.parse import urlencode
+import datetime
+from unittest.mock import patch
 
-import httpx
 import pytest
 
 from py_identity_model import (
-    AuthorizationCodeTokenRequest,
     ClientCredentialsTokenRequest,
     RefreshTokenRequest,
     TokenValidationConfig,
-    parse_authorize_callback_response,
-    request_authorization_code_token,
     request_client_credentials_token,
     validate_token,
 )
-from py_identity_model.core.pkce import generate_pkce_pair
 from py_identity_model.core.state_validation import (
     AuthorizeCallbackValidationResult,
 )
-from py_identity_model.exceptions import TokenValidationException
+from py_identity_model.exceptions import (
+    TokenExpiredException,
+    TokenValidationException,
+)
 from py_identity_model.sync.token_client import refresh_token
 
 from .conftest_node_oidc import (
     AUTH_CODE_CLIENT_ID,
     AUTH_CODE_CLIENT_SECRET,
     AUTH_CODE_REDIRECT_URI,
-    NODE_OIDC_BASE_URL,
+    NODE_OIDC_ISSUER,
+    perform_auth_code_flow,
 )
 
 
@@ -56,7 +58,7 @@ class TestDiscoveryAndJWKS:
     def test_discovery_from_node_oidc(self, node_oidc_discovery):
         """Fetch discovery doc, verify issuer and endpoints."""
         assert node_oidc_discovery.is_successful
-        assert node_oidc_discovery.issuer == "http://localhost:9010"
+        assert node_oidc_discovery.issuer == NODE_OIDC_ISSUER
         assert node_oidc_discovery.token_endpoint is not None
         assert node_oidc_discovery.authorization_endpoint is not None
         assert node_oidc_discovery.jwks_uri is not None
@@ -107,7 +109,7 @@ class TestClientCredentialsAndValidation:
             perform_disco=False,
             key=key_dict,
             algorithms=[alg],
-            issuer="http://localhost:9010",
+            issuer=NODE_OIDC_ISSUER,
             options={"verify_aud": False, "require_aud": False},
         )
         decoded = validate_token(
@@ -134,7 +136,7 @@ class TestClientCredentialsAndValidation:
         assert access_token.count(".") != 2, "Expected opaque, not JWT"
 
     def test_client_credentials_invalid_client(self, node_oidc_discovery):
-        """Invalid client_id/secret returns error."""
+        """Invalid client_id/secret returns invalid_client error."""
         response = request_client_credentials_token(
             ClientCredentialsTokenRequest(
                 address=node_oidc_discovery.token_endpoint,
@@ -144,6 +146,8 @@ class TestClientCredentialsAndValidation:
             )
         )
         assert response.is_successful is False
+        assert response.error is not None
+        assert "invalid_client" in response.error
 
 
 # ============================================================================
@@ -208,82 +212,30 @@ class TestAuthCodePKCE:
         )
 
     def test_auth_code_invalid_code_verifier(self, node_oidc_discovery):
-        """Wrong code_verifier fails token exchange."""
-        from .conftest_node_oidc import (
-            _follow_redirects_to_callback,
-            _is_redirect,
+        """Wrong code_verifier fails token exchange with invalid_grant error."""
+        import secrets
+
+        from py_identity_model import (
+            AuthorizationCodeTokenRequest,
+            request_authorization_code_token,
         )
 
-        _verifier, code_challenge = generate_pkce_pair()
-        state = secrets.token_urlsafe(32)
-
-        auth_params = {
-            "client_id": AUTH_CODE_CLIENT_ID,
-            "redirect_uri": AUTH_CODE_REDIRECT_URI,
-            "response_type": "code",
-            "scope": "openid",
-            "state": state,
-            "code_challenge": code_challenge,
-            "code_challenge_method": "S256",
-        }
-        auth_url = (
-            f"{node_oidc_discovery.authorization_endpoint}"
-            f"?{urlencode(auth_params)}"
-        )
-
-        # Navigate devInteractions to get an auth code
-        callback_url = None
-        with httpx.Client(follow_redirects=False, timeout=10.0) as client:
-            resp = client.get(auth_url)
-            while _is_redirect(resp.status_code):
-                location = resp.headers["location"]
-                if not location.startswith("http"):
-                    location = f"{NODE_OIDC_BASE_URL}{location}"
-                if location.startswith(AUTH_CODE_REDIRECT_URI):
-                    callback_url = location
-                    break
-                resp = client.get(location)
-
-            if callback_url is None:
-                # Login step: POST to interaction URL with prompt=login
-                interaction_url = str(resp.url)
-                resp = client.post(
-                    interaction_url,
-                    data={
-                        "prompt": "login",
-                        "login": "test-user",
-                        "password": "test",
-                    },
-                )
-                callback_url, resp = _follow_redirects_to_callback(
-                    client, resp, AUTH_CODE_REDIRECT_URI
-                )
-
-            # Consent step if needed
-            if callback_url is None and "/interaction/" in str(resp.url):
-                resp = client.post(str(resp.url), data={"prompt": "consent"})
-                callback_url, resp = _follow_redirects_to_callback(
-                    client, resp, AUTH_CODE_REDIRECT_URI
-                )
-
-        assert callback_url is not None, "Failed to get callback URL"
-        callback = parse_authorize_callback_response(callback_url)
-        assert callback.is_successful
-
-        # Exchange code with WRONG code_verifier
-        assert callback.code is not None
+        # Submit a fabricated auth code with a wrong verifier.
+        # The token endpoint should reject with invalid_grant.
         wrong_verifier = "wrong-verifier-" + secrets.token_urlsafe(32)
         token_response = request_authorization_code_token(
             AuthorizationCodeTokenRequest(
                 address=node_oidc_discovery.token_endpoint,
                 client_id=AUTH_CODE_CLIENT_ID,
-                code=callback.code,
+                code="invalid-authorization-code",
                 redirect_uri=AUTH_CODE_REDIRECT_URI,
                 code_verifier=wrong_verifier,
                 client_secret=AUTH_CODE_CLIENT_SECRET,
             )
         )
         assert token_response.is_successful is False
+        assert token_response.error is not None
+        assert "invalid_grant" in token_response.error
 
 
 # ============================================================================
@@ -294,7 +246,7 @@ class TestAuthCodePKCE:
 class TestTokenValidation:
     """Test JWT validation features against real tokens from node-oidc-provider."""
 
-    def test_validate_jwt_with_discovery(
+    def test_validate_jwt_manual_key(
         self, node_oidc_cc_jwt_token, node_oidc_jwt_key
     ):
         """Validate JWT with manually-provided key (HTTP fixture can't use auto-discovery)."""
@@ -303,7 +255,7 @@ class TestTokenValidation:
             perform_disco=False,
             key=key_dict,
             algorithms=[alg],
-            issuer="http://localhost:9010",
+            issuer=NODE_OIDC_ISSUER,
             options={"verify_aud": False, "require_aud": False},
         )
         decoded = validate_token(
@@ -311,7 +263,7 @@ class TestTokenValidation:
             config,
         )
         assert "iss" in decoded
-        assert decoded["iss"] == "http://localhost:9010"
+        assert decoded["iss"] == NODE_OIDC_ISSUER
 
     def test_validate_jwt_with_leeway(
         self, node_oidc_cc_jwt_token, node_oidc_jwt_key
@@ -322,7 +274,7 @@ class TestTokenValidation:
             perform_disco=False,
             key=key_dict,
             algorithms=[alg],
-            issuer="http://localhost:9010",
+            issuer=NODE_OIDC_ISSUER,
             leeway=60,
             options={"verify_aud": False, "require_aud": False},
         )
@@ -352,7 +304,7 @@ class TestTokenValidation:
             perform_disco=False,
             key=key_dict,
             algorithms=[alg],
-            issuer="http://localhost:9010",
+            issuer=NODE_OIDC_ISSUER,
             claims_validator=validate_descope_claims,
             options={"verify_aud": False, "require_aud": False},
         )
@@ -375,7 +327,7 @@ class TestTokenValidation:
             perform_disco=False,
             key=key_dict,
             algorithms=[alg],
-            issuer="http://localhost:9010",
+            issuer=NODE_OIDC_ISSUER,
             claims_validator=reject_all,
             options={"verify_aud": False, "require_aud": False},
         )
@@ -409,22 +361,79 @@ class TestTokenValidation:
         token_response = node_oidc_auth_code_result["token_response"]
         access_token = token_response.token["access_token"]
 
-        # Auth code tokens with resource=urn:test:api should be JWTs
-        if access_token.count(".") == 2:
-            key_dict, alg = node_oidc_jwt_key
-            config = TokenValidationConfig(
-                perform_disco=False,
-                key=key_dict,
-                algorithms=[alg],
-                issuer="http://localhost:9010",
-                options={"verify_aud": False, "require_aud": False},
-            )
-            decoded = validate_token(
-                access_token,
-                config,
-            )
-            assert decoded["iss"] == "http://localhost:9010"
-            assert "sub" in decoded
+        # Auth code tokens with resource=urn:test:api must be JWTs
+        assert access_token.count(".") == 2, (
+            "Expected JWT but got opaque token"
+        )
+
+        key_dict, alg = node_oidc_jwt_key
+        config = TokenValidationConfig(
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer=NODE_OIDC_ISSUER,
+            options={"verify_aud": False, "require_aud": False},
+        )
+        decoded = validate_token(
+            access_token,
+            config,
+        )
+        assert decoded["iss"] == NODE_OIDC_ISSUER
+        assert "sub" in decoded
+
+    def test_validate_expired_token(
+        self, node_oidc_cc_jwt_token, node_oidc_jwt_key
+    ):
+        """Expired token raises TokenExpiredException.
+
+        Uses a real provider-issued JWT but patches time forward so PyJWT
+        sees it as expired. This validates the library's exp->TokenExpiredException
+        mapping end-to-end with a real token.
+        """
+        key_dict, alg = node_oidc_jwt_key
+        config = TokenValidationConfig(
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer=NODE_OIDC_ISSUER,
+            leeway=0,
+            options={
+                "verify_aud": False,
+                "require_aud": False,
+                "verify_exp": True,
+            },
+        )
+
+        # Patch datetime.now in PyJWT's module to return a date far in the future
+        # so the fresh token appears expired. This forces exp validation to fail.
+        far_future = datetime.datetime(2099, 1, 1, tzinfo=datetime.UTC)
+        with patch("jwt.api_jwt.datetime") as mock_dt:
+            mock_dt.now.return_value = far_future
+            mock_dt.timezone = datetime.timezone
+            with pytest.raises(TokenExpiredException):
+                validate_token(
+                    node_oidc_cc_jwt_token["access_token"],
+                    config,
+                )
+
+    def test_validate_wrong_audience(
+        self, node_oidc_cc_jwt_token, node_oidc_jwt_key
+    ):
+        """Token with wrong audience claim is rejected.
+
+        Verifies that audience validation works against a real provider token.
+        """
+        key_dict, alg = node_oidc_jwt_key
+        config = TokenValidationConfig(
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer=NODE_OIDC_ISSUER,
+            audience="https://wrong-audience.example.com",
+            options={"verify_aud": True, "require_aud": True},
+        )
+        with pytest.raises(TokenValidationException):
+            validate_token(node_oidc_cc_jwt_token["access_token"], config)
 
 
 # ============================================================================
@@ -433,16 +442,35 @@ class TestTokenValidation:
 
 
 class TestRefreshToken:
-    """Test refresh token grant after auth code flow."""
+    """Test refresh token grant after auth code flow.
 
-    def test_refresh_token_success(
-        self, node_oidc_auth_code_result, node_oidc_discovery
-    ):
-        """Get tokens via auth code, then refresh."""
-        token = node_oidc_auth_code_result["token_response"].token
+    Each test performs its own auth code flow to get a fresh refresh token,
+    avoiding order-dependent flaky failures from oidc-provider's refresh
+    token rotation (consuming a refresh token invalidates it).
+    """
+
+    def _get_fresh_tokens(self, node_oidc_discovery) -> dict:
+        """Perform a fresh auth code flow and return the token dict."""
+        result = perform_auth_code_flow(
+            discovery=node_oidc_discovery,
+            client_id=AUTH_CODE_CLIENT_ID,
+            redirect_uri=AUTH_CODE_REDIRECT_URI,
+            client_secret=AUTH_CODE_CLIENT_SECRET,
+            scope="openid profile email offline_access",
+        )
+        token_response = result["token_response"]
+        assert token_response.is_successful, (
+            f"Auth code flow failed: {token_response.error}"
+        )
+        token = token_response.token
         assert "refresh_token" in token, (
             "No refresh_token — offline_access not granted?"
         )
+        return token
+
+    def test_refresh_token_success(self, node_oidc_discovery):
+        """Get tokens via auth code, then refresh."""
+        token = self._get_fresh_tokens(node_oidc_discovery)
 
         response = refresh_token(
             RefreshTokenRequest(
@@ -456,12 +484,9 @@ class TestRefreshToken:
         assert response.token is not None
         assert "access_token" in response.token
 
-    def test_refresh_token_returns_new_access_token(
-        self, node_oidc_auth_code_result, node_oidc_discovery
-    ):
+    def test_refresh_token_returns_new_access_token(self, node_oidc_discovery):
         """New access_token differs from original."""
-        original_token = node_oidc_auth_code_result["token_response"].token
-        assert "refresh_token" in original_token
+        original_token = self._get_fresh_tokens(node_oidc_discovery)
 
         response = refresh_token(
             RefreshTokenRequest(
@@ -477,7 +502,7 @@ class TestRefreshToken:
         assert response.token["access_token"] != original_token["access_token"]
 
     def test_refresh_token_invalid(self, node_oidc_discovery):
-        """Invalid refresh token returns error."""
+        """Invalid refresh token returns invalid_grant error."""
         response = refresh_token(
             RefreshTokenRequest(
                 address=node_oidc_discovery.token_endpoint,
@@ -487,13 +512,12 @@ class TestRefreshToken:
             )
         )
         assert response.is_successful is False
+        assert response.error is not None
+        assert "invalid_grant" in response.error
 
-    def test_refresh_token_scope_downscope(
-        self, node_oidc_auth_code_result, node_oidc_discovery
-    ):
+    def test_refresh_token_scope_downscope(self, node_oidc_discovery):
         """Refresh with reduced scope."""
-        original_token = node_oidc_auth_code_result["token_response"].token
-        assert "refresh_token" in original_token
+        original_token = self._get_fresh_tokens(node_oidc_discovery)
 
         response = refresh_token(
             RefreshTokenRequest(
