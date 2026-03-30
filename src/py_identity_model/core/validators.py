@@ -246,6 +246,13 @@ def validate_https_url_with_policy(
             f"{parameter_name} must be an absolute URL with host",
         )
 
+    # Even when HTTPS is not required, only allow HTTP/HTTPS schemes
+    # to prevent SSRF via ftp://, file://, etc.
+    if parsed.scheme not in ("http", "https"):
+        raise ConfigurationException(
+            f"{parameter_name} must use HTTP or HTTPS scheme, got: {parsed.scheme}",
+        )
+
     if not policy.require_https:
         return
 

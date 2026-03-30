@@ -88,7 +88,11 @@ class TestAsyncTokenValidation:
     @pytest.mark.asyncio
     @respx.mock
     async def test_missing_jwks_uri_cached_path_raises(self):
-        """Test that missing jwks_uri in discovery doc raises ConfigurationException (cached path)."""
+        """Test that missing jwks_uri in discovery doc raises TokenValidationException (cached path).
+
+        With require_key_set policy enforcement, missing jwks_uri is caught
+        at the discovery level and surfaced as a TokenValidationException.
+        """
         from py_identity_model.aio.token_validation import (
             _get_disco_response,
             validate_token,
@@ -106,8 +110,8 @@ class TestAsyncTokenValidation:
         )
 
         with pytest.raises(
-            ConfigurationException,
-            match="Discovery document missing jwks_uri",
+            TokenValidationException,
+            match="does not contain a jwks_uri.*require_key_set",
         ):
             await validate_token(
                 jwt="fake.jwt.token",
@@ -118,7 +122,7 @@ class TestAsyncTokenValidation:
     @pytest.mark.asyncio
     @respx.mock
     async def test_missing_jwks_uri_di_path_raises(self):
-        """Test that missing jwks_uri in discovery doc raises ConfigurationException (DI path)."""
+        """Test that missing jwks_uri in discovery doc raises TokenValidationException (DI path)."""
         from py_identity_model.aio.managed_client import AsyncHTTPClient
         from py_identity_model.aio.token_validation import validate_token
 
@@ -133,8 +137,8 @@ class TestAsyncTokenValidation:
 
         async with AsyncHTTPClient() as client:
             with pytest.raises(
-                ConfigurationException,
-                match="Discovery document missing jwks_uri",
+                TokenValidationException,
+                match="does not contain a jwks_uri.*require_key_set",
             ):
                 await validate_token(
                     jwt="fake.jwt.token",
@@ -146,7 +150,7 @@ class TestAsyncTokenValidation:
     @pytest.mark.asyncio
     @respx.mock
     async def test_empty_string_jwks_uri_cached_path_raises(self):
-        """Test that empty-string jwks_uri raises ConfigurationException (cached path)."""
+        """Test that empty-string jwks_uri raises TokenValidationException (cached path)."""
         from py_identity_model.aio.token_validation import (
             _get_disco_response,
             validate_token,
@@ -165,8 +169,8 @@ class TestAsyncTokenValidation:
         )
 
         with pytest.raises(
-            ConfigurationException,
-            match="Discovery document missing jwks_uri",
+            TokenValidationException,
+            match="does not contain a jwks_uri.*require_key_set",
         ):
             await validate_token(
                 jwt="fake.jwt.token",

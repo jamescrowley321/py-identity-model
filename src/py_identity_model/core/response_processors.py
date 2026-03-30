@@ -34,6 +34,52 @@ if TYPE_CHECKING:
     from .discovery_policy import DiscoveryPolicy
 
 
+def _get_url_authority(url: str) -> str:
+    """Extract scheme://host from a URL."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _validate_endpoint_authority(
+    url: str,
+    parameter_name: str,
+    response_json: dict,
+    policy: DiscoveryPolicy,
+) -> None:
+    """Validate that an endpoint URL's authority matches expected values.
+
+    The expected authority is ``policy.authority`` when set, or derived from
+    the discovery document's ``issuer``. Additional allowed authorities come
+    from ``policy.additional_endpoint_base_addresses``.
+
+    Raises:
+        DiscoveryException: If the endpoint URL's authority does not match.
+    """
+
+    ep_authority = _get_url_authority(url)
+
+    # Build allowed authorities set
+    if policy.authority:
+        allowed = {policy.authority.rstrip("/")}
+    else:
+        issuer = response_json.get("issuer", "")
+        allowed = {_get_url_authority(issuer)} if issuer else set()
+
+    for addr in policy.additional_endpoint_base_addresses:
+        allowed.add(addr.rstrip("/"))
+
+    if not allowed:
+        return
+
+    if ep_authority not in allowed:
+        raise DiscoveryException(
+            f"{parameter_name} authority '{ep_authority}' does not match "
+            f"expected authorities: {sorted(allowed)}"
+        )
+
+
 def validate_and_parse_discovery_response(
     response: httpx.Response,
     policy: DiscoveryPolicy | None = None,
@@ -76,30 +122,31 @@ def validate_and_parse_discovery_response(
     # Validate parameter values
     validate_parameter_values(response_json)
 
+    # Enforce require_key_set policy
+    if (policy is None or policy.require_key_set) and not response_json.get(
+        "jwks_uri"
+    ):
+        raise DiscoveryException(
+            "Discovery document does not contain a jwks_uri, "
+            "required by policy (require_key_set=True)"
+        )
+
     # Validate endpoint URLs (policy-aware)
-    validate_https_url_with_policy(
-        response_json.get("jwks_uri"), "jwks_uri", policy
-    )
-    validate_https_url_with_policy(
-        response_json.get("authorization_endpoint"),
+    _endpoint_names = [
+        "jwks_uri",
         "authorization_endpoint",
-        policy,
-    )
-    validate_https_url_with_policy(
-        response_json.get("token_endpoint"),
         "token_endpoint",
-        policy,
-    )
-    validate_https_url_with_policy(
-        response_json.get("userinfo_endpoint"),
         "userinfo_endpoint",
-        policy,
-    )
-    validate_https_url_with_policy(
-        response_json.get("registration_endpoint"),
         "registration_endpoint",
-        policy,
-    )
+    ]
+    for ep_name in _endpoint_names:
+        ep_url = response_json.get(ep_name)
+        validate_https_url_with_policy(ep_url, ep_name, policy)
+        # Validate endpoint authority when policy.validate_endpoints is enabled
+        if ep_url and policy is not None and policy.validate_endpoints:
+            _validate_endpoint_authority(
+                ep_url, ep_name, response_json, policy
+            )
 
     return response_json
 

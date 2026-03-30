@@ -10,6 +10,7 @@ from ..core.discovery_logic import (
     log_discovery_request,
     process_discovery_response,
 )
+from ..core.discovery_policy import DiscoveryPolicy, validate_url_scheme
 from ..core.error_handlers import handle_discovery_error
 from ..core.models import DiscoveryDocumentRequest, DiscoveryDocumentResponse
 from .http_client import get_http_client, retry_with_backoff
@@ -46,6 +47,11 @@ def get_discovery_document(
     """
     log_discovery_request(disco_doc_req)
     try:
+        # Pre-flight: validate URL scheme BEFORE making the HTTP request
+        # to prevent sending plaintext requests to non-loopback hosts
+        policy = disco_doc_req.policy or DiscoveryPolicy()
+        validate_url_scheme(disco_doc_req.address, policy)
+
         client = http_client.client if http_client else get_http_client()
         response = _fetch_discovery_document(client, disco_doc_req.address)
         result = process_discovery_response(response, disco_doc_req.policy)

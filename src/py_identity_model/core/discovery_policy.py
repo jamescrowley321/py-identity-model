@@ -11,6 +11,7 @@ development. Use a relaxed policy for testing environments.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import ipaddress
 from urllib.parse import urlparse
 
 from ..exceptions import ConfigurationException
@@ -74,11 +75,15 @@ def is_loopback(host: str) -> bool:
     """Check if a host is a loopback address.
 
     Recognizes ``localhost``, ``127.0.0.1``, ``::1``, and
-    ``127.x.x.x`` addresses.
+    ``127.x.x.x`` addresses. Uses ``ipaddress`` for safe parsing
+    so that DNS names like ``127.evil.com`` are not matched.
     """
     if host in _LOOPBACK_HOSTS:
         return True
-    return host.startswith("127.")
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 def parse_discovery_url(url: str) -> DiscoveryEndpoint:
@@ -114,6 +119,10 @@ def parse_discovery_url(url: str) -> DiscoveryEndpoint:
     full_url = url
     if not parsed.path.rstrip("/").endswith(_WELL_KNOWN_PATH.rstrip("/")):
         full_url = url.rstrip("/") + _WELL_KNOWN_PATH
+
+    # Normalize: strip trailing slash to avoid 404s on servers
+    # that don't accept the trailing-slash variant
+    full_url = full_url.rstrip("/")
 
     return DiscoveryEndpoint(url=full_url, authority=authority)
 
