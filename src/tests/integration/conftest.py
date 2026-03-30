@@ -110,14 +110,24 @@ def raw_discovery(test_config):
     """Raw discovery JSON for capability detection.
 
     Provides access to all RFC 8414 fields, including those not yet
-    in the typed DiscoveryDocumentResponse model.
-
-    Fails hard if the discovery endpoint is unreachable — consistent
-    with the discovery_document fixture's behavior.
+    in the typed DiscoveryDocumentResponse model. Uses retry logic
+    for rate-limited providers (consistent with discovery_document).
     """
     address = test_config["TEST_DISCO_ADDRESS"]
-    try:
+
+    @retry_with_backoff()
+    def fetch_raw():
         resp = httpx.get(address, timeout=10.0)
+        if resp.status_code == 429:
+            raise httpx.HTTPStatusError(
+                RATE_LIMIT_ERROR_MESSAGE,
+                request=resp.request,
+                response=resp,
+            )
+        return resp
+
+    try:
+        resp = fetch_raw()
     except httpx.TransportError as exc:
         pytest.fail(f"raw_discovery: cannot reach {address}: {exc}")
     if resp.status_code != 200:
