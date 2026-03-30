@@ -335,3 +335,41 @@ Phase set to pr. Next iteration pushes and creates PR.
 - Next iteration: execute `review-fix` phase (Amelia developer persona)
 - Triage all review findings across 4 review phases and fix
 - Then: pr, ci phases
+
+## 2026-03-30 — Iteration: review-fix phase completed (T122)
+
+### Context
+- Task T122: Integration tests for Introspection (RFC 7662) and Revocation (RFC 7009)
+- Branch: test/integration-token-mgmt, worktree: /tmp/pim-T122
+- Executed as Amelia (Developer Agent)
+
+### Fixes Applied (committed 1c3960c)
+
+**Source code fixes (3):**
+1. sync/introspection.py: response.close() moved to finally block (aligned with revocation)
+2. core/introspection_logic.py: client_secret emptiness check aligned with revocation_logic (truthy + strip)
+3. models.py + response_processors.py: added revocation_endpoint to DiscoveryDocumentResponse (RFC 8414)
+
+**Test fixes (7):**
+1. Added test_revoke_wrong_client_credentials (Acceptance FAIL — symmetric error coverage)
+2. Used contextlib.suppress in async test finally blocks (MUST FIX — avoid masking assertions)
+3. Replaced sync httpx.post with async_get_fresh_cc_opaque_token in async test (SHOULD FIX — no sync/async mixing)
+4. Asserted 401 status in wrong-credentials tests (SHOULD FIX — error specificity)
+5. Verified both tenants in custom claims test (SHOULD FIX — complete coverage)
+6. Added JSON parsing guards and access_token assertion in conftest helpers (Edge Case)
+7. Simplified revocation_endpoint fixture to use model (leveraging model fix)
+
+**Deferred (4):**
+- Session-scoped token expiry: tests run in <1s, not realistic
+- Token acquisition consistency (library vs raw httpx): intentional separation
+- Caret version ranges in package.json: mitigated by lockfile
+- Error messages with raw response content: not exploitable, broader refactor
+
+### Verification
+- 562/562 unit tests pass (94.32% coverage)
+- All lint checks pass (ruff, format, pyrefly, coverage)
+- Phase set to `pr`
+
+### Next
+- Next iteration: execute `pr` phase (push branch, create PR)
+- Then: ci phase

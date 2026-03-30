@@ -213,7 +213,10 @@ def validate_issuer_with_policy(
     by the policy, only checks that the issuer is non-empty.
     """
     if policy is None or policy.validate_issuer:
-        validate_issuer(issuer)
+        validate_issuer(
+            issuer,
+            require_https=policy.require_https if policy else True,
+        )
         return
 
     if not issuer:
