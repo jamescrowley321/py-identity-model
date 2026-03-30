@@ -172,7 +172,7 @@ class TestBuildAuthorizationUrl:
             )
 
     def test_invalid_code_challenge_method_raises(self):
-        with pytest.raises(ValueError, match="S256.*plain"):
+        with pytest.raises(ValueError, match=r"S256.*plain"):
             build_authorization_url(
                 AUTHZ_ENDPOINT,
                 client_id="app1",

@@ -78,7 +78,7 @@ class TestAsyncTokenValidation:
 
         with pytest.raises(
             ConfigurationException,
-            match="TokenValidationConfig.key and TokenValidationConfig.algorithms are required",
+            match=r"TokenValidationConfig.key and TokenValidationConfig.algorithms are required",
         ):
             await validate_token(
                 jwt="fake.jwt.token",
@@ -111,7 +111,7 @@ class TestAsyncTokenValidation:
 
         with pytest.raises(
             TokenValidationException,
-            match="does not contain a jwks_uri.*require_key_set",
+            match=r"does not contain a jwks_uri.*require_key_set",
         ):
             await validate_token(
                 jwt="fake.jwt.token",
@@ -138,7 +138,7 @@ class TestAsyncTokenValidation:
         async with AsyncHTTPClient() as client:
             with pytest.raises(
                 TokenValidationException,
-                match="does not contain a jwks_uri.*require_key_set",
+                match=r"does not contain a jwks_uri.*require_key_set",
             ):
                 await validate_token(
                     jwt="fake.jwt.token",
@@ -170,7 +170,7 @@ class TestAsyncTokenValidation:
 
         with pytest.raises(
             TokenValidationException,
-            match="does not contain a jwks_uri.*require_key_set",
+            match=r"does not contain a jwks_uri.*require_key_set",
         ):
             await validate_token(
                 jwt="fake.jwt.token",

@@ -256,7 +256,7 @@ class TestCreateRequestObject:
     def test_pkce_requires_both_challenge_and_method(self):
         """S3: code_challenge without code_challenge_method raises ValueError."""
         pem = _ec_private_key_pem()
-        with pytest.raises(ValueError, match="code_challenge.*both"):
+        with pytest.raises(ValueError, match=r"code_challenge.*both"):
             create_request_object(
                 private_key=pem,
                 algorithm="ES256",
@@ -269,7 +269,7 @@ class TestCreateRequestObject:
     def test_pkce_requires_both_method_and_challenge(self):
         """S3: code_challenge_method without code_challenge raises ValueError."""
         pem = _ec_private_key_pem()
-        with pytest.raises(ValueError, match="code_challenge.*both"):
+        with pytest.raises(ValueError, match=r"code_challenge.*both"):
             create_request_object(
                 private_key=pem,
                 algorithm="ES256",

@@ -197,7 +197,7 @@ def prepare_device_token_request_data(
     return params, headers, auth
 
 
-def process_device_token_response(
+def process_device_token_response(  # noqa: PLR0911  # RFC 8628 error handling requires distinct return paths
     response: httpx.Response,
 ) -> DeviceTokenResponse:
     """Process device token polling HTTP response.

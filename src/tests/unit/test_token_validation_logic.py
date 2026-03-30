@@ -127,7 +127,7 @@ class TestValidateConfigForManualValidation:
         )
         with pytest.raises(
             ConfigurationException,
-            match="TokenValidationConfig.key is required",
+            match=r"TokenValidationConfig.key is required",
         ):
             validate_config_for_manual_validation(config)
 
@@ -139,7 +139,7 @@ class TestValidateConfigForManualValidation:
         )
         with pytest.raises(
             ConfigurationException,
-            match="TokenValidationConfig.algorithms is required",
+            match=r"TokenValidationConfig.algorithms is required",
         ):
             validate_config_for_manual_validation(config)
 
