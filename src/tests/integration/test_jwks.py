@@ -10,8 +10,15 @@ def test_get_jwks_is_successful(jwks_response):
         assert key.alg
         assert key.use
         assert key.kid
-        assert key.n
-        assert key.e
+
+        # Validate key-type-specific parameters
+        if key.kty == "RSA":
+            assert key.n
+            assert key.e
+        elif key.kty == "EC":
+            assert key.crv
+            assert key.x
+            assert key.y
 
         if key.x5t:
             assert key.x5c

@@ -1,0 +1,17 @@
+services:
+  node-oidc-provider:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: node-oidc-provider
+    ports:
+      - "127.0.0.1:9010:9010"
+    environment:
+      - ISSUER=http://localhost:9010
+      - PORT=9010
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9010/.well-known/openid-configuration"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+      start_period: 3s

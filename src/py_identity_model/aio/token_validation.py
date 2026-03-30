@@ -36,6 +36,7 @@ from .jwks import get_jwks
 @alru_cache(maxsize=128)
 async def _get_disco_response(
     disco_doc_address: str,
+    require_https: bool = True,
 ) -> DiscoveryDocumentResponse:
     """
     Cached async discovery document fetching.
@@ -43,7 +44,9 @@ async def _get_disco_response(
     Cache can be cleared using _get_disco_response.cache_clear() if needed.
     """
     return await get_discovery_document(
-        DiscoveryDocumentRequest(address=disco_doc_address),
+        DiscoveryDocumentRequest(
+            address=disco_doc_address, require_https=require_https
+        ),
     )
 
 
@@ -107,7 +110,9 @@ async def validate_token(
     validate_token_config(token_validation_config)
 
     if token_validation_config.perform_disco:
-        disco_doc_response = await _get_disco_response(disco_doc_address)
+        disco_doc_response = await _get_disco_response(
+            disco_doc_address, token_validation_config.require_https
+        )
         validate_disco_response(disco_doc_response)
 
         jwks_response = await _get_jwks_response(disco_doc_response.jwks_uri)

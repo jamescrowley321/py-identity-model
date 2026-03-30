@@ -15,14 +15,24 @@ from .models import TokenValidationConfig
 # ============================================================================
 
 
-def validate_issuer(issuer: str) -> None:
-    """Validate issuer format according to OpenID Connect Discovery 1.0 Section 3"""
+def validate_issuer(issuer: str, *, require_https: bool = True) -> None:
+    """Validate issuer format according to OpenID Connect Discovery 1.0 Section 3.
+
+    Args:
+        issuer: The issuer URL to validate.
+        require_https: Whether to enforce HTTPS. Defaults to ``True``.
+            Set to ``False`` only for local development/testing with HTTP
+            providers.
+    """
     if not issuer:
         raise ConfigurationException("Issuer parameter is required")
 
     parsed = urlparse(issuer)
-    if parsed.scheme != "https":
-        raise ConfigurationException("Issuer must use HTTPS scheme")
+    if require_https:
+        if parsed.scheme != "https":
+            raise ConfigurationException("Issuer must use HTTPS scheme")
+    elif parsed.scheme not in ("http", "https"):
+        raise ConfigurationException("Issuer must use HTTP or HTTPS scheme")
 
     if parsed.query or parsed.fragment:
         raise ConfigurationException(
@@ -84,7 +94,11 @@ def _validate_subject_types(subject_types: list) -> None:
 def _validate_response_type(
     response_type: str, valid_response_types: list
 ) -> None:
-    """Validate a single response type."""
+    """Validate a single response type.
+
+    Accepts all response types defined in OAuth 2.0 Multiple Response Types 1.0
+    and OpenID Connect Core 1.0, including ``none``.
+    """
     if response_type not in valid_response_types:
         # Allow custom response types that contain valid components
         components = response_type.split()
@@ -107,6 +121,7 @@ def validate_parameter_values(response_data: dict) -> None:
             "code",
             "id_token",
             "token",
+            "none",
             "code id_token",
             "code token",
             "id_token token",

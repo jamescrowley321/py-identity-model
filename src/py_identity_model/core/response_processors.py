@@ -25,12 +25,15 @@ from .validators import (
 
 def validate_and_parse_discovery_response(
     response: httpx.Response,
+    *,
+    require_https: bool = True,
 ) -> dict:
     """
     Validate and parse discovery document HTTP response.
 
     Args:
         response: HTTP response from discovery endpoint
+        require_https: Whether to enforce HTTPS on the issuer.
 
     Returns:
         dict: Parsed discovery document JSON
@@ -57,7 +60,9 @@ def validate_and_parse_discovery_response(
     validate_required_parameters(response_json)
 
     # Validate issuer format
-    validate_issuer(response_json.get("issuer", ""))
+    validate_issuer(
+        response_json.get("issuer", ""), require_https=require_https
+    )
 
     # Validate parameter values
     validate_parameter_values(response_json)

@@ -6,11 +6,18 @@ from py_identity_model import (
 )
 
 
-def test_discovery_document_has_userinfo_endpoint(discovery_document):
+def test_discovery_document_has_userinfo_endpoint(
+    discovery_document, require_https
+):
     """Test that the discovery document includes a userinfo_endpoint."""
     assert discovery_document.is_successful
     assert discovery_document.userinfo_endpoint
-    assert discovery_document.userinfo_endpoint.startswith("https://")
+    if require_https:
+        assert discovery_document.userinfo_endpoint.startswith("https://")
+    else:
+        assert discovery_document.userinfo_endpoint.startswith(
+            "http://"
+        ) or discovery_document.userinfo_endpoint.startswith("https://")
 
 
 def test_get_userinfo_with_client_credentials_token(
