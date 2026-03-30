@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.4.1 (2026-03-30)
+
+### Bug Fixes
+
+- **ci**: Remove tracked worktree directory breaking CI checkout
+  ([`4fbaa7e`](https://github.com/jamescrowley321/py-identity-model/commit/4fbaa7e68572a9c8feb56cee0518cc58f1cf42c0))
+
+
 ## v2.4.0 (2026-03-30)
 
 ### Features
