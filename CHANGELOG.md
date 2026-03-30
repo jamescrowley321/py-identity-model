@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.5.0 (2026-03-30)
+
+### Features
+
+- **token-validation**: Add enhanced validation and base request/response classes
+  ([#224](https://github.com/jamescrowley321/py-identity-model/pull/224),
+  [`c137b27`](https://github.com/jamescrowley321/py-identity-model/commit/c137b272852cf8c6c449c9acef0477f44cca74ac))
+
+
 ## v2.4.1 (2026-03-30)
 
 ### Bug Fixes
