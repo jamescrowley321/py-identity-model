@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.4.0 (2026-03-30)
+
+### Features
+
+- **http-client**: Add dependency injection support for HTTP client management
+  ([#222](https://github.com/jamescrowley321/py-identity-model/pull/222),
+  [`4ad60f2`](https://github.com/jamescrowley321/py-identity-model/commit/4ad60f2cffbddc149ed307b93fbb427235008dff))
+
+
 ## v2.3.0 (2026-03-30)
 
 ### Bug Fixes
