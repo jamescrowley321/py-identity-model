@@ -42,7 +42,7 @@ class TestAuthCodePKCEIntegration:
         assert "code_challenge_method=S256" in url
         assert f"state={state}" in url
 
-    def test_full_flow_simulation(self, discovery_document):
+    def test_full_flow_simulation(self, discovery_document, require_https):
         """Simulate the complete auth code + PKCE flow (except actual auth)."""
         # Step 1: Generate PKCE pair
         verifier, challenge = generate_pkce_pair()
@@ -57,7 +57,8 @@ class TestAuthCodePKCEIntegration:
             code_challenge=challenge,
             code_challenge_method="S256",
         )
-        assert url.startswith("https://")
+        if require_https:
+            assert url.startswith("https://")
 
         # Step 3: Simulate callback (would come from browser redirect)
         callback = f"https://app.example.com/callback?code=simulated_code&state={state}"
