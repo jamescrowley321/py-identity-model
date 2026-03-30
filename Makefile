@@ -17,7 +17,7 @@ test:
 
 .PHONY: test-unit
 test-unit:
-	uv run pytest src/tests -m unit -v -n auto --cov=src/py_identity_model --cov-report=term-missing --cov-report=html --cov-fail-under=80 -p no:benchmark
+	uv run pytest src/tests -m unit -v -n auto --cov=src/py_identity_model --cov-report=term-missing --cov-report=html --cov-fail-under=80 --ignore=src/tests/benchmarks -p no:benchmark
 
 .PHONY: test-integration-local
 test-integration-local:

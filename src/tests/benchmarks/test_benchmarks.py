@@ -35,18 +35,22 @@ from py_identity_model.identity import to_principal
 
 @pytest.mark.benchmark(group="pkce")
 def test_bench_generate_pkce_pair(benchmark):
-    benchmark(generate_pkce_pair)
+    result = benchmark(generate_pkce_pair)
+    assert result is not None
+    assert len(result) == 2
 
 
 @pytest.mark.benchmark(group="pkce")
 def test_bench_generate_code_verifier(benchmark):
-    benchmark(generate_code_verifier)
+    result = benchmark(generate_code_verifier)
+    assert isinstance(result, str)
 
 
 @pytest.mark.benchmark(group="pkce")
 def test_bench_generate_code_challenge(benchmark):
     verifier = generate_code_verifier()
-    benchmark(generate_code_challenge, verifier)
+    result = benchmark(generate_code_challenge, verifier)
+    assert isinstance(result, str)
 
 
 # ============================================================================
@@ -56,18 +60,23 @@ def test_bench_generate_code_challenge(benchmark):
 
 @pytest.mark.benchmark(group="dpop")
 def test_bench_generate_dpop_key_ec(benchmark):
-    benchmark(generate_dpop_key, "ES256")
+    result = benchmark(generate_dpop_key, "ES256")
+    assert result is not None
 
 
 @pytest.mark.benchmark(group="dpop")
 def test_bench_generate_dpop_key_rsa(benchmark):
-    benchmark(generate_dpop_key, "RS256")
+    result = benchmark(generate_dpop_key, "RS256")
+    assert result is not None
 
 
 @pytest.mark.benchmark(group="dpop")
 def test_bench_create_dpop_proof(benchmark):
     key = generate_dpop_key()
-    benchmark(create_dpop_proof, key, "POST", "https://auth.example.com/token")
+    result = benchmark(
+        create_dpop_proof, key, "POST", "https://auth.example.com/token"
+    )
+    assert isinstance(result, str)
 
 
 # ============================================================================
@@ -77,7 +86,7 @@ def test_bench_create_dpop_proof(benchmark):
 
 @pytest.mark.benchmark(group="jar")
 def test_bench_create_request_object_ec(benchmark, ec_private_pem):
-    benchmark(
+    result = benchmark(
         create_request_object,
         private_key=ec_private_pem,
         algorithm="ES256",
@@ -85,11 +94,12 @@ def test_bench_create_request_object_ec(benchmark, ec_private_pem):
         audience="https://auth.example.com",
         redirect_uri="https://app.example.com/cb",
     )
+    assert isinstance(result, str)
 
 
 @pytest.mark.benchmark(group="jar")
 def test_bench_create_request_object_rsa(benchmark, rsa_private_pem):
-    benchmark(
+    result = benchmark(
         create_request_object,
         private_key=rsa_private_pem,
         algorithm="RS256",
@@ -97,6 +107,7 @@ def test_bench_create_request_object_rsa(benchmark, rsa_private_pem):
         audience="https://auth.example.com",
         redirect_uri="https://app.example.com/cb",
     )
+    assert isinstance(result, str)
 
 
 # ============================================================================
@@ -106,7 +117,7 @@ def test_bench_create_request_object_rsa(benchmark, rsa_private_pem):
 
 @pytest.mark.benchmark(group="fapi")
 def test_bench_validate_fapi_request(benchmark):
-    benchmark(
+    result = benchmark(
         validate_fapi_authorization_request,
         response_type="code",
         code_challenge="challenge_value",
@@ -115,15 +126,17 @@ def test_bench_validate_fapi_request(benchmark):
         use_par=True,
         algorithm="ES256",
     )
+    assert result is not None
 
 
 @pytest.mark.benchmark(group="fapi")
 def test_bench_validate_fapi_client(benchmark):
-    benchmark(
+    result = benchmark(
         validate_fapi_client_config,
         has_client_authentication=True,
         use_dpop=True,
     )
+    assert result is not None
 
 
 # ============================================================================
@@ -133,13 +146,15 @@ def test_bench_validate_fapi_client(benchmark):
 
 @pytest.mark.benchmark(group="discovery")
 def test_bench_parse_discovery_url(benchmark):
-    benchmark(parse_discovery_url, "https://auth.example.com")
+    result = benchmark(parse_discovery_url, "https://auth.example.com")
+    assert result is not None
 
 
 @pytest.mark.benchmark(group="discovery")
 def test_bench_validate_url_scheme(benchmark):
     policy = DiscoveryPolicy()
     benchmark(validate_url_scheme, "https://auth.example.com/token", policy)
+    # validate_url_scheme returns None on success (raises on failure)
 
 
 # ============================================================================
@@ -149,7 +164,8 @@ def test_bench_validate_url_scheme(benchmark):
 
 @pytest.mark.benchmark(group="jwk")
 def test_bench_jwks_from_dict(benchmark, sample_jwk_dict):
-    benchmark(jwks_from_dict, sample_jwk_dict)
+    result = benchmark(jwks_from_dict, sample_jwk_dict)
+    assert result is not None
 
 
 # ============================================================================
@@ -159,7 +175,8 @@ def test_bench_jwks_from_dict(benchmark, sample_jwk_dict):
 
 @pytest.mark.benchmark(group="identity")
 def test_bench_to_principal(benchmark, sample_claims):
-    benchmark(to_principal, sample_claims)
+    result = benchmark(to_principal, sample_claims)
+    assert result is not None
 
 
 # ============================================================================
@@ -168,8 +185,10 @@ def test_bench_to_principal(benchmark, sample_claims):
 
 
 @pytest.mark.benchmark(group="jwt")
-def test_bench_jwt_decode(benchmark, sample_signed_jwt, ec_public_pem):
-    """Benchmark raw JWT decode + verification (the core validation path)."""
+def test_bench_pyjwt_decode_baseline(
+    benchmark, sample_signed_jwt, ec_public_pem
+):
+    """Benchmark raw pyjwt.decode() as a baseline for comparison (not py-identity-model code)."""
     import jwt as pyjwt
 
     def decode_jwt():
@@ -180,4 +199,5 @@ def test_bench_jwt_decode(benchmark, sample_signed_jwt, ec_public_pem):
             audience="bench-api",
         )
 
-    benchmark(decode_jwt)
+    result = benchmark(decode_jwt)
+    assert result is not None

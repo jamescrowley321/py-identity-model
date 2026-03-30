@@ -1,6 +1,7 @@
 """Fixtures for performance benchmark tests."""
 
 import time
+from types import MappingProxyType
 
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.serialization import (
@@ -72,7 +73,7 @@ def sample_signed_jwt(ec_private_pem):
         "iss": "https://bench.example.com",
         "sub": "user123",
         "aud": "bench-api",
-        "exp": now + 3600,
+        "exp": now + 86400,
         "iat": now,
         "nbf": now,
     }
@@ -81,12 +82,14 @@ def sample_signed_jwt(ec_private_pem):
 
 @pytest.fixture(scope="session")
 def sample_claims():
-    """Sample claims dict for identity benchmarks."""
-    return {
-        "sub": "user123",
-        "name": "Bench User",
-        "email": "bench@example.com",
-        "roles": ["admin", "user"],
-        "iss": "https://bench.example.com",
-        "aud": "bench-api",
-    }
+    """Sample claims dict for identity benchmarks (frozen to prevent mutation)."""
+    return MappingProxyType(
+        {
+            "sub": "user123",
+            "name": "Bench User",
+            "email": "bench@example.com",
+            "roles": ["admin", "user"],
+            "iss": "https://bench.example.com",
+            "aud": "bench-api",
+        }
+    )
