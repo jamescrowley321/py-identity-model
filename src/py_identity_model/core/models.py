@@ -751,6 +751,94 @@ class PushedAuthorizationResponse(BaseResponse):
 
 
 # ============================================================================
+# Device Authorization Grant Models - RFC 8628
+# ============================================================================
+
+
+@dataclass
+class DeviceAuthorizationRequest(BaseRequest):
+    """Request for OAuth 2.0 Device Authorization (RFC 8628).
+
+    Attributes:
+        address: The device authorization endpoint URL.
+        client_id: The client identifier.
+        scope: Space-delimited scopes (default ``"openid"``).
+        client_secret: Client secret (optional for public clients).
+    """
+
+    client_id: str
+    scope: str = "openid"
+    client_secret: str | None = None
+
+
+@dataclass
+class DeviceAuthorizationResponse(BaseResponse):
+    """Response from the device authorization endpoint (RFC 8628).
+
+    Check ``is_successful`` before accessing guarded fields.
+    Display ``user_code`` and ``verification_uri`` to the user,
+    then poll with :class:`DeviceTokenRequest`.
+    """
+
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset(
+        {
+            "device_code",
+            "user_code",
+            "verification_uri",
+            "verification_uri_complete",
+            "expires_in",
+            "interval",
+        }
+    )
+
+    device_code: str | None = None
+    user_code: str | None = None
+    verification_uri: str | None = None
+    verification_uri_complete: str | None = None
+    expires_in: int | None = None
+    interval: int | None = None
+
+
+@dataclass
+class DeviceTokenRequest(BaseRequest):
+    """Request for polling the token endpoint during device flow (RFC 8628).
+
+    Attributes:
+        address: The token endpoint URL.
+        client_id: The client identifier.
+        device_code: The device code from :class:`DeviceAuthorizationResponse`.
+        client_secret: Client secret (optional for public clients).
+    """
+
+    client_id: str
+    device_code: str
+    client_secret: str | None = None
+
+
+@dataclass
+class DeviceTokenResponse(BaseResponse):
+    """Response from a device token poll (RFC 8628).
+
+    Check ``is_successful`` before accessing ``token``.
+    When ``is_successful`` is ``False``, check ``error_code``:
+
+    - ``"authorization_pending"`` - user hasn't authorized yet, poll again
+    - ``"slow_down"`` - increase polling interval (see ``interval``)
+    - ``"expired_token"`` - device code expired, restart flow
+    - ``"access_denied"`` - user denied authorization
+
+    ``error_code`` and ``interval`` are always accessible regardless
+    of ``is_successful``.
+    """
+
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
+
+    token: dict | None = None
+    error_code: str | None = None
+    interval: int | None = None
+
+
+# ============================================================================
 # Token Revocation Models - RFC 7009
 # ============================================================================
 
@@ -886,6 +974,11 @@ __all__ = [
     # Token Client
     "ClientCredentialsTokenRequest",
     "ClientCredentialsTokenResponse",
+    # Device Authorization Grant
+    "DeviceAuthorizationRequest",
+    "DeviceAuthorizationResponse",
+    "DeviceTokenRequest",
+    "DeviceTokenResponse",
     # Discovery
     "DiscoveryDocumentRequest",
     "DiscoveryDocumentResponse",
