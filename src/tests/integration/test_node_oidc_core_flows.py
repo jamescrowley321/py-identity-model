@@ -35,7 +35,7 @@ from py_identity_model.exceptions import (
 )
 from py_identity_model.sync.token_client import refresh_token
 
-from .conftest_node_oidc import (
+from .conftest import (
     AUTH_CODE_CLIENT_ID,
     AUTH_CODE_CLIENT_SECRET,
     AUTH_CODE_REDIRECT_URI,
