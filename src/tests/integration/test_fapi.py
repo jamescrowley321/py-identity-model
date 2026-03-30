@@ -3,6 +3,7 @@
 import pytest
 
 from py_identity_model import (
+    FAPI2_ALLOWED_AUTH_METHODS,
     FAPI2_ALLOWED_SIGNING_ALGORITHMS,
     FAPIValidationResult,
     validate_fapi_authorization_request,
@@ -27,14 +28,13 @@ class TestFAPIIntegration:
         assert auth_result.is_compliant is True
 
         client_result = validate_fapi_client_config(
-            has_client_authentication=True,
+            auth_method="private_key_jwt",
             use_dpop=True,
         )
         assert client_result.is_compliant is True
 
     def test_validation_result_dataclass(self):
         result = FAPIValidationResult(
-            is_compliant=False,
             violations=["test violation"],
         )
         assert result.is_compliant is False
@@ -78,12 +78,14 @@ class TestFAPIIntegration:
         assert callable(validate_fapi_client_config)
         assert callable(validate_fapi_discovery)
         assert FAPIValidationResult is not None
+        assert FAPI2_ALLOWED_AUTH_METHODS is not None
         assert FAPI2_ALLOWED_SIGNING_ALGORITHMS is not None
         assert FAPI2_REQUIRED_PKCE_METHOD is not None
         assert FAPI2_REQUIRED_RESPONSE_TYPE is not None
 
     def test_aio_import(self):
         from py_identity_model.aio import (
+            FAPI2_ALLOWED_AUTH_METHODS,
             FAPI2_ALLOWED_SIGNING_ALGORITHMS,
             FAPIValidationResult,
             validate_fapi_authorization_request,
@@ -95,4 +97,5 @@ class TestFAPIIntegration:
         assert callable(validate_fapi_client_config)
         assert callable(validate_fapi_discovery)
         assert FAPIValidationResult is not None
+        assert FAPI2_ALLOWED_AUTH_METHODS is not None
         assert FAPI2_ALLOWED_SIGNING_ALGORITHMS is not None

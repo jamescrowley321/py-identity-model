@@ -51,14 +51,13 @@ def validate_client_example():
     print("=" * 60)
 
     result = validate_fapi_client_config(
-        has_client_authentication=True,
+        auth_method="private_key_jwt",
         use_dpop=True,
     )
     print(f"\n  DPoP client: compliant = {result.is_compliant}")
 
     result = validate_fapi_client_config(
-        has_client_authentication=False,
-        use_dpop=False,
+        auth_method=None,
     )
     print(f"  Public client without DPoP: compliant = {result.is_compliant}")
     for v in result.violations:

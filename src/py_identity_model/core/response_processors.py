@@ -159,6 +159,10 @@ def build_discovery_response(
         token_endpoint_auth_methods_supported=response_json.get(
             "token_endpoint_auth_methods_supported",
         ),
+        # PKCE support
+        code_challenge_methods_supported=response_json.get(
+            "code_challenge_methods_supported",
+        ),
         token_endpoint_auth_signing_alg_values_supported=response_json.get(
             "token_endpoint_auth_signing_alg_values_supported",
         ),

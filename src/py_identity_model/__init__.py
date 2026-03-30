@@ -29,6 +29,7 @@ from .exceptions import (
 # Identity models (shared)
 from .identity import Claim, ClaimsIdentity, ClaimsPrincipal, to_principal
 from .sync import (
+    FAPI2_ALLOWED_AUTH_METHODS,
     FAPI2_ALLOWED_SIGNING_ALGORITHMS,
     FAPI2_REQUIRED_PKCE_METHOD,
     FAPI2_REQUIRED_RESPONSE_TYPE,
@@ -102,6 +103,7 @@ from .sync import (
 
 __all__ = [
     # FAPI 2.0
+    "FAPI2_ALLOWED_AUTH_METHODS",
     "FAPI2_ALLOWED_SIGNING_ALGORITHMS",
     "FAPI2_REQUIRED_PKCE_METHOD",
     "FAPI2_REQUIRED_RESPONSE_TYPE",

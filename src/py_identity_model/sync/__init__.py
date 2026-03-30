@@ -13,6 +13,7 @@ from ..core.dpop import (
     generate_dpop_key,
 )
 from ..core.fapi import (
+    FAPI2_ALLOWED_AUTH_METHODS,
     FAPI2_ALLOWED_SIGNING_ALGORITHMS,
     FAPI2_REQUIRED_PKCE_METHOD,
     FAPI2_REQUIRED_RESPONSE_TYPE,
@@ -93,6 +94,7 @@ from .userinfo import UserInfoRequest, UserInfoResponse, get_userinfo
 
 __all__ = [
     # FAPI 2.0
+    "FAPI2_ALLOWED_AUTH_METHODS",
     "FAPI2_ALLOWED_SIGNING_ALGORITHMS",
     "FAPI2_REQUIRED_PKCE_METHOD",
     "FAPI2_REQUIRED_RESPONSE_TYPE",
