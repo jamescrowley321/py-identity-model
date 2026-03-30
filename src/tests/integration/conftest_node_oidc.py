@@ -18,14 +18,17 @@ import pytest
 from py_identity_model import (
     AuthorizationCodeTokenRequest,
     ClientCredentialsTokenRequest,
-    DiscoveryDocumentRequest,
     JwksRequest,
-    get_discovery_document,
     get_jwks,
     parse_authorize_callback_response,
     request_authorization_code_token,
     request_client_credentials_token,
     validate_authorize_callback_state,
+)
+from py_identity_model.core.models import DiscoveryDocumentResponse
+from py_identity_model.core.parsers import (
+    extract_kid_from_jwt,
+    find_key_by_kid,
 )
 from py_identity_model.core.pkce import generate_pkce_pair
 from py_identity_model.sync.http_client import close_http_client
@@ -117,31 +120,34 @@ def perform_auth_code_flow(
             location = resp.headers["location"]
             if not location.startswith("http"):
                 location = f"{NODE_OIDC_BASE_URL}{location}"
-            # Don't follow redirect to our redirect_uri
             if location.startswith(redirect_uri):
                 break
             resp = client.get(location)
 
-        # Step 2: POST login to the interaction
+        # Step 2: POST login to the interaction URL (devInteractions form)
+        # node-oidc-provider devInteractions POSTs to the interaction URL
+        # with prompt=login, login=<user>, password=<pass>
         interaction_url = str(resp.url)
-        login_url = f"{interaction_url}/login"
         resp = client.post(
-            login_url,
-            data={"login": "test-user", "password": "test"},
+            interaction_url,
+            data={
+                "prompt": "login",
+                "login": "test-user",
+                "password": "test",
+            },
         )
 
-        # Step 3: Follow redirects through consent and back to redirect_uri
-        callback_url = _follow_redirects_to_callback(
+        # Step 3: Follow redirects — may reach callback or consent page
+        callback_url, resp = _follow_redirects_to_callback(
             client, resp, redirect_uri
         )
 
         if callback_url is None:
-            # May need to confirm consent
-            current_url = str(resp.url)
-            if "/interaction/" in current_url:
-                confirm_url = f"{current_url}/confirm"
-                resp = client.post(confirm_url)
-                callback_url = _follow_redirects_to_callback(
+            # Consent step: POST to the consent interaction URL
+            consent_url = str(resp.url)
+            if "/interaction/" in consent_url:
+                resp = client.post(consent_url, data={"prompt": "consent"})
+                callback_url, resp = _follow_redirects_to_callback(
                     client, resp, redirect_uri
                 )
 
@@ -185,19 +191,23 @@ def _follow_redirects_to_callback(
     client: httpx.Client,
     resp: httpx.Response,
     redirect_uri: str,
-) -> str | None:
-    """Follow redirects until we reach the redirect_uri or run out of redirects."""
+) -> tuple[str | None, httpx.Response]:
+    """Follow redirects until we reach the redirect_uri or run out of redirects.
+
+    Returns (callback_url, final_response) where callback_url is None if
+    we stopped at a non-redirect page (e.g. consent interaction).
+    """
     while _is_redirect(resp.status_code):
         location = resp.headers["location"]
         if not location.startswith("http"):
             location = f"{NODE_OIDC_BASE_URL}{location}"
 
         if location.startswith(redirect_uri):
-            return location
+            return location, resp
 
         resp = client.get(location)
 
-    return None
+    return None, resp
 
 
 # ============================================================================
@@ -214,13 +224,35 @@ def node_oidc_provider():
 
 @pytest.fixture(scope="session")
 def node_oidc_discovery(node_oidc_provider):
-    """Fetch and cache the discovery document from node-oidc-provider."""
-    response = get_discovery_document(
-        DiscoveryDocumentRequest(address=NODE_OIDC_DISCO_URL)
+    """Fetch and cache the discovery document from node-oidc-provider.
+
+    Uses raw httpx to bypass the library's HTTPS issuer validation,
+    since the local test fixture runs on plain HTTP.
+    """
+    resp = httpx.get(NODE_OIDC_DISCO_URL, timeout=10.0)
+    if resp.status_code != 200:
+        pytest.fail(
+            f"Failed to fetch node-oidc discovery: HTTP {resp.status_code}"
+        )
+    data = resp.json()
+    return DiscoveryDocumentResponse(
+        is_successful=True,
+        issuer=data.get("issuer"),
+        jwks_uri=data.get("jwks_uri"),
+        authorization_endpoint=data.get("authorization_endpoint"),
+        token_endpoint=data.get("token_endpoint"),
+        response_types_supported=data.get("response_types_supported"),
+        subject_types_supported=data.get("subject_types_supported"),
+        id_token_signing_alg_values_supported=data.get(
+            "id_token_signing_alg_values_supported"
+        ),
+        userinfo_endpoint=data.get("userinfo_endpoint"),
+        registration_endpoint=data.get("registration_endpoint"),
+        introspection_endpoint=data.get("introspection_endpoint"),
+        scopes_supported=data.get("scopes_supported"),
+        response_modes_supported=data.get("response_modes_supported"),
+        grant_types_supported=data.get("grant_types_supported"),
     )
-    if not response.is_successful:
-        pytest.fail(f"Failed to fetch node-oidc discovery: {response.error}")
-    return response
 
 
 @pytest.fixture(scope="session")
@@ -230,6 +262,17 @@ def node_oidc_jwks(node_oidc_discovery):
     if not response.is_successful:
         pytest.fail(f"Failed to fetch node-oidc JWKS: {response.error}")
     return response
+
+
+@pytest.fixture(scope="session")
+def node_oidc_jwt_key(node_oidc_jwks, node_oidc_cc_jwt_token):
+    """Extract the signing key+algorithm for a JWT from the JWKS.
+
+    Returns (key_dict, algorithm) for use with perform_disco=False validation.
+    """
+    jwt_token = node_oidc_cc_jwt_token["access_token"]
+    kid = extract_kid_from_jwt(jwt_token)
+    return find_key_by_kid(kid, node_oidc_jwks.keys or [])
 
 
 @pytest.fixture(scope="session")

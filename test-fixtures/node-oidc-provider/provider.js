@@ -206,6 +206,18 @@ async function startProvider() {
       return {};
     },
 
+    // Issue refresh tokens when offline_access scope is requested
+    issueRefreshToken: async (ctx, client, code) => {
+      if (!client.grantTypeAllowed("refresh_token")) {
+        return false;
+      }
+      return (
+        code.scopes.has("offline_access") ||
+        (client.applicationType === "web" &&
+          client.tokenEndpointAuthMethod !== "none")
+      );
+    },
+
     // Account lookup
     findAccount,
 

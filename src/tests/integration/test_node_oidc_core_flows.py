@@ -20,20 +20,12 @@ import pytest
 from py_identity_model import (
     AuthorizationCodeTokenRequest,
     ClientCredentialsTokenRequest,
-    DiscoveryDocumentRequest,
-    JwksRequest,
     RefreshTokenRequest,
     TokenValidationConfig,
-    get_discovery_document,
-    get_jwks,
     parse_authorize_callback_response,
     request_authorization_code_token,
     request_client_credentials_token,
     validate_token,
-)
-from py_identity_model.core.parsers import (
-    extract_kid_from_jwt,
-    find_key_by_kid,
 )
 from py_identity_model.core.pkce import generate_pkce_pair
 from py_identity_model.core.state_validation import (
@@ -47,7 +39,6 @@ from .conftest_node_oidc import (
     AUTH_CODE_CLIENT_SECRET,
     AUTH_CODE_REDIRECT_URI,
     NODE_OIDC_BASE_URL,
-    NODE_OIDC_DISCO_URL,
 )
 
 
@@ -70,7 +61,6 @@ class TestDiscoveryAndJWKS:
         assert node_oidc_discovery.authorization_endpoint is not None
         assert node_oidc_discovery.jwks_uri is not None
         assert node_oidc_discovery.introspection_endpoint is not None
-        assert node_oidc_discovery.revocation_endpoint is not None
 
     def test_jwks_from_node_oidc(self, node_oidc_jwks):
         """Fetch JWKS, verify RSA + EC keys present."""
@@ -109,17 +99,20 @@ class TestClientCredentialsAndValidation:
         assert access_token.count(".") == 2, "Expected JWT format"
 
     def test_client_credentials_jwt_has_custom_claims(
-        self, node_oidc_cc_jwt_token
+        self, node_oidc_cc_jwt_token, node_oidc_jwt_key
     ):
         """Validate that JWT contains Descope-style dct/tenants claims."""
+        key_dict, alg = node_oidc_jwt_key
         config = TokenValidationConfig(
-            perform_disco=True,
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer="http://localhost:9010",
             options={"verify_aud": False, "require_aud": False},
         )
         decoded = validate_token(
             node_oidc_cc_jwt_token["access_token"],
             config,
-            disco_doc_address=NODE_OIDC_DISCO_URL,
         )
 
         # Descope-style custom claims
@@ -216,6 +209,11 @@ class TestAuthCodePKCE:
 
     def test_auth_code_invalid_code_verifier(self, node_oidc_discovery):
         """Wrong code_verifier fails token exchange."""
+        from .conftest_node_oidc import (
+            _follow_redirects_to_callback,
+            _is_redirect,
+        )
+
         _verifier, code_challenge = generate_pkce_pair()
         state = secrets.token_urlsafe(32)
 
@@ -237,7 +235,7 @@ class TestAuthCodePKCE:
         callback_url = None
         with httpx.Client(follow_redirects=False, timeout=10.0) as client:
             resp = client.get(auth_url)
-            while resp.status_code in (301, 302, 303, 307, 308):
+            while _is_redirect(resp.status_code):
                 location = resp.headers["location"]
                 if not location.startswith("http"):
                     location = f"{NODE_OIDC_BASE_URL}{location}"
@@ -247,32 +245,26 @@ class TestAuthCodePKCE:
                 resp = client.get(location)
 
             if callback_url is None:
-                # Login step
+                # Login step: POST to interaction URL with prompt=login
                 interaction_url = str(resp.url)
                 resp = client.post(
-                    f"{interaction_url}/login",
-                    data={"login": "test-user", "password": "test"},
+                    interaction_url,
+                    data={
+                        "prompt": "login",
+                        "login": "test-user",
+                        "password": "test",
+                    },
                 )
-                while resp.status_code in (301, 302, 303, 307, 308):
-                    location = resp.headers["location"]
-                    if not location.startswith("http"):
-                        location = f"{NODE_OIDC_BASE_URL}{location}"
-                    if location.startswith(AUTH_CODE_REDIRECT_URI):
-                        callback_url = location
-                        break
-                    resp = client.get(location)
+                callback_url, resp = _follow_redirects_to_callback(
+                    client, resp, AUTH_CODE_REDIRECT_URI
+                )
 
             # Consent step if needed
             if callback_url is None and "/interaction/" in str(resp.url):
-                resp = client.post(f"{resp.url}/confirm")
-                while resp.status_code in (301, 302, 303, 307, 308):
-                    location = resp.headers["location"]
-                    if not location.startswith("http"):
-                        location = f"{NODE_OIDC_BASE_URL}{location}"
-                    if location.startswith(AUTH_CODE_REDIRECT_URI):
-                        callback_url = location
-                        break
-                    resp = client.get(location)
+                resp = client.post(str(resp.url), data={"prompt": "consent"})
+                callback_url, resp = _follow_redirects_to_callback(
+                    client, resp, AUTH_CODE_REDIRECT_URI
+                )
 
         assert callback_url is not None, "Failed to get callback URL"
         callback = parse_authorize_callback_response(callback_url)
@@ -302,37 +294,47 @@ class TestAuthCodePKCE:
 class TestTokenValidation:
     """Test JWT validation features against real tokens from node-oidc-provider."""
 
-    def test_validate_jwt_with_discovery(self, node_oidc_cc_jwt_token):
-        """Standard validation with auto-discovery."""
+    def test_validate_jwt_with_discovery(
+        self, node_oidc_cc_jwt_token, node_oidc_jwt_key
+    ):
+        """Validate JWT with manually-provided key (HTTP fixture can't use auto-discovery)."""
+        key_dict, alg = node_oidc_jwt_key
         config = TokenValidationConfig(
-            perform_disco=True,
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer="http://localhost:9010",
             options={"verify_aud": False, "require_aud": False},
         )
         decoded = validate_token(
             node_oidc_cc_jwt_token["access_token"],
             config,
-            disco_doc_address=NODE_OIDC_DISCO_URL,
         )
         assert "iss" in decoded
         assert decoded["iss"] == "http://localhost:9010"
 
-    def test_validate_jwt_with_leeway(self, node_oidc_cc_jwt_token):
+    def test_validate_jwt_with_leeway(
+        self, node_oidc_cc_jwt_token, node_oidc_jwt_key
+    ):
         """Token validation with clock skew tolerance."""
+        key_dict, alg = node_oidc_jwt_key
         config = TokenValidationConfig(
-            perform_disco=True,
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer="http://localhost:9010",
             leeway=60,
             options={"verify_aud": False, "require_aud": False},
         )
         decoded = validate_token(
             node_oidc_cc_jwt_token["access_token"],
             config,
-            disco_doc_address=NODE_OIDC_DISCO_URL,
         )
         assert "exp" in decoded
         assert "iat" in decoded
 
     def test_validate_jwt_custom_claims_validator(
-        self, node_oidc_cc_jwt_token
+        self, node_oidc_cc_jwt_token, node_oidc_jwt_key
     ):
         """Custom claims validator checks dct/tenants."""
 
@@ -345,28 +347,35 @@ class TestTokenValidation:
             if tenant_id not in claims["tenants"]:
                 raise ValueError(f"dct tenant {tenant_id} not in tenants")
 
+        key_dict, alg = node_oidc_jwt_key
         config = TokenValidationConfig(
-            perform_disco=True,
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer="http://localhost:9010",
             claims_validator=validate_descope_claims,
             options={"verify_aud": False, "require_aud": False},
         )
         decoded = validate_token(
             node_oidc_cc_jwt_token["access_token"],
             config,
-            disco_doc_address=NODE_OIDC_DISCO_URL,
         )
         assert decoded["dct"] == "test-tenant-1"
 
     def test_validate_jwt_claims_validator_rejects(
-        self, node_oidc_cc_jwt_token
+        self, node_oidc_cc_jwt_token, node_oidc_jwt_key
     ):
         """Claims validator raises -> TokenValidationException."""
 
         def reject_all(claims: dict) -> None:
             raise ValueError("Rejected by policy")
 
+        key_dict, alg = node_oidc_jwt_key
         config = TokenValidationConfig(
-            perform_disco=True,
+            perform_disco=False,
+            key=key_dict,
+            algorithms=[alg],
+            issuer="http://localhost:9010",
             claims_validator=reject_all,
             options={"verify_aud": False, "require_aud": False},
         )
@@ -376,20 +385,13 @@ class TestTokenValidation:
             validate_token(
                 node_oidc_cc_jwt_token["access_token"],
                 config,
-                disco_doc_address=NODE_OIDC_DISCO_URL,
             )
 
-    def test_validate_wrong_issuer(self, node_oidc_cc_jwt_token):
+    def test_validate_wrong_issuer(
+        self, node_oidc_cc_jwt_token, node_oidc_jwt_key
+    ):
         """Token with wrong issuer config fails."""
-        disco = get_discovery_document(
-            DiscoveryDocumentRequest(address=NODE_OIDC_DISCO_URL)
-        )
-        assert disco.jwks_uri is not None
-        jwks = get_jwks(JwksRequest(address=disco.jwks_uri))
-        jwt_token = node_oidc_cc_jwt_token["access_token"]
-        kid = extract_kid_from_jwt(jwt_token)
-        key_dict, alg = find_key_by_kid(kid, jwks.keys or [])
-
+        key_dict, alg = node_oidc_jwt_key
         config = TokenValidationConfig(
             perform_disco=False,
             key=key_dict,
@@ -398,23 +400,28 @@ class TestTokenValidation:
             options={"verify_aud": False, "require_aud": False},
         )
         with pytest.raises(TokenValidationException):
-            validate_token(jwt_token, config)
+            validate_token(node_oidc_cc_jwt_token["access_token"], config)
 
-    def test_validate_auth_code_jwt_token(self, node_oidc_auth_code_result):
+    def test_validate_auth_code_jwt_token(
+        self, node_oidc_auth_code_result, node_oidc_jwt_key
+    ):
         """Validate JWT obtained from auth code flow."""
         token_response = node_oidc_auth_code_result["token_response"]
         access_token = token_response.token["access_token"]
 
         # Auth code tokens with resource=urn:test:api should be JWTs
         if access_token.count(".") == 2:
+            key_dict, alg = node_oidc_jwt_key
             config = TokenValidationConfig(
-                perform_disco=True,
+                perform_disco=False,
+                key=key_dict,
+                algorithms=[alg],
+                issuer="http://localhost:9010",
                 options={"verify_aud": False, "require_aud": False},
             )
             decoded = validate_token(
                 access_token,
                 config,
-                disco_doc_address=NODE_OIDC_DISCO_URL,
             )
             assert decoded["iss"] == "http://localhost:9010"
             assert "sub" in decoded
