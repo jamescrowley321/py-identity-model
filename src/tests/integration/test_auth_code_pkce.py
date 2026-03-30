@@ -57,7 +57,8 @@ class TestAuthCodePKCEIntegration:
             code_challenge=challenge,
             code_challenge_method="S256",
         )
-        assert url.startswith("https://")
+        # Verify the URL uses the scheme reported by the discovery document
+        assert url.startswith(discovery_document.authorization_endpoint)
 
         # Step 3: Simulate callback (would come from browser redirect)
         callback = f"https://app.example.com/callback?code=simulated_code&state={state}"

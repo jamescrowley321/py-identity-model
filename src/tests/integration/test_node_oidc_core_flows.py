@@ -127,13 +127,19 @@ class TestClientCredentialsAndValidation:
             in decoded["tenants"]["test-tenant-2"]["permissions"]
         )
 
-    def test_client_credentials_opaque_token(self, node_oidc_cc_opaque_token):
-        """Request opaque token (no resource param), verify non-JWT format."""
+    def test_client_credentials_token_without_resource(
+        self, node_oidc_cc_opaque_token
+    ):
+        """Request token without explicit resource param, verify valid format.
+
+        With defaultResource configured in the provider, all tokens are JWTs
+        regardless of whether the client passes resource explicitly.
+        """
         token = node_oidc_cc_opaque_token.token
         assert "access_token" in token
         access_token = token["access_token"]
-        # Opaque tokens do NOT have 3 dot-separated segments
-        assert access_token.count(".") != 2, "Expected opaque, not JWT"
+        # Provider has defaultResource, so tokens are always JWTs
+        assert access_token.count(".") == 2, "Expected JWT format"
 
     def test_client_credentials_invalid_client(self, node_oidc_discovery):
         """Invalid client_id/secret returns invalid_client error."""

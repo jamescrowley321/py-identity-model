@@ -10,7 +10,7 @@ class TestEnhancedTokenValidation:
     """Test enhanced validation features against real tokens."""
 
     def test_leeway_with_real_token(
-        self, client_credentials_token, test_config
+        self, client_credentials_token, test_config, require_https
     ):
         """Validate a real token with leeway configured."""
         token = client_credentials_token.token["access_token"]
@@ -19,6 +19,7 @@ class TestEnhancedTokenValidation:
             audience=test_config.get("TEST_AUDIENCE") or None,
             leeway=60,
             options={"verify_aud": False, "require_aud": False},
+            require_https=require_https,
         )
 
         decoded = validate_token(
@@ -29,7 +30,7 @@ class TestEnhancedTokenValidation:
         assert "iss" in decoded
 
     def test_issuer_validation_with_real_token(
-        self, client_credentials_token, test_config, issuer
+        self, client_credentials_token, test_config, issuer, require_https
     ):
         """Validate issuer against real discovery document issuer."""
         token = client_credentials_token.token["access_token"]
@@ -37,6 +38,7 @@ class TestEnhancedTokenValidation:
             perform_disco=True,
             issuer=issuer,
             options={"verify_aud": False, "require_aud": False},
+            require_https=require_https,
         )
 
         decoded = validate_token(
@@ -47,7 +49,7 @@ class TestEnhancedTokenValidation:
         assert decoded["iss"] == issuer
 
     def test_multi_issuer_with_real_token(
-        self, client_credentials_token, test_config, issuer
+        self, client_credentials_token, test_config, issuer, require_https
     ):
         """Validate token against a list of accepted issuers."""
         token = client_credentials_token.token["access_token"]
@@ -55,6 +57,7 @@ class TestEnhancedTokenValidation:
             perform_disco=True,
             issuer=[issuer, "https://other-idp.example.com"],
             options={"verify_aud": False, "require_aud": False},
+            require_https=require_https,
         )
 
         decoded = validate_token(
@@ -65,7 +68,7 @@ class TestEnhancedTokenValidation:
         assert decoded["iss"] == issuer
 
     def test_wrong_multi_issuer_list_still_matches_discovery(
-        self, client_credentials_token, test_config, issuer
+        self, client_credentials_token, test_config, issuer, require_https
     ):
         """Config issuer list is overridden by discovery document issuer."""
         token = client_credentials_token.token["access_token"]
@@ -75,6 +78,7 @@ class TestEnhancedTokenValidation:
             perform_disco=True,
             issuer=["https://other.example.com"],
             options={"verify_aud": False, "require_aud": False},
+            require_https=require_https,
         )
 
         # Succeeds because disco document issuer overrides config issuer
