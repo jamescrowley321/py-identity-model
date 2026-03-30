@@ -1,7 +1,7 @@
 import { generateKeyPair, exportJWK } from "jose";
 import Provider from "oidc-provider";
 
-const PORT = parseInt(process.env.PORT || "3000", 10);
+const PORT = parseInt(process.env.PORT || "9010", 10);
 const ISSUER = process.env.ISSUER || `http://localhost:${PORT}`;
 
 // --- Key Generation ---
@@ -140,7 +140,7 @@ async function startProvider() {
       },
       resourceIndicators: {
         enabled: true,
-        defaultResource: () => ISSUER,
+        defaultResource: () => undefined,
         getResourceServerInfo: (ctx, resourceIndicator) => ({
           scope: "openid profile email api",
           accessTokenFormat: "jwt",
@@ -156,7 +156,7 @@ async function startProvider() {
 
     // Custom claims in access tokens (Descope-style multi-tenant claims)
     extraTokenClaims: async (ctx, token) => {
-      if (token.kind === "AccessToken") {
+      if (token.kind === "AccessToken" || token.kind === "ClientCredentials") {
         return {
           dct: "test-tenant-1",
           tenants: {

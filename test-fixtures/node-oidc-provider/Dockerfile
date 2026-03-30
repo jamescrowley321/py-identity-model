@@ -12,6 +12,6 @@ COPY provider.js .
 # Run as non-root user (built-in node user in alpine image)
 USER node
 
-EXPOSE 3000
+EXPOSE 9010
 
 CMD ["node", "provider.js"]
