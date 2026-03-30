@@ -2,9 +2,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files and install production dependencies only
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+# Copy package files and install production dependencies only (lockfile enforced)
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
 # Copy application code
 COPY provider.js .
@@ -13,5 +13,8 @@ COPY provider.js .
 USER node
 
 EXPOSE 9010
+
+HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget -q --spider http://localhost:9010/.well-known/openid-configuration || exit 1
 
 CMD ["node", "provider.js"]

@@ -1,16 +1,20 @@
-import { generateKeyPair, exportJWK } from "jose";
+import { generateKeyPair, exportJWK, decodeJwt } from "jose";
 import Provider from "oidc-provider";
+import crypto from "node:crypto";
 
 const PORT = parseInt(process.env.PORT || "9010", 10);
+if (Number.isNaN(PORT) || PORT < 1 || PORT > 65535) {
+  console.error(`Invalid PORT: ${process.env.PORT} (must be 1-65535)`);
+  process.exit(1);
+}
 const ISSUER = process.env.ISSUER || `http://localhost:${PORT}`;
 
 // --- Key Generation ---
 
 async function generateKeys() {
-  const { publicKey: rsaPub, privateKey: rsaPriv } = await generateKeyPair(
-    "RS256",
-    { extractable: true },
-  );
+  const { privateKey: rsaPriv } = await generateKeyPair("RS256", {
+    extractable: true,
+  });
   const rsaJwk = {
     ...(await exportJWK(rsaPriv)),
     kid: "rsa-sig-key",
@@ -18,10 +22,9 @@ async function generateKeys() {
     alg: "RS256",
   };
 
-  const { publicKey: ecPub, privateKey: ecPriv } = await generateKeyPair(
-    "ES256",
-    { extractable: true },
-  );
+  const { privateKey: ecPriv } = await generateKeyPair("ES256", {
+    extractable: true,
+  });
   const ecJwk = {
     ...(await exportJWK(ecPriv)),
     kid: "ec-sig-key",
@@ -36,7 +39,6 @@ async function generateKeys() {
 
 const ACCOUNTS = {
   "test-user": {
-    sub: "test-user",
     email: "test@example.com",
     email_verified: true,
     name: "Test User",
@@ -57,6 +59,8 @@ function findAccount(ctx, id) {
 }
 
 // --- Provider Configuration ---
+
+const ACCESS_TOKEN_TTL = 300;
 
 async function startProvider() {
   const jwks = { keys: await generateKeys() };
@@ -82,6 +86,15 @@ async function startProvider() {
         token_endpoint_auth_method: "client_secret_basic",
       },
       {
+        // Public client for pure PKCE testing (no client_secret)
+        client_id: "test-pkce-public",
+        grant_types: ["authorization_code", "refresh_token"],
+        response_types: ["code"],
+        redirect_uris: ["http://localhost:8080/callback"],
+        scope: "openid profile email offline_access api",
+        token_endpoint_auth_method: "none",
+      },
+      {
         client_id: "test-device",
         client_secret: "test-device-secret",
         grant_types: [
@@ -101,6 +114,8 @@ async function startProvider() {
         token_endpoint_auth_method: "client_secret_basic",
       },
       {
+        // FAPI 2.0 client — further configuration needed in T125
+        // (private_key_jwt, signed request objects, PAR-required)
         client_id: "test-fapi",
         client_secret: "test-fapi-secret",
         grant_types: ["authorization_code"],
@@ -108,6 +123,7 @@ async function startProvider() {
         redirect_uris: ["http://localhost:8080/callback"],
         scope: "openid profile email api",
         token_endpoint_auth_method: "client_secret_basic",
+        id_token_signed_response_alg: "PS256",
       },
     ],
 
@@ -122,6 +138,15 @@ async function startProvider() {
         enabled: true,
         charset: "digits",
         userCodeInputSource: async (ctx, form, out, err) => {
+          // NOTE: Raw HTML injection is intentional for this test fixture only.
+          // Do not use this pattern in production code.
+          if (err) {
+            ctx.body = `<!DOCTYPE html><html><body>
+              <h1>Device Login Error</h1>
+              <p>${err.message || "An error occurred"}</p>
+            </body></html>`;
+            return;
+          }
           ctx.body = `<!DOCTYPE html><html><body>
             <h1>Device Login</h1>
             <form method="POST" action="${ctx.oidc.urlFor("code_verification")}">
@@ -140,15 +165,22 @@ async function startProvider() {
       },
       resourceIndicators: {
         enabled: true,
+        // Tokens default to opaque (introspectable/revocable).
+        // To get JWT access tokens, include resource=urn:test:api in the token request.
         defaultResource: () => undefined,
-        getResourceServerInfo: (ctx, resourceIndicator) => ({
-          scope: "openid profile email api",
-          accessTokenFormat: "jwt",
-          accessTokenTTL: 300,
-          jwt: {
-            sign: { alg: "RS256" },
-          },
-        }),
+        getResourceServerInfo: (ctx, resourceIndicator) => {
+          if (resourceIndicator !== "urn:test:api") {
+            return undefined;
+          }
+          return {
+            scope: "openid profile email api",
+            accessTokenFormat: "jwt",
+            accessTokenTTL: ACCESS_TOKEN_TTL,
+            jwt: {
+              sign: { alg: "RS256" },
+            },
+          };
+        },
         useGrantedResource: () => true,
       },
       devInteractions: { enabled: true },
@@ -182,9 +214,9 @@ async function startProvider() {
 
     // Short TTLs for test speed
     ttl: {
-      AccessToken: 300,
+      AccessToken: ACCESS_TOKEN_TTL,
       AuthorizationCode: 60,
-      ClientCredentials: 300,
+      ClientCredentials: ACCESS_TOKEN_TTL,
       DeviceCode: 300,
       Grant: 600,
       IdToken: 300,
@@ -205,9 +237,12 @@ async function startProvider() {
       keys: ["test-fixture-cookie-key-1", "test-fixture-cookie-key-2"],
     },
 
-    // Allow HTTP for local testing
+    // JWA algorithms — explicit for JAR and DPoP test coverage
     enabledJWA: {
       authorizationSigningAlgValues: ["RS256", "ES256"],
+      requestObjectSigningAlgValues: ["RS256", "ES256"],
+      dPoPSigningAlgValues: ["RS256", "ES256"],
+      introspectionSigningAlgValues: ["RS256", "ES256"],
     },
   };
 
@@ -231,7 +266,7 @@ async function startProvider() {
 
   provider.registerGrantType(
     grantType,
-    async function tokenExchangeHandler(ctx, next) {
+    async function tokenExchangeHandler(ctx) {
       const {
         oidc: {
           params: {
@@ -250,34 +285,79 @@ async function startProvider() {
             "subject_token and subject_token_type are required",
         };
         ctx.status = 400;
-        return next();
+        return;
       }
 
-      // For test purposes: accept access tokens as subject tokens
+      // Validate subject_token_type (trim to handle whitespace edge case)
       const validTokenTypes = [
         "urn:ietf:params:oauth:token-type:access_token",
         "urn:ietf:params:oauth:token-type:jwt",
       ];
-      if (!validTokenTypes.includes(subjectTokenType)) {
+      if (!validTokenTypes.includes(subjectTokenType.trim())) {
         ctx.body = {
           error: "invalid_request",
           error_description: "unsupported subject_token_type",
         };
         ctx.status = 400;
-        return next();
+        return;
+      }
+
+      // Validate subject_token — try opaque lookup first, then JWT decode
+      let accountId = "test-user";
+      const opaqueToken =
+        (await provider.AccessToken.find(subjectToken).catch(() => null)) ||
+        (await provider.ClientCredentials.find(subjectToken).catch(
+          () => null,
+        ));
+      if (opaqueToken) {
+        accountId = opaqueToken.accountId || "test-user";
+      } else {
+        // Try JWT format
+        try {
+          const decoded = decodeJwt(subjectToken);
+          if (decoded.iss !== ISSUER) {
+            ctx.body = {
+              error: "invalid_grant",
+              error_description:
+                "subject_token was not issued by this provider",
+            };
+            ctx.status = 400;
+            return;
+          }
+          if (decoded.exp && decoded.exp < Math.floor(Date.now() / 1000)) {
+            ctx.body = {
+              error: "invalid_grant",
+              error_description: "subject_token has expired",
+            };
+            ctx.status = 400;
+            return;
+          }
+          accountId = decoded.sub || "test-user";
+        } catch {
+          ctx.body = {
+            error: "invalid_grant",
+            error_description:
+              "subject_token is invalid or not issued by this provider",
+          };
+          ctx.status = 400;
+          return;
+        }
       }
 
       // Issue a new access token
       const AccessToken = provider.AccessToken;
       const at = new AccessToken({
-        accountId: "test-user",
+        accountId,
         client,
         scope: ctx.oidc.params.scope || "openid",
-        grantId: ctx.oidc.uid,
+        grantId: ctx.oidc.uid || crypto.randomUUID(),
       });
 
+      ctx.oidc.entity("AccessToken", at);
       const value = await at.save();
-      const expiresIn = at.expiration;
+      const expiresIn = at.exp
+        ? at.exp - Math.floor(Date.now() / 1000)
+        : ACCESS_TOKEN_TTL;
 
       ctx.body = {
         access_token: value,
@@ -286,20 +366,31 @@ async function startProvider() {
         expires_in: expiresIn,
         scope: at.scope,
       };
-
-      await next();
     },
     parameters,
   );
 
   // Start listening
-  provider.listen(PORT, () => {
+  const server = provider.listen(PORT, () => {
     console.log(
       `node-oidc-provider test fixture listening on ${ISSUER} (port ${PORT})`,
     );
     console.log(`Discovery: ${ISSUER}/.well-known/openid-configuration`);
     console.log(`JWKS: ${ISSUER}/jwks`);
   });
+
+  server.on("error", (err) => {
+    console.error(`Listen failed: ${err.message}`);
+    process.exit(1);
+  });
+
+  // Graceful shutdown
+  for (const signal of ["SIGTERM", "SIGINT"]) {
+    process.on(signal, () => {
+      console.log(`Received ${signal}, shutting down...`);
+      server.close(() => process.exit(0));
+    });
+  }
 }
 
 startProvider().catch((err) => {
