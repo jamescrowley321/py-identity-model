@@ -14,6 +14,7 @@ from .models import (
     ClientCredentialsTokenResponse,
     DiscoveryDocumentResponse,
     JwksResponse,
+    PushedAuthorizationResponse,
     RefreshTokenResponse,
     TokenIntrospectionResponse,
     TokenRevocationResponse,
@@ -185,6 +186,20 @@ def handle_revocation_error(e: Exception) -> TokenRevocationResponse:
     return TokenRevocationResponse(is_successful=False, error=error_msg)
 
 
+def handle_par_error(e: Exception) -> PushedAuthorizationResponse:
+    """Handle errors during pushed authorization requests."""
+    if isinstance(e, httpx.RequestError):
+        error_msg = f"Network error during PAR: {e!s}"
+        logger.error(error_msg, exc_info=True)
+        return PushedAuthorizationResponse(
+            is_successful=False, error=error_msg
+        )
+
+    error_msg = f"Unexpected error during PAR: {e!s}"
+    logger.error(error_msg, exc_info=True)
+    return PushedAuthorizationResponse(is_successful=False, error=error_msg)
+
+
 def handle_userinfo_error(e: Exception) -> UserInfoResponse:
     """
     Handle errors during UserInfo requests.
@@ -216,6 +231,7 @@ __all__ = [
     "handle_discovery_error",
     "handle_introspection_error",
     "handle_jwks_error",
+    "handle_par_error",
     "handle_revocation_error",
     "handle_token_error",
     "handle_userinfo_error",

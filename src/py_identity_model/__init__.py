@@ -46,6 +46,8 @@ from .sync import (
     JsonWebKeyParameterNames,
     JwksRequest,
     JwksResponse,
+    PushedAuthorizationRequest,
+    PushedAuthorizationResponse,
     RefreshTokenRequest,
     RefreshTokenResponse,
     StateValidationResult,
@@ -70,6 +72,7 @@ from .sync import (
     introspect_token,
     jwks_from_dict,
     parse_authorize_callback_response,
+    push_authorization_request,
     refresh_token,
     request_authorization_code_token,
     request_client_credentials_token,
@@ -115,6 +118,9 @@ __all__ = [
     "JwksRequest",
     "JwksResponse",
     "NetworkException",
+    # PAR
+    "PushedAuthorizationRequest",
+    "PushedAuthorizationResponse",
     # Exceptions
     "PyIdentityModelException",
     # Refresh Token
@@ -152,6 +158,7 @@ __all__ = [
     "introspect_token",
     "jwks_from_dict",
     "parse_authorize_callback_response",
+    "push_authorization_request",
     "refresh_token",
     "request_authorization_code_token",
     "request_client_credentials_token",

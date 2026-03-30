@@ -699,6 +699,58 @@ class TokenIntrospectionResponse(BaseResponse):
 
 
 # ============================================================================
+# Pushed Authorization Request Models - RFC 9126
+# ============================================================================
+
+
+@dataclass
+class PushedAuthorizationRequest(BaseRequest):
+    """Request for OAuth 2.0 Pushed Authorization Request (RFC 9126).
+
+    Pushes authorization parameters to the PAR endpoint and receives
+    a ``request_uri`` for use in the authorization URL.
+
+    Attributes:
+        address: The pushed authorization request endpoint URL.
+        client_id: The client identifier.
+        redirect_uri: The registered redirect URI.
+        scope: Space-delimited scopes (default ``"openid"``).
+        response_type: OAuth 2.0 response type (default ``"code"``).
+        state: CSRF protection value.
+        nonce: OpenID Connect nonce.
+        code_challenge: PKCE code challenge.
+        code_challenge_method: PKCE method (``"S256"`` or ``"plain"``).
+        client_secret: Client secret (optional for public clients).
+    """
+
+    client_id: str
+    redirect_uri: str
+    scope: str = "openid"
+    response_type: str = "code"
+    state: str | None = None
+    nonce: str | None = None
+    code_challenge: str | None = None
+    code_challenge_method: str | None = None
+    client_secret: str | None = None
+
+
+@dataclass
+class PushedAuthorizationResponse(BaseResponse):
+    """Response from a pushed authorization request endpoint (RFC 9126).
+
+    Check ``is_successful`` before accessing ``request_uri``.
+    Use ``request_uri`` in the authorization URL instead of inline parameters.
+    """
+
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset(
+        {"request_uri", "expires_in"}
+    )
+
+    request_uri: str | None = None
+    expires_in: int | None = None
+
+
+# ============================================================================
 # Token Revocation Models - RFC 7009
 # ============================================================================
 
@@ -842,6 +894,9 @@ __all__ = [
     "JsonWebKeyParameterNames",
     "JwksRequest",
     "JwksResponse",
+    # Pushed Authorization Request
+    "PushedAuthorizationRequest",
+    "PushedAuthorizationResponse",
     # Refresh Token
     "RefreshTokenRequest",
     "RefreshTokenResponse",
