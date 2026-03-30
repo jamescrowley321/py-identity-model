@@ -21,16 +21,16 @@ test-unit:
 
 .PHONY: test-integration-local
 test-integration-local:
-	uv run pytest src/tests -m integration --env-file=.env.local -v -n auto
+	uv run pytest src/tests -m "integration and not node_oidc" --env-file=.env.local -v -n auto
 
 .PHONY: test-integration-ory
 test-integration-ory:
-	uv run pytest src/tests -m integration -v -n auto
+	uv run pytest src/tests -m "integration and not node_oidc" -v -n auto
 
 .PHONY: test-integration-descope
 test-integration-descope:
 	@echo "Running integration tests against Descope..."
-	uv run pytest src/tests -m integration $(if $(wildcard .env.descope),--env-file=.env.descope) -v -n auto
+	uv run pytest src/tests -m "integration and not node_oidc" $(if $(wildcard .env.descope),--env-file=.env.descope) -v -n auto
 
 .PHONY: test-integration-node-oidc
 test-integration-node-oidc: ## Run integration tests against node-oidc-provider
