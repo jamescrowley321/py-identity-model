@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.17.0 (2026-03-30)
+
+### Refactoring
+
+- **test**: Provider-agnostic integration tests with discovery-driven capabilities
+  ([#281](https://github.com/jamescrowley321/py-identity-model/pull/281),
+  [`02ff38a`](https://github.com/jamescrowley321/py-identity-model/commit/02ff38a8d786816b2e6446ba65e932082762f6bf))
+
+
 ## v2.16.0 (2026-03-30)
 
 
