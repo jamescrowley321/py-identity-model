@@ -139,9 +139,13 @@ dmypy.json
 *.pfx
 .secrets.baseline
 
-# Claude Code MCP configuration (may contain tokens)
+# Claude Code runtime state
 .claude/mcp.json
 .claude/worktrees/
+.claude/task-state.md
+
+# Ralph orchestrator runtime state
+.ralph/
 
 # Terraform
 infra/**/.terraform/
@@ -150,4 +154,3 @@ infra/**/*.tfstate.backup
 infra/**/*.tfvars
 infra/**/access_key.json
 infra/**/expired_token.txt
-.claude/worktrees/
