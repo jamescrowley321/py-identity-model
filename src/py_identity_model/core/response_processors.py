@@ -13,6 +13,7 @@ from .models import (
     ClientCredentialsTokenResponse,
     DiscoveryDocumentResponse,
     JwksResponse,
+    TokenIntrospectionResponse,
     UserInfoResponse,
 )
 from .parsers import jwks_from_dict
@@ -121,6 +122,7 @@ def build_discovery_response(
         # Common optional properties
         userinfo_endpoint=response_json.get("userinfo_endpoint"),
         registration_endpoint=response_json.get("registration_endpoint"),
+        introspection_endpoint=response_json.get("introspection_endpoint"),
         scopes_supported=response_json.get("scopes_supported"),
         response_modes_supported=response_json.get(
             "response_modes_supported",
@@ -264,6 +266,29 @@ def parse_auth_code_token_response(
     )
 
 
+def parse_introspection_response(
+    response: httpx.Response,
+) -> TokenIntrospectionResponse:
+    """Parse token introspection HTTP response (RFC 7662)."""
+    if response.is_success:
+        data = response.json()
+        if not isinstance(data, dict):
+            return TokenIntrospectionResponse(
+                is_successful=False,
+                error=f"Introspection response is not a JSON object: {type(data).__name__}",
+            )
+        return TokenIntrospectionResponse(
+            is_successful=True,
+            claims=data,
+        )
+
+    error_msg = (
+        f"Token introspection failed with status code: "
+        f"{response.status_code}. Response Content: {response.content}"
+    )
+    return TokenIntrospectionResponse(is_successful=False, error=error_msg)
+
+
 def parse_userinfo_response(response: httpx.Response) -> UserInfoResponse:
     """
     Parse UserInfo HTTP response.
@@ -308,6 +333,7 @@ def parse_userinfo_response(response: httpx.Response) -> UserInfoResponse:
 __all__ = [
     "build_discovery_response",
     "parse_auth_code_token_response",
+    "parse_introspection_response",
     "parse_jwks_response",
     "parse_token_response",
     "parse_userinfo_response",

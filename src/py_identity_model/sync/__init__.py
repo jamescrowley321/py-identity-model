@@ -21,6 +21,11 @@ from .discovery import (
     DiscoveryDocumentResponse,
     get_discovery_document,
 )
+from .introspection import (
+    TokenIntrospectionRequest,
+    TokenIntrospectionResponse,
+    introspect_token,
+)
 from .jwks import (
     JsonWebAlgorithmsKeyTypes,
     JsonWebKey,
@@ -68,6 +73,9 @@ __all__ = [
     "JwksRequest",
     "JwksResponse",
     "StateValidationResult",
+    # Token Introspection
+    "TokenIntrospectionRequest",
+    "TokenIntrospectionResponse",
     # Token Validation
     "TokenValidationConfig",
     # UserInfo
@@ -80,6 +88,7 @@ __all__ = [
     "get_discovery_document",
     "get_jwks",
     "get_userinfo",
+    "introspect_token",
     "jwks_from_dict",
     "parse_authorize_callback_response",
     "request_authorization_code_token",
