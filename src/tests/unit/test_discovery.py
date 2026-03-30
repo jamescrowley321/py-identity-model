@@ -169,11 +169,9 @@ class TestSyncDiscoveryPreFlightSchemeValidation:
         result = get_discovery_document(request)
         # Pre-flight passes for loopback — mock was actually called
         assert route.called
-        # Post-flight issuer validation rejects HTTP issuer (OIDC spec
-        # requires HTTPS), but the error is NOT from the pre-flight check
-        assert "HTTPS is required by discovery policy" not in (
-            result.error or ""
-        )
+        # Loopback HTTP issuer is allowed by default policy
+        assert result.is_successful
+        assert result.issuer == "http://127.0.0.1:9999"
 
     @respx.mock
     def test_relaxed_policy_allows_http(self):

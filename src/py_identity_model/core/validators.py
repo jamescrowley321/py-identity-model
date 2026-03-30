@@ -211,12 +211,25 @@ def validate_issuer_with_policy(
     When *policy* is ``None`` or ``policy.validate_issuer`` is ``True``,
     delegates to :func:`validate_issuer`. When validation is disabled
     by the policy, only checks that the issuer is non-empty.
+
+    The ``allow_http_on_loopback`` policy flag is respected: if the
+    issuer is an HTTP URL on a loopback address, HTTPS is not required.
     """
     if policy is None or policy.validate_issuer:
-        validate_issuer(
-            issuer,
-            require_https=policy.require_https if policy else True,
-        )
+        # Determine effective require_https: allow HTTP on loopback
+        effective_require_https = policy.require_https if policy else True
+        if (
+            effective_require_https
+            and policy is not None
+            and policy.allow_http_on_loopback
+        ):
+            parsed = urlparse(issuer)
+            if parsed.scheme == "http" and is_loopback(
+                parsed.hostname or ""
+            ):
+                effective_require_https = False
+
+        validate_issuer(issuer, require_https=effective_require_https)
         return
 
     if not issuer:
