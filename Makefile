@@ -41,6 +41,10 @@ test-integration-node-oidc: ## Run integration tests against node-oidc-provider
 		(docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down && exit 1)
 	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
 
+.PHONY: provider-matrix
+provider-matrix: ## Show provider capability matrix from discovery documents
+	uv run python src/tests/integration/provider_matrix.py
+
 .PHONY: generate-token
 generate-token:
 	uv run python examples/generate_token.py

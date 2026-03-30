@@ -143,3 +143,28 @@ class TestAuthorizeCallbackWithDiscovery:
         result = validate_authorize_callback_state(response, state)
 
         assert result.is_valid is True
+
+
+@pytest.mark.integration
+class TestLiveAuthorizeCallback:
+    """Test callback validation with live auth code flow results.
+
+    These tests use auth_code_result which skips when the provider
+    does not support devInteractions.
+    """
+
+    def test_live_state_validation(self, auth_code_result):
+        """Verify state parameter roundtrip from live flow."""
+        assert auth_code_result["state_result"].is_valid
+        assert auth_code_result["callback"].state == auth_code_result["state"]
+
+    def test_live_state_mismatch(self, auth_code_result):
+        """Wrong state returns STATE_MISMATCH against live callback."""
+        callback = auth_code_result["callback"]
+        wrong_state = "completely-wrong-state-value"
+        state_result = validate_authorize_callback_state(callback, wrong_state)
+        assert not state_result.is_valid
+        assert (
+            state_result.result
+            == AuthorizeCallbackValidationResult.STATE_MISMATCH
+        )
