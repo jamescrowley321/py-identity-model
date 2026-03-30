@@ -466,6 +466,7 @@ class DiscoveryDocumentResponse(BaseResponse):
             "op_policy_uri",
             "op_tos_uri",
             "introspection_endpoint",
+            "code_challenge_methods_supported",
         }
     )
 
@@ -509,6 +510,9 @@ class DiscoveryDocumentResponse(BaseResponse):
     claims_supported: list[str] | None = None
     claims_locales_supported: list[str] | None = None
     ui_locales_supported: list[str] | None = None
+
+    # PKCE support (RFC 8414)
+    code_challenge_methods_supported: list[str] | None = None
 
     # Feature support flags
     claims_parameter_supported: bool | None = None
