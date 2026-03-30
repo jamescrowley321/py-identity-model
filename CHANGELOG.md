@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.9.0 (2026-03-30)
+
+### Features
+
+- **refresh**: Implement OAuth 2.0 Refresh Token Grant
+  ([#228](https://github.com/jamescrowley321/py-identity-model/pull/228),
+  [`c0eae00`](https://github.com/jamescrowley321/py-identity-model/commit/c0eae004b9b33e2e2d4ad658d772cdcae4e3fccc))
+
+
 ## v2.8.0 (2026-03-30)
 
 
