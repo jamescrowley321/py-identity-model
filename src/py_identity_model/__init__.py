@@ -31,6 +31,8 @@ from .identity import Claim, ClaimsIdentity, ClaimsPrincipal, to_principal
 from .sync import (
     AuthorizeCallbackResponse,
     AuthorizeCallbackValidationResult,
+    BaseRequest,
+    BaseResponse,
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
     DiscoveryDocumentRequest,
@@ -61,6 +63,9 @@ __all__ = [
     "AuthorizeCallbackException",
     "AuthorizeCallbackResponse",
     "AuthorizeCallbackValidationResult",
+    # Base Classes
+    "BaseRequest",
+    "BaseResponse",
     # Identity models
     "Claim",
     "ClaimsIdentity",

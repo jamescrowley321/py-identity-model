@@ -22,6 +22,7 @@ from ..core.token_validation_logic import (
     validate_config_for_manual_validation,
     validate_disco_response,
     validate_jwks_response,
+    validate_jwks_uri,
 )
 from ..core.validators import validate_token_config
 from ..exceptions import ConfigurationException
@@ -130,13 +131,10 @@ async def validate_token(
                 http_client=http_client,
             )
             validate_disco_response(disco_doc_response)
+            jwks_uri = validate_jwks_uri(disco_doc_response)
 
-            if disco_doc_response.jwks_uri is None:
-                raise ConfigurationException(
-                    "Discovery document missing jwks_uri"
-                )
             jwks_response = await get_jwks(
-                JwksRequest(address=disco_doc_response.jwks_uri),
+                JwksRequest(address=jwks_uri),
                 http_client=http_client,
             )
             validate_jwks_response(jwks_response)
@@ -149,16 +147,13 @@ async def validate_token(
                 disco_doc_address, token_validation_config.require_https
             )
             validate_disco_response(disco_doc_response)
+            jwks_uri = validate_jwks_uri(disco_doc_response)
 
-            jwks_response = await _get_jwks_response(
-                disco_doc_response.jwks_uri
-            )
+            jwks_response = await _get_jwks_response(jwks_uri)
             validate_jwks_response(jwks_response)
 
             kid = extract_kid_from_jwt(jwt)
-            key_dict, alg = await _get_public_key_by_kid(
-                kid, disco_doc_response.jwks_uri
-            )
+            key_dict, alg = await _get_public_key_by_kid(kid, jwks_uri)
 
         # Use local variables instead of mutating the config object
         decoded_token = decode_with_config(
@@ -172,6 +167,7 @@ async def validate_token(
                 subject=token_validation_config.subject,
                 options=token_validation_config.options,
                 claims_validator=token_validation_config.claims_validator,
+                leeway=token_validation_config.leeway,
             ),
             disco_doc_response.issuer,
         )

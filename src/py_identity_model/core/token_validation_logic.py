@@ -35,6 +35,25 @@ def validate_disco_response(
         raise TokenValidationException(error_msg)
 
 
+def validate_jwks_uri(
+    disco_doc_response: DiscoveryDocumentResponse,
+) -> str:
+    """Validate and return jwks_uri from a discovery document response.
+
+    Args:
+        disco_doc_response: A successful discovery document response.
+
+    Returns:
+        The non-empty jwks_uri string.
+
+    Raises:
+        ConfigurationException: If jwks_uri is missing or empty.
+    """
+    if not disco_doc_response.jwks_uri:
+        raise ConfigurationException("Discovery document missing jwks_uri")
+    return disco_doc_response.jwks_uri
+
+
 def validate_jwks_response(jwks_response: JwksResponse) -> None:
     """
     Validate JWKS response.
@@ -81,7 +100,7 @@ def validate_config_for_manual_validation(
 def decode_with_config(
     jwt: str,
     token_validation_config: TokenValidationConfig,
-    issuer: str | None = None,
+    issuer: str | list[str] | None = None,
 ) -> dict:
     """
     Decode and validate JWT using the token validation configuration.
@@ -106,13 +125,24 @@ def decode_with_config(
             "Token validation configuration must have key and algorithms set"
         )
 
+    # Warn when discovery issuer overrides a user-supplied multi-issuer list
+    if issuer is not None and isinstance(token_validation_config.issuer, list):
+        logger.warning(
+            "Discovery issuer overrides configured multi-issuer list; "
+            "multi-issuer is not supported in discovery mode"
+        )
+
     return decode_and_validate_jwt(
         jwt=jwt,
         key=token_validation_config.key,
         algorithms=token_validation_config.algorithms,
         audience=token_validation_config.audience,
-        issuer=issuer or token_validation_config.issuer,
+        issuer=issuer
+        if issuer is not None
+        else token_validation_config.issuer,
         options=token_validation_config.options,
+        leeway=token_validation_config.leeway,
+        subject=token_validation_config.subject,
     )
 
 
@@ -205,7 +235,7 @@ def log_validation_success(decoded_token: dict) -> None:
         decoded_token: The decoded token claims
     """
     logger.info(
-        f"Token validation successful for subject: {decoded_token.get('sub', 'unknown')}",
+        f"Token validation successful, subject: {'[present]' if 'sub' in decoded_token else '[absent]'}",
     )
     logger.debug(f"Decoded token claims: {list(decoded_token.keys())}")
 
@@ -219,4 +249,5 @@ __all__ = [
     "validate_config_for_manual_validation",
     "validate_disco_response",
     "validate_jwks_response",
+    "validate_jwks_uri",
 ]

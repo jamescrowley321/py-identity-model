@@ -53,6 +53,60 @@ class _GuardedResponseMixin:
 
 
 # ============================================================================
+# Base Request / Response Classes
+# ============================================================================
+
+
+@dataclass
+class BaseRequest:
+    """Base class for all API requests.
+
+    Every request targets an endpoint URL via the *address* field.
+    Subclasses add endpoint-specific parameters.
+    """
+
+    address: str
+
+
+@dataclass(repr=False, eq=False)
+class BaseResponse(_GuardedResponseMixin):
+    """Base class for all API responses with success/error state.
+
+    Inherits field-access guarding from ``_GuardedResponseMixin``.
+    Subclasses override ``_guarded_fields`` and add data fields.
+    Check ``is_successful`` before accessing data or error fields.
+
+    .. note::
+
+       ``dataclasses.asdict()`` and ``astuple()`` trigger the field-access
+       guards and will raise.  Use ``vars(response)`` instead for dict
+       conversion.
+    """
+
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset()
+
+    is_successful: bool
+    error: str | None = None
+
+    __hash__ = None  # type: ignore[assignment]  # mutable dataclass
+
+    def __repr__(self) -> str:
+        """Safe repr that bypasses field-access guards."""
+        cls_name = type(self).__name__
+        parts: list[str] = []
+        for f in fields(self):
+            val = object.__getattribute__(self, f.name)
+            parts.append(f"{f.name}={val!r}")
+        return f"{cls_name}({', '.join(parts)})"
+
+    def __eq__(self, other: object) -> bool:
+        """Safe equality that bypasses field-access guards."""
+        if type(self) is not type(other):
+            return NotImplemented
+        return self.__dict__ == other.__dict__
+
+
+# ============================================================================
 # JSON Web Key (JWK) Models - RFC 7517
 # ============================================================================
 
@@ -349,7 +403,7 @@ class JsonWebKey:
 
 
 @dataclass
-class DiscoveryDocumentRequest:
+class DiscoveryDocumentRequest(BaseRequest):
     """Request for fetching an OpenID Connect discovery document.
 
     Attributes:
@@ -362,12 +416,11 @@ class DiscoveryDocumentRequest:
             providers.
     """
 
-    address: str
     require_https: bool = True
 
 
-@dataclass
-class DiscoveryDocumentResponse(_GuardedResponseMixin):
+@dataclass(repr=False, eq=False)
+class DiscoveryDocumentResponse(BaseResponse):
     """Response from an OpenID Connect discovery document fetch.
 
     Check ``is_successful`` before accessing data fields. Accessing guarded
@@ -415,7 +468,6 @@ class DiscoveryDocumentResponse(_GuardedResponseMixin):
         }
     )
 
-    is_successful: bool
     # Core OpenID Connect endpoints
     issuer: str | None = None
     jwks_uri: str | None = None
@@ -467,9 +519,6 @@ class DiscoveryDocumentResponse(_GuardedResponseMixin):
     op_policy_uri: str | None = None
     op_tos_uri: str | None = None
 
-    # Internal properties
-    error: str | None = None
-
 
 # ============================================================================
 # JWKS Models - RFC 7517
@@ -477,18 +526,16 @@ class DiscoveryDocumentResponse(_GuardedResponseMixin):
 
 
 @dataclass
-class JwksRequest:
+class JwksRequest(BaseRequest):
     """Request for fetching a JSON Web Key Set.
 
     Attributes:
         address: The JWKS endpoint URL (typically from ``DiscoveryDocumentResponse.jwks_uri``).
     """
 
-    address: str
 
-
-@dataclass
-class JwksResponse(_GuardedResponseMixin):
+@dataclass(repr=False, eq=False)
+class JwksResponse(BaseResponse):
     """Response from a JWKS endpoint fetch.
 
     Check ``is_successful`` before accessing ``keys``.
@@ -496,9 +543,7 @@ class JwksResponse(_GuardedResponseMixin):
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"keys"})
 
-    is_successful: bool
     keys: list[JsonWebKey] | None = None
-    error: str | None = None
 
 
 # ============================================================================
@@ -507,7 +552,7 @@ class JwksResponse(_GuardedResponseMixin):
 
 
 @dataclass
-class ClientCredentialsTokenRequest:
+class ClientCredentialsTokenRequest(BaseRequest):
     """Request for an OAuth 2.0 client credentials token.
 
     Attributes:
@@ -517,14 +562,13 @@ class ClientCredentialsTokenRequest:
         scope: Space-delimited list of requested scopes.
     """
 
-    address: str
     client_id: str
     client_secret: str
     scope: str
 
 
-@dataclass
-class ClientCredentialsTokenResponse(_GuardedResponseMixin):
+@dataclass(repr=False, eq=False)
+class ClientCredentialsTokenResponse(BaseResponse):
     """Response from a client credentials token request.
 
     Check ``is_successful`` before accessing ``token``.
@@ -532,9 +576,7 @@ class ClientCredentialsTokenResponse(_GuardedResponseMixin):
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
 
-    is_successful: bool
     token: dict | None = None
-    error: str | None = None
 
 
 # ============================================================================
@@ -543,7 +585,7 @@ class ClientCredentialsTokenResponse(_GuardedResponseMixin):
 
 
 @dataclass
-class UserInfoRequest:
+class UserInfoRequest(BaseRequest):
     """Request for the OpenID Connect UserInfo endpoint.
 
     Attributes:
@@ -551,12 +593,11 @@ class UserInfoRequest:
         token: A valid access token with ``openid`` scope.
     """
 
-    address: str
     token: str
 
 
-@dataclass
-class UserInfoResponse(_GuardedResponseMixin):
+@dataclass(repr=False, eq=False)
+class UserInfoResponse(BaseResponse):
     """Response from the UserInfo endpoint.
 
     Check ``is_successful`` before accessing ``claims`` or ``raw``.
@@ -564,10 +605,8 @@ class UserInfoResponse(_GuardedResponseMixin):
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"claims", "raw"})
 
-    is_successful: bool
     claims: dict | None = None
     raw: str | None = None
-    error: str | None = None
 
 
 # ============================================================================
@@ -585,23 +624,38 @@ class TokenValidationConfig:
         key: Public key for JWT verification (dict with 'kty', 'n', 'e' for RSA)
         audience: Expected audience claim(s) in the token
         algorithms: List of allowed signing algorithms (e.g., ['RS256'])
-        issuer: Expected issuer claim in the token
-        subject: Expected subject claim in the token
+        issuer: Expected issuer claim.  A single string or a list of
+            accepted issuers for multi-tenant validation.
+        subject: Expected ``sub`` claim.  Validated after decoding.
         options: Additional PyJWT decode options (e.g., {'verify_exp': False})
         claims_validator: Optional callable for custom claims validation.
                          Can be sync: Callable[[dict], None]
                          or async: Callable[[dict], Awaitable[None]] (in async context)
                          Should raise an exception if validation fails.
                          The decoded token claims dict is passed as the only argument.
+        leeway: Clock skew tolerance in seconds for ``exp`` and ``nbf``
+            claims.  Useful when clocks between the issuer and this
+            server are not perfectly synchronized.
 
-    Example:
+    Examples:
+        >>> # Multi-tenant with clock skew tolerance
+        >>> config = TokenValidationConfig(
+        ...     perform_disco=True,
+        ...     audience="my-api",
+        ...     issuer=[
+        ...         "https://idp1.example.com",
+        ...         "https://idp2.example.com",
+        ...     ],
+        ...     leeway=30,
+        ... )
+
+        >>> # Custom claims validation
         >>> def validate_custom_claims(claims: dict) -> None:
         ...     if claims.get("role") != "admin":
         ...         raise ValueError("User is not an admin")
         >>>
         >>> config = TokenValidationConfig(
         ...     perform_disco=True,
-        ...     audience="my-api",
         ...     claims_validator=validate_custom_claims,
         ... )
     """
@@ -610,14 +664,18 @@ class TokenValidationConfig:
     key: dict | None = None
     audience: str | None = None
     algorithms: list[str] | None = None
-    issuer: str | None = None
+    issuer: str | list[str] | None = None
     subject: str | None = None
     options: dict | None = None
     claims_validator: Callable | None = None
     require_https: bool = True
+    leeway: float | None = None
 
 
 __all__ = [
+    # Base Classes
+    "BaseRequest",
+    "BaseResponse",
     # Token Client
     "ClientCredentialsTokenRequest",
     "ClientCredentialsTokenResponse",

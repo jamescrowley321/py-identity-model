@@ -51,8 +51,9 @@ def _decode_jwt_cached(
     key_json: str,
     algorithms_tuple: tuple[str, ...],
     audience: str | None,
-    issuer: str | None,
+    issuer: str | tuple[str, ...] | None,
     options_json: str | None,
+    leeway: float | None = None,
 ) -> dict:
     """
     Internal cached JWT decoding.
@@ -65,8 +66,9 @@ def _decode_jwt_cached(
         key_json: Serialized key
         algorithms_tuple: Algorithms as tuple (hashable)
         audience: Expected audience
-        issuer: Expected issuer
+        issuer: Expected issuer (string or tuple for multi-issuer)
         options_json: Serialized options
+        leeway: Clock skew tolerance in seconds
 
     Returns:
         Decoded claims
@@ -76,14 +78,20 @@ def _decode_jwt_cached(
     )
     options = json.loads(options_json) if options_json else None
 
-    return decode(
-        jwt,
-        pyjwk,
-        audience=audience,
-        algorithms=list(algorithms_tuple),
-        issuer=issuer,
-        options=options,
+    # PyJWT accepts issuer as str or sequence
+    issuer_param: str | list[str] | None = (
+        list(issuer) if isinstance(issuer, tuple) else issuer
     )
+
+    kwargs: dict = {
+        "audience": audience,
+        "algorithms": list(algorithms_tuple),
+        "issuer": issuer_param,
+        "options": options,
+        "leeway": leeway if leeway is not None else 0,
+    }
+
+    return decode(jwt, pyjwk, **kwargs)
 
 
 def decode_and_validate_jwt(
@@ -91,8 +99,10 @@ def decode_and_validate_jwt(
     key: dict,
     algorithms: list[str],
     audience: str | None,
-    issuer: str | None,
+    issuer: str | list[str] | None,
     options: dict | None,
+    leeway: float | None = None,
+    subject: str | None = None,
 ) -> dict:
     """
     Decode and validate JWT with proper exception handling.
@@ -102,8 +112,10 @@ def decode_and_validate_jwt(
         key: The public key to use for verification
         algorithms: List of allowed algorithms
         audience: Expected audience
-        issuer: Expected issuer
+        issuer: Expected issuer (single string or list for multi-tenant)
         options: Additional validation options
+        leeway: Clock skew tolerance in seconds for exp/nbf claims
+        subject: Expected ``sub`` claim.  Validated after decoding.
 
     Returns:
         Decoded token claims
@@ -116,19 +128,55 @@ def decode_and_validate_jwt(
         TokenValidationException: For other token validation errors
     """
     try:
+        # Guard against empty algorithms on direct API calls
+        if not algorithms:
+            from ..exceptions import ConfigurationException
+
+            raise ConfigurationException("algorithms must not be empty")
+
+        # Guard against empty issuer list on direct API calls
+        if isinstance(issuer, list) and len(issuer) == 0:
+            from ..exceptions import ConfigurationException
+
+            raise ConfigurationException(
+                "issuer must not be an empty list; omit or set to None to skip issuer validation"
+            )
+
         # Convert to hashable types for caching
         key_json = json.dumps(key, sort_keys=True)
-        algorithms_tuple = tuple(algorithms) if algorithms else ()
+        algorithms_tuple = tuple(algorithms)
         options_json = json.dumps(options, sort_keys=True) if options else None
 
-        return _decode_jwt_cached(
+        # Convert issuer list to tuple for hashability
+        issuer_hashable: str | tuple[str, ...] | None = (
+            tuple(issuer) if isinstance(issuer, list) else issuer
+        )
+
+        decoded = _decode_jwt_cached(
             jwt,
             key_json,
             algorithms_tuple,
             audience,
-            issuer,
+            issuer_hashable,
             options_json,
+            leeway=leeway,
         )
+
+        # Return a shallow copy to prevent cache aliasing —
+        # lru_cache returns the same dict reference on cache hits,
+        # so callers mutating the returned dict would corrupt the cache.
+        decoded = decoded.copy()
+
+        # Validate subject claim (PyJWT doesn't do this natively)
+        if subject is not None and decoded.get("sub") != subject:
+            raise TokenValidationException(
+                "Invalid subject: token sub does not match expected value",
+                token_part="payload",
+            )
+
+        return decoded
+    except TokenValidationException:
+        raise
     except ExpiredSignatureError as e:
         logger.error(f"Token has expired: {e!s}")
         raise TokenExpiredException(

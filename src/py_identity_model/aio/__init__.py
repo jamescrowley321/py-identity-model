@@ -25,6 +25,7 @@ from ..core.authorize_response import (
     AuthorizeCallbackResponse,
     parse_authorize_callback_response,
 )
+from ..core.models import BaseRequest, BaseResponse
 from ..core.state_validation import (
     AuthorizeCallbackValidationResult,
     StateValidationResult,
@@ -60,6 +61,9 @@ __all__ = [
     # Authorize Callback
     "AuthorizeCallbackResponse",
     "AuthorizeCallbackValidationResult",
+    # Base Classes
+    "BaseRequest",
+    "BaseResponse",
     # Token Client
     "ClientCredentialsTokenRequest",
     "ClientCredentialsTokenResponse",
