@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.17.1 (2026-03-30)
+
+### Bug Fixes
+
+- **ci**: Add git identity config to uv.lock sync step in release workflow
+  ([`5167464`](https://github.com/jamescrowley321/py-identity-model/commit/51674649062f960f2be795b063330a41aff6991e))
+
+
 ## v2.17.0 (2026-03-30)
 
 ### Refactoring
