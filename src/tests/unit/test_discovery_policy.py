@@ -8,11 +8,17 @@ from py_identity_model.core.discovery_policy import (
     parse_discovery_url,
     validate_url_scheme,
 )
+from py_identity_model.core.response_processors import (
+    _validate_endpoint_authority,
+)
 from py_identity_model.core.validators import (
     validate_https_url_with_policy,
     validate_issuer_with_policy,
 )
-from py_identity_model.exceptions import ConfigurationException
+from py_identity_model.exceptions import (
+    ConfigurationException,
+    DiscoveryException,
+)
 
 
 @pytest.mark.unit
@@ -55,6 +61,11 @@ class TestIsLoopback:
         assert is_loopback("example.com") is False
         assert is_loopback("192.168.1.1") is False
         assert is_loopback("10.0.0.1") is False
+
+    def test_dns_spoofed_loopback_rejected(self):
+        """127.evil.com must not match as loopback (S2 fix)."""
+        assert is_loopback("127.evil.com") is False
+        assert is_loopback("127.0.0.1.evil.com") is False
 
 
 @pytest.mark.unit
@@ -195,3 +206,125 @@ class TestDiscoveryDocumentRequestWithPolicy:
         )
         assert req.policy is not None
         assert req.policy.require_https is False
+
+
+@pytest.mark.unit
+class TestValidateEndpointAuthority:
+    """Tests for _validate_endpoint_authority (M2 & M3 coverage)."""
+
+    def _make_response(self, issuer: str = "https://auth.example.com") -> dict:
+        return {"issuer": issuer}
+
+    def test_matching_issuer_authority_passes(self):
+        """Endpoint with same authority as issuer passes validation."""
+        policy = DiscoveryPolicy(validate_endpoints=True)
+        _validate_endpoint_authority(
+            "https://auth.example.com/token",
+            "token_endpoint",
+            self._make_response(),
+            policy,
+        )
+
+    def test_mismatched_authority_raises(self):
+        """Endpoint from different authority than issuer is rejected."""
+        policy = DiscoveryPolicy(validate_endpoints=True)
+        with pytest.raises(DiscoveryException, match="authority"):
+            _validate_endpoint_authority(
+                "https://evil.com/token",
+                "token_endpoint",
+                self._make_response(),
+                policy,
+            )
+
+    def test_additional_base_addresses_accepted(self):
+        """Endpoint from additional_endpoint_base_addresses passes (M2)."""
+        policy = DiscoveryPolicy(
+            validate_endpoints=True,
+            additional_endpoint_base_addresses=["https://cdn.example.com"],
+        )
+        _validate_endpoint_authority(
+            "https://cdn.example.com/keys",
+            "jwks_uri",
+            self._make_response(),
+            policy,
+        )
+
+    def test_additional_base_addresses_trailing_slash(self):
+        """Trailing slashes on additional addresses are normalized."""
+        policy = DiscoveryPolicy(
+            validate_endpoints=True,
+            additional_endpoint_base_addresses=["https://cdn.example.com/"],
+        )
+        _validate_endpoint_authority(
+            "https://cdn.example.com/keys",
+            "jwks_uri",
+            self._make_response(),
+            policy,
+        )
+
+    def test_additional_base_addresses_rejects_unlisted(self):
+        """Endpoint not in issuer or additional addresses is rejected."""
+        policy = DiscoveryPolicy(
+            validate_endpoints=True,
+            additional_endpoint_base_addresses=["https://cdn.example.com"],
+        )
+        with pytest.raises(DiscoveryException, match="authority"):
+            _validate_endpoint_authority(
+                "https://attacker.com/keys",
+                "jwks_uri",
+                self._make_response(),
+                policy,
+            )
+
+    def test_explicit_authority_overrides_issuer(self):
+        """policy.authority takes precedence over issuer (M3)."""
+        policy = DiscoveryPolicy(
+            validate_endpoints=True,
+            authority="https://gateway.example.com",
+        )
+        # Endpoint matches explicit authority, not issuer
+        _validate_endpoint_authority(
+            "https://gateway.example.com/token",
+            "token_endpoint",
+            self._make_response("https://auth.example.com"),
+            policy,
+        )
+
+    def test_explicit_authority_rejects_issuer(self):
+        """When authority is set, issuer's authority alone is not enough."""
+        policy = DiscoveryPolicy(
+            validate_endpoints=True,
+            authority="https://gateway.example.com",
+        )
+        with pytest.raises(DiscoveryException, match="authority"):
+            _validate_endpoint_authority(
+                "https://auth.example.com/token",
+                "token_endpoint",
+                self._make_response("https://auth.example.com"),
+                policy,
+            )
+
+    def test_explicit_authority_plus_additional(self):
+        """Both authority and additional_endpoint_base_addresses are checked."""
+        policy = DiscoveryPolicy(
+            validate_endpoints=True,
+            authority="https://gateway.example.com",
+            additional_endpoint_base_addresses=["https://cdn.example.com"],
+        )
+        # CDN address accepted alongside explicit authority
+        _validate_endpoint_authority(
+            "https://cdn.example.com/keys",
+            "jwks_uri",
+            self._make_response(),
+            policy,
+        )
+
+    def test_empty_issuer_no_allowed_set(self):
+        """When no issuer and no authority, validation passes (no constraint)."""
+        policy = DiscoveryPolicy(validate_endpoints=True)
+        _validate_endpoint_authority(
+            "https://anything.com/keys",
+            "jwks_uri",
+            {"issuer": ""},
+            policy,
+        )

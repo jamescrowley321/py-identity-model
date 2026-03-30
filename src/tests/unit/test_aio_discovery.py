@@ -4,6 +4,7 @@ import httpx
 import pytest
 import respx
 
+from py_identity_model import DiscoveryPolicy
 from py_identity_model.aio.discovery import (
     DiscoveryDocumentRequest,
     get_discovery_document,
@@ -87,3 +88,39 @@ class TestAsyncDiscoveryDocument:
         assert result.is_successful is False
         assert result.error is not None
         assert "Invalid JSON" in result.error
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+class TestAsyncDiscoveryPreFlightSchemeValidation:
+    """Verify pre-flight URL scheme check prevents HTTP requests (M4)."""
+
+    async def test_http_url_rejected_before_request(self):
+        """HTTP to non-loopback host fails without making any HTTP request."""
+        request = DiscoveryDocumentRequest(
+            address="http://auth.example.com/.well-known/openid-configuration",
+        )
+        result = await get_discovery_document(request)
+        assert result.is_successful is False
+        assert result.error is not None
+        assert "HTTPS" in result.error
+
+    async def test_http_loopback_allowed_by_default(self):
+        """HTTP to loopback is allowed by default policy (no pre-flight block)."""
+        request = DiscoveryDocumentRequest(
+            address="http://127.0.0.1:9999/.well-known/openid-configuration",
+        )
+        result = await get_discovery_document(request)
+        assert result.is_successful is False
+        assert "HTTPS" not in (result.error or "")
+
+    async def test_relaxed_policy_allows_http(self):
+        """Relaxed policy skips pre-flight check for HTTP URLs."""
+        policy = DiscoveryPolicy(require_https=False)
+        request = DiscoveryDocumentRequest(
+            address="http://auth.example.com:9999/.well-known/openid-configuration",
+            policy=policy,
+        )
+        result = await get_discovery_document(request)
+        assert result.is_successful is False
+        assert "HTTPS" not in (result.error or "")

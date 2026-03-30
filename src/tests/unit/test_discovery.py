@@ -1,6 +1,8 @@
 import httpx
+import pytest
 import respx
 
+from py_identity_model import DiscoveryPolicy
 from py_identity_model.discovery import (
     DiscoveryDocumentRequest,
     DiscoveryDocumentResponse,
@@ -127,3 +129,43 @@ class TestGetDiscoveryDocument:
         assert result.is_successful is False
         assert result.error is not None
         assert "Missing required parameters" in result.error
+
+
+@pytest.mark.unit
+class TestSyncDiscoveryPreFlightSchemeValidation:
+    """Verify pre-flight URL scheme check prevents HTTP requests (M4)."""
+
+    def test_http_url_rejected_before_request(self):
+        """HTTP to non-loopback host fails without making any HTTP request."""
+        request = DiscoveryDocumentRequest(
+            address="http://auth.example.com/.well-known/openid-configuration",
+        )
+        # No respx mock needed — if an HTTP request is attempted it will raise
+        result = get_discovery_document(request)
+        assert result.is_successful is False
+        assert result.error is not None
+        assert "HTTPS" in result.error
+
+    def test_http_loopback_allowed_by_default(self):
+        """HTTP to loopback is allowed by default policy (no pre-flight block)."""
+        # This will fail at the network level (no mock), but should NOT
+        # fail at the pre-flight scheme check
+        request = DiscoveryDocumentRequest(
+            address="http://127.0.0.1:9999/.well-known/openid-configuration",
+        )
+        result = get_discovery_document(request)
+        # Should fail with network/connection error, NOT scheme error
+        assert result.is_successful is False
+        assert "HTTPS" not in (result.error or "")
+
+    def test_relaxed_policy_allows_http(self):
+        """Relaxed policy skips pre-flight check for HTTP URLs."""
+        policy = DiscoveryPolicy(require_https=False)
+        request = DiscoveryDocumentRequest(
+            address="http://auth.example.com:9999/.well-known/openid-configuration",
+            policy=policy,
+        )
+        result = get_discovery_document(request)
+        # Should fail with network error, NOT scheme error
+        assert result.is_successful is False
+        assert "HTTPS" not in (result.error or "")
