@@ -53,6 +53,60 @@ class _GuardedResponseMixin:
 
 
 # ============================================================================
+# Base Request / Response Classes
+# ============================================================================
+
+
+@dataclass
+class BaseRequest:
+    """Base class for all API requests.
+
+    Every request targets an endpoint URL via the *address* field.
+    Subclasses add endpoint-specific parameters.
+    """
+
+    address: str
+
+
+@dataclass(repr=False, eq=False)
+class BaseResponse(_GuardedResponseMixin):
+    """Base class for all API responses with success/error state.
+
+    Inherits field-access guarding from ``_GuardedResponseMixin``.
+    Subclasses override ``_guarded_fields`` and add data fields.
+    Check ``is_successful`` before accessing data or error fields.
+
+    .. note::
+
+       ``dataclasses.asdict()`` and ``astuple()`` trigger the field-access
+       guards and will raise.  Use ``vars(response)`` instead for dict
+       conversion.
+    """
+
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset()
+
+    is_successful: bool
+    error: str | None = None
+
+    __hash__ = None  # type: ignore[assignment]  # mutable dataclass
+
+    def __repr__(self) -> str:
+        """Safe repr that bypasses field-access guards."""
+        cls_name = type(self).__name__
+        parts: list[str] = []
+        for f in fields(self):
+            val = object.__getattribute__(self, f.name)
+            parts.append(f"{f.name}={val!r}")
+        return f"{cls_name}({', '.join(parts)})"
+
+    def __eq__(self, other: object) -> bool:
+        """Safe equality that bypasses field-access guards."""
+        if type(self) is not type(other):
+            return NotImplemented
+        return self.__dict__ == other.__dict__
+
+
+# ============================================================================
 # JSON Web Key (JWK) Models - RFC 7517
 # ============================================================================
 
@@ -349,7 +403,7 @@ class JsonWebKey:
 
 
 @dataclass
-class DiscoveryDocumentRequest:
+class DiscoveryDocumentRequest(BaseRequest):
     """Request for fetching an OpenID Connect discovery document.
 
     Attributes:
@@ -358,11 +412,9 @@ class DiscoveryDocumentRequest:
             appended automatically.
     """
 
-    address: str
 
-
-@dataclass
-class DiscoveryDocumentResponse(_GuardedResponseMixin):
+@dataclass(repr=False, eq=False)
+class DiscoveryDocumentResponse(BaseResponse):
     """Response from an OpenID Connect discovery document fetch.
 
     Check ``is_successful`` before accessing data fields. Accessing guarded
@@ -410,7 +462,6 @@ class DiscoveryDocumentResponse(_GuardedResponseMixin):
         }
     )
 
-    is_successful: bool
     # Core OpenID Connect endpoints
     issuer: str | None = None
     jwks_uri: str | None = None
@@ -462,9 +513,6 @@ class DiscoveryDocumentResponse(_GuardedResponseMixin):
     op_policy_uri: str | None = None
     op_tos_uri: str | None = None
 
-    # Internal properties
-    error: str | None = None
-
 
 # ============================================================================
 # JWKS Models - RFC 7517
@@ -472,18 +520,16 @@ class DiscoveryDocumentResponse(_GuardedResponseMixin):
 
 
 @dataclass
-class JwksRequest:
+class JwksRequest(BaseRequest):
     """Request for fetching a JSON Web Key Set.
 
     Attributes:
         address: The JWKS endpoint URL (typically from ``DiscoveryDocumentResponse.jwks_uri``).
     """
 
-    address: str
 
-
-@dataclass
-class JwksResponse(_GuardedResponseMixin):
+@dataclass(repr=False, eq=False)
+class JwksResponse(BaseResponse):
     """Response from a JWKS endpoint fetch.
 
     Check ``is_successful`` before accessing ``keys``.
@@ -491,9 +537,7 @@ class JwksResponse(_GuardedResponseMixin):
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"keys"})
 
-    is_successful: bool
     keys: list[JsonWebKey] | None = None
-    error: str | None = None
 
 
 # ============================================================================
@@ -502,7 +546,7 @@ class JwksResponse(_GuardedResponseMixin):
 
 
 @dataclass
-class ClientCredentialsTokenRequest:
+class ClientCredentialsTokenRequest(BaseRequest):
     """Request for an OAuth 2.0 client credentials token.
 
     Attributes:
@@ -512,14 +556,13 @@ class ClientCredentialsTokenRequest:
         scope: Space-delimited list of requested scopes.
     """
 
-    address: str
     client_id: str
     client_secret: str
     scope: str
 
 
-@dataclass
-class ClientCredentialsTokenResponse(_GuardedResponseMixin):
+@dataclass(repr=False, eq=False)
+class ClientCredentialsTokenResponse(BaseResponse):
     """Response from a client credentials token request.
 
     Check ``is_successful`` before accessing ``token``.
@@ -527,9 +570,48 @@ class ClientCredentialsTokenResponse(_GuardedResponseMixin):
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
 
-    is_successful: bool
     token: dict | None = None
-    error: str | None = None
+
+
+# ============================================================================
+# Authorization Code Token Models
+# ============================================================================
+
+
+@dataclass
+class AuthorizationCodeTokenRequest(BaseRequest):
+    """Request for exchanging an authorization code for tokens.
+
+    Attributes:
+        address: The token endpoint URL.
+        client_id: The client identifier.
+        code: The authorization code received from the callback.
+        redirect_uri: The same redirect URI used in the authorization request.
+        code_verifier: PKCE code verifier (required when PKCE was used).
+        client_secret: Client secret (optional for public clients per RFC 7636).
+        scope: Space-delimited list of requested scopes (optional).
+    """
+
+    client_id: str
+    code: str
+    redirect_uri: str
+    code_verifier: str | None = None
+    client_secret: str | None = None
+    scope: str | None = None
+
+
+@dataclass(repr=False, eq=False)
+class AuthorizationCodeTokenResponse(BaseResponse):
+    """Response from an authorization code token exchange.
+
+    Check ``is_successful`` before accessing ``token``.
+    The token dict typically contains ``access_token``, ``token_type``,
+    ``expires_in``, ``refresh_token``, and optionally ``id_token``.
+    """
+
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
+
+    token: dict | None = None
 
 
 # ============================================================================
@@ -538,7 +620,7 @@ class ClientCredentialsTokenResponse(_GuardedResponseMixin):
 
 
 @dataclass
-class UserInfoRequest:
+class UserInfoRequest(BaseRequest):
     """Request for the OpenID Connect UserInfo endpoint.
 
     Attributes:
@@ -546,12 +628,11 @@ class UserInfoRequest:
         token: A valid access token with ``openid`` scope.
     """
 
-    address: str
     token: str
 
 
-@dataclass
-class UserInfoResponse(_GuardedResponseMixin):
+@dataclass(repr=False, eq=False)
+class UserInfoResponse(BaseResponse):
     """Response from the UserInfo endpoint.
 
     Check ``is_successful`` before accessing ``claims`` or ``raw``.
@@ -559,10 +640,8 @@ class UserInfoResponse(_GuardedResponseMixin):
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"claims", "raw"})
 
-    is_successful: bool
     claims: dict | None = None
     raw: str | None = None
-    error: str | None = None
 
 
 # ============================================================================
@@ -628,6 +707,12 @@ class TokenValidationConfig:
 
 
 __all__ = [
+    # Authorization Code Token
+    "AuthorizationCodeTokenRequest",
+    "AuthorizationCodeTokenResponse",
+    # Base Classes
+    "BaseRequest",
+    "BaseResponse",
     # Token Client
     "ClientCredentialsTokenRequest",
     "ClientCredentialsTokenResponse",

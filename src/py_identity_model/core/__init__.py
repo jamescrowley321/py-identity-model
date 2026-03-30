@@ -9,6 +9,7 @@ from .authorize_response import (
     AuthorizeCallbackResponse,
     parse_authorize_callback_response,
 )
+from .authorize_url import build_authorization_url
 from .http_utils import (
     DEFAULT_HTTP_TIMEOUT,
     DEFAULT_RETRY_BASE_DELAY,
@@ -16,6 +17,10 @@ from .http_utils import (
 )
 from .jwt_helpers import decode_and_validate_jwt
 from .models import (
+    AuthorizationCodeTokenRequest,
+    AuthorizationCodeTokenResponse,
+    BaseRequest,
+    BaseResponse,
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
     DiscoveryDocumentRequest,
@@ -28,6 +33,11 @@ from .models import (
     TokenValidationConfig,
 )
 from .parsers import get_public_key_from_jwk, jwks_from_dict
+from .pkce import (
+    generate_code_challenge,
+    generate_code_verifier,
+    generate_pkce_pair,
+)
 from .state_validation import (
     AuthorizeCallbackValidationResult,
     StateValidationResult,
@@ -47,10 +57,16 @@ __all__ = [
     "DEFAULT_HTTP_TIMEOUT",
     "DEFAULT_RETRY_BASE_DELAY",
     "DEFAULT_RETRY_MAX_ATTEMPTS",
+    # Auth Code + PKCE
+    "AuthorizationCodeTokenRequest",
+    "AuthorizationCodeTokenResponse",
     # From authorize_response
     "AuthorizeCallbackResponse",
     # From state_validation
     "AuthorizeCallbackValidationResult",
+    # From models (base classes)
+    "BaseRequest",
+    "BaseResponse",
     # From models
     "ClientCredentialsTokenRequest",
     "ClientCredentialsTokenResponse",
@@ -63,8 +79,12 @@ __all__ = [
     "JwksResponse",
     "StateValidationResult",
     "TokenValidationConfig",
+    "build_authorization_url",
     # From jwt_helpers
     "decode_and_validate_jwt",
+    "generate_code_challenge",
+    "generate_code_verifier",
+    "generate_pkce_pair",
     # From parsers
     "get_public_key_from_jwk",
     "jwks_from_dict",

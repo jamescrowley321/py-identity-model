@@ -35,6 +35,25 @@ def validate_disco_response(
         raise TokenValidationException(error_msg)
 
 
+def validate_jwks_uri(
+    disco_doc_response: DiscoveryDocumentResponse,
+) -> str:
+    """Validate and return jwks_uri from a discovery document response.
+
+    Args:
+        disco_doc_response: A successful discovery document response.
+
+    Returns:
+        The non-empty jwks_uri string.
+
+    Raises:
+        ConfigurationException: If jwks_uri is missing or empty.
+    """
+    if not disco_doc_response.jwks_uri:
+        raise ConfigurationException("Discovery document missing jwks_uri")
+    return disco_doc_response.jwks_uri
+
+
 def validate_jwks_response(jwks_response: JwksResponse) -> None:
     """
     Validate JWKS response.
@@ -230,4 +249,5 @@ __all__ = [
     "validate_config_for_manual_validation",
     "validate_disco_response",
     "validate_jwks_response",
+    "validate_jwks_uri",
 ]
