@@ -12,6 +12,10 @@ from py_identity_model.jwks import JwksRequest, get_jwks, jwks_from_dict
 from .test_utils import get_config
 
 
+# Minimum RSA key size (bits)
+MIN_RSA_KEY_SIZE = 2048
+
+
 @pytest.fixture
 def jwks_data(jwks_response):
     """Pytest fixture to provide JWKS data for tests"""
@@ -113,7 +117,7 @@ def test_key_size_calculation(jwks_data):
 
         # RSA keys typically should be 2048 bits or more
         if jwk.kty == "RSA":
-            assert jwk.key_size >= 2048
+            assert jwk.key_size >= MIN_RSA_KEY_SIZE
 
         # EC keys typically use P-256 (256 bits), P-384, or P-521
         elif jwk.kty == "EC":

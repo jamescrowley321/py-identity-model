@@ -16,6 +16,10 @@ from py_identity_model.sync.token_client import (
 )
 
 
+# Expected token expiry value (seconds)
+EXPECTED_TOKEN_EXPIRES_IN = 3600
+
+
 class TestSyncTokenClient:
     """Test sync token client functionality."""
 
@@ -50,7 +54,7 @@ class TestSyncTokenClient:
         assert response.token is not None
         assert response.token["access_token"] == "test_token"
         assert response.token["token_type"] == "Bearer"
-        assert response.token["expires_in"] == 3600
+        assert response.token["expires_in"] == EXPECTED_TOKEN_EXPIRES_IN
 
     @respx.mock
     def test_request_client_credentials_token_http_error(self):

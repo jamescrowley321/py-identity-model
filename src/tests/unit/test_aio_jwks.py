@@ -8,6 +8,10 @@ from py_identity_model.aio.jwks import JwksRequest, get_jwks
 from py_identity_model.exceptions import FailedResponseAccessError
 
 
+# Expected JWKS key count
+EXPECTED_KEY_COUNT = 2
+
+
 @pytest.mark.asyncio
 class TestAsyncJwks:
     @respx.mock
@@ -46,7 +50,7 @@ class TestAsyncJwks:
 
         assert result.is_successful is True
         assert result.keys is not None
-        assert len(result.keys) == 2
+        assert len(result.keys) == EXPECTED_KEY_COUNT
         assert result.keys[0].kty == "RSA"
         assert result.keys[0].kid == "key1"
         assert result.keys[1].kty == "EC"

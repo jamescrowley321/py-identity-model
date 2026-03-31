@@ -164,7 +164,7 @@ class TestManualKeyEnhancedValidation:
     ):
         """Claims validator raises -> TokenValidationException."""
 
-        def reject_all(claims: dict) -> None:
+        def reject_all(_claims: dict) -> None:
             raise ValueError("Rejected by policy")
 
         key_dict, alg = jwt_signing_key

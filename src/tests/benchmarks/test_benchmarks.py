@@ -3,6 +3,7 @@
 Run with: make test-benchmark
 """
 
+import jwt as pyjwt
 import pytest
 
 from py_identity_model import (
@@ -28,6 +29,9 @@ from py_identity_model.core.pkce import (
 from py_identity_model.identity import to_principal
 
 
+# Test constants
+PKCE_PAIR_LENGTH = 2
+
 # ============================================================================
 # PKCE Benchmarks
 # ============================================================================
@@ -37,7 +41,7 @@ from py_identity_model.identity import to_principal
 def test_bench_generate_pkce_pair(benchmark):
     result = benchmark(generate_pkce_pair)
     assert result is not None
-    assert len(result) == 2
+    assert len(result) == PKCE_PAIR_LENGTH
 
 
 @pytest.mark.benchmark(group="pkce")
@@ -189,7 +193,6 @@ def test_bench_pyjwt_decode_baseline(
     benchmark, sample_signed_jwt, ec_public_pem
 ):
     """Benchmark raw pyjwt.decode() as a baseline for comparison (not py-identity-model code)."""
-    import jwt as pyjwt
 
     def decode_jwt():
         return pyjwt.decode(

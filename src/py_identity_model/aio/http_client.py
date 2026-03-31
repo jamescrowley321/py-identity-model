@@ -13,6 +13,7 @@ Environment Variables:
 import asyncio
 from functools import wraps
 import threading
+from typing import TypedDict
 
 import httpx
 
@@ -29,11 +30,18 @@ from ..ssl_config import get_ssl_verify
 # Thread lock for async client creation (protects multi-threaded initialization)
 _async_client_creation_lock = threading.Lock()
 
-# Async lock for async client cleanup (protects async operations)
-_async_client_cleanup_lock: asyncio.Lock | None = None
 
-# Cached async client instance
-_async_http_client: httpx.AsyncClient | None = None
+class _AsyncClientState(TypedDict):
+    """Module-level mutable state container (avoids `global` statements)."""
+
+    client: httpx.AsyncClient | None
+    cleanup_lock: asyncio.Lock | None
+
+
+_state: _AsyncClientState = {
+    "client": None,
+    "cleanup_lock": None,
+}
 
 
 def _log_retry(message: str, delay: float, attempt: int, retries: int) -> None:
@@ -148,26 +156,24 @@ def get_async_http_client() -> httpx.AsyncClient:
         Thread-safe: Uses a lock to prevent race conditions when creating
         the async client from multiple threads simultaneously.
     """
-    global _async_http_client
-
     # Fast path: client already exists
-    if _async_http_client is not None:
-        return _async_http_client
+    if _state["client"] is not None:
+        return _state["client"]
 
     # Slow path: need to create client with lock
     with _async_client_creation_lock:
         # Double-check: another thread might have created it while we waited
-        if _async_http_client is not None:
-            return _async_http_client
+        if _state["client"] is not None:
+            return _state["client"]
 
         # Create client - httpx.AsyncClient creation is synchronous and safe
         timeout = get_timeout()
-        _async_http_client = httpx.AsyncClient(
+        _state["client"] = httpx.AsyncClient(
             verify=get_ssl_verify(),
             timeout=timeout,
             follow_redirects=True,
         )
-        return _async_http_client
+        return _state["client"]
 
 
 async def close_async_http_client() -> None:
@@ -182,17 +188,15 @@ async def close_async_http_client() -> None:
         This function uses asyncio.Lock for proper async cleanup without
         blocking the event loop.
     """
-    global _async_http_client, _async_client_cleanup_lock
-
     # Initialize the async cleanup lock if needed (lazy initialization)
-    if _async_client_cleanup_lock is None:
-        _async_client_cleanup_lock = asyncio.Lock()
+    if _state["cleanup_lock"] is None:
+        _state["cleanup_lock"] = asyncio.Lock()
 
-    if _async_http_client is not None:
-        async with _async_client_cleanup_lock:
-            if _async_http_client is not None:
-                await _async_http_client.aclose()
-                _async_http_client = None
+    if _state["client"] is not None:
+        async with _state["cleanup_lock"]:
+            if _state["client"] is not None:
+                await _state["client"].aclose()
+                _state["client"] = None
 
 
 def _reset_async_http_client() -> None:
@@ -206,10 +210,9 @@ def _reset_async_http_client() -> None:
     must await close_async_http_client() first to properly release
     sockets and prevent ResourceWarning during garbage collection.
     """
-    global _async_http_client, _async_client_cleanup_lock
     with _async_client_creation_lock:
-        _async_http_client = None
-        _async_client_cleanup_lock = None
+        _state["client"] = None
+        _state["cleanup_lock"] = None
 
 
 __all__ = [

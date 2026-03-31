@@ -197,37 +197,41 @@ def prepare_device_token_request_data(
     return params, headers, auth
 
 
-def process_device_token_response(
+def _parse_success_response(
     response: httpx.Response,
 ) -> DeviceTokenResponse:
-    """Process device token polling HTTP response.
+    """Parse a successful device token HTTP response.
 
-    Handles RFC 8628 polling error codes (``authorization_pending``,
-    ``slow_down``, ``expired_token``, ``access_denied``) by setting
-    ``error_code`` on the response instead of treating them as generic errors.
+    Validates the JSON body is a dict and returns the token data.
     """
-    logger.debug(f"Device token response status: {response.status_code}")
+    try:
+        data = response.json()
+    except (json.JSONDecodeError, ValueError):
+        error_msg = "Device token response has invalid JSON body"
+        logger.error(error_msg)
+        return DeviceTokenResponse(is_successful=False, error=error_msg)
 
-    if response.is_success:
-        try:
-            data = response.json()
-        except (json.JSONDecodeError, ValueError):
-            error_msg = "Device token response has invalid JSON body"
-            logger.error(error_msg)
-            return DeviceTokenResponse(is_successful=False, error=error_msg)
+    if not isinstance(data, dict):
+        error_msg = (
+            f"Device token response is not a JSON object: "
+            f"{type(data).__name__}"
+        )
+        logger.error(error_msg)
+        return DeviceTokenResponse(is_successful=False, error=error_msg)
 
-        if not isinstance(data, dict):
-            error_msg = (
-                f"Device token response is not a JSON object: "
-                f"{type(data).__name__}"
-            )
-            logger.error(error_msg)
-            return DeviceTokenResponse(is_successful=False, error=error_msg)
+    logger.info("Device token request successful")
+    return DeviceTokenResponse(is_successful=True, token=data)
 
-        logger.info("Device token request successful")
-        return DeviceTokenResponse(is_successful=True, token=data)
 
-    # Check for RFC 8628 polling error codes in the error response
+def _parse_error_response(
+    response: httpx.Response,
+) -> DeviceTokenResponse:
+    """Parse a failed device token HTTP response.
+
+    Checks for RFC 8628 polling error codes (``authorization_pending``,
+    ``slow_down``, ``expired_token``, ``access_denied``) and returns
+    structured error information.
+    """
     try:
         data = response.json()
     except Exception:
@@ -263,6 +267,23 @@ def process_device_token_response(
         f"{response.status_code}. Error: {data.get('error', 'unknown')}"
     )
     return DeviceTokenResponse(is_successful=False, error=error_msg)
+
+
+def process_device_token_response(
+    response: httpx.Response,
+) -> DeviceTokenResponse:
+    """Process device token polling HTTP response.
+
+    Handles RFC 8628 polling error codes (``authorization_pending``,
+    ``slow_down``, ``expired_token``, ``access_denied``) by setting
+    ``error_code`` on the response instead of treating them as generic errors.
+    """
+    logger.debug(f"Device token response status: {response.status_code}")
+
+    if response.is_success:
+        return _parse_success_response(response)
+
+    return _parse_error_response(response)
 
 
 def handle_device_token_error(e: Exception) -> DeviceTokenResponse:

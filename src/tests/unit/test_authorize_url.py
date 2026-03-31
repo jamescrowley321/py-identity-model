@@ -4,7 +4,10 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from py_identity_model.core.authorize_url import build_authorization_url
+from py_identity_model.core.authorize_url import (
+    _RESERVED_PARAMS,
+    build_authorization_url,
+)
 
 
 AUTHZ_ENDPOINT = "https://auth.example.com/authorize"
@@ -92,8 +95,6 @@ class TestBuildAuthorizationUrl:
 
     def test_reserved_params_guard_exists(self):
         """MF-1: _RESERVED_PARAMS set covers all security-critical params."""
-        from py_identity_model.core.authorize_url import _RESERVED_PARAMS
-
         expected = {
             "client_id",
             "redirect_uri",
@@ -172,7 +173,7 @@ class TestBuildAuthorizationUrl:
             )
 
     def test_invalid_code_challenge_method_raises(self):
-        with pytest.raises(ValueError, match="S256.*plain"):
+        with pytest.raises(ValueError, match=r"S256.*plain"):
             build_authorization_url(
                 AUTHZ_ENDPOINT,
                 client_id="app1",

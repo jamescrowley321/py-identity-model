@@ -7,12 +7,30 @@ passing authorization parameters as signed JWTs.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import time
 from typing import Any
 from urllib.parse import urlencode, urlparse
 import uuid
 
 import jwt as pyjwt
+
+
+@dataclass(frozen=True)
+class _RequestParams:
+    """Internal container for validated request object parameters."""
+
+    private_key: str | bytes
+    algorithm: str
+    client_id: str
+    audience: str
+    redirect_uri: str
+    response_type: str
+    lifetime: int
+    code_challenge: str | None
+    code_challenge_method: str | None
+    kid: str | None
+    extra_claims: dict[str, Any]
 
 
 _RESERVED_CLAIMS = frozenset(
@@ -48,55 +66,45 @@ _SUPPORTED_ALGORITHMS = {
 }
 
 
-def _validate_request_params(
-    private_key: str | bytes,
-    algorithm: str,
-    client_id: str,
-    audience: str,
-    redirect_uri: str,
-    response_type: str,
-    lifetime: int,
-    code_challenge: str | None,
-    code_challenge_method: str | None,
-    kid: str | None,
-    extra_claims: dict[str, Any],
-) -> None:
+def _validate_request_params(params: _RequestParams) -> None:
     """Validate all inputs for :func:`create_request_object`."""
     for name, value in (
-        ("private_key", private_key),
-        ("client_id", client_id),
-        ("audience", audience),
-        ("redirect_uri", redirect_uri),
-        ("response_type", response_type),
+        ("private_key", params.private_key),
+        ("client_id", params.client_id),
+        ("audience", params.audience),
+        ("redirect_uri", params.redirect_uri),
+        ("response_type", params.response_type),
     ):
         if not value:
             raise ValueError(f"{name} must not be empty")
 
-    if algorithm not in _SUPPORTED_ALGORITHMS:
+    if params.algorithm not in _SUPPORTED_ALGORITHMS:
         msg = (
-            f"Unsupported JAR algorithm: {algorithm}. "
+            f"Unsupported JAR algorithm: {params.algorithm}. "
             f"Supported: {sorted(_SUPPORTED_ALGORITHMS)}"
         )
         raise ValueError(msg)
 
-    if lifetime <= 0:
-        raise ValueError(f"lifetime must be positive, got {lifetime}")
+    if params.lifetime <= 0:
+        raise ValueError(f"lifetime must be positive, got {params.lifetime}")
 
-    if (code_challenge is None) != (code_challenge_method is None):
+    if (params.code_challenge is None) != (
+        params.code_challenge_method is None
+    ):
         raise ValueError(
             "code_challenge and code_challenge_method must both be "
             "provided or both omitted"
         )
 
     for name, value in (
-        ("code_challenge", code_challenge),
-        ("code_challenge_method", code_challenge_method),
-        ("kid", kid),
+        ("code_challenge", params.code_challenge),
+        ("code_challenge_method", params.code_challenge_method),
+        ("kid", params.kid),
     ):
         if value is not None and not value:
             raise ValueError(f"{name} must be non-empty when provided")
 
-    collisions = set(extra_claims) & _RESERVED_CLAIMS
+    collisions = set(params.extra_claims) & _RESERVED_CLAIMS
     if collisions:
         raise ValueError(
             f"extra_claims cannot override reserved claims: "
@@ -104,7 +112,7 @@ def _validate_request_params(
         )
 
 
-def create_request_object(
+def create_request_object(  # noqa: PLR0913  # RFC 9101 §4 request object carries all authorization params
     private_key: str | bytes,
     algorithm: str,
     client_id: str,
@@ -154,17 +162,19 @@ def create_request_object(
             *extra_claims* contains a reserved claim name.
     """
     _validate_request_params(
-        private_key,
-        algorithm,
-        client_id,
-        audience,
-        redirect_uri,
-        response_type,
-        lifetime,
-        code_challenge,
-        code_challenge_method,
-        kid,
-        extra_claims,
+        _RequestParams(
+            private_key=private_key,
+            algorithm=algorithm,
+            client_id=client_id,
+            audience=audience,
+            redirect_uri=redirect_uri,
+            response_type=response_type,
+            lifetime=lifetime,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+            kid=kid,
+            extra_claims=extra_claims,
+        )
     )
 
     now = int(time.time())
@@ -181,14 +191,18 @@ def create_request_object(
         "scope": scope,
     }
 
-    for name, value in (
-        ("state", state),
-        ("nonce", nonce),
-        ("code_challenge", code_challenge),
-        ("code_challenge_method", code_challenge_method),
-    ):
-        if value is not None:
-            claims[name] = value
+    claims.update(
+        {
+            name: value
+            for name, value in (
+                ("state", state),
+                ("nonce", nonce),
+                ("code_challenge", code_challenge),
+                ("code_challenge_method", code_challenge_method),
+            )
+            if value is not None
+        }
+    )
 
     claims.update(extra_claims)
 

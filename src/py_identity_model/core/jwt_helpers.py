@@ -17,6 +17,7 @@ from jwt.exceptions import (
 )
 
 from ..exceptions import (
+    ConfigurationException,
     InvalidAudienceException,
     InvalidIssuerException,
     SignatureVerificationException,
@@ -46,7 +47,7 @@ def _get_pyjwk(key_json: str, algorithm: str | None) -> PyJWK:
 
 
 @lru_cache(maxsize=256)
-def _decode_jwt_cached(
+def _decode_jwt_cached(  # noqa: PLR0913  # @lru_cache requires individual hashable params
     jwt: str,
     key_json: str,
     algorithms_tuple: tuple[str, ...],
@@ -94,7 +95,7 @@ def _decode_jwt_cached(
     return decode(jwt, pyjwk, **kwargs)
 
 
-def decode_and_validate_jwt(
+def decode_and_validate_jwt(  # noqa: PLR0913  # RFC 7519 §7.2 validation requires these params
     jwt: str,
     key: dict,
     algorithms: list[str],
@@ -130,14 +131,10 @@ def decode_and_validate_jwt(
     try:
         # Guard against empty algorithms on direct API calls
         if not algorithms:
-            from ..exceptions import ConfigurationException
-
             raise ConfigurationException("algorithms must not be empty")
 
         # Guard against empty issuer list on direct API calls
         if isinstance(issuer, list) and len(issuer) == 0:
-            from ..exceptions import ConfigurationException
-
             raise ConfigurationException(
                 "issuer must not be an empty list; omit or set to None to skip issuer validation"
             )

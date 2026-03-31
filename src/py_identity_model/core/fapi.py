@@ -47,7 +47,7 @@ class FAPIValidationResult:
         self.is_compliant = len(self.violations) == 0
 
 
-def validate_fapi_authorization_request(
+def validate_fapi_authorization_request(  # noqa: PLR0913  # FAPI 2.0 Security Profile requires all these fields
     *,
     response_type: str,
     code_challenge: str | None,

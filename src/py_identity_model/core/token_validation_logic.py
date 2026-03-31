@@ -5,6 +5,8 @@ This module contains the shared validation logic used by both sync and async
 implementations to reduce code duplication.
 """
 
+import inspect
+
 from ..core.jwt_helpers import decode_and_validate_jwt
 from ..core.models import (
     DiscoveryDocumentResponse,
@@ -13,6 +15,7 @@ from ..core.models import (
 )
 from ..exceptions import ConfigurationException, TokenValidationException
 from ..logging_config import logger
+from ..logging_utils import redact_token
 
 
 def validate_disco_response(
@@ -189,8 +192,6 @@ async def validate_async_claims(
     Raises:
         TokenValidationException: If claims validation fails
     """
-    import inspect
-
     if token_validation_config.claims_validator:
         try:
             if inspect.iscoroutinefunction(
@@ -218,8 +219,6 @@ def log_validation_start(
         jwt: The JWT token (will be redacted in logs)
         token_validation_config: Token validation configuration
     """
-    from ..logging_utils import redact_token
-
     logger.info(f"Starting token validation, token: {redact_token(jwt)}")
     logger.debug(
         f"Validation config - perform_disco: {token_validation_config.perform_disco}, "

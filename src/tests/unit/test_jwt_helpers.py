@@ -12,6 +12,7 @@ from jwt.exceptions import (
 )
 import pytest
 
+import py_identity_model.core.jwt_helpers
 from py_identity_model.core.jwt_helpers import decode_and_validate_jwt
 from py_identity_model.exceptions import (
     InvalidAudienceException,
@@ -27,12 +28,10 @@ class TestDecodeAndValidateJWT:
     def test_decode_jwt_invalid_audience(self, monkeypatch):
         """Test that InvalidAudienceError is converted to InvalidAudienceException."""
 
-        def mock_decode(*args, **kwargs):
+        def mock_decode(*_args, **_kwargs):
             raise InvalidAudienceError("Invalid audience")
 
         # Mock the internal _decode_jwt_cached function
-        import py_identity_model.core.jwt_helpers
-
         monkeypatch.setattr(
             py_identity_model.core.jwt_helpers,
             "_decode_jwt_cached",
@@ -52,10 +51,8 @@ class TestDecodeAndValidateJWT:
     def test_decode_jwt_invalid_issuer(self, monkeypatch):
         """Test that InvalidIssuerError is converted to InvalidIssuerException."""
 
-        def mock_decode(*args, **kwargs):
+        def mock_decode(*_args, **_kwargs):
             raise InvalidIssuerError("Invalid issuer")
-
-        import py_identity_model.core.jwt_helpers
 
         monkeypatch.setattr(
             py_identity_model.core.jwt_helpers,
@@ -76,10 +73,8 @@ class TestDecodeAndValidateJWT:
     def test_decode_jwt_invalid_signature(self, monkeypatch):
         """Test that InvalidSignatureError is converted to SignatureVerificationException."""
 
-        def mock_decode(*args, **kwargs):
+        def mock_decode(*_args, **_kwargs):
             raise InvalidSignatureError("Invalid signature")
-
-        import py_identity_model.core.jwt_helpers
 
         monkeypatch.setattr(
             py_identity_model.core.jwt_helpers,
@@ -102,10 +97,8 @@ class TestDecodeAndValidateJWT:
     def test_decode_jwt_invalid_token(self, monkeypatch):
         """Test that InvalidTokenError is converted to TokenValidationException."""
 
-        def mock_decode(*args, **kwargs):
+        def mock_decode(*_args, **_kwargs):
             raise InvalidTokenError("Invalid token format")
-
-        import py_identity_model.core.jwt_helpers
 
         monkeypatch.setattr(
             py_identity_model.core.jwt_helpers,

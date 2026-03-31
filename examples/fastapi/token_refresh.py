@@ -17,6 +17,10 @@ from py_identity_model import (
 )
 
 
+# HTTP status codes
+HTTP_OK = 200
+
+
 @dataclass
 class RefreshTokenRequest:
     """Request parameters for refreshing an OAuth2 token."""
@@ -116,7 +120,7 @@ async def refresh_access_token(
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
 
-        if response.status_code != 200:
+        if response.status_code != HTTP_OK:
             error_data = response.json() if response.text else {}
             return RefreshTokenResponse(
                 is_successful=False,

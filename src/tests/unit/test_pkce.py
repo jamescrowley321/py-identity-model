@@ -15,24 +15,31 @@ from py_identity_model.core.pkce import (
 
 URLSAFE_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
+# PKCE verifier length constants (RFC 7636)
+PKCE_VERIFIER_DEFAULT_LENGTH = 128
+PKCE_VERIFIER_MIN_LENGTH = 43
+PKCE_VERIFIER_MAX_LENGTH = 128
+PKCE_CUSTOM_VERIFIER_LENGTH = 64
+PKCE_PAIR_ELEMENT_COUNT = 2
+
 
 @pytest.mark.unit
 class TestGenerateCodeVerifier:
     def test_default_length(self):
         v = generate_code_verifier()
-        assert len(v) == 128
+        assert len(v) == PKCE_VERIFIER_DEFAULT_LENGTH
 
     def test_custom_length(self):
-        v = generate_code_verifier(43)
-        assert len(v) == 43
+        v = generate_code_verifier(PKCE_VERIFIER_MIN_LENGTH)
+        assert len(v) == PKCE_VERIFIER_MIN_LENGTH
 
     def test_min_length(self):
-        v = generate_code_verifier(43)
-        assert len(v) >= 43
+        v = generate_code_verifier(PKCE_VERIFIER_MIN_LENGTH)
+        assert len(v) >= PKCE_VERIFIER_MIN_LENGTH
 
     def test_max_length(self):
-        v = generate_code_verifier(128)
-        assert len(v) <= 128
+        v = generate_code_verifier(PKCE_VERIFIER_MAX_LENGTH)
+        assert len(v) <= PKCE_VERIFIER_MAX_LENGTH
 
     def test_too_short_raises(self):
         with pytest.raises(ValueError, match="42"):
@@ -69,11 +76,11 @@ class TestGenerateCodeChallenge:
         assert challenge == expected
 
     def test_plain_method(self):
-        verifier = generate_code_verifier(43)
+        verifier = generate_code_verifier(PKCE_VERIFIER_MIN_LENGTH)
         assert generate_code_challenge(verifier, "plain") == verifier
 
     def test_unsupported_method_raises(self):
-        verifier = generate_code_verifier(43)
+        verifier = generate_code_verifier(PKCE_VERIFIER_MIN_LENGTH)
         with pytest.raises(ValueError, match="Unsupported"):
             generate_code_challenge(verifier, "SHA512")
 
@@ -112,5 +119,7 @@ class TestGeneratePkcePair:
         assert verifier == challenge
 
     def test_custom_length(self):
-        verifier, _ = generate_pkce_pair(verifier_length=64)
-        assert len(verifier) == 64
+        verifier, _ = generate_pkce_pair(
+            verifier_length=PKCE_CUSTOM_VERIFIER_LENGTH
+        )
+        assert len(verifier) == PKCE_CUSTOM_VERIFIER_LENGTH

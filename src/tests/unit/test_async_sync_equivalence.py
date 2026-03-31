@@ -13,6 +13,18 @@ from py_identity_model import (
     DiscoveryDocumentRequest,
     JwksRequest,
 )
+from py_identity_model import (
+    get_discovery_document as sync_get_discovery,
+)
+from py_identity_model import (
+    get_jwks as sync_get_jwks,
+)
+from py_identity_model.aio import (
+    get_discovery_document as async_get_discovery,
+)
+from py_identity_model.aio import (
+    get_jwks as async_get_jwks,
+)
 
 
 class TestDiscoveryEquivalence:
@@ -22,13 +34,6 @@ class TestDiscoveryEquivalence:
     @pytest.mark.asyncio
     async def test_discovery_success_equivalence(self):
         """Test that successful discovery returns identical results."""
-        from py_identity_model import (
-            get_discovery_document as sync_get_discovery,
-        )
-        from py_identity_model.aio import (
-            get_discovery_document as async_get_discovery,
-        )
-
         # Mock discovery response
         discovery_data = {
             "issuer": "https://auth.example.com",
@@ -69,13 +74,6 @@ class TestDiscoveryEquivalence:
     @pytest.mark.asyncio
     async def test_discovery_http_error_equivalence(self):
         """Test that HTTP errors are handled identically."""
-        from py_identity_model import (
-            get_discovery_document as sync_get_discovery,
-        )
-        from py_identity_model.aio import (
-            get_discovery_document as async_get_discovery,
-        )
-
         # Mock 404 response
         respx.get(
             "https://auth.example.com/.well-known/openid-configuration"
@@ -105,13 +103,6 @@ class TestDiscoveryEquivalence:
     @pytest.mark.asyncio
     async def test_discovery_invalid_json_equivalence(self):
         """Test that invalid JSON is handled identically."""
-        from py_identity_model import (
-            get_discovery_document as sync_get_discovery,
-        )
-        from py_identity_model.aio import (
-            get_discovery_document as async_get_discovery,
-        )
-
         # Mock invalid JSON response
         respx.get(
             "https://auth.example.com/.well-known/openid-configuration"
@@ -155,9 +146,6 @@ class TestJWKSEquivalence:
     @pytest.mark.asyncio
     async def test_jwks_success_equivalence(self):
         """Test that successful JWKS fetch returns identical results."""
-        from py_identity_model import get_jwks as sync_get_jwks
-        from py_identity_model.aio import get_jwks as async_get_jwks
-
         # Mock JWKS response
         jwks_data = {
             "keys": [
@@ -204,9 +192,6 @@ class TestJWKSEquivalence:
     @pytest.mark.asyncio
     async def test_jwks_http_error_equivalence(self):
         """Test that JWKS HTTP errors are handled identically."""
-        from py_identity_model import get_jwks as sync_get_jwks
-        from py_identity_model.aio import get_jwks as async_get_jwks
-
         # Mock 500 response
         respx.get("https://auth.example.com/.well-known/jwks.json").mock(
             return_value=Response(500, text="Internal Server Error")
@@ -240,13 +225,6 @@ class TestResponseStructureEquivalence:
     @pytest.mark.asyncio
     async def test_discovery_response_structure(self):
         """Test that discovery response structure is identical."""
-        from py_identity_model import (
-            get_discovery_document as sync_get_discovery,
-        )
-        from py_identity_model.aio import (
-            get_discovery_document as async_get_discovery,
-        )
-
         discovery_data = {
             "issuer": "https://auth.example.com",
             "jwks_uri": "https://auth.example.com/.well-known/jwks.json",
@@ -285,9 +263,6 @@ class TestResponseStructureEquivalence:
     @pytest.mark.asyncio
     async def test_jwks_response_structure(self):
         """Test that JWKS response structure is identical."""
-        from py_identity_model import get_jwks as sync_get_jwks
-        from py_identity_model.aio import get_jwks as async_get_jwks
-
         jwks_data = {
             "keys": [
                 {

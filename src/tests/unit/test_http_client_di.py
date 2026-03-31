@@ -40,6 +40,9 @@ from py_identity_model.sync.token_validation import (
 from py_identity_model.sync.userinfo import get_userinfo as sync_get_userinfo
 
 
+# Minimum expected HTTP call count for discovery + JWKS
+MIN_EXPECTED_CALL_COUNT = 2
+
 DISCO_URL = "https://example.com/.well-known/openid-configuration"
 JWKS_URL = "https://example.com/.well-known/jwks"
 TOKEN_URL = "https://example.com/token"
@@ -187,7 +190,7 @@ class TestSyncDI:
                 http_client=client,
             )
         # Verify discovery and JWKS were called via injected client
-        assert respx.calls.call_count >= 2
+        assert respx.calls.call_count >= MIN_EXPECTED_CALL_COUNT
 
 
 @pytest.mark.unit
@@ -306,4 +309,4 @@ class TestAsyncDI:
                     http_client=client,
                 )
         # Verify discovery and JWKS were called via injected client
-        assert respx.calls.call_count >= 2
+        assert respx.calls.call_count >= MIN_EXPECTED_CALL_COUNT

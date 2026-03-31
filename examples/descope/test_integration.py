@@ -6,7 +6,9 @@ Descope's OIDC provider and properly validates tokens.
 """
 
 import os
+import sys
 import time
+import traceback
 
 import requests
 
@@ -17,6 +19,12 @@ from py_identity_model import (
     request_client_credentials_token,
 )
 
+
+# HTTP status codes
+HTTP_OK = 200
+HTTP_UNAUTHORIZED = 401
+HTTP_FORBIDDEN = 403
+HTTP_SERVER_ERROR_THRESHOLD = 500
 
 # Configuration from environment
 DESCOPE_PROJECT_ID = os.getenv("DESCOPE_PROJECT_ID", "")
@@ -38,7 +46,7 @@ def _make_request(
 ) -> requests.Response:
     """Helper to make HTTP requests to the FastAPI service."""
     url = f"{FASTAPI_URL}{endpoint}"
-    return requests.request(method, url, headers=headers, **kwargs)
+    return requests.request(method, url, headers=headers, timeout=30, **kwargs)
 
 
 def _create_auth_headers(token: str) -> dict:
@@ -101,7 +109,7 @@ def wait_for_service(url: str, max_attempts: int = 30) -> bool:
     for attempt in range(max_attempts):
         try:
             response = requests.get(url, timeout=5)
-            if response.status_code < 500:
+            if response.status_code < HTTP_SERVER_ERROR_THRESHOLD:
                 print(f"✅ Service available at {url}")
                 return True
         except requests.exceptions.RequestException as e:
@@ -121,7 +129,7 @@ def test_public_endpoints():
 
     # Test root endpoint
     response = _make_request("GET", "/")
-    assert response.status_code == 200, (
+    assert response.status_code == HTTP_OK, (
         f"Root endpoint failed: {response.text}"
     )
     data = response.json()
@@ -131,7 +139,7 @@ def test_public_endpoints():
 
     # Test health endpoint
     response = _make_request("GET", "/health")
-    assert response.status_code == 200, (
+    assert response.status_code == HTTP_OK, (
         f"Health endpoint failed: {response.text}"
     )
     data = response.json()
@@ -155,7 +163,7 @@ def test_protected_endpoints_without_token():
 
     for endpoint in protected_endpoints:
         response = _make_request("GET", endpoint)
-        assert response.status_code == 401, (
+        assert response.status_code == HTTP_UNAUTHORIZED, (
             f"Expected 401 for {endpoint}, got {response.status_code}"
         )
         print(f"✅ {endpoint} correctly rejects missing token")
@@ -175,7 +183,7 @@ def test_protected_endpoints_with_invalid_token():
 
     for endpoint in protected_endpoints:
         response = _make_request("GET", endpoint, headers=headers)
-        assert response.status_code == 401, (
+        assert response.status_code == HTTP_UNAUTHORIZED, (
             f"Expected 401 for {endpoint}, got {response.status_code}"
         )
         print(f"✅ {endpoint} correctly rejects invalid token")
@@ -196,14 +204,16 @@ def test_protected_endpoints_with_valid_token():
 
     # Test /api/me endpoint
     response = _make_request("GET", "/api/me", headers=headers)
-    assert response.status_code == 200, f"/api/me failed: {response.text}"
+    assert response.status_code == HTTP_OK, f"/api/me failed: {response.text}"
     data = response.json()
     assert data["authenticated"] is True
     print("✅ /api/me works with valid token")
 
     # Test /api/claims endpoint
     response = _make_request("GET", "/api/claims", headers=headers)
-    assert response.status_code == 200, f"/api/claims failed: {response.text}"
+    assert response.status_code == HTTP_OK, (
+        f"/api/claims failed: {response.text}"
+    )
     data = response.json()
     assert "claims" in data
     assert isinstance(data["claims"], dict)
@@ -211,14 +221,16 @@ def test_protected_endpoints_with_valid_token():
 
     # Test /api/profile endpoint
     response = _make_request("GET", "/api/profile", headers=headers)
-    assert response.status_code == 200, f"/api/profile failed: {response.text}"
+    assert response.status_code == HTTP_OK, (
+        f"/api/profile failed: {response.text}"
+    )
     data = response.json()
     assert "user_id" in data
     print("✅ /api/profile works with valid token")
 
     # Test /api/token-info endpoint
     response = _make_request("GET", "/api/token-info", headers=headers)
-    assert response.status_code == 200, (
+    assert response.status_code == HTTP_OK, (
         f"/api/token-info failed: {response.text}"
     )
     data = response.json()
@@ -239,7 +251,7 @@ def test_descope_specific_endpoints():
 
     # Test /api/descope/roles endpoint
     response = _make_request("GET", "/api/descope/roles", headers=headers)
-    assert response.status_code == 200, (
+    assert response.status_code == HTTP_OK, (
         f"/api/descope/roles failed: {response.text}"
     )
     data = response.json()
@@ -251,7 +263,7 @@ def test_descope_specific_endpoints():
     response = _make_request(
         "GET", "/api/descope/permissions", headers=headers
     )
-    assert response.status_code == 200, (
+    assert response.status_code == HTTP_OK, (
         f"/api/descope/permissions failed: {response.text}"
     )
     data = response.json()
@@ -276,11 +288,11 @@ def test_scope_based_authorization():
     # Test /api/data endpoint (requires openid scope)
     response = _make_request("GET", "/api/data", headers=headers)
     # Will be 200 if token has required scope, 403 otherwise
-    assert response.status_code in [200, 403], (
+    assert response.status_code in [HTTP_OK, HTTP_FORBIDDEN], (
         f"Unexpected status code: {response.status_code}"
     )
 
-    if response.status_code == 200:
+    if response.status_code == HTTP_OK:
         data = response.json()
         assert "data" in data
         print("✅ /api/data works with valid scope")
@@ -302,11 +314,11 @@ def test_role_based_authorization():
     # Test /api/admin/users endpoint (requires admin role)
     response = _make_request("GET", "/api/admin/users", headers=headers)
     # Will be 200 if token has admin role, 403 otherwise
-    assert response.status_code in [200, 403], (
+    assert response.status_code in [HTTP_OK, HTTP_FORBIDDEN], (
         f"Unexpected status code: {response.status_code}"
     )
 
-    if response.status_code == 200:
+    if response.status_code == HTTP_OK:
         data = response.json()
         assert "message" in data
         print("✅ /api/admin/users works with admin role")
@@ -332,11 +344,11 @@ def test_permission_based_authorization():
         headers=headers,
     )
     # Will be 200 if token has permission, 403 otherwise
-    assert response.status_code in [200, 403], (
+    assert response.status_code in [HTTP_OK, HTTP_FORBIDDEN], (
         f"Unexpected status code: {response.status_code}"
     )
 
-    if response.status_code == 200:
+    if response.status_code == HTTP_OK:
         data = response.json()
         assert "message" in data
         print("✅ /api/users POST works with users.create permission")
@@ -377,11 +389,9 @@ def main():
         return 1
     except Exception as e:
         print(f"\n❌ Unexpected error: {e}")
-        import traceback
-
         traceback.print_exc()
         return 1
 
 
 if __name__ == "__main__":
-    exit(main())
+    sys.exit(main())

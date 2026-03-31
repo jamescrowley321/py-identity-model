@@ -17,6 +17,9 @@ from py_identity_model.exceptions import (
 
 CALLBACK = "https://app.example.com/callback"
 
+# Expected token expiry values (seconds)
+EXPECTED_EXPIRES_IN = 3600
+
 
 @pytest.mark.unit
 class TestParseAuthorizeCallbackResponse:
@@ -42,7 +45,7 @@ class TestParseAuthorizeCallbackResponse:
         assert response.access_token == "token123"
         assert response.token_type == "Bearer"
         assert response.state == "xyz789"
-        assert response.expires_in == 3600
+        assert response.expires_in == EXPECTED_EXPIRES_IN
 
     def test_hybrid_flow_fragment(self):
         response = parse_authorize_callback_response(
@@ -208,7 +211,7 @@ class TestParseAuthorizeCallbackResponse:
             "&token_type=Bearer&state=s"
         )
 
-        assert response.expires_in == 3600
+        assert response.expires_in == EXPECTED_EXPIRES_IN
         assert isinstance(response.expires_in, int)
 
     def test_expires_in_non_numeric_becomes_none(self):

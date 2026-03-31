@@ -4,6 +4,7 @@ Unit tests for core token validation logic.
 These tests verify the shared validation logic used by both sync and async implementations.
 """
 
+import math
 from unittest.mock import patch
 
 import pytest
@@ -16,10 +17,12 @@ from py_identity_model.core.models import (
 )
 from py_identity_model.core.token_validation_logic import (
     decode_with_config,
+    log_validation_success,
     validate_config_for_manual_validation,
     validate_disco_response,
     validate_jwks_response,
 )
+from py_identity_model.core.validators import validate_token_config
 from py_identity_model.exceptions import (
     ConfigurationException,
     TokenValidationException,
@@ -127,7 +130,7 @@ class TestValidateConfigForManualValidation:
         )
         with pytest.raises(
             ConfigurationException,
-            match="TokenValidationConfig.key is required",
+            match=r"TokenValidationConfig\.key is required",
         ):
             validate_config_for_manual_validation(config)
 
@@ -139,7 +142,7 @@ class TestValidateConfigForManualValidation:
         )
         with pytest.raises(
             ConfigurationException,
-            match="TokenValidationConfig.algorithms is required",
+            match=r"TokenValidationConfig\.algorithms is required",
         ):
             validate_config_for_manual_validation(config)
 
@@ -159,8 +162,6 @@ class TestValidateTokenConfig:
 
     def test_empty_issuer_list_rejected(self):
         """M2: Empty issuer list must be rejected as fail-open security defect."""
-        from py_identity_model.core.validators import validate_token_config
-
         config = TokenValidationConfig(perform_disco=True, issuer=[])
         with pytest.raises(
             ConfigurationException,
@@ -170,8 +171,6 @@ class TestValidateTokenConfig:
 
     def test_non_empty_issuer_list_accepted(self):
         """Issuer list with values should be accepted."""
-        from py_identity_model.core.validators import validate_token_config
-
         config = TokenValidationConfig(
             perform_disco=True,
             issuer=["https://idp1.com", "https://idp2.com"],
@@ -181,8 +180,6 @@ class TestValidateTokenConfig:
 
     def test_negative_leeway_rejected(self):
         """S2: Negative leeway must be rejected."""
-        from py_identity_model.core.validators import validate_token_config
-
         config = TokenValidationConfig(perform_disco=True, leeway=-5)
         with pytest.raises(
             ConfigurationException, match="leeway must be non-negative"
@@ -191,10 +188,6 @@ class TestValidateTokenConfig:
 
     def test_infinite_leeway_rejected(self):
         """S2: Infinite leeway must be rejected."""
-        import math
-
-        from py_identity_model.core.validators import validate_token_config
-
         config = TokenValidationConfig(perform_disco=True, leeway=math.inf)
         with pytest.raises(
             ConfigurationException, match="leeway must be a finite number"
@@ -203,10 +196,6 @@ class TestValidateTokenConfig:
 
     def test_nan_leeway_rejected(self):
         """S2: NaN leeway must be rejected."""
-        import math
-
-        from py_identity_model.core.validators import validate_token_config
-
         config = TokenValidationConfig(perform_disco=True, leeway=math.nan)
         with pytest.raises(
             ConfigurationException, match="leeway must be a finite number"
@@ -215,34 +204,24 @@ class TestValidateTokenConfig:
 
     def test_negative_infinity_leeway_rejected(self):
         """S2: Negative infinity leeway must be rejected."""
-        import math
-
-        from py_identity_model.core.validators import validate_token_config
-
         config = TokenValidationConfig(perform_disco=True, leeway=-math.inf)
         with pytest.raises(ConfigurationException):
             validate_token_config(config)
 
     def test_zero_leeway_accepted(self):
         """S2: Zero leeway should be accepted."""
-        from py_identity_model.core.validators import validate_token_config
-
         config = TokenValidationConfig(perform_disco=True, leeway=0)
         # Should not raise
         validate_token_config(config)
 
     def test_none_leeway_accepted(self):
         """S2: None leeway (default) should be accepted."""
-        from py_identity_model.core.validators import validate_token_config
-
         config = TokenValidationConfig(perform_disco=True, leeway=None)
         # Should not raise
         validate_token_config(config)
 
     def test_boolean_leeway_rejected(self):
         """Boolean leeway must be rejected (not silently treated as 0/1)."""
-        from py_identity_model.core.validators import validate_token_config
-
         config = TokenValidationConfig(perform_disco=True, leeway=True)
         with pytest.raises(
             ConfigurationException,
@@ -252,8 +231,6 @@ class TestValidateTokenConfig:
 
     def test_string_leeway_rejected(self):
         """String leeway must be rejected."""
-        from py_identity_model.core.validators import validate_token_config
-
         config = TokenValidationConfig(perform_disco=True, leeway="30")  # type: ignore
         with pytest.raises(
             ConfigurationException, match="leeway must be a number"
@@ -262,8 +239,6 @@ class TestValidateTokenConfig:
 
     def test_issuer_list_with_empty_string_rejected(self):
         """Issuer list containing empty strings must be rejected."""
-        from py_identity_model.core.validators import validate_token_config
-
         config = TokenValidationConfig(
             perform_disco=True, issuer=["https://good.com", ""]
         )
@@ -275,8 +250,6 @@ class TestValidateTokenConfig:
 
     def test_issuer_list_with_non_string_rejected(self):
         """Issuer list containing non-string items must be rejected."""
-        from py_identity_model.core.validators import validate_token_config
-
         config = TokenValidationConfig(
             perform_disco=True,
             issuer=["https://good.com", 123],  # type: ignore
@@ -317,8 +290,6 @@ class TestDecodeWithConfig:
 
     def test_empty_string_issuer_not_replaced_by_config(self):
         """Empty-string discovery issuer must be passed through, not replaced by config issuer."""
-        from unittest.mock import patch
-
         config = TokenValidationConfig(
             perform_disco=False,
             key={"kty": "RSA", "n": "test", "e": "AQAB"},
@@ -340,10 +311,6 @@ class TestLogValidationSuccess:
 
     def test_success_log_does_not_expose_sub(self):
         """Success log must not expose the actual sub claim value."""
-        from py_identity_model.core.token_validation_logic import (
-            log_validation_success,
-        )
-
         with patch(
             "py_identity_model.core.token_validation_logic.logger"
         ) as mock_logger:
@@ -354,10 +321,6 @@ class TestLogValidationSuccess:
 
     def test_success_log_absent_sub(self):
         """Success log must indicate when sub is absent."""
-        from py_identity_model.core.token_validation_logic import (
-            log_validation_success,
-        )
-
         with patch(
             "py_identity_model.core.token_validation_logic.logger"
         ) as mock_logger:

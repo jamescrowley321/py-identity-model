@@ -33,6 +33,10 @@ from .test_utils import (
 )
 
 
+# Minimum expected cache hits after validating multiple tokens
+MIN_EXPECTED_CACHE_HITS = 2
+
+
 # Token validation options - only override defaults where needed
 DEFAULT_OPTIONS = {
     "verify_aud": False,
@@ -129,8 +133,12 @@ class TestMultipleTokensFromSameProvider:
 
         # After validating 3 tokens, we should have cache hits
         # (first token causes miss, subsequent tokens hit cache)
-        assert disco_cache_info.hits >= 2, "Discovery cache should have hits"
-        assert jwks_cache_info.hits >= 2, "JWKS cache should have hits"
+        assert disco_cache_info.hits >= MIN_EXPECTED_CACHE_HITS, (
+            "Discovery cache should have hits"
+        )
+        assert jwks_cache_info.hits >= MIN_EXPECTED_CACHE_HITS, (
+            "JWKS cache should have hits"
+        )
 
 
 @pytest.mark.usefixtures("clear_validation_caches")

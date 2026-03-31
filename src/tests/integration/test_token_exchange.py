@@ -7,6 +7,16 @@ from py_identity_model import (
     FailedResponseAccessError,
     TokenExchangeRequest,
     TokenExchangeResponse,
+    exchange_token,
+)
+from py_identity_model.aio import (
+    TokenExchangeRequest as AioTokenExchangeRequest,
+)
+from py_identity_model.aio import (
+    TokenExchangeResponse as AioTokenExchangeResponse,
+)
+from py_identity_model.aio import (
+    exchange_token as aio_exchange_token,
 )
 from py_identity_model.core import token_type
 from py_identity_model.core.token_exchange_logic import (
@@ -118,23 +128,11 @@ class TestTokenExchangeIntegration:
         assert token_type.JWT.startswith("urn:ietf:params:oauth:")
 
     def test_top_level_import(self):
-        from py_identity_model import (
-            TokenExchangeRequest,
-            TokenExchangeResponse,
-            exchange_token,
-        )
-
         assert callable(exchange_token)
         assert TokenExchangeRequest is not None
         assert TokenExchangeResponse is not None
 
     def test_aio_import(self):
-        from py_identity_model.aio import (
-            TokenExchangeRequest,
-            TokenExchangeResponse,
-            exchange_token,
-        )
-
-        assert callable(exchange_token)
-        assert TokenExchangeRequest is not None
-        assert TokenExchangeResponse is not None
+        assert callable(aio_exchange_token)
+        assert AioTokenExchangeRequest is not None
+        assert AioTokenExchangeResponse is not None

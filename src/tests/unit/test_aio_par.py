@@ -19,6 +19,9 @@ PAR_RESPONSE = {
     "expires_in": 60,
 }
 
+# Expected PAR response values
+EXPECTED_PAR_EXPIRES_IN = 60
+
 
 @pytest.mark.asyncio
 class TestAsyncPAR:
@@ -39,7 +42,7 @@ class TestAsyncPAR:
         assert (
             response.request_uri == "urn:ietf:params:oauth:request_uri:abc123"
         )
-        assert response.expires_in == 60
+        assert response.expires_in == EXPECTED_PAR_EXPIRES_IN
 
     @respx.mock
     async def test_par_with_pkce(self):

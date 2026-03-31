@@ -6,9 +6,19 @@ environments like FastAPI with multiple workers, Gunicorn, or Django.
 """
 
 import concurrent.futures
+from functools import lru_cache
 import threading
 
 from py_identity_model.ssl_config import get_ssl_verify
+from py_identity_model.sync.http_client import (
+    _reset_http_client,
+    get_http_client,
+)
+
+
+# Test constants
+CONCURRENT_CALLS = 100
+EXPECTED_CACHED_RESULT = 84
 
 
 class TestSSLConfigThreadSafety:
@@ -37,7 +47,7 @@ class TestSSLConfigThreadSafety:
         assert len(errors) == 0, f"Errors occurred: {errors}"
 
         # All results should be identical (cached value)
-        assert len(results) == 100
+        assert len(results) == CONCURRENT_CALLS
         assert all(r == results[0] for r in results), (
             "Results should be identical"
         )
@@ -152,12 +162,6 @@ class TestHTTPClientThreadSafety:
 
     def test_http_client_concurrent_access(self):
         """Test that HTTP client can be accessed concurrently with thread-local storage."""
-        from py_identity_model.ssl_config import get_ssl_verify
-        from py_identity_model.sync.http_client import (
-            _reset_http_client,
-            get_http_client,
-        )
-
         # Clear SSL verify cache to ensure we use system defaults
         # (previous tests may have set invalid SSL paths)
         get_ssl_verify.cache_clear()
@@ -189,7 +193,7 @@ class TestHTTPClientThreadSafety:
         assert len(errors) == 0, f"Errors occurred: {errors}"
 
         # We should have collected 100 results
-        assert len(results) == 100
+        assert len(results) == CONCURRENT_CALLS
 
         thread_ids = [r[0] for r in results]
         clients = [r[1] for r in results]
@@ -223,8 +227,6 @@ class TestCachingThreadSafety:
 
     def test_lru_cache_thread_safe(self):
         """Test that functools.lru_cache is thread-safe."""
-        from functools import lru_cache
-
         call_count = 0
         lock = threading.Lock()
 
@@ -247,7 +249,7 @@ class TestCachingThreadSafety:
             concurrent.futures.wait(futures)
 
         # All results should be correct
-        assert all(r == 84 for r in results)
+        assert all(r == EXPECTED_CACHED_RESULT for r in results)
 
         # Function should only be called once due to caching
         assert call_count == 1, "Function should only be called once (cached)"

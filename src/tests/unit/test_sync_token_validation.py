@@ -14,6 +14,7 @@ from py_identity_model.exceptions import (
     ConfigurationException,
     TokenValidationException,
 )
+from py_identity_model.sync.managed_client import HTTPClient
 from py_identity_model.sync.token_validation import (
     _get_disco_response,
     _get_jwks_response,
@@ -68,7 +69,7 @@ class TestSyncTokenValidation:
 
         with pytest.raises(
             ConfigurationException,
-            match="TokenValidationConfig.key and TokenValidationConfig.algorithms are required",
+            match=r"TokenValidationConfig\.key and TokenValidationConfig\.algorithms are required",
         ):
             validate_token(
                 jwt="fake.jwt.token",
@@ -205,7 +206,7 @@ class TestSyncTokenValidation:
 
         with pytest.raises(
             TokenValidationException,
-            match="does not contain a jwks_uri.*require_key_set",
+            match=r"does not contain a jwks_uri.*require_key_set",
         ):
             validate_token(
                 jwt="fake.jwt.token",
@@ -216,8 +217,6 @@ class TestSyncTokenValidation:
     @respx.mock
     def test_missing_jwks_uri_di_path_raises(self):
         """Test that missing jwks_uri in discovery doc raises TokenValidationException (DI path)."""
-        from py_identity_model.sync.managed_client import HTTPClient
-
         respx.get("https://example.com/.well-known/openid-configuration").mock(
             return_value=httpx.Response(200, json=_DISCO_RESPONSE_NO_JWKS)
         )
@@ -231,7 +230,7 @@ class TestSyncTokenValidation:
             HTTPClient() as client,
             pytest.raises(
                 TokenValidationException,
-                match="does not contain a jwks_uri.*require_key_set",
+                match=r"does not contain a jwks_uri.*require_key_set",
             ),
         ):
             validate_token(
@@ -258,7 +257,7 @@ class TestSyncTokenValidation:
 
         with pytest.raises(
             TokenValidationException,
-            match="does not contain a jwks_uri.*require_key_set",
+            match=r"does not contain a jwks_uri.*require_key_set",
         ):
             validate_token(
                 jwt="fake.jwt.token",

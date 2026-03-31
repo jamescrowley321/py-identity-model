@@ -6,6 +6,8 @@ These tests verify async token validation with real tokens and async claims vali
 
 import pytest
 
+from py_identity_model.aio.http_client import close_async_http_client
+from py_identity_model.aio.token_validation import validate_token
 from py_identity_model.core.models import TokenValidationConfig
 from py_identity_model.exceptions import TokenValidationException
 
@@ -30,9 +32,6 @@ class TestAsyncTokenValidation:
         self, test_config, client_credentials_token, require_https
     ):
         """Test async claims validator that succeeds."""
-        from py_identity_model.aio.http_client import close_async_http_client
-        from py_identity_model.aio.token_validation import validate_token
-
         assert client_credentials_token.token is not None
 
         async def async_validate_claims(token: dict):
@@ -64,12 +63,9 @@ class TestAsyncTokenValidation:
         self, test_config, client_credentials_token, require_https
     ):
         """Test async claims validator that fails."""
-        from py_identity_model.aio.http_client import close_async_http_client
-        from py_identity_model.aio.token_validation import validate_token
-
         assert client_credentials_token.token is not None
 
-        async def async_validate_claims(token: dict):
+        async def async_validate_claims(_token: dict):
             """Async claims validator that fails."""
             raise ValueError("Custom validation failed")
 
@@ -98,9 +94,6 @@ class TestAsyncTokenValidation:
         self, test_config, client_credentials_token, require_https
     ):
         """Test that sync claims validator works in async validation."""
-        from py_identity_model.aio.http_client import close_async_http_client
-        from py_identity_model.aio.token_validation import validate_token
-
         assert client_credentials_token.token is not None
 
         def sync_validate_claims(token: dict):

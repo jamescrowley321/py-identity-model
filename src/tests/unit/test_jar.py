@@ -12,9 +12,16 @@ import jwt as pyjwt
 import pytest
 
 from py_identity_model.core.jar import (
+    _RESERVED_CLAIMS,
+    _SUPPORTED_ALGORITHMS,
     build_jar_authorization_url,
     create_request_object,
 )
+
+
+# Expected JAR token values
+JAR_LIFETIME_SECONDS = 600
+UUID_STRING_LENGTH = 36
 
 
 def _ec_private_key_pem() -> bytes:
@@ -135,7 +142,7 @@ class TestCreateRequestObject:
             lifetime=600,
         )
         decoded = pyjwt.decode(token, options={"verify_signature": False})
-        assert decoded["exp"] - decoded["iat"] == 600
+        assert decoded["exp"] - decoded["iat"] == JAR_LIFETIME_SECONDS
 
     def test_unsupported_algorithm(self):
         pem = _ec_private_key_pem()
@@ -179,8 +186,6 @@ class TestCreateRequestObject:
         entering extra_claims in normal usage. The frozenset is defense-in-depth
         against programmatic dict construction.
         """
-        from py_identity_model.core.jar import _RESERVED_CLAIMS
-
         for claim in (
             "state",
             "nonce",
@@ -231,7 +236,7 @@ class TestCreateRequestObject:
         )
         decoded = pyjwt.decode(token, options={"verify_signature": False})
         assert "jti" in decoded
-        assert len(decoded["jti"]) == 36  # UUID format
+        assert len(decoded["jti"]) == UUID_STRING_LENGTH  # UUID format
 
     def test_jti_unique_per_call(self):
         """S2: each request object gets a unique jti."""
@@ -256,7 +261,7 @@ class TestCreateRequestObject:
     def test_pkce_requires_both_challenge_and_method(self):
         """S3: code_challenge without code_challenge_method raises ValueError."""
         pem = _ec_private_key_pem()
-        with pytest.raises(ValueError, match="code_challenge.*both"):
+        with pytest.raises(ValueError, match=r"code_challenge.*both"):
             create_request_object(
                 private_key=pem,
                 algorithm="ES256",
@@ -269,7 +274,7 @@ class TestCreateRequestObject:
     def test_pkce_requires_both_method_and_challenge(self):
         """S3: code_challenge_method without code_challenge raises ValueError."""
         pem = _ec_private_key_pem()
-        with pytest.raises(ValueError, match="code_challenge.*both"):
+        with pytest.raises(ValueError, match=r"code_challenge.*both"):
             create_request_object(
                 private_key=pem,
                 algorithm="ES256",
@@ -407,8 +412,6 @@ class TestCreateRequestObject:
             )
 
     def test_eddsa_algorithm_accepted(self):
-        from py_identity_model.core.jar import _SUPPORTED_ALGORITHMS
-
         assert "EdDSA" in _SUPPORTED_ALGORITHMS
 
     def test_zero_lifetime_rejected(self):

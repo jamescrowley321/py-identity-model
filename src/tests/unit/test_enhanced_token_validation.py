@@ -1,5 +1,6 @@
 """Unit tests for enhanced token validation features (leeway, multi-issuer, subject)."""
 
+import base64
 import time
 
 from cryptography.hazmat.primitives import serialization
@@ -13,10 +14,16 @@ from py_identity_model.core.jwt_helpers import (
 )
 from py_identity_model.core.models import TokenValidationConfig
 from py_identity_model.exceptions import (
+    ConfigurationException,
     InvalidIssuerException,
     TokenExpiredException,
     TokenValidationException,
 )
+
+
+# Test constants
+EXPECTED_LEEWAY_SECONDS = 30
+EXPECTED_ISSUER_COUNT = 2
 
 
 @pytest.fixture
@@ -29,8 +36,6 @@ def rsa_keypair():
 
     # Get public key in JWK-compatible format
     pub_numbers = public_key.public_numbers()
-
-    import base64
 
     def _int_to_base64url(n: int, length: int) -> str:
         return (
@@ -124,7 +129,7 @@ class TestLeeway:
             perform_disco=False,
             leeway=30,
         )
-        assert config.leeway == 30
+        assert config.leeway == EXPECTED_LEEWAY_SECONDS
 
 
 @pytest.mark.unit
@@ -174,7 +179,7 @@ class TestMultiIssuer:
             issuer=["https://idp1.com", "https://idp2.com"],
         )
         assert isinstance(config.issuer, list)
-        assert len(config.issuer) == 2
+        assert len(config.issuer) == EXPECTED_ISSUER_COUNT
 
 
 @pytest.mark.unit
@@ -293,8 +298,6 @@ class TestDirectAPIGuards:
     def test_empty_algorithms_rejected(self, rsa_keypair):
         """Empty algorithms list must be rejected."""
         key_dict, _pem = rsa_keypair
-        from py_identity_model.exceptions import ConfigurationException
-
         with pytest.raises(
             ConfigurationException, match="algorithms must not be empty"
         ):
@@ -305,8 +308,6 @@ class TestDirectAPIGuards:
     def test_empty_issuer_list_rejected(self, rsa_keypair):
         """Empty issuer list must be rejected on direct API call."""
         key_dict, _pem = rsa_keypair
-        from py_identity_model.exceptions import ConfigurationException
-
         with pytest.raises(
             ConfigurationException, match="issuer must not be an empty list"
         ):

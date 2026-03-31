@@ -1,3 +1,5 @@
+import pytest
+
 from py_identity_model import (
     DiscoveryDocumentRequest,
     get_discovery_document,
@@ -13,7 +15,8 @@ def test_get_discovery_document_is_successful(discovery_document):
     assert discovery_document.authorization_endpoint
 
 
-def test_get_discovery_document_fails(env_file):
+@pytest.mark.usefixtures("env_file")
+def test_get_discovery_document_fails():
     disco_doc_request = DiscoveryDocumentRequest(address="https://google.com")
     disco_doc_response = get_discovery_document(disco_doc_request)
     assert disco_doc_response.is_successful is False

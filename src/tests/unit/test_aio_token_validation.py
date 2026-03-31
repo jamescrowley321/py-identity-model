@@ -5,6 +5,7 @@ These tests verify async-specific token validation logic including
 error handling, caching, and enhanced features (leeway, multi-issuer, subject).
 """
 
+import base64
 import time
 
 from cryptography.hazmat.primitives import serialization
@@ -14,7 +15,14 @@ import jwt as pyjwt
 import pytest
 import respx
 
-from py_identity_model.aio.token_validation import _get_jwks_response
+from py_identity_model.aio.managed_client import AsyncHTTPClient
+from py_identity_model.aio.token_validation import (
+    _get_disco_response,
+    _get_jwks_response,
+    _get_public_key_by_kid,
+    validate_token,
+)
+from py_identity_model.core.jwt_helpers import _decode_jwt_cached
 from py_identity_model.core.models import TokenValidationConfig
 from py_identity_model.exceptions import (
     ConfigurationException,
@@ -42,10 +50,6 @@ class TestAsyncTokenValidation:
     @respx.mock
     async def test_get_jwks_response_no_keys(self):
         """Test that fetching JWKS with no keys raises exception."""
-        from py_identity_model.aio.token_validation import (
-            _get_public_key_by_kid,
-        )
-
         # Mock JWKS endpoint to return empty keys array
         respx.get("https://example.com/jwks").mock(
             return_value=httpx.Response(
@@ -69,8 +73,6 @@ class TestAsyncTokenValidation:
     @pytest.mark.asyncio
     async def test_manual_validation_missing_config(self):
         """Test manual validation (perform_disco=False) with missing config."""
-        from py_identity_model.aio.token_validation import validate_token
-
         # Config without key/algorithms - should raise ConfigurationException
         validation_config = TokenValidationConfig(
             perform_disco=False,
@@ -78,7 +80,7 @@ class TestAsyncTokenValidation:
 
         with pytest.raises(
             ConfigurationException,
-            match="TokenValidationConfig.key and TokenValidationConfig.algorithms are required",
+            match=r"TokenValidationConfig\.key and TokenValidationConfig\.algorithms are required",
         ):
             await validate_token(
                 jwt="fake.jwt.token",
@@ -93,11 +95,6 @@ class TestAsyncTokenValidation:
         With require_key_set policy enforcement, missing jwks_uri is caught
         at the discovery level and surfaced as a TokenValidationException.
         """
-        from py_identity_model.aio.token_validation import (
-            _get_disco_response,
-            validate_token,
-        )
-
         respx.get("https://example.com/.well-known/openid-configuration").mock(
             return_value=httpx.Response(200, json=_DISCO_RESPONSE_NO_JWKS)
         )
@@ -111,7 +108,7 @@ class TestAsyncTokenValidation:
 
         with pytest.raises(
             TokenValidationException,
-            match="does not contain a jwks_uri.*require_key_set",
+            match=r"does not contain a jwks_uri.*require_key_set",
         ):
             await validate_token(
                 jwt="fake.jwt.token",
@@ -123,9 +120,6 @@ class TestAsyncTokenValidation:
     @respx.mock
     async def test_missing_jwks_uri_di_path_raises(self):
         """Test that missing jwks_uri in discovery doc raises TokenValidationException (DI path)."""
-        from py_identity_model.aio.managed_client import AsyncHTTPClient
-        from py_identity_model.aio.token_validation import validate_token
-
         respx.get("https://example.com/.well-known/openid-configuration").mock(
             return_value=httpx.Response(200, json=_DISCO_RESPONSE_NO_JWKS)
         )
@@ -138,7 +132,7 @@ class TestAsyncTokenValidation:
         async with AsyncHTTPClient() as client:
             with pytest.raises(
                 TokenValidationException,
-                match="does not contain a jwks_uri.*require_key_set",
+                match=r"does not contain a jwks_uri.*require_key_set",
             ):
                 await validate_token(
                     jwt="fake.jwt.token",
@@ -151,11 +145,6 @@ class TestAsyncTokenValidation:
     @respx.mock
     async def test_empty_string_jwks_uri_cached_path_raises(self):
         """Test that empty-string jwks_uri raises TokenValidationException (cached path)."""
-        from py_identity_model.aio.token_validation import (
-            _get_disco_response,
-            validate_token,
-        )
-
         disco_with_empty_jwks = {**_DISCO_RESPONSE_NO_JWKS, "jwks_uri": ""}
         respx.get("https://example.com/.well-known/openid-configuration").mock(
             return_value=httpx.Response(200, json=disco_with_empty_jwks)
@@ -170,7 +159,7 @@ class TestAsyncTokenValidation:
 
         with pytest.raises(
             TokenValidationException,
-            match="does not contain a jwks_uri.*require_key_set",
+            match=r"does not contain a jwks_uri.*require_key_set",
         ):
             await validate_token(
                 jwt="fake.jwt.token",
@@ -187,8 +176,6 @@ class TestAsyncTokenValidation:
 @pytest.fixture
 def rsa_keypair():
     """Generate a fresh RSA key pair for testing."""
-    import base64
-
     private_key = rsa.generate_private_key(
         public_exponent=65537, key_size=2048
     )
@@ -228,8 +215,6 @@ def _sign_jwt(pem: bytes, claims: dict, headers: dict | None = None) -> str:
 @pytest.fixture(autouse=True)
 def _clear_jwt_cache():
     """Clear JWT decode cache between tests."""
-    from py_identity_model.core.jwt_helpers import _decode_jwt_cached
-
     _decode_jwt_cached.cache_clear()
     yield
     _decode_jwt_cached.cache_clear()
@@ -241,8 +226,6 @@ class TestAsyncLeeway:
 
     @pytest.mark.asyncio
     async def test_expired_token_rejected_without_leeway(self, rsa_keypair):
-        from py_identity_model.aio.token_validation import validate_token
-
         key_dict, pem = rsa_keypair
         token = _sign_jwt(
             pem,
@@ -264,8 +247,6 @@ class TestAsyncLeeway:
 
     @pytest.mark.asyncio
     async def test_expired_token_accepted_with_leeway(self, rsa_keypair):
-        from py_identity_model.aio.token_validation import validate_token
-
         key_dict, pem = rsa_keypair
         token = _sign_jwt(
             pem,
@@ -290,8 +271,6 @@ class TestAsyncLeeway:
 
     @pytest.mark.asyncio
     async def test_leeway_zero_does_not_allow_expired(self, rsa_keypair):
-        from py_identity_model.aio.token_validation import validate_token
-
         key_dict, pem = rsa_keypair
         token = _sign_jwt(
             pem,
@@ -315,8 +294,6 @@ class TestAsyncMultiIssuer:
 
     @pytest.mark.asyncio
     async def test_single_issuer_still_works(self, rsa_keypair):
-        from py_identity_model.aio.token_validation import validate_token
-
         key_dict, pem = rsa_keypair
         token = _sign_jwt(pem, {"sub": "user1", "iss": "https://idp1.com"})
 
@@ -334,8 +311,6 @@ class TestAsyncMultiIssuer:
 
     @pytest.mark.asyncio
     async def test_list_issuer_accepts_matching(self, rsa_keypair):
-        from py_identity_model.aio.token_validation import validate_token
-
         key_dict, pem = rsa_keypair
         token = _sign_jwt(pem, {"sub": "user1", "iss": "https://idp2.com"})
 
@@ -353,8 +328,6 @@ class TestAsyncMultiIssuer:
 
     @pytest.mark.asyncio
     async def test_list_issuer_rejects_non_matching(self, rsa_keypair):
-        from py_identity_model.aio.token_validation import validate_token
-
         key_dict, pem = rsa_keypair
         token = _sign_jwt(pem, {"sub": "user1", "iss": "https://evil.com"})
 
@@ -375,8 +348,6 @@ class TestAsyncSubjectValidation:
 
     @pytest.mark.asyncio
     async def test_subject_matches(self, rsa_keypair):
-        from py_identity_model.aio.token_validation import validate_token
-
         key_dict, pem = rsa_keypair
         token = _sign_jwt(pem, {"sub": "user123", "iss": "https://test.com"})
 
@@ -394,8 +365,6 @@ class TestAsyncSubjectValidation:
 
     @pytest.mark.asyncio
     async def test_subject_mismatch_raises(self, rsa_keypair):
-        from py_identity_model.aio.token_validation import validate_token
-
         key_dict, pem = rsa_keypair
         token = _sign_jwt(pem, {"sub": "user123", "iss": "https://test.com"})
 
@@ -414,8 +383,6 @@ class TestAsyncSubjectValidation:
         self, rsa_keypair
     ):
         """S1: Error message must NOT contain the actual sub claim value."""
-        from py_identity_model.aio.token_validation import validate_token
-
         key_dict, pem = rsa_keypair
         secret_sub = "sensitive-user-id-12345"
         token = _sign_jwt(pem, {"sub": secret_sub, "iss": "https://test.com"})
@@ -433,8 +400,6 @@ class TestAsyncSubjectValidation:
 
     @pytest.mark.asyncio
     async def test_missing_sub_claim_raises(self, rsa_keypair):
-        from py_identity_model.aio.token_validation import validate_token
-
         key_dict, pem = rsa_keypair
         token = _sign_jwt(pem, {"iss": "https://test.com"})
 
@@ -450,8 +415,6 @@ class TestAsyncSubjectValidation:
 
     @pytest.mark.asyncio
     async def test_subject_none_skips_validation(self, rsa_keypair):
-        from py_identity_model.aio.token_validation import validate_token
-
         key_dict, pem = rsa_keypair
         token = _sign_jwt(pem, {"sub": "anyone", "iss": "https://test.com"})
 

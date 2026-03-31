@@ -19,6 +19,10 @@ DEFAULT_HTTP_TIMEOUT = 30.0
 DEFAULT_RETRY_MAX_ATTEMPTS = 3
 DEFAULT_RETRY_BASE_DELAY = 1.0
 
+# HTTP status codes for retry logic
+HTTP_TOO_MANY_REQUESTS = 429
+HTTP_INTERNAL_SERVER_ERROR = 500
+
 
 def get_retry_config() -> tuple[int, float]:
     """
@@ -61,7 +65,8 @@ def should_retry_response(
         bool: True if should retry, False otherwise
     """
     return (
-        response.status_code == 429 or response.status_code >= 500
+        response.status_code == HTTP_TOO_MANY_REQUESTS
+        or response.status_code >= HTTP_INTERNAL_SERVER_ERROR
     ) and attempt < retries
 
 
@@ -83,6 +88,8 @@ __all__ = [
     "DEFAULT_HTTP_TIMEOUT",
     "DEFAULT_RETRY_BASE_DELAY",
     "DEFAULT_RETRY_MAX_ATTEMPTS",
+    "HTTP_INTERNAL_SERVER_ERROR",
+    "HTTP_TOO_MANY_REQUESTS",
     "calculate_delay",
     "get_retry_config",
     "get_timeout",

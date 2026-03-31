@@ -5,6 +5,12 @@ from py_identity_model.identity import (
 )
 
 
+# Expected claim counts for test assertions
+SIMPLE_TOKEN_CLAIM_COUNT = 6
+ARRAY_TOKEN_TOTAL_CLAIM_COUNT = 7
+ROLE_CLAIM_COUNT = 2
+
+
 def test_create_claims_principal_from_simple_token():
     """Test creating ClaimsPrincipal from a simple token dictionary"""
     token_claims = {
@@ -24,7 +30,7 @@ def test_create_claims_principal_from_simple_token():
     assert principal.identity.authentication_type == "Bearer"
 
     # Check that all claims were converted
-    assert len(principal.claims) == 6
+    assert len(principal.claims) == SIMPLE_TOKEN_CLAIM_COUNT
     assert principal.has_claim("sub", "user123")
     assert principal.has_claim("iss", "https://example.com")
     assert principal.has_claim("aud", "my-app")
@@ -62,7 +68,7 @@ def test_create_claims_principal_from_token_with_array_claims():
 
     assert isinstance(principal, ClaimsPrincipal)
     # Should have 7 claims total: sub, iss, 3 roles, 2 groups
-    assert len(principal.claims) == 7
+    assert len(principal.claims) == ARRAY_TOKEN_TOTAL_CLAIM_COUNT
 
     # Check individual role claims
     assert principal.has_claim("roles", "admin")
@@ -146,7 +152,7 @@ def test_find_claims_in_principal():
 
     # Test find_all for multiple values
     role_claims = principal.find_all("roles")
-    assert len(role_claims) == 2
+    assert len(role_claims) == ROLE_CLAIM_COUNT
     role_values = [claim.value for claim in role_claims]
     assert "admin" in role_values
     assert "user" in role_values
