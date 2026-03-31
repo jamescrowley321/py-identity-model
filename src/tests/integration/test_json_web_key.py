@@ -354,6 +354,7 @@ def test_get_jwks_failure():
         _ = jwks_response.keys
 
 
+@pytest.mark.filterwarnings("ignore::ResourceWarning")
 def test_get_jwks_network_error():
     """Test get_jwks with network errors"""
     # Test with malformed URL
