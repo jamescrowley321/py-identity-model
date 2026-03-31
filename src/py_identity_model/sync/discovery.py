@@ -44,6 +44,7 @@ def get_discovery_document(
         DiscoveryDocumentResponse: Discovery document response
     """
     log_discovery_request(disco_doc_req)
+    response = None
     try:
         # Pre-flight: validate URL scheme BEFORE making the HTTP request
         # to prevent sending plaintext requests to non-loopback hosts
@@ -52,12 +53,12 @@ def get_discovery_document(
 
         client = http_client.client if http_client else get_http_client()
         response = _fetch_discovery_document(client, disco_doc_req.address)
-        result = process_discovery_response(response, policy)
-        # Explicitly close the response to ensure the connection is released
-        response.close()
-        return result
+        return process_discovery_response(response, policy)
     except Exception as e:
         return handle_discovery_error(e)
+    finally:
+        if response is not None:
+            response.close()
 
 
 __all__ = [

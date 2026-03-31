@@ -47,12 +47,16 @@ async def get_jwks(
         JwksResponse: JWKS response with keys
     """
     log_jwks_request(jwks_request)
+    response = None
     try:
         client = http_client.client if http_client else get_async_http_client()
         response = await _fetch_jwks(client, jwks_request.address)
         return process_jwks_response(response)
     except Exception as e:
         return handle_jwks_error(e)
+    finally:
+        if response is not None:
+            await response.aclose()
 
 
 __all__ = [

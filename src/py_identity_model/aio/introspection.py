@@ -49,16 +49,18 @@ async def introspect_token(
     log_introspection_request(request)
     params, headers, auth = prepare_introspection_request_data(request)
 
+    response = None
     try:
         client = http_client.client if http_client else get_async_http_client()
         response = await _introspect_token(
             client, request.address, params, headers, auth
         )
-        result = process_introspection_response(response)
-        await response.aclose()
-        return result
+        return process_introspection_response(response)
     except Exception as e:
         return handle_introspection_error(e)
+    finally:
+        if response is not None:
+            await response.aclose()
 
 
 __all__ = [
