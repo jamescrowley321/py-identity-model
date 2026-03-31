@@ -143,9 +143,7 @@ class TestValidateFAPIAuthorizationRequest:
             use_par=True,
         )
         assert result.is_compliant is False
-        assert any(
-            "code_challenge_method is required" in v for v in result.violations
-        )
+        assert any("code_challenge_method is required" in v for v in result.violations)
         # Must NOT contain Python repr 'None'
         assert not any("'None'" in v for v in result.violations)
 

@@ -42,9 +42,7 @@ class _GuardedResponseMixin:
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset()
 
-    _error_fields: ClassVar[frozenset[str]] = frozenset(
-        {"error", "error_description"}
-    )
+    _error_fields: ClassVar[frozenset[str]] = frozenset({"error", "error_description"})
 
     def __getattribute__(self, name: str):
         guarded = object.__getattribute__(self, "_guarded_fields")
@@ -339,9 +337,7 @@ class JsonWebKey:
                     mapped_data[k] = v
 
             # Filter to only include valid fields
-            filtered_data = {
-                k: v for k, v in mapped_data.items() if k in valid_fields
-            }
+            filtered_data = {k: v for k, v in mapped_data.items() if k in valid_fields}
 
             return cls(**filtered_data)
         except json.JSONDecodeError as e:
@@ -394,11 +390,7 @@ class JsonWebKey:
     def as_dict(self):
         """Convert the JWK to a dictionary with all available properties"""
         # Add all non-None properties to the dictionary
-        return {
-            key: value
-            for key, value in self.__dict__.items()
-            if value is not None
-        }
+        return {key: value for key, value in self.__dict__.items() if value is not None}
 
 
 # ============================================================================
@@ -748,9 +740,7 @@ class PushedAuthorizationResponse(BaseResponse):
     Use ``request_uri`` in the authorization URL instead of inline parameters.
     """
 
-    _guarded_fields: ClassVar[frozenset[str]] = frozenset(
-        {"request_uri", "expires_in"}
-    )
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset({"request_uri", "expires_in"})
 
     request_uri: str | None = None
     expires_in: int | None = None

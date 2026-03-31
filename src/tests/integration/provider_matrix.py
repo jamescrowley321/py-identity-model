@@ -69,9 +69,7 @@ def detect_capabilities(disco: dict) -> dict[str, bool]:
     for label, field, value in FEATURES:
         if label == "devInteractions":
             issuer = disco.get("issuer", "")
-            caps[label] = issuer.startswith(
-                ("http://localhost", "http://127.0.0.1")
-            )
+            caps[label] = issuer.startswith(("http://localhost", "http://127.0.0.1"))
         elif value:
             caps[label] = value in disco.get(field, [])
         elif field:
@@ -188,9 +186,7 @@ def main() -> None:
         print("No providers with TEST_DISCO_ADDRESS found")
         sys.exit(1)
 
-    all_caps = [name for name, _ in GRANT_TYPES] + [
-        label for label, _, _ in FEATURES
-    ]
+    all_caps = [name for name, _ in GRANT_TYPES] + [label for label, _, _ in FEATURES]
     _print_matrix(providers, all_caps)
 
 

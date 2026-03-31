@@ -182,9 +182,7 @@ def require_descope_permission(permission: str) -> Callable[..., None]:
 
 
         @app.post("/users")
-        async def create_user(
-            user_data: dict, _: None = Depends(require_user_create)
-        ):
+        async def create_user(user_data: dict, _: None = Depends(require_user_create)):
             return {"message": "User created"}
         ```
     """

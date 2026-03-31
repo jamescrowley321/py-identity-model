@@ -80,10 +80,7 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
 
         # Parse Bearer token
         parts = authorization.split()
-        if (
-            len(parts) != _BEARER_HEADER_PART_COUNT
-            or parts[0].lower() != "bearer"
-        ):
+        if len(parts) != _BEARER_HEADER_PART_COUNT or parts[0].lower() != "bearer":
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={

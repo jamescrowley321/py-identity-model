@@ -30,9 +30,7 @@ class TestJARIntegration:
     def test_full_flow_ec256(self):
         """Create request object with EC key, build URL, verify JWT."""
         key = ec.generate_private_key(ec.SECP256R1())
-        pem = key.private_bytes(
-            Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
-        )
+        pem = key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
         pub_pem = key.public_key().public_bytes(
             Encoding.PEM, PublicFormat.SubjectPublicKeyInfo
         )
@@ -61,9 +59,7 @@ class TestJARIntegration:
     def test_full_flow_rsa256(self):
         """Create request object with RSA key, build URL, verify JWT."""
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        pem = key.private_bytes(
-            Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
-        )
+        pem = key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
         pub_pem = key.public_key().public_bytes(
             Encoding.PEM, PublicFormat.SubjectPublicKeyInfo
         )
@@ -88,9 +84,7 @@ class TestJARIntegration:
     def test_jar_with_pkce(self):
         """Combine JAR with PKCE code challenge."""
         key = ec.generate_private_key(ec.SECP256R1())
-        pem = key.private_bytes(
-            Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
-        )
+        pem = key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
         pub_pem = key.public_key().public_bytes(
             Encoding.PEM, PublicFormat.SubjectPublicKeyInfo
         )
@@ -118,9 +112,7 @@ class TestJARIntegration:
     def test_build_url_with_real_jwt(self):
         """Build authorization URL containing actual signed JWT."""
         key = ec.generate_private_key(ec.SECP256R1())
-        pem = key.private_bytes(
-            Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
-        )
+        pem = key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
         pub_pem = key.public_key().public_bytes(
             Encoding.PEM, PublicFormat.SubjectPublicKeyInfo
         )
@@ -159,9 +151,7 @@ class TestJARIntegration:
     def test_ps256_algorithm(self):
         """Verify PS256 (RSA-PSS) algorithm support."""
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        pem = key.private_bytes(
-            Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
-        )
+        pem = key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
         pub_pem = key.public_key().public_bytes(
             Encoding.PEM, PublicFormat.SubjectPublicKeyInfo
         )

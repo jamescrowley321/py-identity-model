@@ -46,9 +46,7 @@ _state: _AsyncClientState = {
 
 def _log_retry(message: str, delay: float, attempt: int, retries: int) -> None:
     """Log a retry attempt warning."""
-    logger.warning(
-        f"{message}, retrying in {delay}s (attempt {attempt + 1}/{retries})"
-    )
+    logger.warning(f"{message}, retrying in {delay}s (attempt {attempt + 1}/{retries})")
 
 
 def _get_retry_params(
@@ -116,9 +114,7 @@ def retry_with_backoff_async(
                     last_exception = e
                     if attempt < retries:
                         delay = calculate_delay(delay_base, attempt)
-                        _log_retry(
-                            f"Request error: {e}", delay, attempt, retries
-                        )
+                        _log_retry(f"Request error: {e}", delay, attempt, retries)
                         await asyncio.sleep(delay)
                         continue
                     raise

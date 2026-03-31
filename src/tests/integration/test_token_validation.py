@@ -129,9 +129,7 @@ def test_cache_succeeds(test_config, client_credentials_token, require_https):
     assert cache_info[0] > 0
 
 
-def test_benchmark_validation(
-    test_config, client_credentials_token, require_https
-):
+def test_benchmark_validation(test_config, client_credentials_token, require_https):
     """Test benchmark using cached fixtures."""
     assert client_credentials_token.token is not None
     validation_config = TokenValidationConfig(
@@ -205,9 +203,7 @@ class TestManualKeyValidation:
     any provider that returns JWT-format access tokens.
     """
 
-    def test_validate_jwt_manual_key(
-        self, jwt_access_token, jwt_signing_key, issuer
-    ):
+    def test_validate_jwt_manual_key(self, jwt_access_token, jwt_signing_key, issuer):
         """Validate JWT with manually-provided key."""
         key_dict, alg = jwt_signing_key
         config = TokenValidationConfig(
@@ -234,9 +230,7 @@ class TestManualKeyValidation:
         with pytest.raises(TokenValidationException):
             validate_token(jwt_access_token["access_token"], config)
 
-    def test_validate_wrong_audience(
-        self, jwt_access_token, jwt_signing_key, issuer
-    ):
+    def test_validate_wrong_audience(self, jwt_access_token, jwt_signing_key, issuer):
         """Token with wrong audience claim is rejected."""
         key_dict, alg = jwt_signing_key
         config = TokenValidationConfig(

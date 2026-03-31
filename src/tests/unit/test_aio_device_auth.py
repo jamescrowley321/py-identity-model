@@ -76,9 +76,7 @@ class TestAsyncRequestDeviceAuthorization:
     @respx.mock
     async def test_device_auth_error(self):
         respx.post(DEVICE_AUTH_URL).mock(
-            return_value=httpx.Response(
-                400, content=b'{"error":"unauthorized_client"}'
-            )
+            return_value=httpx.Response(400, content=b'{"error":"unauthorized_client"}')
         )
         response = await request_device_authorization(
             DeviceAuthorizationRequest(
@@ -89,9 +87,7 @@ class TestAsyncRequestDeviceAuthorization:
         assert response.is_successful is False
 
     async def test_request_inherits_base(self):
-        req = DeviceAuthorizationRequest(
-            address=DEVICE_AUTH_URL, client_id="app"
-        )
+        req = DeviceAuthorizationRequest(address=DEVICE_AUTH_URL, client_id="app")
         assert isinstance(req, BaseRequest)
 
     async def test_response_inherits_base(self):
@@ -107,9 +103,7 @@ class TestAsyncRequestDeviceAuthorization:
     @respx.mock
     async def test_missing_required_fields_returns_error(self):
         """S2: Missing REQUIRED fields per RFC 8628 §3.2 return error."""
-        respx.post(DEVICE_AUTH_URL).mock(
-            return_value=httpx.Response(200, json={})
-        )
+        respx.post(DEVICE_AUTH_URL).mock(return_value=httpx.Response(200, json={}))
         response = await request_device_authorization(
             DeviceAuthorizationRequest(
                 address=DEVICE_AUTH_URL,
@@ -128,9 +122,7 @@ class TestAsyncRequestDeviceAuthorization:
         """S2: Partial REQUIRED fields still fail."""
         partial = {**DEVICE_AUTH_RESPONSE}
         del partial["device_code"]
-        respx.post(DEVICE_AUTH_URL).mock(
-            return_value=httpx.Response(200, json=partial)
-        )
+        respx.post(DEVICE_AUTH_URL).mock(return_value=httpx.Response(200, json=partial))
         response = await request_device_authorization(
             DeviceAuthorizationRequest(
                 address=DEVICE_AUTH_URL,
@@ -212,9 +204,7 @@ class TestAsyncRequestDeviceAuthorization:
     async def test_non_json_success_returns_error(self):
         """M1: Non-JSON body on 200 returns error instead of crashing."""
         respx.post(DEVICE_AUTH_URL).mock(
-            return_value=httpx.Response(
-                200, content=b"<html>Gateway Error</html>"
-            )
+            return_value=httpx.Response(200, content=b"<html>Gateway Error</html>")
         )
         response = await request_device_authorization(
             DeviceAuthorizationRequest(
@@ -284,9 +274,7 @@ class TestAsyncPollDeviceToken:
             "token_type": "Bearer",
             "expires_in": 3600,
         }
-        respx.post(TOKEN_URL).mock(
-            return_value=httpx.Response(200, json=token_data)
-        )
+        respx.post(TOKEN_URL).mock(return_value=httpx.Response(200, json=token_data))
         response = await poll_device_token(
             DeviceTokenRequest(
                 address=TOKEN_URL,
@@ -480,16 +468,12 @@ class TestAsyncPollDeviceToken:
         assert isinstance(req, BaseRequest)
 
     async def test_token_response_inherits_base(self):
-        resp = DeviceTokenResponse(
-            is_successful=True, token={"access_token": "tok"}
-        )
+        resp = DeviceTokenResponse(is_successful=True, token={"access_token": "tok"})
         assert isinstance(resp, BaseResponse)
 
     @respx.mock
     async def test_network_error(self):
-        respx.post(TOKEN_URL).mock(
-            side_effect=httpx.ConnectError("Connection refused")
-        )
+        respx.post(TOKEN_URL).mock(side_effect=httpx.ConnectError("Connection refused"))
         response = await poll_device_token(
             DeviceTokenRequest(
                 address=TOKEN_URL,

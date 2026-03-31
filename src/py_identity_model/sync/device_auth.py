@@ -51,9 +51,7 @@ def request_device_authorization(
     response = None
     try:
         client = http_client.client if http_client else get_http_client()
-        response = _request_device_auth(
-            client, request.address, params, headers, auth
-        )
+        response = _request_device_auth(client, request.address, params, headers, auth)
         return process_device_auth_response(response)
     except Exception as e:
         return handle_device_auth_error(e)
@@ -98,9 +96,7 @@ def poll_device_token(
     response = None
     try:
         client = http_client.client if http_client else get_http_client()
-        response = _poll_device_token(
-            client, request.address, params, headers, auth
-        )
+        response = _poll_device_token(client, request.address, params, headers, auth)
         return process_device_token_response(response)
     except Exception as e:
         return handle_device_token_error(e)

@@ -88,9 +88,7 @@ def _validate_request_params(params: _RequestParams) -> None:
     if params.lifetime <= 0:
         raise ValueError(f"lifetime must be positive, got {params.lifetime}")
 
-    if (params.code_challenge is None) != (
-        params.code_challenge_method is None
-    ):
+    if (params.code_challenge is None) != (params.code_challenge_method is None):
         raise ValueError(
             "code_challenge and code_challenge_method must both be "
             "provided or both omitted"
@@ -107,8 +105,7 @@ def _validate_request_params(params: _RequestParams) -> None:
     collisions = set(params.extra_claims) & _RESERVED_CLAIMS
     if collisions:
         raise ValueError(
-            f"extra_claims cannot override reserved claims: "
-            f"{sorted(collisions)}"
+            f"extra_claims cannot override reserved claims: {sorted(collisions)}"
         )
 
 
@@ -210,9 +207,7 @@ def create_request_object(  # noqa: PLR0913  # RFC 9101 §4 request object carri
     if kid is not None:
         headers["kid"] = kid
 
-    return pyjwt.encode(
-        claims, private_key, algorithm=algorithm, headers=headers
-    )
+    return pyjwt.encode(claims, private_key, algorithm=algorithm, headers=headers)
 
 
 def build_jar_authorization_url(

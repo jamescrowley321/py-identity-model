@@ -99,9 +99,7 @@ class TestManualKeyEnhancedValidation:
     the same features with manual key configuration.
     """
 
-    def test_leeway_with_manual_key(
-        self, jwt_access_token, jwt_signing_key, issuer
-    ):
+    def test_leeway_with_manual_key(self, jwt_access_token, jwt_signing_key, issuer):
         """Token validation with clock skew tolerance."""
         key_dict, alg = jwt_signing_key
         config = TokenValidationConfig(
@@ -142,9 +140,7 @@ class TestManualKeyEnhancedValidation:
             issuer=issuer,
             options={"verify_aud": False, "require_aud": False},
         )
-        decoded = validate_token(
-            jwt_access_token["access_token"], check_config
-        )
+        decoded = validate_token(jwt_access_token["access_token"], check_config)
         if "dct" not in decoded or "tenants" not in decoded:
             pytest.skip("Provider does not include custom dct/tenants claims")
 

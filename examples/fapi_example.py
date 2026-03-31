@@ -63,9 +63,7 @@ def validate_client_example():
     for v in result.violations:
         print(f"    - {v}")
 
-    print(
-        f"\n  Allowed algorithms: {sorted(FAPI2_ALLOWED_SIGNING_ALGORITHMS)}"
-    )
+    print(f"\n  Allowed algorithms: {sorted(FAPI2_ALLOWED_SIGNING_ALGORITHMS)}")
 
 
 def main():

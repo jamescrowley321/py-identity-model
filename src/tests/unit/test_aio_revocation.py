@@ -198,10 +198,7 @@ class TestAsyncRevocation:
         )
 
         request = route.calls[0].request
-        assert (
-            request.headers["content-type"]
-            == "application/x-www-form-urlencoded"
-        )
+        assert request.headers["content-type"] == "application/x-www-form-urlencoded"
 
     @respx.mock
     async def test_unexpected_error_returns_error_response(self):

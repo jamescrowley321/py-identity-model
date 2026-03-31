@@ -57,9 +57,7 @@ class TestBaseRequest:
         assert req.address == "https://example.com/token"
 
     def test_userinfo_request_isinstance(self):
-        req = UserInfoRequest(
-            address="https://example.com/userinfo", token="tok"
-        )
+        req = UserInfoRequest(address="https://example.com/userinfo", token="tok")
         assert isinstance(req, BaseRequest)
         assert req.token == "tok"
 

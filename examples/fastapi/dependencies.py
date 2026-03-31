@@ -275,10 +275,7 @@ def require_scope(scope: str) -> Callable[..., None]:
             )
 
         # Handle space-separated string or array
-        if isinstance(scope_claim, str):
-            scopes = scope_claim.split()
-        else:
-            scopes = scope_claim
+        scopes = scope_claim.split() if isinstance(scope_claim, str) else scope_claim
 
         if scope not in scopes:
             raise HTTPException(

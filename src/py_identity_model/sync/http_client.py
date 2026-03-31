@@ -32,9 +32,7 @@ _thread_local = threading.local()
 
 def _log_retry(message: str, delay: float, attempt: int, retries: int) -> None:
     """Log a retry attempt warning."""
-    logger.warning(
-        f"{message}, retrying in {delay}s (attempt {attempt + 1}/{retries})"
-    )
+    logger.warning(f"{message}, retrying in {delay}s (attempt {attempt + 1}/{retries})")
 
 
 def _get_retry_params(
@@ -56,9 +54,7 @@ def _get_retry_params(
     return retries, delay_base
 
 
-def retry_with_backoff(
-    max_retries: int | None = None, base_delay: float | None = None
-):
+def retry_with_backoff(max_retries: int | None = None, base_delay: float | None = None):
     """
     Decorator to retry HTTP requests with exponential backoff.
 
@@ -104,9 +100,7 @@ def retry_with_backoff(
                     last_exception = e
                     if attempt < retries:
                         delay = calculate_delay(delay_base, attempt)
-                        _log_retry(
-                            f"Request error: {e}", delay, attempt, retries
-                        )
+                        _log_retry(f"Request error: {e}", delay, attempt, retries)
                         time.sleep(delay)
                         continue
                     raise

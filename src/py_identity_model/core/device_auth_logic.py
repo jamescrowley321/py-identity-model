@@ -50,9 +50,7 @@ def _coerce_int(value: object) -> int | None:
 
 def log_device_auth_request(request: DeviceAuthorizationRequest) -> None:
     """Log device authorization request."""
-    logger.info(
-        f"Requesting device authorization from {redact_url(request.address)}"
-    )
+    logger.info(f"Requesting device authorization from {redact_url(request.address)}")
     logger.debug(f"Client ID: {request.client_id}, Scope: {request.scope}")
 
 
@@ -89,9 +87,7 @@ def process_device_auth_response(
         except (json.JSONDecodeError, ValueError):
             error_msg = "Device authorization response has invalid JSON body"
             logger.error(error_msg)
-            return DeviceAuthorizationResponse(
-                is_successful=False, error=error_msg
-            )
+            return DeviceAuthorizationResponse(is_successful=False, error=error_msg)
 
         if not isinstance(data, dict):
             error_msg = (
@@ -99,9 +95,7 @@ def process_device_auth_response(
                 f"{type(data).__name__}"
             )
             logger.error(error_msg)
-            return DeviceAuthorizationResponse(
-                is_successful=False, error=error_msg
-            )
+            return DeviceAuthorizationResponse(is_successful=False, error=error_msg)
 
         # RFC 8628 Section 3.2: validate REQUIRED fields
         device_code = data.get("device_code")
@@ -126,9 +120,7 @@ def process_device_auth_response(
                 f"per RFC 8628 Section 3.2: {', '.join(missing)}"
             )
             logger.error(error_msg)
-            return DeviceAuthorizationResponse(
-                is_successful=False, error=error_msg
-            )
+            return DeviceAuthorizationResponse(is_successful=False, error=error_msg)
 
         interval = _coerce_int(data.get("interval"))
 
@@ -155,9 +147,7 @@ def handle_device_auth_error(e: Exception) -> DeviceAuthorizationResponse:
     if isinstance(e, httpx.RequestError):
         error_msg = f"Network error during device authorization: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return DeviceAuthorizationResponse(
-            is_successful=False, error=error_msg
-        )
+        return DeviceAuthorizationResponse(is_successful=False, error=error_msg)
 
     error_msg = f"Unexpected error during device authorization: {e!s}"
     logger.error(error_msg, exc_info=True)
@@ -212,10 +202,7 @@ def _parse_success_response(
         return DeviceTokenResponse(is_successful=False, error=error_msg)
 
     if not isinstance(data, dict):
-        error_msg = (
-            f"Device token response is not a JSON object: "
-            f"{type(data).__name__}"
-        )
+        error_msg = f"Device token response is not a JSON object: {type(data).__name__}"
         logger.error(error_msg)
         return DeviceTokenResponse(is_successful=False, error=error_msg)
 
@@ -251,9 +238,7 @@ def _parse_error_response(
     error_code = data.get("error")
     if error_code in _POLLING_ERROR_CODES:
         interval = _coerce_int(data.get("interval"))
-        error_description = data.get(
-            "error_description", f"Device flow: {error_code}"
-        )
+        error_description = data.get("error_description", f"Device flow: {error_code}")
         logger.debug(f"Device token poll: {error_code}")
         return DeviceTokenResponse(
             is_successful=False,

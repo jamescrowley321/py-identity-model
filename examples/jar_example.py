@@ -29,9 +29,7 @@ def jar_basic_example():
 
     # Generate an EC key pair for signing
     key = ec.generate_private_key(ec.SECP256R1())
-    private_pem = key.private_bytes(
-        Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
-    )
+    private_pem = key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
 
     # Create a signed request object
     request_jwt = create_request_object(
@@ -67,9 +65,7 @@ def jar_with_pkce_example():
     print("=" * 60)
 
     key = ec.generate_private_key(ec.SECP256R1())
-    private_pem = key.private_bytes(
-        Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
-    )
+    private_pem = key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
 
     # Generate PKCE pair
     verifier, challenge = generate_pkce_pair()

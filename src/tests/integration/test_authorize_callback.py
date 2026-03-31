@@ -68,9 +68,7 @@ class TestAuthorizeCallbackWithDiscovery:
         result = validate_authorize_callback_state(response, legitimate_state)
 
         assert result.is_valid is False
-        assert (
-            result.result is AuthorizeCallbackValidationResult.STATE_MISMATCH
-        )
+        assert result.result is AuthorizeCallbackValidationResult.STATE_MISMATCH
 
     def test_error_callback_with_issuer(self, discovery_document):
         """Parse error callback that includes issuer (RFC 9207)."""
@@ -117,15 +115,11 @@ class TestAuthorizeCallbackWithDiscovery:
         assert response.token_type == "Bearer"
         assert response.state == state
 
-    def test_authorization_endpoint_available(
-        self, discovery_document, require_https
-    ):
+    def test_authorization_endpoint_available(self, discovery_document, require_https):
         """Verify the identity provider exposes an authorization endpoint."""
         assert discovery_document.authorization_endpoint is not None
         if require_https:
-            assert discovery_document.authorization_endpoint.startswith(
-                "https://"
-            )
+            assert discovery_document.authorization_endpoint.startswith("https://")
         else:
             assert discovery_document.authorization_endpoint.startswith(
                 ("https://", "http://")
@@ -164,7 +158,4 @@ class TestLiveAuthorizeCallback:
         wrong_state = "completely-wrong-state-value"
         state_result = validate_authorize_callback_state(callback, wrong_state)
         assert not state_result.is_valid
-        assert (
-            state_result.result
-            == AuthorizeCallbackValidationResult.STATE_MISMATCH
-        )
+        assert state_result.result == AuthorizeCallbackValidationResult.STATE_MISMATCH

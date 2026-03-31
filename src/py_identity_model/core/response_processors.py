@@ -130,9 +130,7 @@ def validate_and_parse_discovery_response(
     validate_parameter_values(response_json)
 
     # Enforce require_key_set policy
-    if (policy is None or policy.require_key_set) and not response_json.get(
-        "jwks_uri"
-    ):
+    if (policy is None or policy.require_key_set) and not response_json.get("jwks_uri"):
         raise DiscoveryException(
             "Discovery document does not contain a jwks_uri, "
             "required by policy (require_key_set=True)"

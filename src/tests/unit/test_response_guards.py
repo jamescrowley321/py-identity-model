@@ -32,9 +32,7 @@ class TestJwksResponseGuards:
             is_successful=False,
             error="Connection refused",
         )
-        with pytest.raises(
-            FailedResponseAccessError, match="Connection refused"
-        ):
+        with pytest.raises(FailedResponseAccessError, match="Connection refused"):
             _ = response.keys
 
     def test_failed_response_allows_is_successful_access(self):
@@ -110,23 +108,17 @@ class TestDiscoveryDocumentResponseGuards:
         assert response.jwks_uri == "https://example.com/jwks"
 
     def test_failed_response_blocks_issuer_access(self):
-        response = DiscoveryDocumentResponse(
-            is_successful=False, error="Not found"
-        )
+        response = DiscoveryDocumentResponse(is_successful=False, error="Not found")
         with pytest.raises(FailedResponseAccessError, match="issuer"):
             _ = response.issuer
 
     def test_failed_response_blocks_jwks_uri_access(self):
-        response = DiscoveryDocumentResponse(
-            is_successful=False, error="Not found"
-        )
+        response = DiscoveryDocumentResponse(is_successful=False, error="Not found")
         with pytest.raises(FailedResponseAccessError, match="jwks_uri"):
             _ = response.jwks_uri
 
     def test_failed_response_blocks_token_endpoint_access(self):
-        response = DiscoveryDocumentResponse(
-            is_successful=False, error="Not found"
-        )
+        response = DiscoveryDocumentResponse(is_successful=False, error="Not found")
         with pytest.raises(FailedResponseAccessError, match="token_endpoint"):
             _ = response.token_endpoint
 

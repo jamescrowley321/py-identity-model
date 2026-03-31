@@ -54,8 +54,7 @@ def _validate_request_params(request: TokenExchangeRequest) -> None:
     # actor_token_type without actor_token is meaningless per RFC 8693 §2.1
     if request.actor_token_type is not None and request.actor_token is None:
         raise ValueError(
-            "actor_token_type has no meaning without actor_token "
-            "(RFC 8693 Section 2.1)"
+            "actor_token_type has no meaning without actor_token (RFC 8693 Section 2.1)"
         )
 
     # Reject empty strings on optional fields when provided
@@ -159,23 +158,16 @@ def process_token_exchange_response(
 
         if not isinstance(data, dict):
             error_msg = (
-                f"Token exchange response is not a JSON object: "
-                f"{type(data).__name__}"
+                f"Token exchange response is not a JSON object: {type(data).__name__}"
             )
             logger.error(error_msg)
             return TokenExchangeResponse(is_successful=False, error=error_msg)
 
         # RFC 6749 §5.1 + RFC 8693 §2.2.1: validate REQUIRED fields
         missing: list[str] = []
-        if (
-            not isinstance(data.get("access_token"), str)
-            or not data["access_token"]
-        ):
+        if not isinstance(data.get("access_token"), str) or not data["access_token"]:
             missing.append("access_token")
-        if (
-            not isinstance(data.get("token_type"), str)
-            or not data["token_type"]
-        ):
+        if not isinstance(data.get("token_type"), str) or not data["token_type"]:
             missing.append("token_type")
 
         if missing:
@@ -189,9 +181,7 @@ def process_token_exchange_response(
         # RFC 8693 §2.2.1: issued_token_type is REQUIRED but we tolerate
         # its absence for non-compliant servers; validate type when present
         issued_token_type = data.get("issued_token_type")
-        if issued_token_type is not None and not isinstance(
-            issued_token_type, str
-        ):
+        if issued_token_type is not None and not isinstance(issued_token_type, str):
             issued_token_type = None
 
         logger.info("Token exchange successful")

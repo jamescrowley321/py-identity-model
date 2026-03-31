@@ -72,20 +72,14 @@ class TestIsLoopback:
 class TestParseDiscoveryUrl:
     def test_base_url(self):
         result = parse_discovery_url("https://auth.example.com")
-        assert (
-            result.url
-            == "https://auth.example.com/.well-known/openid-configuration"
-        )
+        assert result.url == "https://auth.example.com/.well-known/openid-configuration"
         assert result.authority == "https://auth.example.com"
 
     def test_full_wellknown_url(self):
         result = parse_discovery_url(
             "https://auth.example.com/.well-known/openid-configuration"
         )
-        assert (
-            result.url
-            == "https://auth.example.com/.well-known/openid-configuration"
-        )
+        assert result.url == "https://auth.example.com/.well-known/openid-configuration"
         assert result.authority == "https://auth.example.com"
 
     def test_with_path(self):
@@ -107,10 +101,7 @@ class TestParseDiscoveryUrl:
 
     def test_trailing_slash(self):
         result = parse_discovery_url("https://auth.example.com/")
-        assert (
-            result.url
-            == "https://auth.example.com/.well-known/openid-configuration"
-        )
+        assert result.url == "https://auth.example.com/.well-known/openid-configuration"
 
     def test_query_string_rejected(self):
         """URLs with query strings are rejected (WARN-8)."""
@@ -240,9 +231,7 @@ class TestDiscoveryDocumentRequestWithPolicy:
 
     def test_request_with_policy(self):
         policy = DiscoveryPolicy(require_https=False)
-        req = DiscoveryDocumentRequest(
-            address="http://localhost:8080", policy=policy
-        )
+        req = DiscoveryDocumentRequest(address="http://localhost:8080", policy=policy)
         assert req.policy is not None
         assert req.policy.require_https is False
 

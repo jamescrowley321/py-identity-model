@@ -20,9 +20,7 @@ from py_identity_model import (
 
 
 # Constants
-DEMO_DISCOVERY_URL = (
-    "https://demo.duendesoftware.com/.well-known/openid-configuration"
-)
+DEMO_DISCOVERY_URL = "https://demo.duendesoftware.com/.well-known/openid-configuration"
 
 
 # =============================================================================
@@ -78,9 +76,7 @@ def fetch_jwks_example():
         print("✓ JWKS fetched successfully!")
         print(f"  Number of keys: {len(response.keys)}")
         for key in response.keys:
-            print(
-                f"  - Key ID: {key.kid}, Algorithm: {key.alg}, Type: {key.kty}"
-            )
+            print(f"  - Key ID: {key.kid}, Algorithm: {key.alg}, Type: {key.kty}")
     else:
         print(f"✗ JWKS fetch failed: {response.error}")
 
@@ -247,8 +243,7 @@ def userinfo_example(access_token: str):
         return response
     print(f"✗ UserInfo request failed: {response.error}")
     print(
-        "  Note: Client credentials tokens may not have a "
-        "userinfo endpoint available"
+        "  Note: Client credentials tokens may not have a userinfo endpoint available"
     )
     return response
 
@@ -376,9 +371,7 @@ def main():
     print(
         "\\nThese examples demonstrate traditional synchronous operations (blocking I/O)."
     )
-    print(
-        "Perfect for scripts, CLIs, Flask, Django, and simple applications.\\n"
-    )
+    print("Perfect for scripts, CLIs, Flask, Django, and simple applications.\\n")
 
     # Example 1: Discovery
     fetch_discovery_document_example()

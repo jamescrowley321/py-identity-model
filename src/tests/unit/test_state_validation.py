@@ -72,16 +72,12 @@ class TestValidateAuthorizeCallbackState:
         )
 
         assert result.is_valid is False
-        assert (
-            result.result is AuthorizeCallbackValidationResult.STATE_MISMATCH
-        )
+        assert result.result is AuthorizeCallbackValidationResult.STATE_MISMATCH
         assert result.error == "state_mismatch"
         assert result.error_description is not None
 
     def test_missing_state(self):
-        result = validate_authorize_callback_state(
-            _parse("code=abc"), "expected"
-        )
+        result = validate_authorize_callback_state(_parse("code=abc"), "expected")
 
         assert result.is_valid is False
         assert result.result is AuthorizeCallbackValidationResult.MISSING_STATE
@@ -89,43 +85,31 @@ class TestValidateAuthorizeCallbackState:
 
     def test_empty_state_treated_as_missing(self):
         """Empty state value preserved by parse_qs but caught by validator."""
-        result = validate_authorize_callback_state(
-            _parse("code=c&state="), "expected"
-        )
+        result = validate_authorize_callback_state(_parse("code=c&state="), "expected")
 
         assert result.is_valid is False
         assert result.result is AuthorizeCallbackValidationResult.MISSING_STATE
 
     def test_error_response_propagates_error_fields(self):
         result = validate_authorize_callback_state(
-            _parse(
-                "error=access_denied&error_description=User+denied&state=s"
-            ),
+            _parse("error=access_denied&error_description=User+denied&state=s"),
             "s",
         )
 
         assert result.is_valid is False
-        assert (
-            result.result is AuthorizeCallbackValidationResult.ERROR_RESPONSE
-        )
+        assert result.result is AuthorizeCallbackValidationResult.ERROR_RESPONSE
         assert result.error == "access_denied"
         assert result.error_description == "User denied"
 
     def test_error_response_takes_precedence_over_state(self):
         """Error detection runs before state comparison."""
-        result = validate_authorize_callback_state(
-            _parse("error=server_error"), "any"
-        )
+        result = validate_authorize_callback_state(_parse("error=server_error"), "any")
 
-        assert (
-            result.result is AuthorizeCallbackValidationResult.ERROR_RESPONSE
-        )
+        assert result.result is AuthorizeCallbackValidationResult.ERROR_RESPONSE
 
     def test_expected_state_none_returns_missing_state(self):
         """[M1] expected_state=None must not crash with TypeError in hmac.compare_digest."""
-        result = validate_authorize_callback_state(
-            _parse("code=abc&state=valid"), None
-        )
+        result = validate_authorize_callback_state(_parse("code=abc&state=valid"), None)
 
         assert result.is_valid is False
         assert result.result is AuthorizeCallbackValidationResult.MISSING_STATE
@@ -134,9 +118,7 @@ class TestValidateAuthorizeCallbackState:
 
     def test_expected_state_empty_string_returns_missing_state(self):
         """[BLOCK] Empty string expected_state must not pass hmac.compare_digest."""
-        result = validate_authorize_callback_state(
-            _parse("code=abc&state=valid"), ""
-        )
+        result = validate_authorize_callback_state(_parse("code=abc&state=valid"), "")
 
         assert result.is_valid is False
         assert result.result is AuthorizeCallbackValidationResult.MISSING_STATE

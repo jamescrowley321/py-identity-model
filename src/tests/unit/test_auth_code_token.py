@@ -31,9 +31,7 @@ TOKEN_JSON = {
 class TestAuthCodeTokenExchange:
     @respx.mock
     def test_success_with_pkce(self):
-        respx.post(TOKEN_URL).mock(
-            return_value=httpx.Response(200, json=TOKEN_JSON)
-        )
+        respx.post(TOKEN_URL).mock(return_value=httpx.Response(200, json=TOKEN_JSON))
 
         request = AuthorizationCodeTokenRequest(
             address=TOKEN_URL,
@@ -51,9 +49,7 @@ class TestAuthCodeTokenExchange:
 
     @respx.mock
     def test_success_with_client_secret(self):
-        respx.post(TOKEN_URL).mock(
-            return_value=httpx.Response(200, json=TOKEN_JSON)
-        )
+        respx.post(TOKEN_URL).mock(return_value=httpx.Response(200, json=TOKEN_JSON))
 
         request = AuthorizationCodeTokenRequest(
             address=TOKEN_URL,
@@ -107,9 +103,7 @@ class TestAuthCodeTokenExchange:
 
     def test_response_repr_success_no_crash(self):
         """repr() on successful response must not crash (T104 pattern)."""
-        resp = AuthorizationCodeTokenResponse(
-            is_successful=True, token={"a": 1}
-        )
+        resp = AuthorizationCodeTokenResponse(is_successful=True, token={"a": 1})
         r = repr(resp)
         assert "AuthorizationCodeTokenResponse" in r
 
@@ -170,9 +164,7 @@ class TestAuthCodeTokenExchange:
 class TestAsyncAuthCodeTokenExchange:
     @respx.mock
     async def test_success_with_pkce(self):
-        respx.post(TOKEN_URL).mock(
-            return_value=httpx.Response(200, json=TOKEN_JSON)
-        )
+        respx.post(TOKEN_URL).mock(return_value=httpx.Response(200, json=TOKEN_JSON))
 
         request = AuthorizationCodeTokenRequest(
             address=TOKEN_URL,
@@ -189,9 +181,7 @@ class TestAsyncAuthCodeTokenExchange:
 
     @respx.mock
     async def test_success_with_client_secret(self):
-        respx.post(TOKEN_URL).mock(
-            return_value=httpx.Response(200, json=TOKEN_JSON)
-        )
+        respx.post(TOKEN_URL).mock(return_value=httpx.Response(200, json=TOKEN_JSON))
 
         request = AuthorizationCodeTokenRequest(
             address=TOKEN_URL,

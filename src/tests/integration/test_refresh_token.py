@@ -27,9 +27,7 @@ class TestRefreshTokenIntegration:
         )
         assert req.address != ""
 
-    def test_invalid_refresh_token_returns_error(
-        self, discovery_document, test_config
-    ):
+    def test_invalid_refresh_token_returns_error(self, discovery_document, test_config):
         """Sending an invalid refresh token to the real endpoint returns an error."""
         response = refresh_token(
             RefreshTokenRequest(
@@ -110,9 +108,7 @@ class TestLiveRefreshToken:
         if "refresh_token" not in provider_capabilities:
             pytest.skip("Provider does not support refresh_token grant")
 
-        original_token = self._get_fresh_tokens(
-            discovery_document, test_config
-        )
+        original_token = self._get_fresh_tokens(discovery_document, test_config)
         response = refresh_token(
             RefreshTokenRequest(
                 address=discovery_document.token_endpoint,
@@ -161,9 +157,7 @@ class TestLiveRefreshToken:
         if "refresh_token" not in provider_capabilities:
             pytest.skip("Provider does not support refresh_token grant")
 
-        original_token = self._get_fresh_tokens(
-            discovery_document, test_config
-        )
+        original_token = self._get_fresh_tokens(discovery_document, test_config)
         response = refresh_token(
             RefreshTokenRequest(
                 address=discovery_document.token_endpoint,
@@ -173,8 +167,6 @@ class TestLiveRefreshToken:
                 scope="openid",
             )
         )
-        assert response.is_successful, (
-            f"Downscoped refresh failed: {response.error}"
-        )
+        assert response.is_successful, f"Downscoped refresh failed: {response.error}"
         assert response.token is not None
         assert "access_token" in response.token

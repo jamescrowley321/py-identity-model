@@ -72,9 +72,7 @@ def jwks_from_dict(keys_dict: dict) -> JsonWebKey:
     )
 
 
-def find_key_by_kid(
-    kid: str | None, keys: list[JsonWebKey]
-) -> tuple[dict, str]:
+def find_key_by_kid(kid: str | None, keys: list[JsonWebKey]) -> tuple[dict, str]:
     """
     Find a public key from JWKS by key ID and return it with algorithm.
 

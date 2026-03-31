@@ -43,9 +43,7 @@ class TestAsyncUserInfo:
     async def test_async_get_userinfo_jwt_response(self):
         """Test async UserInfo request with JWT response."""
         url = "https://example.com/userinfo"
-        jwt_string = (
-            "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIyNDgyODk3NjEwMDEifQ.signature"
-        )
+        jwt_string = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIyNDgyODk3NjEwMDEifQ.signature"
         respx.get(url).mock(
             return_value=httpx.Response(
                 200,
@@ -68,9 +66,7 @@ class TestAsyncUserInfo:
     async def test_async_get_userinfo_http_error(self):
         """Test async UserInfo request with HTTP error."""
         url = "https://example.com/userinfo"
-        respx.get(url).mock(
-            return_value=httpx.Response(401, content=b"Unauthorized")
-        )
+        respx.get(url).mock(return_value=httpx.Response(401, content=b"Unauthorized"))
 
         request = UserInfoRequest(
             address=url,

@@ -76,9 +76,7 @@ class TestGetDiscoveryDocument:
     def test_get_discovery_document_http_error(self):
         # Mock HTTP error response
         url = "https://example.com/.well-known/openid_configuration"
-        respx.get(url).mock(
-            return_value=httpx.Response(404, content=b"Not Found")
-        )
+        respx.get(url).mock(return_value=httpx.Response(404, content=b"Not Found"))
 
         request = DiscoveryDocumentRequest(address=url)
         result = get_discovery_document(request)

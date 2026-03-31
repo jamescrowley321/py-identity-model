@@ -176,18 +176,12 @@ class TestAsyncTokenValidation:
 @pytest.fixture
 def rsa_keypair():
     """Generate a fresh RSA key pair for testing."""
-    private_key = rsa.generate_private_key(
-        public_exponent=65537, key_size=2048
-    )
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public_key = private_key.public_key()
     pub_numbers = public_key.public_numbers()
 
     def _int_to_base64url(n: int, length: int) -> str:
-        return (
-            base64.urlsafe_b64encode(n.to_bytes(length, "big"))
-            .rstrip(b"=")
-            .decode()
-        )
+        return base64.urlsafe_b64encode(n.to_bytes(length, "big")).rstrip(b"=").decode()
 
     key_dict = {
         "kty": "RSA",
@@ -264,9 +258,7 @@ class TestAsyncLeeway:
             leeway=30,
         )
 
-        decoded = await validate_token(
-            jwt=token, token_validation_config=config
-        )
+        decoded = await validate_token(jwt=token, token_validation_config=config)
         assert decoded["sub"] == "user1"
 
     @pytest.mark.asyncio
@@ -304,9 +296,7 @@ class TestAsyncMultiIssuer:
             issuer="https://idp1.com",
         )
 
-        decoded = await validate_token(
-            jwt=token, token_validation_config=config
-        )
+        decoded = await validate_token(jwt=token, token_validation_config=config)
         assert decoded["iss"] == "https://idp1.com"
 
     @pytest.mark.asyncio
@@ -321,9 +311,7 @@ class TestAsyncMultiIssuer:
             issuer=["https://idp1.com", "https://idp2.com"],
         )
 
-        decoded = await validate_token(
-            jwt=token, token_validation_config=config
-        )
+        decoded = await validate_token(jwt=token, token_validation_config=config)
         assert decoded["iss"] == "https://idp2.com"
 
     @pytest.mark.asyncio
@@ -358,9 +346,7 @@ class TestAsyncSubjectValidation:
             subject="user123",
         )
 
-        decoded = await validate_token(
-            jwt=token, token_validation_config=config
-        )
+        decoded = await validate_token(jwt=token, token_validation_config=config)
         assert decoded["sub"] == "user123"
 
     @pytest.mark.asyncio
@@ -379,9 +365,7 @@ class TestAsyncSubjectValidation:
             await validate_token(jwt=token, token_validation_config=config)
 
     @pytest.mark.asyncio
-    async def test_subject_mismatch_does_not_leak_claim_value(
-        self, rsa_keypair
-    ):
+    async def test_subject_mismatch_does_not_leak_claim_value(self, rsa_keypair):
         """S1: Error message must NOT contain the actual sub claim value."""
         key_dict, pem = rsa_keypair
         secret_sub = "sensitive-user-id-12345"
@@ -425,7 +409,5 @@ class TestAsyncSubjectValidation:
             subject=None,
         )
 
-        decoded = await validate_token(
-            jwt=token, token_validation_config=config
-        )
+        decoded = await validate_token(jwt=token, token_validation_config=config)
         assert decoded["sub"] == "anyone"

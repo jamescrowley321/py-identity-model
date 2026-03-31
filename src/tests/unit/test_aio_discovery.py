@@ -46,9 +46,7 @@ class TestAsyncDiscoveryDocument:
     async def test_async_get_discovery_document_http_error(self):
         """Test async discovery document fetch with HTTP error"""
         url = "https://example.com/.well-known/openid_configuration"
-        respx.get(url).mock(
-            return_value=httpx.Response(404, content=b"Not Found")
-        )
+        respx.get(url).mock(return_value=httpx.Response(404, content=b"Not Found"))
 
         request = DiscoveryDocumentRequest(address=url)
         result = await get_discovery_document(request)

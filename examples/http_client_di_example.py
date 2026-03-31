@@ -16,9 +16,7 @@ from py_identity_model import (
 )
 
 
-DEMO_DISCOVERY_URL = (
-    "https://demo.duendesoftware.com/.well-known/openid-configuration"
-)
+DEMO_DISCOVERY_URL = "https://demo.duendesoftware.com/.well-known/openid-configuration"
 
 
 # =============================================================================

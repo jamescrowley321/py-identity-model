@@ -102,9 +102,7 @@ class TestDPoPKeyGeneration:
 class TestDPoPProofCreation:
     def test_basic_proof(self):
         key = generate_dpop_key()
-        proof = create_dpop_proof(
-            key, "POST", "https://auth.example.com/token"
-        )
+        proof = create_dpop_proof(key, "POST", "https://auth.example.com/token")
 
         decoded = pyjwt.decode(proof, options={"verify_signature": False})
         assert decoded["htm"] == "POST"
@@ -114,9 +112,7 @@ class TestDPoPProofCreation:
 
     def test_proof_header(self):
         key = generate_dpop_key()
-        proof = create_dpop_proof(
-            key, "GET", "https://api.example.com/resource"
-        )
+        proof = create_dpop_proof(key, "GET", "https://api.example.com/resource")
 
         header = pyjwt.get_unverified_header(proof)
         assert header["typ"] == "dpop+jwt"
@@ -151,9 +147,7 @@ class TestDPoPProofCreation:
 
     def test_proof_method_uppercased(self):
         key = generate_dpop_key()
-        proof = create_dpop_proof(
-            key, "post", "https://auth.example.com/token"
-        )
+        proof = create_dpop_proof(key, "post", "https://auth.example.com/token")
 
         decoded = pyjwt.decode(proof, options={"verify_signature": False})
         assert decoded["htm"] == "POST"
@@ -180,9 +174,7 @@ class TestDPoPProofCreation:
 
     def test_htu_preserves_path_without_query(self):
         key = generate_dpop_key()
-        proof = create_dpop_proof(
-            key, "POST", "https://auth.example.com/token"
-        )
+        proof = create_dpop_proof(key, "POST", "https://auth.example.com/token")
         decoded = pyjwt.decode(proof, options={"verify_signature": False})
         assert decoded["htu"] == "https://auth.example.com/token"
 
@@ -203,16 +195,12 @@ class TestDPoPProofCreation:
 
     def test_relative_uri_raises(self):
         key = generate_dpop_key()
-        with pytest.raises(
-            ValueError, match="uri must be an absolute HTTP URI"
-        ):
+        with pytest.raises(ValueError, match="uri must be an absolute HTTP URI"):
             create_dpop_proof(key, "GET", "/relative/path")
 
     def test_schemeless_uri_raises(self):
         key = generate_dpop_key()
-        with pytest.raises(
-            ValueError, match="uri must be an absolute HTTP URI"
-        ):
+        with pytest.raises(ValueError, match="uri must be an absolute HTTP URI"):
             create_dpop_proof(key, "GET", "just-a-path")
 
     def test_htu_preserves_path_params(self):
@@ -249,9 +237,7 @@ class TestDPoPProofCreation:
     def test_proof_signature_verified(self, algorithm: str):
         """M2: Verify that the proof JWT has a valid signature."""
         key = generate_dpop_key(algorithm)
-        proof = create_dpop_proof(
-            key, "POST", "https://auth.example.com/token"
-        )
+        proof = create_dpop_proof(key, "POST", "https://auth.example.com/token")
 
         # Build a PyJWK from the embedded JWK header for verification
         header = pyjwt.get_unverified_header(proof)

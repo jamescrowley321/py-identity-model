@@ -29,20 +29,14 @@ EXPECTED_ISSUER_COUNT = 2
 @pytest.fixture
 def rsa_keypair():
     """Generate a fresh RSA key pair for testing."""
-    private_key = rsa.generate_private_key(
-        public_exponent=65537, key_size=2048
-    )
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public_key = private_key.public_key()
 
     # Get public key in JWK-compatible format
     pub_numbers = public_key.public_numbers()
 
     def _int_to_base64url(n: int, length: int) -> str:
-        return (
-            base64.urlsafe_b64encode(n.to_bytes(length, "big"))
-            .rstrip(b"=")
-            .decode()
-        )
+        return base64.urlsafe_b64encode(n.to_bytes(length, "big")).rstrip(b"=").decode()
 
     key_dict = {
         "kty": "RSA",
@@ -92,9 +86,7 @@ class TestLeeway:
         )
 
         with pytest.raises(TokenExpiredException):
-            decode_and_validate_jwt(
-                token, key_dict, ["RS256"], None, None, None
-            )
+            decode_and_validate_jwt(token, key_dict, ["RS256"], None, None, None)
 
     def test_expired_token_accepted_with_leeway(self, rsa_keypair):
         key_dict, pem = rsa_keypair
@@ -282,12 +274,8 @@ class TestCacheAliasing:
         key_dict, pem = rsa_keypair
         token = _sign_jwt(pem, {"sub": "user1"})
 
-        decoded1 = decode_and_validate_jwt(
-            token, key_dict, ["RS256"], None, None, None
-        )
-        decoded2 = decode_and_validate_jwt(
-            token, key_dict, ["RS256"], None, None, None
-        )
+        decoded1 = decode_and_validate_jwt(token, key_dict, ["RS256"], None, None, None)
+        decoded2 = decode_and_validate_jwt(token, key_dict, ["RS256"], None, None, None)
         assert decoded1 is not decoded2
 
 
@@ -301,9 +289,7 @@ class TestDirectAPIGuards:
         with pytest.raises(
             ConfigurationException, match="algorithms must not be empty"
         ):
-            decode_and_validate_jwt(
-                "fake.token", key_dict, [], None, None, None
-            )
+            decode_and_validate_jwt("fake.token", key_dict, [], None, None, None)
 
     def test_empty_issuer_list_rejected(self, rsa_keypair):
         """Empty issuer list must be rejected on direct API call."""
@@ -311,6 +297,4 @@ class TestDirectAPIGuards:
         with pytest.raises(
             ConfigurationException, match="issuer must not be an empty list"
         ):
-            decode_and_validate_jwt(
-                "fake.token", key_dict, ["RS256"], None, [], None
-            )
+            decode_and_validate_jwt("fake.token", key_dict, ["RS256"], None, [], None)

@@ -38,9 +38,7 @@ class TestSSLConfigThreadSafety:
 
         # Call from 50 threads concurrently
         with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
-            futures = [
-                executor.submit(call_get_ssl_verify) for _ in range(100)
-            ]
+            futures = [executor.submit(call_get_ssl_verify) for _ in range(100)]
             concurrent.futures.wait(futures)
 
         # No errors should occur
@@ -48,9 +46,7 @@ class TestSSLConfigThreadSafety:
 
         # All results should be identical (cached value)
         assert len(results) == CONCURRENT_CALLS
-        assert all(r == results[0] for r in results), (
-            "Results should be identical"
-        )
+        assert all(r == results[0] for r in results), "Results should be identical"
 
     def test_get_ssl_verify_with_env_var(self, monkeypatch):
         """Test get_ssl_verify with environment variable set."""
@@ -75,9 +71,7 @@ class TestSSLConfigThreadSafety:
         # Set all three environment variables
         monkeypatch.setenv("SSL_CERT_FILE", "/path/to/ssl_cert.crt")
         monkeypatch.setenv("CURL_CA_BUNDLE", "/path/to/curl_bundle.crt")
-        monkeypatch.setenv(
-            "REQUESTS_CA_BUNDLE", "/path/to/requests_bundle.crt"
-        )
+        monkeypatch.setenv("REQUESTS_CA_BUNDLE", "/path/to/requests_bundle.crt")
 
         result = get_ssl_verify()
 
@@ -92,9 +86,7 @@ class TestSSLConfigThreadSafety:
         # Only set CURL_CA_BUNDLE and REQUESTS_CA_BUNDLE
         monkeypatch.delenv("SSL_CERT_FILE", raising=False)
         monkeypatch.setenv("CURL_CA_BUNDLE", "/path/to/curl_bundle.crt")
-        monkeypatch.setenv(
-            "REQUESTS_CA_BUNDLE", "/path/to/requests_bundle.crt"
-        )
+        monkeypatch.setenv("REQUESTS_CA_BUNDLE", "/path/to/requests_bundle.crt")
 
         result = get_ssl_verify()
 
@@ -109,9 +101,7 @@ class TestSSLConfigThreadSafety:
         # Only set REQUESTS_CA_BUNDLE
         monkeypatch.delenv("SSL_CERT_FILE", raising=False)
         monkeypatch.delenv("CURL_CA_BUNDLE", raising=False)
-        monkeypatch.setenv(
-            "REQUESTS_CA_BUNDLE", "/path/to/requests_bundle.crt"
-        )
+        monkeypatch.setenv("REQUESTS_CA_BUNDLE", "/path/to/requests_bundle.crt")
 
         result = get_ssl_verify()
 

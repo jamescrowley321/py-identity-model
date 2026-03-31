@@ -149,10 +149,7 @@ class TestDeviceAuthIntegration:
             device_code="dev_code_xyz",
         )
         data, _headers, auth = prepare_device_token_request_data(req)
-        assert (
-            data["grant_type"]
-            == "urn:ietf:params:oauth:grant-type:device_code"
-        )
+        assert data["grant_type"] == "urn:ietf:params:oauth:grant-type:device_code"
         assert data["device_code"] == "dev_code_xyz"
         assert data["client_id"] == "app"
         assert auth is None

@@ -68,9 +68,7 @@ class TestParseAuthorizeCallbackResponse:
         assert response.error_description == "User denied access"
 
     def test_error_response_without_description(self):
-        response = parse_authorize_callback_response(
-            f"{CALLBACK}?error=server_error"
-        )
+        response = parse_authorize_callback_response(f"{CALLBACK}?error=server_error")
 
         assert response.is_successful is False
         assert response.error == "server_error"
@@ -114,9 +112,7 @@ class TestParseAuthorizeCallbackResponse:
 
     def test_no_params_raises_exception(self):
         """[BH-M2] URL with no parameters must not return is_successful=True."""
-        with pytest.raises(
-            AuthorizeCallbackException, match="no callback parameters"
-        ):
+        with pytest.raises(AuthorizeCallbackException, match="no callback parameters"):
             parse_authorize_callback_response(CALLBACK)
 
     def test_multiple_values_takes_first(self):
@@ -142,43 +138,31 @@ class TestParseAuthorizeCallbackResponse:
 
     def test_none_input_raises_exception(self):
         """[M2] parse_authorize_callback_response(None) must not crash with TypeError."""
-        with pytest.raises(
-            AuthorizeCallbackException, match="non-empty string"
-        ):
+        with pytest.raises(AuthorizeCallbackException, match="non-empty string"):
             parse_authorize_callback_response(None)  # type: ignore
 
     def test_empty_string_raises_exception(self):
         """[S1] Empty redirect_uri must raise, not return misleading success."""
-        with pytest.raises(
-            AuthorizeCallbackException, match="non-empty string"
-        ):
+        with pytest.raises(AuthorizeCallbackException, match="non-empty string"):
             parse_authorize_callback_response("")
 
     def test_whitespace_only_raises_exception(self):
         """Whitespace-only redirect_uri must raise."""
-        with pytest.raises(
-            AuthorizeCallbackException, match="non-empty string"
-        ):
+        with pytest.raises(AuthorizeCallbackException, match="non-empty string"):
             parse_authorize_callback_response("   \t\n  ")
 
     def test_non_string_type_raises_exception(self):
         """Non-string types must raise, not crash with TypeError."""
-        with pytest.raises(
-            AuthorizeCallbackException, match="non-empty string"
-        ):
+        with pytest.raises(AuthorizeCallbackException, match="non-empty string"):
             parse_authorize_callback_response(12345)  # type: ignore
 
-        with pytest.raises(
-            AuthorizeCallbackException, match="non-empty string"
-        ):
+        with pytest.raises(AuthorizeCallbackException, match="non-empty string"):
             parse_authorize_callback_response(b"https://example.com?code=x")  # type: ignore
 
     def test_javascript_scheme_rejected(self):
         """[BH-S1] Dangerous URI schemes must be rejected per RFC 6749 §3.1.2.1."""
         with pytest.raises(AuthorizeCallbackException, match="http or https"):
-            parse_authorize_callback_response(
-                "javascript:alert(1)?code=x&state=y"
-            )
+            parse_authorize_callback_response("javascript:alert(1)?code=x&state=y")
 
     def test_data_scheme_rejected(self):
         with pytest.raises(AuthorizeCallbackException, match="http or https"):
@@ -198,8 +182,7 @@ class TestParseAuthorizeCallbackResponse:
     def test_refresh_token_mapped(self):
         """[BH-M3] refresh_token must be mapped from callback parameters."""
         response = parse_authorize_callback_response(
-            f"{CALLBACK}#access_token=tok&refresh_token=rt123"
-            "&token_type=Bearer&state=s"
+            f"{CALLBACK}#access_token=tok&refresh_token=rt123&token_type=Bearer&state=s"
         )
 
         assert response.refresh_token == "rt123"
@@ -207,8 +190,7 @@ class TestParseAuthorizeCallbackResponse:
     def test_expires_in_as_integer(self):
         """[BH-M4] expires_in must be int per RFC 6749 §5.1."""
         response = parse_authorize_callback_response(
-            f"{CALLBACK}#access_token=tok&expires_in=3600"
-            "&token_type=Bearer&state=s"
+            f"{CALLBACK}#access_token=tok&expires_in=3600&token_type=Bearer&state=s"
         )
 
         assert response.expires_in == EXPECTED_EXPIRES_IN
@@ -217,17 +199,14 @@ class TestParseAuthorizeCallbackResponse:
     def test_expires_in_non_numeric_becomes_none(self):
         """Non-numeric expires_in is dropped rather than crashing."""
         response = parse_authorize_callback_response(
-            f"{CALLBACK}#access_token=tok&expires_in=abc"
-            "&token_type=Bearer&state=s"
+            f"{CALLBACK}#access_token=tok&expires_in=abc&token_type=Bearer&state=s"
         )
 
         assert response.expires_in is None
 
     def test_keep_blank_values_preserved(self):
         """[BH-M1] Empty parameter values are preserved (not silently dropped)."""
-        response = parse_authorize_callback_response(
-            f"{CALLBACK}?code=abc&state="
-        )
+        response = parse_authorize_callback_response(f"{CALLBACK}?code=abc&state=")
 
         # Empty state is preserved in values dict (not dropped by parse_qs)
         assert "state" in response.values
@@ -259,9 +238,7 @@ class TestAuthorizeCallbackResponseGuards:
     """Tests for _GuardedResponseMixin behavior on AuthorizeCallbackResponse."""
 
     def test_guarded_fields_blocked_on_error_response(self):
-        response = parse_authorize_callback_response(
-            f"{CALLBACK}?error=access_denied"
-        )
+        response = parse_authorize_callback_response(f"{CALLBACK}?error=access_denied")
 
         with pytest.raises(FailedResponseAccessError, match="code"):
             _ = response.code
@@ -278,22 +255,16 @@ class TestAuthorizeCallbackResponseGuards:
         assert response.state == "original_state"
 
     def test_error_field_blocked_on_successful_response(self):
-        response = parse_authorize_callback_response(
-            f"{CALLBACK}?code=abc&state=xyz"
-        )
+        response = parse_authorize_callback_response(f"{CALLBACK}?code=abc&state=xyz")
 
         with pytest.raises(SuccessfulResponseAccessError, match="error"):
             _ = response.error
 
     def test_error_description_blocked_on_successful_response(self):
         """[BH-S4] error_description must be guarded symmetrically with error."""
-        response = parse_authorize_callback_response(
-            f"{CALLBACK}?code=abc&state=xyz"
-        )
+        response = parse_authorize_callback_response(f"{CALLBACK}?code=abc&state=xyz")
 
-        with pytest.raises(
-            SuccessfulResponseAccessError, match="error_description"
-        ):
+        with pytest.raises(SuccessfulResponseAccessError, match="error_description"):
             _ = response.error_description
 
     def test_error_description_accessible_on_error_response(self):
@@ -316,14 +287,10 @@ class TestAuthorizeCallbackException:
     """Tests for AuthorizeCallbackException hierarchy."""
 
     def test_inherits_from_validation_exception(self):
-        assert isinstance(
-            AuthorizeCallbackException("err"), ValidationException
-        )
+        assert isinstance(AuthorizeCallbackException("err"), ValidationException)
 
     def test_inherits_from_base_exception(self):
-        assert isinstance(
-            AuthorizeCallbackException("err"), PyIdentityModelException
-        )
+        assert isinstance(AuthorizeCallbackException("err"), PyIdentityModelException)
 
     def test_catchable_as_validation_exception(self):
         with pytest.raises(ValidationException):

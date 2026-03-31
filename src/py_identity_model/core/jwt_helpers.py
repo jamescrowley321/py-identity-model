@@ -74,9 +74,7 @@ def _decode_jwt_cached(  # noqa: PLR0913  # @lru_cache requires individual hasha
     Returns:
         Decoded claims
     """
-    pyjwk = _get_pyjwk(
-        key_json, algorithms_tuple[0] if algorithms_tuple else None
-    )
+    pyjwk = _get_pyjwk(key_json, algorithms_tuple[0] if algorithms_tuple else None)
     options = json.loads(options_json) if options_json else None
 
     # PyJWT accepts issuer as str or sequence
@@ -188,9 +186,7 @@ def decode_and_validate_jwt(  # noqa: PLR0913  # RFC 7519 §7.2 validation requi
         ) from e
     except InvalidIssuerError as e:
         logger.error(f"Invalid issuer: {e!s}")
-        raise InvalidIssuerException(
-            "Invalid issuer", details={"error": str(e)}
-        ) from e
+        raise InvalidIssuerException("Invalid issuer", details={"error": str(e)}) from e
     except InvalidSignatureError as e:
         logger.error(f"Invalid signature: {e!s}")
         raise SignatureVerificationException(

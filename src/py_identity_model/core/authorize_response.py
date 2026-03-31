@@ -135,9 +135,7 @@ def parse_authorize_callback_response(
             contains no callback parameters.
     """
     if not isinstance(redirect_uri, str) or not redirect_uri.strip():
-        raise AuthorizeCallbackException(
-            "redirect_uri must be a non-empty string"
-        )
+        raise AuthorizeCallbackException("redirect_uri must be a non-empty string")
 
     parsed = urlparse(redirect_uri)
 
@@ -155,9 +153,7 @@ def parse_authorize_callback_response(
     values: dict[str, str] = {k: v[0] for k, v in raw_params.items()}
 
     if not values:
-        raise AuthorizeCallbackException(
-            "redirect_uri contains no callback parameters"
-        )
+        raise AuthorizeCallbackException("redirect_uri contains no callback parameters")
 
     # Map known parameters to dataclass fields
     field_values: dict[str, Any] = {}

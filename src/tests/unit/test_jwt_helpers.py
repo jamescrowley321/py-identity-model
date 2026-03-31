@@ -82,9 +82,7 @@ class TestDecodeAndValidateJWT:
             mock_decode,
         )
 
-        with pytest.raises(
-            SignatureVerificationException, match="Invalid signature"
-        ):
+        with pytest.raises(SignatureVerificationException, match="Invalid signature"):
             decode_and_validate_jwt(
                 jwt="fake.jwt.token",
                 key={"kty": "RSA", "n": "test", "e": "AQAB"},

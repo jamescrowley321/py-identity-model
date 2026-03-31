@@ -29,9 +29,7 @@ def parse_code_flow_callback():
 
     # This URL is what your app receives after the user authorizes
     callback_url = (
-        "https://app.example.com/callback"
-        "?code=SplxlOBeZQQYbYS6WxSbIA"
-        "&state=af0ifjsldkj"
+        "https://app.example.com/callback?code=SplxlOBeZQQYbYS6WxSbIA&state=af0ifjsldkj"
     )
 
     response = parse_authorize_callback_response(callback_url)
@@ -74,9 +72,7 @@ def state_validation_example():
 
     # Step 4: Parse and validate
     response = parse_authorize_callback_response(callback_url)
-    result = validate_authorize_callback_state(
-        response, session["oauth_state"]
-    )
+    result = validate_authorize_callback_state(response, session["oauth_state"])
 
     if result.is_valid:
         print("State validation passed - safe to proceed")
@@ -138,8 +134,7 @@ def detect_csrf_attack():
     # Attacker crafts a callback with a different state
     attacker_state = secrets.token_urlsafe(32)
     malicious_callback = (
-        f"https://app.example.com/callback"
-        f"?code=stolen_code&state={attacker_state}"
+        f"https://app.example.com/callback?code=stolen_code&state={attacker_state}"
     )
 
     response = parse_authorize_callback_response(malicious_callback)
@@ -230,9 +225,7 @@ def web_framework_pattern():
         if not response.is_successful:
             return {"error": response.error, "status": 400}
 
-        result = validate_authorize_callback_state(
-            response, sessions["oauth_state"]
-        )
+        result = validate_authorize_callback_state(response, sessions["oauth_state"])
 
         if not result.is_valid:
             return {"error": result.error, "status": 403}
@@ -246,9 +239,7 @@ def web_framework_pattern():
 
     # Simulate the flow
     state = start_login()
-    callback = (
-        f"https://app.example.com/callback?code=auth_code_123&state={state}"
-    )
+    callback = f"https://app.example.com/callback?code=auth_code_123&state={state}"
     result = handle_callback(callback)
     print(f"  Result: {result}")
 

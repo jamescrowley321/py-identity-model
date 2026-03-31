@@ -48,9 +48,7 @@ class TestSyncUserInfo:
     @respx.mock
     def test_get_userinfo_jwt_response(self):
         """Test UserInfo request with JWT response (raw stored, claims empty)."""
-        jwt_string = (
-            "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIyNDgyODk3NjEwMDEifQ.signature"
-        )
+        jwt_string = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIyNDgyODk3NjEwMDEifQ.signature"
         respx.get("https://example.com/userinfo").mock(
             return_value=httpx.Response(
                 200,

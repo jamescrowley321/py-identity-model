@@ -193,9 +193,7 @@ class TestCreateRequestObject:
             "code_challenge_method",
             "jti",
         ):
-            assert claim in _RESERVED_CLAIMS, (
-                f"{claim} missing from _RESERVED_CLAIMS"
-            )
+            assert claim in _RESERVED_CLAIMS, f"{claim} missing from _RESERVED_CLAIMS"
 
     def test_kid_included_in_header(self):
         """M2: kid parameter appears in JWT header for key lookup."""
@@ -357,9 +355,7 @@ class TestCreateRequestObject:
 
     def test_empty_response_type_rejected(self):
         pem = _ec_private_key_pem()
-        with pytest.raises(
-            ValueError, match="response_type must not be empty"
-        ):
+        with pytest.raises(ValueError, match="response_type must not be empty"):
             create_request_object(
                 private_key=pem,
                 algorithm="ES256",
@@ -383,9 +379,7 @@ class TestCreateRequestObject:
 
     def test_empty_code_challenge_rejected(self):
         pem = _ec_private_key_pem()
-        with pytest.raises(
-            ValueError, match="code_challenge must be non-empty"
-        ):
+        with pytest.raises(ValueError, match="code_challenge must be non-empty"):
             create_request_object(
                 private_key=pem,
                 algorithm="ES256",
@@ -398,9 +392,7 @@ class TestCreateRequestObject:
 
     def test_empty_code_challenge_method_rejected(self):
         pem = _ec_private_key_pem()
-        with pytest.raises(
-            ValueError, match="code_challenge_method must be non-empty"
-        ):
+        with pytest.raises(ValueError, match="code_challenge_method must be non-empty"):
             create_request_object(
                 private_key=pem,
                 algorithm="ES256",

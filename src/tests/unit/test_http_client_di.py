@@ -59,9 +59,7 @@ DISCO_JSON = {
 }
 
 JWKS_JSON = {
-    "keys": [
-        {"kty": "RSA", "kid": "1", "n": "test", "e": "AQAB", "use": "sig"}
-    ]
+    "keys": [{"kty": "RSA", "kid": "1", "n": "test", "e": "AQAB", "use": "sig"}]
 }
 
 TOKEN_JSON = {
@@ -77,9 +75,7 @@ class TestSyncDI:
 
     @respx.mock
     def test_discovery_with_injected_client(self):
-        respx.get(DISCO_URL).mock(
-            return_value=httpx.Response(200, json=DISCO_JSON)
-        )
+        respx.get(DISCO_URL).mock(return_value=httpx.Response(200, json=DISCO_JSON))
         with HTTPClient() as client:
             response = sync_get_disco(
                 DiscoveryDocumentRequest(address=DISCO_URL),
@@ -90,20 +86,14 @@ class TestSyncDI:
 
     @respx.mock
     def test_jwks_with_injected_client(self):
-        respx.get(JWKS_URL).mock(
-            return_value=httpx.Response(200, json=JWKS_JSON)
-        )
+        respx.get(JWKS_URL).mock(return_value=httpx.Response(200, json=JWKS_JSON))
         with HTTPClient() as client:
-            response = sync_get_jwks(
-                JwksRequest(address=JWKS_URL), http_client=client
-            )
+            response = sync_get_jwks(JwksRequest(address=JWKS_URL), http_client=client)
         assert response.is_successful
 
     @respx.mock
     def test_token_with_injected_client(self):
-        respx.post(TOKEN_URL).mock(
-            return_value=httpx.Response(200, json=TOKEN_JSON)
-        )
+        respx.post(TOKEN_URL).mock(return_value=httpx.Response(200, json=TOKEN_JSON))
         with HTTPClient() as client:
             response = sync_request_token(
                 ClientCredentialsTokenRequest(
@@ -133,9 +123,7 @@ class TestSyncDI:
     @respx.mock
     def test_discovery_without_client_backward_compat(self):
         """http_client=None uses thread-local default (backward compat)."""
-        respx.get(DISCO_URL).mock(
-            return_value=httpx.Response(200, json=DISCO_JSON)
-        )
+        respx.get(DISCO_URL).mock(return_value=httpx.Response(200, json=DISCO_JSON))
         response = sync_get_disco(DiscoveryDocumentRequest(address=DISCO_URL))
         assert response.is_successful
 
@@ -156,9 +144,7 @@ class TestSyncDI:
     @respx.mock
     def test_validate_token_di_bypasses_cache(self):
         """validate_token with http_client hits discovery directly (no cache)."""
-        respx.get(DISCO_URL).mock(
-            return_value=httpx.Response(200, json=DISCO_JSON)
-        )
+        respx.get(DISCO_URL).mock(return_value=httpx.Response(200, json=DISCO_JSON))
         respx.get(JWKS_URL).mock(
             return_value=httpx.Response(
                 200,
@@ -200,9 +186,7 @@ class TestAsyncDI:
     @pytest.mark.asyncio
     @respx.mock
     async def test_discovery_with_injected_client(self):
-        respx.get(DISCO_URL).mock(
-            return_value=httpx.Response(200, json=DISCO_JSON)
-        )
+        respx.get(DISCO_URL).mock(return_value=httpx.Response(200, json=DISCO_JSON))
         async with AsyncHTTPClient() as client:
             response = await aio_get_disco(
                 DiscoveryDocumentRequest(address=DISCO_URL),
@@ -214,9 +198,7 @@ class TestAsyncDI:
     @pytest.mark.asyncio
     @respx.mock
     async def test_jwks_with_injected_client(self):
-        respx.get(JWKS_URL).mock(
-            return_value=httpx.Response(200, json=JWKS_JSON)
-        )
+        respx.get(JWKS_URL).mock(return_value=httpx.Response(200, json=JWKS_JSON))
         async with AsyncHTTPClient() as client:
             response = await aio_get_jwks(
                 JwksRequest(address=JWKS_URL), http_client=client
@@ -226,9 +208,7 @@ class TestAsyncDI:
     @pytest.mark.asyncio
     @respx.mock
     async def test_token_with_injected_client(self):
-        respx.post(TOKEN_URL).mock(
-            return_value=httpx.Response(200, json=TOKEN_JSON)
-        )
+        respx.post(TOKEN_URL).mock(return_value=httpx.Response(200, json=TOKEN_JSON))
         async with AsyncHTTPClient() as client:
             response = await aio_request_token(
                 ClientCredentialsTokenRequest(
@@ -261,9 +241,7 @@ class TestAsyncDI:
         """validate_token with http_client raises if disco_doc_address is None."""
         config = TokenValidationConfig(perform_disco=True)
         async with AsyncHTTPClient() as client:
-            with pytest.raises(
-                ConfigurationException, match="disco_doc_address"
-            ):
+            with pytest.raises(ConfigurationException, match="disco_doc_address"):
                 await aio_validate_token(
                     jwt="fake.jwt.token",
                     token_validation_config=config,
@@ -275,9 +253,7 @@ class TestAsyncDI:
     @respx.mock
     async def test_validate_token_di_bypasses_cache(self):
         """validate_token with http_client hits discovery directly (no cache)."""
-        respx.get(DISCO_URL).mock(
-            return_value=httpx.Response(200, json=DISCO_JSON)
-        )
+        respx.get(DISCO_URL).mock(return_value=httpx.Response(200, json=DISCO_JSON))
         respx.get(JWKS_URL).mock(
             return_value=httpx.Response(
                 200,

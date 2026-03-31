@@ -27,9 +27,7 @@ TOKEN_JSON = {
 class TestRefreshToken:
     @respx.mock
     def test_successful_refresh(self):
-        respx.post(TOKEN_URL).mock(
-            return_value=httpx.Response(200, json=TOKEN_JSON)
-        )
+        respx.post(TOKEN_URL).mock(return_value=httpx.Response(200, json=TOKEN_JSON))
 
         response = refresh_token(
             RefreshTokenRequest(
@@ -63,16 +61,12 @@ class TestRefreshToken:
         assert response.is_successful is True
         request = route.calls[0].request
         body = request.content.decode()
-        assert (
-            "scope=openid+profile" in body or "scope=openid%20profile" in body
-        )
+        assert "scope=openid+profile" in body or "scope=openid%20profile" in body
 
     @respx.mock
     def test_expired_refresh_token(self):
         respx.post(TOKEN_URL).mock(
-            return_value=httpx.Response(
-                400, content=b'{"error": "invalid_grant"}'
-            )
+            return_value=httpx.Response(400, content=b'{"error": "invalid_grant"}')
         )
 
         response = refresh_token(
@@ -88,9 +82,7 @@ class TestRefreshToken:
 
     @respx.mock
     def test_public_client_refresh(self):
-        respx.post(TOKEN_URL).mock(
-            return_value=httpx.Response(200, json=TOKEN_JSON)
-        )
+        respx.post(TOKEN_URL).mock(return_value=httpx.Response(200, json=TOKEN_JSON))
 
         response = refresh_token(
             RefreshTokenRequest(
@@ -106,9 +98,7 @@ class TestRefreshToken:
     def test_failed_response_guard(self):
         """Accessing .token on failed response raises FailedResponseAccessError."""
         respx.post(TOKEN_URL).mock(
-            return_value=httpx.Response(
-                401, content=b'{"error": "invalid_client"}'
-            )
+            return_value=httpx.Response(401, content=b'{"error": "invalid_client"}')
         )
 
         response = refresh_token(
@@ -149,9 +139,7 @@ class TestRefreshToken:
     @respx.mock
     def test_network_error(self):
         """Network errors are caught and returned as error responses."""
-        respx.post(TOKEN_URL).mock(
-            side_effect=httpx.ConnectError("Connection refused")
-        )
+        respx.post(TOKEN_URL).mock(side_effect=httpx.ConnectError("Connection refused"))
 
         response = refresh_token(
             RefreshTokenRequest(

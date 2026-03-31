@@ -68,9 +68,7 @@ def validation_config(test_config, require_https):
     )
 
 
-def generate_tokens(
-    test_config: dict, token_endpoint: str, count: int
-) -> list[str]:
+def generate_tokens(test_config: dict, token_endpoint: str, count: int) -> list[str]:
     """Generate multiple tokens from the provider."""
     tokens = []
     for _ in range(count):
@@ -123,9 +121,7 @@ class TestMultipleTokensFromSameProvider:
         # If provider includes jti, verify uniqueness
         if "jti" in validated_claims[0]:
             jtis = [c["jti"] for c in validated_claims]
-            assert len(set(jtis)) == num_tokens, (
-                "Each token should have unique jti"
-            )
+            assert len(set(jtis)) == num_tokens, "Each token should have unique jti"
 
         # Verify caching is working - disco and jwks should have cache hits
         disco_cache_info = _get_disco_response.cache_info()
@@ -179,9 +175,7 @@ class TestCacheIsolationBetweenProviders:
             f"Expected kid/key mismatch error, got: {exc_info.value}"
         )
 
-    def test_expired_token_from_same_provider_fails(
-        self, test_config, require_https
-    ):
+    def test_expired_token_from_same_provider_fails(self, test_config, require_https):
         """
         Test that an expired token from the same provider fails with
         the correct error (expiration, not cache issues).
@@ -231,9 +225,7 @@ class TestBenchmarkWithPreGeneratedTokens:
            different tokens are validated
         """
         num_unique_tokens = 5
-        tokens = generate_tokens(
-            test_config, token_endpoint, num_unique_tokens
-        )
+        tokens = generate_tokens(test_config, token_endpoint, num_unique_tokens)
 
         # Warm up the cache with one validation
         validate_token(

@@ -42,9 +42,7 @@ async def exchange_token(
     try:
         params, headers, auth = prepare_token_exchange_request_data(request)
         client = http_client.client if http_client else get_async_http_client()
-        response = await _exchange_token(
-            client, request.address, params, headers, auth
-        )
+        response = await _exchange_token(client, request.address, params, headers, auth)
         return process_token_exchange_response(response)
     except Exception as e:
         return handle_token_exchange_error(e)
