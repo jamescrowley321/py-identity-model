@@ -140,18 +140,19 @@ select = [
     "RUF", # ruff-specific rules
 ]
 ignore = [
-    # Formatter conflicts — these rules contradict ruff format output
-    "E501",      # line too long
-    "COM812",    # trailing comma missing
-    "ISC001",    # implicit string concatenation
-    # OIDC protocol naming — *_token, *_secret, *_password are RFC field names
-    "S101",      # use of assert (needed for tests)
-    "S105",      # possible hardcoded password assigned to variable (OIDC field names)
-    "S106",      # possible hardcoded password assigned to argument (OIDC field names)
-    "S107",      # possible hardcoded password in function default (OIDC field names)
-    # Spec-sourced content that cannot be changed
-    "RUF003",    # ambiguous unicode character (OIDC spec comments with non-breaking hyphens)
+    # Formatter conflicts — verified: `ruff format` produces output that triggers these rules
+    "E501",      # 346 violations from ruff format output (line-length 79 vs format wrapping)
+    "COM812",    # 835 violations from ruff format's trailing comma decisions
+    # OIDC protocol naming — variables/args named *_token, *_secret, *_password are RFC 6749/7519/8693 field names
+    # Per-file-ignores not viable: 70 S105 violations are in production code (oidc_constants.py, token_type.py)
+    # defining RFC parameter name constants, not actual secrets
+    "S105",      # 119 violations — all OIDC protocol constants (RFC 6749 §1.4, §1.5; RFC 8693 §2.1)
+    "S106",      # 292 violations — 9 prod (token_part args in JWT parsers), 283 test/example fixtures
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"src/tests/**/*.py" = ["S101"]   # 1858 assert violations — all test assertions, 0 in production code
+"examples/**/*.py" = ["S101"]    # 73 assert violations in example integration tests
 
 [tool.ruff.lint.isort]
 known-first-party = ["py_identity_model"]
