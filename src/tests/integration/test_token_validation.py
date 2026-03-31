@@ -18,18 +18,12 @@ from py_identity_model.sync.token_validation import (
     _get_jwks_response,
 )
 
+from .conftest import DEFAULT_VALIDATION_OPTIONS as DEFAULT_OPTIONS
 from .test_utils import _is_valid_jwt_format
 
 
 # JWT format: three dot-separated segments
 JWT_SEGMENT_SEPARATOR_COUNT = 2
-
-
-# Token validation options - only override defaults where needed
-DEFAULT_OPTIONS = {
-    "verify_aud": False,  # Audience validation disabled for these tests
-    "require_aud": False,
-}
 
 
 def test_token_validation_expired_token(test_config, require_https):
@@ -119,14 +113,10 @@ def test_cache_succeeds(test_config, client_credentials_token, require_https):
         )
 
     cache_info = _get_disco_response.cache_info()
-    print(cache_info)
-    assert cache_info
-    assert cache_info[0] > 0
+    assert cache_info.hits > 0
 
     cache_info = _get_jwks_response.cache_info()
-    print(cache_info)
-    assert cache_info
-    assert cache_info[0] > 0
+    assert cache_info.hits > 0
 
 
 def test_benchmark_validation(test_config, client_credentials_token, require_https):

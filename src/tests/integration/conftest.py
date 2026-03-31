@@ -55,6 +55,14 @@ HTTP_TOO_MANY_REQUESTS = 429
 # JWT format: three dot-separated segments
 JWT_SEGMENT_SEPARATOR_COUNT = 2
 
+# Shared token validation options — audience validation disabled for
+# integration tests because provider-issued tokens may not include an
+# audience matching the test client.
+DEFAULT_VALIDATION_OPTIONS: dict[str, bool] = {
+    "verify_aud": False,
+    "require_aud": False,
+}
+
 
 # ============================================================================
 # Generic provider fixtures

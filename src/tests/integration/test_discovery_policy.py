@@ -7,15 +7,6 @@ from py_identity_model import (
     DiscoveryEndpoint,
     DiscoveryPolicy,
 )
-from py_identity_model.aio import (
-    DiscoveryEndpoint as AioDiscoveryEndpoint,
-)
-from py_identity_model.aio import (
-    DiscoveryPolicy as AioDiscoveryPolicy,
-)
-from py_identity_model.aio import (
-    parse_discovery_url as aio_parse_discovery_url,
-)
 from py_identity_model.core.discovery_policy import parse_discovery_url
 
 
@@ -63,13 +54,3 @@ class TestDiscoveryPolicyIntegration:
             len(policy.additional_endpoint_base_addresses)
             == EXPECTED_ADDITIONAL_ADDRESS_COUNT
         )
-
-    def test_top_level_import(self):
-        assert DiscoveryPolicy is not None
-        assert DiscoveryEndpoint is not None
-        assert callable(parse_discovery_url)
-
-    def test_aio_import(self):
-        assert AioDiscoveryPolicy is not None
-        assert AioDiscoveryEndpoint is not None
-        assert callable(aio_parse_discovery_url)

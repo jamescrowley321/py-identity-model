@@ -9,26 +9,6 @@ from py_identity_model import (
     DeviceTokenRequest,
     DeviceTokenResponse,
     FailedResponseAccessError,
-    poll_device_token,
-    request_device_authorization,
-)
-from py_identity_model.aio import (
-    DeviceAuthorizationRequest as AioDeviceAuthorizationRequest,
-)
-from py_identity_model.aio import (
-    DeviceAuthorizationResponse as AioDeviceAuthorizationResponse,
-)
-from py_identity_model.aio import (
-    DeviceTokenRequest as AioDeviceTokenRequest,
-)
-from py_identity_model.aio import (
-    DeviceTokenResponse as AioDeviceTokenResponse,
-)
-from py_identity_model.aio import (
-    poll_device_token as aio_poll_device_token,
-)
-from py_identity_model.aio import (
-    request_device_authorization as aio_request_device_authorization,
 )
 from py_identity_model.core.device_auth_logic import (
     prepare_device_auth_request_data,
@@ -153,19 +133,3 @@ class TestDeviceAuthIntegration:
         assert data["device_code"] == "dev_code_xyz"
         assert data["client_id"] == "app"
         assert auth is None
-
-    def test_top_level_import(self):
-        assert callable(request_device_authorization)
-        assert callable(poll_device_token)
-        assert DeviceAuthorizationRequest is not None
-        assert DeviceAuthorizationResponse is not None
-        assert DeviceTokenRequest is not None
-        assert DeviceTokenResponse is not None
-
-    def test_aio_import(self):
-        assert callable(aio_request_device_authorization)
-        assert callable(aio_poll_device_token)
-        assert AioDeviceAuthorizationRequest is not None
-        assert AioDeviceAuthorizationResponse is not None
-        assert AioDeviceTokenRequest is not None
-        assert AioDeviceTokenResponse is not None

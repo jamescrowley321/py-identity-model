@@ -27,6 +27,7 @@ from py_identity_model.sync.token_validation import (
     _get_public_key_by_kid,
 )
 
+from .conftest import DEFAULT_VALIDATION_OPTIONS as DEFAULT_OPTIONS
 from .test_utils import (
     _is_valid_jwt_format,
     get_alternate_provider_expired_token,
@@ -35,13 +36,6 @@ from .test_utils import (
 
 # Minimum expected cache hits after validating multiple tokens
 MIN_EXPECTED_CACHE_HITS = 2
-
-
-# Token validation options - only override defaults where needed
-DEFAULT_OPTIONS = {
-    "verify_aud": False,
-    "require_aud": False,
-}
 
 
 @pytest.fixture

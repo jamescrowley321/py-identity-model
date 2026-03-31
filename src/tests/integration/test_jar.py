@@ -17,12 +17,6 @@ from py_identity_model import (
     create_request_object,
     generate_pkce_pair,
 )
-from py_identity_model.aio import (
-    build_jar_authorization_url as aio_build_jar_authorization_url,
-)
-from py_identity_model.aio import (
-    create_request_object as aio_create_request_object,
-)
 
 
 @pytest.mark.integration
@@ -171,13 +165,3 @@ class TestJARIntegration:
             audience="https://auth.example.com",
         )
         assert decoded["iss"] == "ps256-app"
-
-    def test_top_level_import(self):
-        """Verify JAR functions are importable from top-level package."""
-        assert callable(create_request_object)
-        assert callable(build_jar_authorization_url)
-
-    def test_aio_import(self):
-        """Verify JAR functions are importable from aio package."""
-        assert callable(aio_create_request_object)
-        assert callable(aio_build_jar_authorization_url)

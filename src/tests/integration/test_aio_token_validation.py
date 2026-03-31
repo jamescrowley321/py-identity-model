@@ -11,12 +11,7 @@ from py_identity_model.aio.token_validation import validate_token
 from py_identity_model.core.models import TokenValidationConfig
 from py_identity_model.exceptions import TokenValidationException
 
-
-# Token validation options - only override defaults where needed
-DEFAULT_OPTIONS = {
-    "verify_aud": False,  # Audience validation disabled for these tests
-    "require_aud": False,
-}
+from .conftest import DEFAULT_VALIDATION_OPTIONS as DEFAULT_OPTIONS
 
 
 @pytest.mark.integration
