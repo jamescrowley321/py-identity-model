@@ -87,9 +87,7 @@ def get_access_token() -> str | None:
             return None
 
         access_token = (
-            token_response.token.get("access_token")
-            if token_response.token
-            else None
+            token_response.token.get("access_token") if token_response.token else None
         )
         if access_token:
             print("✅ Successfully obtained access token from Descope")
@@ -129,9 +127,7 @@ def test_public_endpoints():
 
     # Test root endpoint
     response = _make_request("GET", "/")
-    assert response.status_code == HTTP_OK, (
-        f"Root endpoint failed: {response.text}"
-    )
+    assert response.status_code == HTTP_OK, f"Root endpoint failed: {response.text}"
     data = response.json()
     assert "message" in data
     assert "descope_project_id" in data
@@ -139,9 +135,7 @@ def test_public_endpoints():
 
     # Test health endpoint
     response = _make_request("GET", "/health")
-    assert response.status_code == HTTP_OK, (
-        f"Health endpoint failed: {response.text}"
-    )
+    assert response.status_code == HTTP_OK, f"Health endpoint failed: {response.text}"
     data = response.json()
     assert data["status"] == "healthy"
     assert data["provider"] == "descope"
@@ -211,9 +205,7 @@ def test_protected_endpoints_with_valid_token():
 
     # Test /api/claims endpoint
     response = _make_request("GET", "/api/claims", headers=headers)
-    assert response.status_code == HTTP_OK, (
-        f"/api/claims failed: {response.text}"
-    )
+    assert response.status_code == HTTP_OK, f"/api/claims failed: {response.text}"
     data = response.json()
     assert "claims" in data
     assert isinstance(data["claims"], dict)
@@ -221,18 +213,14 @@ def test_protected_endpoints_with_valid_token():
 
     # Test /api/profile endpoint
     response = _make_request("GET", "/api/profile", headers=headers)
-    assert response.status_code == HTTP_OK, (
-        f"/api/profile failed: {response.text}"
-    )
+    assert response.status_code == HTTP_OK, f"/api/profile failed: {response.text}"
     data = response.json()
     assert "user_id" in data
     print("✅ /api/profile works with valid token")
 
     # Test /api/token-info endpoint
     response = _make_request("GET", "/api/token-info", headers=headers)
-    assert response.status_code == HTTP_OK, (
-        f"/api/token-info failed: {response.text}"
-    )
+    assert response.status_code == HTTP_OK, f"/api/token-info failed: {response.text}"
     data = response.json()
     assert "token_length" in data
     print("✅ /api/token-info works with valid token")
@@ -260,9 +248,7 @@ def test_descope_specific_endpoints():
     print(f"✅ /api/descope/roles works - found {len(data['roles'])} roles")
 
     # Test /api/descope/permissions endpoint
-    response = _make_request(
-        "GET", "/api/descope/permissions", headers=headers
-    )
+    response = _make_request("GET", "/api/descope/permissions", headers=headers)
     assert response.status_code == HTTP_OK, (
         f"/api/descope/permissions failed: {response.text}"
     )
@@ -353,9 +339,7 @@ def test_permission_based_authorization():
         assert "message" in data
         print("✅ /api/users POST works with users.create permission")
     else:
-        print(
-            "⚠️  /api/users POST returned 403 - token missing users.create permission"
-        )
+        print("⚠️  /api/users POST returned 403 - token missing users.create permission")
 
 
 def main():

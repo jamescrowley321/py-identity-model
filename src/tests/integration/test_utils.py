@@ -98,24 +98,18 @@ def get_config(env_file: str | None = None) -> dict:
         "TEST_SCOPE": os.environ.get("TEST_SCOPE", ""),
         "TEST_EXPIRED_TOKEN": os.environ.get("TEST_EXPIRED_TOKEN", ""),
         "TEST_AUDIENCE": os.environ.get("TEST_AUDIENCE", ""),
-        "TEST_REQUIRE_HTTPS": os.environ.get(
-            "TEST_REQUIRE_HTTPS", "true"
-        ).lower()
+        "TEST_REQUIRE_HTTPS": os.environ.get("TEST_REQUIRE_HTTPS", "true").lower()
         not in ("false", "0", "no"),
         # Auth code flow config (optional — used when provider
         # supports devInteractions)
-        "TEST_AUTH_CODE_CLIENT_ID": os.environ.get(
-            "TEST_AUTH_CODE_CLIENT_ID", ""
-        ),
+        "TEST_AUTH_CODE_CLIENT_ID": os.environ.get("TEST_AUTH_CODE_CLIENT_ID", ""),
         "TEST_AUTH_CODE_CLIENT_SECRET": os.environ.get(
             "TEST_AUTH_CODE_CLIENT_SECRET", ""
         ),
         "TEST_AUTH_CODE_REDIRECT_URI": os.environ.get(
             "TEST_AUTH_CODE_REDIRECT_URI", ""
         ),
-        "TEST_PKCE_PUBLIC_CLIENT_ID": os.environ.get(
-            "TEST_PKCE_PUBLIC_CLIENT_ID", ""
-        ),
+        "TEST_PKCE_PUBLIC_CLIENT_ID": os.environ.get("TEST_PKCE_PUBLIC_CLIENT_ID", ""),
         "TEST_PKCE_PUBLIC_REDIRECT_URI": os.environ.get(
             "TEST_PKCE_PUBLIC_REDIRECT_URI", ""
         ),

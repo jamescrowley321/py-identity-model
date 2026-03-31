@@ -45,9 +45,7 @@ class TestAsyncTokenClient:
     async def test_async_request_client_credentials_token_http_error(self):
         """Test async client credentials token request with HTTP error"""
         url = "https://example.com/token"
-        respx.post(url).mock(
-            return_value=httpx.Response(401, content=b"Unauthorized")
-        )
+        respx.post(url).mock(return_value=httpx.Response(401, content=b"Unauthorized"))
 
         request = ClientCredentialsTokenRequest(
             address=url,

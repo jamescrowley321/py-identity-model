@@ -174,9 +174,7 @@ def _detect_grant_capabilities(raw_discovery: dict, grants: set) -> set[str]:
 def _detect_feature_capabilities(raw_discovery: dict) -> set[str]:
     """Detect feature capabilities from discovery metadata."""
     caps = set()
-    challenge_methods = raw_discovery.get(
-        "code_challenge_methods_supported", []
-    )
+    challenge_methods = raw_discovery.get("code_challenge_methods_supported", [])
     if "S256" in challenge_methods:
         caps.add("pkce")
     if raw_discovery.get("dpop_signing_alg_values_supported"):
@@ -334,10 +332,7 @@ def jwt_access_token(client_credentials_token, test_config, token_endpoint):
     resp = fetch_jwt_with_resource()
     if resp.status_code == HTTP_OK:
         data = resp.json()
-        if (
-            data.get("access_token", "").count(".")
-            == JWT_SEGMENT_SEPARATOR_COUNT
-        ):
+        if data.get("access_token", "").count(".") == JWT_SEGMENT_SEPARATOR_COUNT:
             return data
 
     pytest.skip("Provider does not return JWT-format access tokens")
@@ -520,9 +515,7 @@ def perform_auth_code_flow(
             resp = client.get(location)
 
         if resp.status_code >= HTTP_BAD_REQUEST:
-            pytest.fail(
-                f"Auth request failed: {resp.status_code} at {resp.url}"
-            )
+            pytest.fail(f"Auth request failed: {resp.status_code} at {resp.url}")
 
         interaction_url = str(resp.url)
         resp = client.post(
@@ -591,8 +584,7 @@ def auth_code_result(provider_capabilities, discovery_document, test_config):
     """
     if "dev_interactions" not in provider_capabilities:
         pytest.skip(
-            "Provider does not support automated auth code "
-            "flow (no devInteractions)"
+            "Provider does not support automated auth code flow (no devInteractions)"
         )
     if "authorization_code" not in provider_capabilities:
         pytest.skip("Provider does not advertise authorization_endpoint")
@@ -620,17 +612,14 @@ def auth_code_result(provider_capabilities, discovery_document, test_config):
 
 
 @pytest.fixture(scope="session")
-def public_auth_code_result(
-    provider_capabilities, discovery_document, test_config
-):
+def public_auth_code_result(provider_capabilities, discovery_document, test_config):
     """Perform auth code + PKCE flow with public client.
 
     Skips if provider lacks dev_interactions or authorization_code.
     """
     if "dev_interactions" not in provider_capabilities:
         pytest.skip(
-            "Provider does not support automated auth code "
-            "flow (no devInteractions)"
+            "Provider does not support automated auth code flow (no devInteractions)"
         )
     if "authorization_code" not in provider_capabilities:
         pytest.skip("Provider does not advertise authorization_endpoint")

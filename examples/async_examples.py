@@ -21,9 +21,7 @@ from py_identity_model.aio import (
 
 
 # Constants
-DEMO_DISCOVERY_URL = (
-    "https://demo.duendesoftware.com/.well-known/openid-configuration"
-)
+DEMO_DISCOVERY_URL = "https://demo.duendesoftware.com/.well-known/openid-configuration"
 
 
 # =============================================================================
@@ -79,9 +77,7 @@ async def fetch_jwks_example():
         print("✓ JWKS fetched successfully!")
         print(f"  Number of keys: {len(response.keys)}")
         for key in response.keys:
-            print(
-                f"  - Key ID: {key.kid}, Algorithm: {key.alg}, Type: {key.kty}"
-            )
+            print(f"  - Key ID: {key.kid}, Algorithm: {key.alg}, Type: {key.kty}")
     else:
         print(f"✗ JWKS fetch failed: {response.error}")
 
@@ -205,8 +201,7 @@ async def userinfo_example(access_token: str):
         return response
     print(f"✗ UserInfo request failed: {response.error}")
     print(
-        "  Note: Client credentials tokens may not have a "
-        "userinfo endpoint available"
+        "  Note: Client credentials tokens may not have a userinfo endpoint available"
     )
     return response
 
@@ -242,9 +237,7 @@ async def concurrent_operations_example():
     print("\\n✓ Both operations completed concurrently!")
     print(f"  Discovery: {disco_response.is_successful}")
     assert jwks_response.keys is not None
-    print(
-        f"  JWKS: {jwks_response.is_successful} ({len(jwks_response.keys)} keys)"
-    )
+    print(f"  JWKS: {jwks_response.is_successful} ({len(jwks_response.keys)} keys)")
 
     return disco_response, jwks_response
 
@@ -367,9 +360,7 @@ async def main():
     print("\\n" + "=" * 60)
     print("PY-IDENTITY-MODEL ASYNC EXAMPLES")
     print("=" * 60)
-    print(
-        "\\nThese examples demonstrate async/await operations for non-blocking I/O."
-    )
+    print("\\nThese examples demonstrate async/await operations for non-blocking I/O.")
     print(
         "Perfect for async web frameworks (FastAPI, Starlette) and high-concurrency apps.\\n"
     )

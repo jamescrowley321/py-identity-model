@@ -91,9 +91,7 @@ class TestValidateJwksResponse:
             is_successful=False,
             error="JWKS fetch failed",
         )
-        with pytest.raises(
-            TokenValidationException, match="JWKS fetch failed"
-        ):
+        with pytest.raises(TokenValidationException, match="JWKS fetch failed"):
             validate_jwks_response(response)
 
     def test_validate_jwks_response_no_error_message(self):
@@ -101,9 +99,7 @@ class TestValidateJwksResponse:
         response = JwksResponse(
             is_successful=False,
         )
-        with pytest.raises(
-            TokenValidationException, match="JWKS request failed"
-        ):
+        with pytest.raises(TokenValidationException, match="JWKS request failed"):
             validate_jwks_response(response)
 
     def test_validate_jwks_response_no_keys(self):
@@ -181,9 +177,7 @@ class TestValidateTokenConfig:
     def test_negative_leeway_rejected(self):
         """S2: Negative leeway must be rejected."""
         config = TokenValidationConfig(perform_disco=True, leeway=-5)
-        with pytest.raises(
-            ConfigurationException, match="leeway must be non-negative"
-        ):
+        with pytest.raises(ConfigurationException, match="leeway must be non-negative"):
             validate_token_config(config)
 
     def test_infinite_leeway_rejected(self):
@@ -232,9 +226,7 @@ class TestValidateTokenConfig:
     def test_string_leeway_rejected(self):
         """String leeway must be rejected."""
         config = TokenValidationConfig(perform_disco=True, leeway="30")  # type: ignore
-        with pytest.raises(
-            ConfigurationException, match="leeway must be a number"
-        ):
+        with pytest.raises(ConfigurationException, match="leeway must be a number"):
             validate_token_config(config)
 
     def test_issuer_list_with_empty_string_rejected(self):

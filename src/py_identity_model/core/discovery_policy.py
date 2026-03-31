@@ -106,17 +106,13 @@ def parse_discovery_url(url: str) -> DiscoveryEndpoint:
 
     parsed = urlparse(url)
     if not parsed.scheme:
-        raise ConfigurationException(
-            f"Discovery URL must include a scheme: {url}"
-        )
+        raise ConfigurationException(f"Discovery URL must include a scheme: {url}")
     if parsed.scheme not in ("http", "https"):
         raise ConfigurationException(
             f"Discovery URL must use HTTP or HTTPS scheme, got: {parsed.scheme}"
         )
     if not parsed.netloc:
-        raise ConfigurationException(
-            f"Discovery URL must include a host: {url}"
-        )
+        raise ConfigurationException(f"Discovery URL must include a host: {url}")
     if parsed.query or parsed.fragment:
         raise ConfigurationException(
             "Discovery URL must not contain query or fragment components"

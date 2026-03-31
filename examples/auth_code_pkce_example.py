@@ -80,9 +80,7 @@ def auth_code_pkce_flow():
     )
 
     print(f"\n  Token endpoint: {token_request.address}")
-    print(
-        f"  Code verifier included: {token_request.code_verifier is not None}"
-    )
+    print(f"  Code verifier included: {token_request.code_verifier is not None}")
     print("  (Would call request_authorization_code_token() here)")
 
 

@@ -76,9 +76,7 @@ class TestFAPIIntegration:
             is_successful=True,
             issuer="https://fapi.example.com",
             grant_types_supported=["authorization_code"],
-            token_endpoint_auth_methods_supported=[
-                "self_signed_tls_client_auth"
-            ],
+            token_endpoint_auth_methods_supported=["self_signed_tls_client_auth"],
             id_token_signing_alg_values_supported=["ES256"],
         )
         result = validate_fapi_discovery(disco)

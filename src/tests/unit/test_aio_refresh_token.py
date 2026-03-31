@@ -26,9 +26,7 @@ TOKEN_JSON = {
 class TestAsyncRefreshToken:
     @respx.mock
     async def test_successful_refresh(self):
-        respx.post(TOKEN_URL).mock(
-            return_value=httpx.Response(200, json=TOKEN_JSON)
-        )
+        respx.post(TOKEN_URL).mock(return_value=httpx.Response(200, json=TOKEN_JSON))
 
         response = await refresh_token(
             RefreshTokenRequest(
@@ -46,9 +44,7 @@ class TestAsyncRefreshToken:
     @respx.mock
     async def test_refresh_error(self):
         respx.post(TOKEN_URL).mock(
-            return_value=httpx.Response(
-                400, content=b'{"error": "invalid_grant"}'
-            )
+            return_value=httpx.Response(400, content=b'{"error": "invalid_grant"}')
         )
 
         response = await refresh_token(
@@ -65,9 +61,7 @@ class TestAsyncRefreshToken:
 
     @respx.mock
     async def test_network_error(self):
-        respx.post(TOKEN_URL).mock(
-            side_effect=httpx.ConnectError("Connection refused")
-        )
+        respx.post(TOKEN_URL).mock(side_effect=httpx.ConnectError("Connection refused"))
 
         response = await refresh_token(
             RefreshTokenRequest(
@@ -86,9 +80,7 @@ class TestAsyncRefreshToken:
     async def test_failed_response_guard(self):
         """Accessing .token on failed response raises FailedResponseAccessError."""
         respx.post(TOKEN_URL).mock(
-            return_value=httpx.Response(
-                401, content=b'{"error": "invalid_client"}'
-            )
+            return_value=httpx.Response(401, content=b'{"error": "invalid_client"}')
         )
 
         response = await refresh_token(
@@ -165,9 +157,7 @@ class TestAsyncRefreshToken:
 
         request = route.calls[0].request
         body = request.content.decode()
-        assert (
-            "scope=openid+profile" in body or "scope=openid%20profile" in body
-        )
+        assert "scope=openid+profile" in body or "scope=openid%20profile" in body
 
     @respx.mock
     async def test_content_type_header(self):
@@ -186,10 +176,7 @@ class TestAsyncRefreshToken:
         )
 
         request = route.calls[0].request
-        assert (
-            request.headers["content-type"]
-            == "application/x-www-form-urlencoded"
-        )
+        assert request.headers["content-type"] == "application/x-www-form-urlencoded"
 
     async def test_response_inherits_base(self):
         resp = RefreshTokenResponse(is_successful=True, token={})

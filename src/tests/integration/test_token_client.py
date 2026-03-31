@@ -13,9 +13,7 @@ from py_identity_model.exceptions import FailedResponseAccessError
 JWT_SEGMENT_SEPARATOR_COUNT = 2
 
 
-def test_request_client_credentials_token_is_successful(
-    test_config, token_endpoint
-):
+def test_request_client_credentials_token_is_successful(test_config, token_endpoint):
     """Test successful token request using cached fixtures."""
     client_creds_req = ClientCredentialsTokenRequest(
         client_id=test_config["TEST_CLIENT_ID"],
@@ -141,7 +139,4 @@ class TestJwtAccessToken:
         assert "test-tenant-1" in decoded["tenants"]
         assert "test-tenant-2" in decoded["tenants"]
         assert "admin" in decoded["tenants"]["test-tenant-1"]["roles"]
-        assert (
-            "projects.read"
-            in decoded["tenants"]["test-tenant-2"]["permissions"]
-        )
+        assert "projects.read" in decoded["tenants"]["test-tenant-2"]["permissions"]

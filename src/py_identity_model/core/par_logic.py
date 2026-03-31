@@ -15,9 +15,7 @@ from .models import PushedAuthorizationRequest, PushedAuthorizationResponse
 
 def log_par_request(request: PushedAuthorizationRequest) -> None:
     """Log pushed authorization request."""
-    logger.info(
-        f"Pushing authorization request to {redact_url(request.address)}"
-    )
+    logger.info(f"Pushing authorization request to {redact_url(request.address)}")
     logger.debug(f"Client ID: {request.client_id}")
 
 
@@ -71,9 +69,7 @@ def process_par_response(
         except (json.JSONDecodeError, ValueError):
             error_msg = "PAR response has invalid JSON body"
             logger.error(error_msg)
-            return PushedAuthorizationResponse(
-                is_successful=False, error=error_msg
-            )
+            return PushedAuthorizationResponse(is_successful=False, error=error_msg)
         request_uri = data.get("request_uri")
         expires_in = data.get("expires_in")
 
@@ -88,9 +84,7 @@ def process_par_response(
                 f"Section 2.2: {', '.join(missing)}"
             )
             logger.error(error_msg)
-            return PushedAuthorizationResponse(
-                is_successful=False, error=error_msg
-            )
+            return PushedAuthorizationResponse(is_successful=False, error=error_msg)
         logger.info("Pushed authorization request successful")
         return PushedAuthorizationResponse(
             is_successful=True,

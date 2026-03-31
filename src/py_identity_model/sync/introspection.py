@@ -51,9 +51,7 @@ def introspect_token(
 
     try:
         client = http_client.client if http_client else get_http_client()
-        response = _introspect_token(
-            client, request.address, params, headers, auth
-        )
+        response = _introspect_token(client, request.address, params, headers, auth)
         result = process_introspection_response(response)
         response.close()
         return result

@@ -61,9 +61,7 @@ async def _get_jwks_response(jwks_uri: str) -> JwksResponse:
 
 
 @alru_cache(maxsize=128)
-async def _get_public_key_by_kid(
-    kid: str | None, jwks_uri: str
-) -> tuple[dict, str]:
+async def _get_public_key_by_kid(kid: str | None, jwks_uri: str) -> tuple[dict, str]:
     """Cached public key extraction from JWKS by key ID.
 
     Args:

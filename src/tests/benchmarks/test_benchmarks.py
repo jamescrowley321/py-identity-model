@@ -77,9 +77,7 @@ def test_bench_generate_dpop_key_rsa(benchmark):
 @pytest.mark.benchmark(group="dpop")
 def test_bench_create_dpop_proof(benchmark):
     key = generate_dpop_key()
-    result = benchmark(
-        create_dpop_proof, key, "POST", "https://auth.example.com/token"
-    )
+    result = benchmark(create_dpop_proof, key, "POST", "https://auth.example.com/token")
     assert isinstance(result, str)
 
 
@@ -189,9 +187,7 @@ def test_bench_to_principal(benchmark, sample_claims):
 
 
 @pytest.mark.benchmark(group="jwt")
-def test_bench_pyjwt_decode_baseline(
-    benchmark, sample_signed_jwt, ec_public_pem
-):
+def test_bench_pyjwt_decode_baseline(benchmark, sample_signed_jwt, ec_public_pem):
     """Benchmark raw pyjwt.decode() as a baseline for comparison (not py-identity-model code)."""
 
     def decode_jwt():

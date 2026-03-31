@@ -101,9 +101,7 @@ class TestRevocation:
         assert "Connection refused" in response.error
 
     def test_request_inherits_base(self):
-        req = TokenRevocationRequest(
-            address=REVOKE_URL, token="tok", client_id="app"
-        )
+        req = TokenRevocationRequest(address=REVOKE_URL, token="tok", client_id="app")
         assert isinstance(req, BaseRequest)
 
     def test_response_inherits_base(self):
@@ -197,10 +195,7 @@ class TestRevocation:
         )
 
         request = route.calls[0].request
-        assert (
-            request.headers["content-type"]
-            == "application/x-www-form-urlencoded"
-        )
+        assert request.headers["content-type"] == "application/x-www-form-urlencoded"
 
     @respx.mock
     def test_unexpected_error_returns_error_response(self):

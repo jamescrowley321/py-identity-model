@@ -107,9 +107,7 @@ def request_authorization_code_token(
 
     try:
         client = http_client.client if http_client else get_http_client()
-        response = _request_token(
-            client, request.address, params, headers, auth
-        )
+        response = _request_token(client, request.address, params, headers, auth)
         result = process_auth_code_token_response(response)
         response.close()
         return result
@@ -135,9 +133,7 @@ def refresh_token(
 
     try:
         client = http_client.client if http_client else get_http_client()
-        response = _request_token(
-            client, request.address, params, headers, auth
-        )
+        response = _request_token(client, request.address, params, headers, auth)
         result = process_refresh_token_response(response)
         response.close()
         return result

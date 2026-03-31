@@ -27,9 +27,7 @@ def log_jwks_status(status_code: int) -> None:
 def log_jwks_success(jwks_response: JwksResponse) -> None:
     """Log successful JWKS fetch."""
     if jwks_response.is_successful and jwks_response.keys:
-        logger.info(
-            f"JWKS fetched successfully, found {len(jwks_response.keys)} keys"
-        )
+        logger.info(f"JWKS fetched successfully, found {len(jwks_response.keys)} keys")
         logger.debug(
             f"Key IDs: {[k.kid for k in jwks_response.keys if k.kid is not None]}",
         )

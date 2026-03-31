@@ -23,9 +23,7 @@ class TestSyncDIIntegration:
                 DiscoveryDocumentRequest(
                     address=test_config["TEST_DISCO_ADDRESS"],
                     policy=DiscoveryPolicy(
-                        require_https=test_config.get(
-                            "TEST_REQUIRE_HTTPS", True
-                        )
+                        require_https=test_config.get("TEST_REQUIRE_HTTPS", True)
                     ),
                 ),
                 http_client=client,
@@ -41,9 +39,7 @@ class TestSyncDIIntegration:
                 DiscoveryDocumentRequest(
                     address=test_config["TEST_DISCO_ADDRESS"],
                     policy=DiscoveryPolicy(
-                        require_https=test_config.get(
-                            "TEST_REQUIRE_HTTPS", True
-                        )
+                        require_https=test_config.get("TEST_REQUIRE_HTTPS", True)
                     ),
                 ),
                 http_client=client,
@@ -63,9 +59,7 @@ class TestSyncDIIntegration:
                 DiscoveryDocumentRequest(
                     address=test_config["TEST_DISCO_ADDRESS"],
                     policy=DiscoveryPolicy(
-                        require_https=test_config.get(
-                            "TEST_REQUIRE_HTTPS", True
-                        )
+                        require_https=test_config.get("TEST_REQUIRE_HTTPS", True)
                     ),
                 ),
                 http_client=client,

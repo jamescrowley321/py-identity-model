@@ -65,9 +65,7 @@ class TestGenerateCodeChallenge:
         verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
         # RFC 7636 Appendix B test vector
         expected = (
-            urlsafe_b64encode(
-                hashlib.sha256(verifier.encode("ascii")).digest()
-            )
+            urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest())
             .rstrip(b"=")
             .decode("ascii")
         )
@@ -119,7 +117,5 @@ class TestGeneratePkcePair:
         assert verifier == challenge
 
     def test_custom_length(self):
-        verifier, _ = generate_pkce_pair(
-            verifier_length=PKCE_CUSTOM_VERIFIER_LENGTH
-        )
+        verifier, _ = generate_pkce_pair(verifier_length=PKCE_CUSTOM_VERIFIER_LENGTH)
         assert len(verifier) == PKCE_CUSTOM_VERIFIER_LENGTH

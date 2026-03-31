@@ -31,9 +31,7 @@ def validate_disco_response(
         TokenValidationException: If discovery response is not successful
     """
     if not disco_doc_response.is_successful:
-        error_msg = (
-            disco_doc_response.error or "Discovery document request failed"
-        )
+        error_msg = disco_doc_response.error or "Discovery document request failed"
         logger.error(f"Discovery failed: {error_msg}")
         raise TokenValidationException(error_msg)
 
@@ -120,10 +118,7 @@ def decode_with_config(
         TokenValidationException: If token validation fails
         ConfigurationException: If key or algorithms are missing
     """
-    if (
-        not token_validation_config.key
-        or not token_validation_config.algorithms
-    ):
+    if not token_validation_config.key or not token_validation_config.algorithms:
         raise ConfigurationException(
             "Token validation configuration must have key and algorithms set"
         )
@@ -140,9 +135,7 @@ def decode_with_config(
         key=token_validation_config.key,
         algorithms=token_validation_config.algorithms,
         audience=token_validation_config.audience,
-        issuer=issuer
-        if issuer is not None
-        else token_validation_config.issuer,
+        issuer=issuer if issuer is not None else token_validation_config.issuer,
         options=token_validation_config.options,
         leeway=token_validation_config.leeway,
         subject=token_validation_config.subject,
@@ -194,9 +187,7 @@ async def validate_async_claims(
     """
     if token_validation_config.claims_validator:
         try:
-            if inspect.iscoroutinefunction(
-                token_validation_config.claims_validator
-            ):
+            if inspect.iscoroutinefunction(token_validation_config.claims_validator):
                 await token_validation_config.claims_validator(decoded_token)
             else:
                 token_validation_config.claims_validator(decoded_token)

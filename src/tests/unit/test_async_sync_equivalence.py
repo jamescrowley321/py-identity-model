@@ -45,9 +45,9 @@ class TestDiscoveryEquivalence:
             "id_token_signing_alg_values_supported": ["RS256"],
         }
 
-        respx.get(
-            "https://auth.example.com/.well-known/openid-configuration"
-        ).mock(return_value=Response(200, json=discovery_data))
+        respx.get("https://auth.example.com/.well-known/openid-configuration").mock(
+            return_value=Response(200, json=discovery_data)
+        )
 
         request = DiscoveryDocumentRequest(
             address="https://auth.example.com/.well-known/openid-configuration"
@@ -64,10 +64,7 @@ class TestDiscoveryEquivalence:
         # Results should be identical
         assert sync_result.issuer == async_result.issuer
         assert sync_result.jwks_uri == async_result.jwks_uri
-        assert (
-            sync_result.authorization_endpoint
-            == async_result.authorization_endpoint
-        )
+        assert sync_result.authorization_endpoint == async_result.authorization_endpoint
         assert sync_result.token_endpoint == async_result.token_endpoint
 
     @respx.mock
@@ -75,9 +72,9 @@ class TestDiscoveryEquivalence:
     async def test_discovery_http_error_equivalence(self):
         """Test that HTTP errors are handled identically."""
         # Mock 404 response
-        respx.get(
-            "https://auth.example.com/.well-known/openid-configuration"
-        ).mock(return_value=Response(404, text="Not Found"))
+        respx.get("https://auth.example.com/.well-known/openid-configuration").mock(
+            return_value=Response(404, text="Not Found")
+        )
 
         request = DiscoveryDocumentRequest(
             address="https://auth.example.com/.well-known/openid-configuration"
@@ -104,9 +101,7 @@ class TestDiscoveryEquivalence:
     async def test_discovery_invalid_json_equivalence(self):
         """Test that invalid JSON is handled identically."""
         # Mock invalid JSON response
-        respx.get(
-            "https://auth.example.com/.well-known/openid-configuration"
-        ).mock(
+        respx.get("https://auth.example.com/.well-known/openid-configuration").mock(
             return_value=Response(
                 200,
                 headers={"content-type": "application/json"},
@@ -130,8 +125,7 @@ class TestDiscoveryEquivalence:
         assert sync_result.error is not None
         assert async_result.error is not None
         assert (
-            "json" in sync_result.error.lower()
-            or "parse" in sync_result.error.lower()
+            "json" in sync_result.error.lower() or "parse" in sync_result.error.lower()
         )
         assert (
             "json" in async_result.error.lower()
@@ -164,9 +158,7 @@ class TestJWKSEquivalence:
             return_value=Response(200, json=jwks_data)
         )
 
-        request = JwksRequest(
-            address="https://auth.example.com/.well-known/jwks.json"
-        )
+        request = JwksRequest(address="https://auth.example.com/.well-known/jwks.json")
 
         # Get results from both APIs
         sync_result = sync_get_jwks(request)
@@ -182,9 +174,7 @@ class TestJWKSEquivalence:
         assert len(sync_result.keys) == len(async_result.keys) == 1
 
         # Keys should have identical properties
-        assert (
-            sync_result.keys[0].kid == async_result.keys[0].kid == "test-key-1"
-        )
+        assert sync_result.keys[0].kid == async_result.keys[0].kid == "test-key-1"
         assert sync_result.keys[0].kty == async_result.keys[0].kty == "RSA"
         assert sync_result.keys[0].alg == async_result.keys[0].alg == "RS256"
 
@@ -197,9 +187,7 @@ class TestJWKSEquivalence:
             return_value=Response(500, text="Internal Server Error")
         )
 
-        request = JwksRequest(
-            address="https://auth.example.com/.well-known/jwks.json"
-        )
+        request = JwksRequest(address="https://auth.example.com/.well-known/jwks.json")
 
         # Get results from both APIs
         sync_result = sync_get_jwks(request)
@@ -235,9 +223,9 @@ class TestResponseStructureEquivalence:
             "id_token_signing_alg_values_supported": ["RS256"],
         }
 
-        respx.get(
-            "https://auth.example.com/.well-known/openid-configuration"
-        ).mock(return_value=Response(200, json=discovery_data))
+        respx.get("https://auth.example.com/.well-known/openid-configuration").mock(
+            return_value=Response(200, json=discovery_data)
+        )
 
         request = DiscoveryDocumentRequest(
             address="https://auth.example.com/.well-known/openid-configuration"
@@ -280,9 +268,7 @@ class TestResponseStructureEquivalence:
             return_value=Response(200, json=jwks_data)
         )
 
-        request = JwksRequest(
-            address="https://auth.example.com/.well-known/jwks.json"
-        )
+        request = JwksRequest(address="https://auth.example.com/.well-known/jwks.json")
 
         sync_result = sync_get_jwks(request)
         async_result = await async_get_jwks(request)

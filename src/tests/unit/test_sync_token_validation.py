@@ -173,13 +173,9 @@ class TestSyncTokenValidation:
         _get_public_key_by_kid.cache_clear()
 
         # First call
-        key1, alg1 = _get_public_key_by_kid(
-            "test-key", "https://example.com/jwks"
-        )
+        key1, alg1 = _get_public_key_by_kid("test-key", "https://example.com/jwks")
         # Second call (should be cached)
-        key2, alg2 = _get_public_key_by_kid(
-            "test-key", "https://example.com/jwks"
-        )
+        key2, alg2 = _get_public_key_by_kid("test-key", "https://example.com/jwks")
 
         # Both should return the same key
         assert key1 == key2

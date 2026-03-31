@@ -53,10 +53,7 @@ def generate_code_challenge(
         ValueError: If *method* is not ``"S256"`` or ``"plain"``, or
             if *verifier* length is outside the 43-128 range (RFC 7636).
     """
-    if (
-        len(verifier) < _MIN_VERIFIER_LENGTH
-        or len(verifier) > _MAX_VERIFIER_LENGTH
-    ):
+    if len(verifier) < _MIN_VERIFIER_LENGTH or len(verifier) > _MAX_VERIFIER_LENGTH:
         msg = (
             f"Code verifier length must be between "
             f"{_MIN_VERIFIER_LENGTH} and {_MAX_VERIFIER_LENGTH}, "

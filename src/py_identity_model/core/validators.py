@@ -99,9 +99,7 @@ def _validate_subject_types(subject_types: list) -> None:
             )
 
 
-def _validate_response_type(
-    response_type: str, valid_response_types: list
-) -> None:
+def _validate_response_type(response_type: str, valid_response_types: list) -> None:
     """Validate a single response type.
 
     Accepts all response types defined in OAuth 2.0 Multiple Response Types 1.0
@@ -163,9 +161,7 @@ def validate_token_config(
                 "issuer must not be an empty list; omit or set to None to skip issuer validation",
             )
         # Validate list items are non-empty strings
-        if not all(
-            isinstance(i, str) and i for i in token_validation_config.issuer
-        ):
+        if not all(isinstance(i, str) and i for i in token_validation_config.issuer):
             raise ConfigurationException(
                 "issuer list must contain only non-empty strings",
             )
@@ -194,18 +190,13 @@ def validate_token_config(
     if token_validation_config.perform_disco:
         return
 
-    if (
-        not token_validation_config.key
-        and not token_validation_config.algorithms
-    ):
+    if not token_validation_config.key and not token_validation_config.algorithms:
         raise ConfigurationException(
             "TokenValidationConfig.key and TokenValidationConfig.algorithms are required if perform_disco is False",
         )
 
 
-def validate_issuer_with_policy(
-    issuer: str, policy: DiscoveryPolicy | None
-) -> None:
+def validate_issuer_with_policy(issuer: str, policy: DiscoveryPolicy | None) -> None:
     """Validate issuer, respecting the discovery policy.
 
     When *policy* is ``None`` or ``policy.validate_issuer`` is ``True``,

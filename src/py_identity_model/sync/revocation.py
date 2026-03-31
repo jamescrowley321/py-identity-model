@@ -52,9 +52,7 @@ def revoke_token(
     response = None
     try:
         client = http_client.client if http_client else get_http_client()
-        response = _revoke_token(
-            client, request.address, params, headers, auth
-        )
+        response = _revoke_token(client, request.address, params, headers, auth)
         return process_revocation_response(response)
     except Exception as e:
         return handle_revocation_error(e)

@@ -59,9 +59,7 @@ def main():
     print("BASE REQUEST/RESPONSE EXAMPLES")
     print("=" * 60)
 
-    disco_url = (
-        "https://demo.duendesoftware.com/.well-known/openid-configuration"
-    )
+    disco_url = "https://demo.duendesoftware.com/.well-known/openid-configuration"
 
     # All requests share a common BaseRequest interface
     disco_req = DiscoveryDocumentRequest(address=disco_url)

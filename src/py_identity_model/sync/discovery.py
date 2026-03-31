@@ -18,9 +18,7 @@ from .managed_client import HTTPClient
 
 
 @retry_with_backoff()
-def _fetch_discovery_document(
-    client: httpx.Client, url: str
-) -> httpx.Response:
+def _fetch_discovery_document(client: httpx.Client, url: str) -> httpx.Response:
     """
     Fetch discovery document with retry logic.
 

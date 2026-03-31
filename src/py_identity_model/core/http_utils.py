@@ -50,9 +50,7 @@ def get_timeout() -> float:
     return float(os.getenv("HTTP_TIMEOUT", str(DEFAULT_HTTP_TIMEOUT)))
 
 
-def should_retry_response(
-    response: httpx.Response, attempt: int, retries: int
-) -> bool:
+def should_retry_response(response: httpx.Response, attempt: int, retries: int) -> bool:
     """
     Check if response should be retried.
 

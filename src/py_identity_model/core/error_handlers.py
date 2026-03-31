@@ -133,17 +133,11 @@ def handle_auth_code_token_error(
 ) -> AuthorizationCodeTokenResponse:
     """Handle errors during authorization code token exchange."""
     if isinstance(e, httpx.RequestError):
-        error_msg = (
-            f"Network error during authorization code token exchange: {e!s}"
-        )
+        error_msg = f"Network error during authorization code token exchange: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return AuthorizationCodeTokenResponse(
-            is_successful=False, error=error_msg
-        )
+        return AuthorizationCodeTokenResponse(is_successful=False, error=error_msg)
 
-    error_msg = (
-        f"Unexpected error during authorization code token exchange: {e!s}"
-    )
+    error_msg = f"Unexpected error during authorization code token exchange: {e!s}"
     logger.error(error_msg, exc_info=True)
     return AuthorizationCodeTokenResponse(is_successful=False, error=error_msg)
 
@@ -191,9 +185,7 @@ def handle_par_error(e: Exception) -> PushedAuthorizationResponse:
     if isinstance(e, httpx.RequestError):
         error_msg = f"Network error during PAR: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return PushedAuthorizationResponse(
-            is_successful=False, error=error_msg
-        )
+        return PushedAuthorizationResponse(is_successful=False, error=error_msg)
 
     error_msg = f"Unexpected error during PAR: {e!s}"
     logger.error(error_msg, exc_info=True)

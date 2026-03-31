@@ -82,23 +82,17 @@ def _create_jwt_with_kid(kid: str, alg: str = "RS256") -> str:
     # Create unsigned JWT (header.payload.signature)
     # Use compact JSON without spaces for proper JWT format
     header_b64 = (
-        base64.urlsafe_b64encode(
-            json.dumps(header, separators=(",", ":")).encode()
-        )
+        base64.urlsafe_b64encode(json.dumps(header, separators=(",", ":")).encode())
         .rstrip(b"=")
         .decode()
     )
     payload_b64 = (
-        base64.urlsafe_b64encode(
-            json.dumps(payload, separators=(",", ":")).encode()
-        )
+        base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode())
         .rstrip(b"=")
         .decode()
     )
     # Create a fake but valid base64 signature
-    fake_sig = (
-        base64.urlsafe_b64encode(b"fake_signature_bytes").rstrip(b"=").decode()
-    )
+    fake_sig = base64.urlsafe_b64encode(b"fake_signature_bytes").rstrip(b"=").decode()
     return f"{header_b64}.{payload_b64}.{fake_sig}"
 
 
@@ -116,9 +110,7 @@ class TestExtractKidFromJwt:
         header = {"alg": "RS256", "typ": "JWT"}
         payload = {"sub": "test"}
         header_b64 = (
-            base64.urlsafe_b64encode(
-                json.dumps(header, separators=(",", ":")).encode()
-            )
+            base64.urlsafe_b64encode(json.dumps(header, separators=(",", ":")).encode())
             .rstrip(b"=")
             .decode()
         )

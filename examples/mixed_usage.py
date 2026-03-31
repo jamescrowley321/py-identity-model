@@ -94,9 +94,7 @@ def sync_example():
         assert token_response.token is not None
         print("✓ Token received successfully")
         print(f"  Token type: {token_response.token.get('token_type')}")
-        print(
-            f"  Expires in: {token_response.token.get('expires_in')} seconds"
-        )
+        print(f"  Expires in: {token_response.token.get('expires_in')} seconds")
     else:
         print(f"✗ Error: {token_response.error}")
         return
@@ -166,9 +164,7 @@ async def async_example():
         assert token_response.token is not None
         print("✓ Token received successfully")
         print(f"  Token type: {token_response.token.get('token_type')}")
-        print(
-            f"  Expires in: {token_response.token.get('expires_in')} seconds"
-        )
+        print(f"  Expires in: {token_response.token.get('expires_in')} seconds")
     else:
         print(f"✗ Error: {token_response.error}")
         return

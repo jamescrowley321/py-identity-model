@@ -60,9 +60,7 @@ class TestAsyncJwks:
     async def test_async_get_jwks_http_error(self):
         """Test async JWKS fetch with HTTP error"""
         url = "https://example.com/jwks"
-        respx.get(url).mock(
-            return_value=httpx.Response(404, content=b"Not Found")
-        )
+        respx.get(url).mock(return_value=httpx.Response(404, content=b"Not Found"))
 
         request = JwksRequest(address=url)
         result = await get_jwks(request)

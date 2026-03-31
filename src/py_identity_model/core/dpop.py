@@ -25,28 +25,20 @@ import jwt as pyjwt
 
 
 # Mapping from JWT algorithm to EC curve (immutable to prevent curve confusion)
-_EC_CURVES: types.MappingProxyType[str, ec.EllipticCurve] = (
-    types.MappingProxyType(
-        {
-            "ES256": ec.SECP256R1(),
-            "ES384": ec.SECP384R1(),
-            "ES512": ec.SECP521R1(),
-        }
-    )
+_EC_CURVES: types.MappingProxyType[str, ec.EllipticCurve] = types.MappingProxyType(
+    {
+        "ES256": ec.SECP256R1(),
+        "ES384": ec.SECP384R1(),
+        "ES512": ec.SECP521R1(),
+    }
 )
 
-_SUPPORTED_ALGORITHMS: frozenset[str] = frozenset(
-    {"ES256", "ES384", "ES512", "RS256"}
-)
+_SUPPORTED_ALGORITHMS: frozenset[str] = frozenset({"ES256", "ES384", "ES512", "RS256"})
 
 
 def _int_to_b64url(n: int, length: int) -> str:
     """Encode an integer as base64url without padding."""
-    return (
-        urlsafe_b64encode(n.to_bytes(length, "big"))
-        .rstrip(b"=")
-        .decode("ascii")
-    )
+    return urlsafe_b64encode(n.to_bytes(length, "big")).rstrip(b"=").decode("ascii")
 
 
 class DPoPKey:
@@ -181,9 +173,7 @@ def compute_ath(access_token: str) -> str:
     try:
         token_bytes = access_token.encode("ascii")
     except UnicodeEncodeError:
-        raise ValueError(
-            "access_token must contain only ASCII characters"
-        ) from None
+        raise ValueError("access_token must contain only ASCII characters") from None
     digest = hashlib.sha256(token_bytes).digest()
     return urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
@@ -221,9 +211,7 @@ def create_dpop_proof(
     parsed = urlparse(uri)
     if not parsed.scheme or not parsed.netloc:
         raise ValueError("uri must be an absolute HTTP URI")
-    htu = urlunparse(
-        (parsed.scheme, parsed.netloc, parsed.path, parsed.params, "", "")
-    )
+    htu = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, "", ""))
 
     headers = {
         "typ": "dpop+jwt",

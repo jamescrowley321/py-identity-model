@@ -27,9 +27,7 @@ def main():
     """Generate a token from the local identity server."""
 
     # Local identity server configuration
-    discovery_address = (
-        "https://localhost:5001/.well-known/openid-configuration"
-    )
+    discovery_address = "https://localhost:5001/.well-known/openid-configuration"
     client_id = "py-identity-model-client"
     client_secret = "py-identity-model-secret"
     scope = "py-identity-model"

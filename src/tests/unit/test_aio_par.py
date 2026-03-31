@@ -27,9 +27,7 @@ EXPECTED_PAR_EXPIRES_IN = 60
 class TestAsyncPAR:
     @respx.mock
     async def test_successful_par(self):
-        respx.post(PAR_URL).mock(
-            return_value=httpx.Response(201, json=PAR_RESPONSE)
-        )
+        respx.post(PAR_URL).mock(return_value=httpx.Response(201, json=PAR_RESPONSE))
         response = await push_authorization_request(
             PushedAuthorizationRequest(
                 address=PAR_URL,
@@ -39,16 +37,12 @@ class TestAsyncPAR:
             )
         )
         assert response.is_successful is True
-        assert (
-            response.request_uri == "urn:ietf:params:oauth:request_uri:abc123"
-        )
+        assert response.request_uri == "urn:ietf:params:oauth:request_uri:abc123"
         assert response.expires_in == EXPECTED_PAR_EXPIRES_IN
 
     @respx.mock
     async def test_par_with_pkce(self):
-        respx.post(PAR_URL).mock(
-            return_value=httpx.Response(201, json=PAR_RESPONSE)
-        )
+        respx.post(PAR_URL).mock(return_value=httpx.Response(201, json=PAR_RESPONSE))
         response = await push_authorization_request(
             PushedAuthorizationRequest(
                 address=PAR_URL,
@@ -63,9 +57,7 @@ class TestAsyncPAR:
     @respx.mock
     async def test_par_error(self):
         respx.post(PAR_URL).mock(
-            return_value=httpx.Response(
-                400, content=b'{"error":"invalid_request"}'
-            )
+            return_value=httpx.Response(400, content=b'{"error":"invalid_request"}')
         )
         response = await push_authorization_request(
             PushedAuthorizationRequest(
@@ -167,9 +159,7 @@ class TestAsyncPAR:
 
         ValueError is caught by error handler — returns error response.
         """
-        respx.post(PAR_URL).mock(
-            return_value=httpx.Response(201, json=PAR_RESPONSE)
-        )
+        respx.post(PAR_URL).mock(return_value=httpx.Response(201, json=PAR_RESPONSE))
         response = await push_authorization_request(
             PushedAuthorizationRequest(
                 address=PAR_URL,
@@ -184,9 +174,7 @@ class TestAsyncPAR:
 
     @respx.mock
     async def test_network_error(self):
-        respx.post(PAR_URL).mock(
-            side_effect=httpx.ConnectError("Connection refused")
-        )
+        respx.post(PAR_URL).mock(side_effect=httpx.ConnectError("Connection refused"))
         response = await push_authorization_request(
             PushedAuthorizationRequest(
                 address=PAR_URL,
@@ -220,10 +208,7 @@ class TestAsyncPAR:
             )
         )
         request = route.calls[0].request
-        assert (
-            request.headers["content-type"]
-            == "application/x-www-form-urlencoded"
-        )
+        assert request.headers["content-type"] == "application/x-www-form-urlencoded"
 
     @respx.mock
     async def test_empty_client_secret_treated_as_public(self):
@@ -394,9 +379,7 @@ class TestAsyncPAR:
     async def test_error_response_uses_text_not_bytes(self):
         """Error messages use response.text, not response.content (bytes)."""
         respx.post(PAR_URL).mock(
-            return_value=httpx.Response(
-                400, content=b'{"error":"invalid_request"}'
-            )
+            return_value=httpx.Response(400, content=b'{"error":"invalid_request"}')
         )
         response = await push_authorization_request(
             PushedAuthorizationRequest(

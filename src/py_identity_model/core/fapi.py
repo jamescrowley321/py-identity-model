@@ -74,9 +74,7 @@ def validate_fapi_authorization_request(  # noqa: PLR0913  # FAPI 2.0 Security P
     violations: list[str] = []
 
     if response_type != FAPI2_REQUIRED_RESPONSE_TYPE:
-        violations.append(
-            f"response_type must be 'code', got '{response_type}'"
-        )
+        violations.append(f"response_type must be 'code', got '{response_type}'")
 
     if not code_challenge or not code_challenge.strip():
         violations.append("PKCE code_challenge is required")
@@ -84,9 +82,7 @@ def validate_fapi_authorization_request(  # noqa: PLR0913  # FAPI 2.0 Security P
     if code_challenge_method is None:
         violations.append("PKCE code_challenge_method is required")
     elif code_challenge_method != FAPI2_REQUIRED_PKCE_METHOD:
-        violations.append(
-            f"PKCE method must be 'S256', got '{code_challenge_method}'"
-        )
+        violations.append(f"PKCE method must be 'S256', got '{code_challenge_method}'")
 
     if not use_par:
         violations.append("PAR (Pushed Authorization Requests) is required")
@@ -96,18 +92,11 @@ def validate_fapi_authorization_request(  # noqa: PLR0913  # FAPI 2.0 Security P
     else:
         parsed_uri = urlparse(redirect_uri.strip())
         if parsed_uri.scheme.lower() != "https":
-            violations.append(
-                f"redirect_uri must use HTTPS, got '{redirect_uri}'"
-            )
+            violations.append(f"redirect_uri must use HTTPS, got '{redirect_uri}'")
         elif not parsed_uri.hostname:
-            violations.append(
-                f"redirect_uri must have a host, got '{redirect_uri}'"
-            )
+            violations.append(f"redirect_uri must have a host, got '{redirect_uri}'")
 
-    if (
-        algorithm is not None
-        and algorithm not in FAPI2_ALLOWED_SIGNING_ALGORITHMS
-    ):
+    if algorithm is not None and algorithm not in FAPI2_ALLOWED_SIGNING_ALGORITHMS:
         violations.append(
             f"Algorithm '{algorithm}' not allowed; "
             f"use {', '.join(sorted(FAPI2_ALLOWED_SIGNING_ALGORITHMS))}"
@@ -137,9 +126,7 @@ def validate_fapi_client_config(
     violations: list[str] = []
 
     if auth_method is None:
-        violations.append(
-            "Client authentication is required (confidential client)"
-        )
+        violations.append("Client authentication is required (confidential client)")
     elif auth_method not in FAPI2_ALLOWED_AUTH_METHODS:
         violations.append(
             f"Auth method '{auth_method}' is not FAPI 2.0 compliant; "
@@ -147,9 +134,7 @@ def validate_fapi_client_config(
         )
 
     if not use_dpop and not use_mtls:
-        violations.append(
-            "Sender-constrained tokens required (enable DPoP or mTLS)"
-        )
+        violations.append("Sender-constrained tokens required (enable DPoP or mTLS)")
 
     return FAPIValidationResult(violations=violations)
 
@@ -180,9 +165,7 @@ def validate_fapi_discovery(
     # RFC 8414 §2 default when omitted is ["authorization_code"] — compliant.
     grants = discovery.grant_types_supported
     if grants is not None and "authorization_code" not in grants:
-        violations.append(
-            "Server does not support authorization_code grant type"
-        )
+        violations.append("Server does not support authorization_code grant type")
 
     # Check response_types_supported includes "code" (authorization code flow).
     # OIDC Discovery §3 default when omitted is ["code"] — compliant.

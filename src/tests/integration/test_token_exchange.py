@@ -77,10 +77,7 @@ class TestTokenExchangeIntegration:
             subject_token_type=token_type.ACCESS_TOKEN,
         )
         data, _headers, auth = prepare_token_exchange_request_data(req)
-        assert (
-            data["grant_type"]
-            == "urn:ietf:params:oauth:grant-type:token-exchange"
-        )
+        assert data["grant_type"] == "urn:ietf:params:oauth:grant-type:token-exchange"
         assert data["subject_token"] == "user-tok"
         assert data["subject_token_type"] == token_type.ACCESS_TOKEN
         assert data["client_id"] == "svc"

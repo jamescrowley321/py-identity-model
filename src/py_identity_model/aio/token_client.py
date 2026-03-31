@@ -104,9 +104,7 @@ async def request_authorization_code_token(
 
     try:
         client = http_client.client if http_client else get_async_http_client()
-        response = await _request_token(
-            client, request.address, params, headers, auth
-        )
+        response = await _request_token(client, request.address, params, headers, auth)
         result = process_auth_code_token_response(response)
         await response.aclose()
         return result
@@ -132,9 +130,7 @@ async def refresh_token(
 
     try:
         client = http_client.client if http_client else get_async_http_client()
-        response = await _request_token(
-            client, request.address, params, headers, auth
-        )
+        response = await _request_token(client, request.address, params, headers, auth)
         result = process_refresh_token_response(response)
         await response.aclose()
         return result

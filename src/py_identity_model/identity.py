@@ -61,27 +61,15 @@ class ClaimType(enum.Enum):
         "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
     )
     Role = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
-    Email = (
-        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
-    )
-    GivenName = (
-        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
-    )
+    Email = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+    GivenName = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
     Surname = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"
-    DateOfBirth = (
-        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/dateofbirth"
-    )
+    DateOfBirth = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/dateofbirth"
     Country = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/country"
     Gender = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/gender"
-    HomePhone = (
-        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/homephone"
-    )
-    MobilePhone = (
-        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/mobilephone"
-    )
-    PostalCode = (
-        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/postalcode"
-    )
+    HomePhone = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/homephone"
+    MobilePhone = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/mobilephone"
+    PostalCode = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/postalcode"
     StateOrProvince = (
         "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/stateorprovince"
     )
@@ -308,9 +296,7 @@ class ClaimsIdentity(Identity):
         Returns:
             List[Claim]: All matching claims.
         """
-        return [
-            claim for claim in self.claims if claim.claim_type == claim_type
-        ]
+        return [claim for claim in self.claims if claim.claim_type == claim_type]
 
 
 class ClaimsPrincipal(Principal):
@@ -381,8 +367,7 @@ class ClaimsPrincipal(Principal):
             bool: True if a matching claim exists, False otherwise.
         """
         return any(
-            claim.claim_type == claim_type
-            and (value is None or claim.value == value)
+            claim.claim_type == claim_type and (value is None or claim.value == value)
             for claim in self._claims
         )
 
@@ -409,11 +394,7 @@ class ClaimsPrincipal(Principal):
             Optional[Claim]: The first matching claim, or None if not found.
         """
         return next(
-            (
-                claim
-                for claim in self._claims
-                if claim.claim_type == claim_type
-            ),
+            (claim for claim in self._claims if claim.claim_type == claim_type),
             None,
         )
 
@@ -427,9 +408,7 @@ class ClaimsPrincipal(Principal):
         Returns:
             List[Claim]: All matching claims.
         """
-        return [
-            claim for claim in self._claims if claim.claim_type == claim_type
-        ]
+        return [claim for claim in self._claims if claim.claim_type == claim_type]
 
 
 def to_principal(

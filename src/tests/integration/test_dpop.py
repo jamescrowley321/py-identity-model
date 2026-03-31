@@ -20,9 +20,7 @@ class TestDPoPIntegration:
     def test_full_token_request_flow(self):
         """Generate key, create proof for token endpoint."""
         key = generate_dpop_key()
-        proof = create_dpop_proof(
-            key, "POST", "https://auth.example.com/token"
-        )
+        proof = create_dpop_proof(key, "POST", "https://auth.example.com/token")
         headers = build_dpop_headers(proof)
 
         assert "DPoP" in headers

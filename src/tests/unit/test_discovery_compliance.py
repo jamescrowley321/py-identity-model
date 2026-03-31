@@ -250,9 +250,7 @@ class TestDiscoveryComplianceIntegration:
                     "issuer": "https://example.com",
                     "jwks_uri": "https://example.com/jwks",
                     "response_types_supported": ["code"],
-                    "subject_types_supported": [
-                        "invalid_subject_type"
-                    ],  # Invalid
+                    "subject_types_supported": ["invalid_subject_type"],  # Invalid
                     "id_token_signing_alg_values_supported": ["RS256"],
                 },
                 headers={"Content-Type": "application/json"},
@@ -302,9 +300,7 @@ class TestDiscoveryComplianceIntegration:
 
         assert result.is_successful is False
         assert result.error is not None
-        assert (
-            "Network error during discovery document request" in result.error
-        )
+        assert "Network error during discovery document request" in result.error
 
     @respx.mock
     def test_discovery_handles_invalid_json(self):

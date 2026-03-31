@@ -77,9 +77,7 @@ def get_access_token() -> tuple[str | None, str | None]:
         # Disable endpoint validation for Docker: the identity server's
         # internal hostname differs from the external discovery URL.
         policy = DiscoveryPolicy(validate_endpoints=False)
-        disco_request = DiscoveryDocumentRequest(
-            address=DISCOVERY_URL, policy=policy
-        )
+        disco_request = DiscoveryDocumentRequest(address=DISCOVERY_URL, policy=policy)
         disco_response = get_discovery_document(disco_request)
 
         if not disco_response.is_successful:
@@ -110,9 +108,7 @@ def get_access_token() -> tuple[str | None, str | None]:
             return None, userinfo_endpoint
 
         access_token = (
-            token_response.token.get("access_token")
-            if token_response.token
-            else None
+            token_response.token.get("access_token") if token_response.token else None
         )
         if access_token:
             print("✅ Successfully obtained access token")
@@ -152,18 +148,14 @@ def test_public_endpoints():
 
     # Test root endpoint
     response = _make_request("GET", "/")
-    assert response.status_code == HTTP_OK, (
-        f"Root endpoint failed: {response.text}"
-    )
+    assert response.status_code == HTTP_OK, f"Root endpoint failed: {response.text}"
     data = response.json()
     assert "message" in data
     print("✅ Root endpoint works")
 
     # Test health endpoint
     response = _make_request("GET", "/health")
-    assert response.status_code == HTTP_OK, (
-        f"Health endpoint failed: {response.text}"
-    )
+    assert response.status_code == HTTP_OK, f"Health endpoint failed: {response.text}"
     data = response.json()
     assert data["status"] == "healthy"
     print("✅ Health endpoint works")
@@ -221,9 +213,7 @@ def test_protected_endpoints_with_valid_token(token: str):
 
     # Test /api/claims
     response = _make_request("GET", "/api/claims", headers=headers)
-    assert response.status_code == HTTP_OK, (
-        f"/api/claims failed: {response.text}"
-    )
+    assert response.status_code == HTTP_OK, f"/api/claims failed: {response.text}"
     data = response.json()
     assert "claims" in data
     assert "scope" in data["claims"] or "scp" in data["claims"]
@@ -231,9 +221,7 @@ def test_protected_endpoints_with_valid_token(token: str):
 
     # Test /api/token-info
     response = _make_request("GET", "/api/token-info", headers=headers)
-    assert response.status_code == HTTP_OK, (
-        f"/api/token-info failed: {response.text}"
-    )
+    assert response.status_code == HTTP_OK, f"/api/token-info failed: {response.text}"
     data = response.json()
     assert "token_length" in data
     assert data["token_length"] > 0
@@ -241,18 +229,14 @@ def test_protected_endpoints_with_valid_token(token: str):
 
     # Test /api/profile
     response = _make_request("GET", "/api/profile", headers=headers)
-    assert response.status_code == HTTP_OK, (
-        f"/api/profile failed: {response.text}"
-    )
+    assert response.status_code == HTTP_OK, f"/api/profile failed: {response.text}"
     data = response.json()
     assert "user_id" in data
     print("✅ /api/profile works with valid token")
 
     # Test /api/data (requires scope)
     response = _make_request("GET", "/api/data", headers=headers)
-    assert response.status_code == HTTP_OK, (
-        f"/api/data failed: {response.text}"
-    )
+    assert response.status_code == HTTP_OK, f"/api/data failed: {response.text}"
     data = response.json()
     assert "data" in data
     assert len(data["data"]) > 0
@@ -295,9 +279,7 @@ def test_admin_endpoints_without_role(token: str):
     )
 
     response = _make_request("GET", "/api/admin/stats", headers=headers)
-    assert response.status_code == HTTP_FORBIDDEN, (
-        "Expected 403 for missing admin role"
-    )
+    assert response.status_code == HTTP_FORBIDDEN, "Expected 403 for missing admin role"
     print("✅ Admin stats endpoint correctly rejects token without admin role")
 
 
@@ -387,9 +369,7 @@ def run_tests():
         if userinfo_endpoint:
             test_userinfo_endpoint(token, userinfo_endpoint)
         else:
-            print(
-                "\n⚠️  Skipping UserInfo tests (no userinfo_endpoint in discovery)"
-            )
+            print("\n⚠️  Skipping UserInfo tests (no userinfo_endpoint in discovery)")
 
         print("\n" + "=" * 60)
         print("✅ All tests passed!")
@@ -398,9 +378,7 @@ def run_tests():
 
     except Exception as e:
         error_type = (
-            "Test failed"
-            if isinstance(e, AssertionError)
-            else "Unexpected error"
+            "Test failed" if isinstance(e, AssertionError) else "Unexpected error"
         )
         print(f"\n❌ {error_type}: {e}")
         traceback.print_exc()

@@ -209,9 +209,7 @@ class TestAsyncExchangeToken:
     async def test_non_json_success_returns_error(self):
         """S3: Non-JSON body on 200 returns error instead of crashing."""
         respx.post(TOKEN_URL).mock(
-            return_value=httpx.Response(
-                200, content=b"<html>Gateway Error</html>"
-            )
+            return_value=httpx.Response(200, content=b"<html>Gateway Error</html>")
         )
         response = await exchange_token(
             TokenExchangeRequest(
@@ -247,9 +245,7 @@ class TestAsyncExchangeToken:
 
     @respx.mock
     async def test_network_error(self):
-        respx.post(TOKEN_URL).mock(
-            side_effect=httpx.ConnectError("Connection refused")
-        )
+        respx.post(TOKEN_URL).mock(side_effect=httpx.ConnectError("Connection refused"))
         response = await exchange_token(
             TokenExchangeRequest(
                 address=TOKEN_URL,
@@ -401,10 +397,7 @@ class TestAsyncExchangeToken:
         )
         assert response.is_successful is False
         assert response.error is not None
-        assert (
-            "actor_token_type has no meaning without actor_token"
-            in response.error
-        )
+        assert "actor_token_type has no meaning without actor_token" in response.error
 
     async def test_empty_client_id_returns_error(self):
         """S4: Empty client_id returns error response."""
@@ -452,9 +445,7 @@ class TestAsyncExchangeToken:
             **TOKEN_EXCHANGE_RESPONSE,
             "issued_token_type": 123,
         }
-        respx.post(TOKEN_URL).mock(
-            return_value=httpx.Response(200, json=resp_data)
-        )
+        respx.post(TOKEN_URL).mock(return_value=httpx.Response(200, json=resp_data))
         response = await exchange_token(
             TokenExchangeRequest(
                 address=TOKEN_URL,
