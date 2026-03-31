@@ -22,9 +22,11 @@ from py_identity_model.aio.revocation import (
 HTTP_OK = 200
 
 
-def _require_revocation(provider_capabilities):
+def _require_revocation(provider_capabilities, test_config):
     if "revocation" not in provider_capabilities:
         pytest.skip("Provider does not expose revocation_endpoint")
+    if not test_config.get("TEST_OPAQUE_CLIENT_ID"):
+        pytest.skip("TEST_OPAQUE_CLIENT_ID not configured")
 
 
 def _get_fresh_opaque_token(raw_discovery, test_config) -> str:
@@ -64,7 +66,7 @@ class TestRevocationSync:
         test_config,
     ):
         """Revoking a valid access token succeeds (RFC 7009 §2.1)."""
-        _require_revocation(provider_capabilities)
+        _require_revocation(provider_capabilities, test_config)
         token = _get_fresh_opaque_token(raw_discovery, test_config)
 
         response = revoke_token(
@@ -90,7 +92,7 @@ class TestRevocationSync:
         The server MUST respond with HTTP 200 for both valid and invalid
         tokens to prevent token scanning attacks.
         """
-        _require_revocation(provider_capabilities)
+        _require_revocation(provider_capabilities, test_config)
 
         response = revoke_token(
             TokenRevocationRequest(
@@ -110,7 +112,7 @@ class TestRevocationSync:
         test_config,
     ):
         """Revoked token is inactive when introspected."""
-        _require_revocation(provider_capabilities)
+        _require_revocation(provider_capabilities, test_config)
         if "introspection" not in provider_capabilities:
             pytest.skip("Provider does not expose introspection_endpoint")
 
@@ -161,7 +163,7 @@ class TestRevocationSync:
         test_config,
     ):
         """Revocation with explicit token_type_hint=access_token."""
-        _require_revocation(provider_capabilities)
+        _require_revocation(provider_capabilities, test_config)
         token = _get_fresh_opaque_token(raw_discovery, test_config)
 
         response = revoke_token(
@@ -187,7 +189,7 @@ class TestRevocationSync:
         RFC 7009 §2.1: The authorization server responds with HTTP 200
         for both valid and already-invalidated tokens.
         """
-        _require_revocation(provider_capabilities)
+        _require_revocation(provider_capabilities, test_config)
         token = _get_fresh_opaque_token(raw_discovery, test_config)
         endpoint = raw_discovery["revocation_endpoint"]
 
@@ -217,7 +219,7 @@ class TestRevocationAsync:
         test_config,
     ):
         """Async revocation of a valid token succeeds."""
-        _require_revocation(provider_capabilities)
+        _require_revocation(provider_capabilities, test_config)
         token = _get_fresh_opaque_token(raw_discovery, test_config)
 
         response = await aio_revoke_token(
@@ -240,7 +242,7 @@ class TestRevocationAsync:
         test_config,
     ):
         """Async revocation of invalid token still succeeds."""
-        _require_revocation(provider_capabilities)
+        _require_revocation(provider_capabilities, test_config)
 
         response = await aio_revoke_token(
             TokenRevocationRequest(

@@ -22,9 +22,11 @@ from py_identity_model.aio.introspection import (
 HTTP_OK = 200
 
 
-def _require_introspection(provider_capabilities):
+def _require_introspection(provider_capabilities, test_config):
     if "introspection" not in provider_capabilities:
         pytest.skip("Provider does not expose introspection_endpoint")
+    if not test_config.get("TEST_OPAQUE_CLIENT_ID"):
+        pytest.skip("TEST_OPAQUE_CLIENT_ID not configured")
 
 
 def _get_fresh_opaque_token(raw_discovery, test_config) -> str:
@@ -65,7 +67,7 @@ class TestIntrospectionSync:
         test_config,
     ):
         """Introspecting a valid access token returns active=True."""
-        _require_introspection(provider_capabilities)
+        _require_introspection(provider_capabilities, test_config)
         endpoint = raw_discovery["introspection_endpoint"]
 
         response = introspect_token(
@@ -90,7 +92,7 @@ class TestIntrospectionSync:
         test_config,
     ):
         """Active token introspection includes RFC 7662 §2.2 claims."""
-        _require_introspection(provider_capabilities)
+        _require_introspection(provider_capabilities, test_config)
         endpoint = raw_discovery["introspection_endpoint"]
 
         response = introspect_token(
@@ -117,7 +119,7 @@ class TestIntrospectionSync:
         test_config,
     ):
         """Introspecting a garbage token returns active=False."""
-        _require_introspection(provider_capabilities)
+        _require_introspection(provider_capabilities, test_config)
         endpoint = raw_discovery["introspection_endpoint"]
 
         response = introspect_token(
@@ -140,7 +142,7 @@ class TestIntrospectionSync:
         test_config,
     ):
         """Introspecting with refresh_token hint on an invalid token."""
-        _require_introspection(provider_capabilities)
+        _require_introspection(provider_capabilities, test_config)
         endpoint = raw_discovery["introspection_endpoint"]
 
         response = introspect_token(
@@ -168,7 +170,7 @@ class TestIntrospectionSync:
         Tests the introspection+revocation interplay: revoke a token,
         then introspect to confirm the server considers it dead.
         """
-        _require_introspection(provider_capabilities)
+        _require_introspection(provider_capabilities, test_config)
         if "revocation" not in provider_capabilities:
             pytest.skip("Provider does not expose revocation_endpoint")
 
@@ -213,7 +215,7 @@ class TestIntrospectionAsync:
         test_config,
     ):
         """Async introspection of a valid token returns active=True."""
-        _require_introspection(provider_capabilities)
+        _require_introspection(provider_capabilities, test_config)
         endpoint = raw_discovery["introspection_endpoint"]
 
         response = await aio_introspect_token(
@@ -238,7 +240,7 @@ class TestIntrospectionAsync:
         test_config,
     ):
         """Async introspection of garbage token returns active=False."""
-        _require_introspection(provider_capabilities)
+        _require_introspection(provider_capabilities, test_config)
         endpoint = raw_discovery["introspection_endpoint"]
 
         response = await aio_introspect_token(
