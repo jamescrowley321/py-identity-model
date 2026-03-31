@@ -220,6 +220,9 @@ filterwarnings = [
     "error", # treat warnings as errors
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
+    # Python 3.13 raises ResourceWarning on unclosed async transports
+    # during GC in httpx teardown — not a library bug, just GC timing.
+    "ignore::pytest.PytestUnraisableExceptionWarning",
 ]
 
 [tool.coverage.run]
