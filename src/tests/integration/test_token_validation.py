@@ -161,10 +161,10 @@ def test_claim_validation_function_succeeds(
     """Test claim validation success using cached fixtures."""
     assert client_credentials_token.token is not None
 
+    called = []
+
     def validate_claims(_token: dict):
-        # Do some token validation here
-        # and raise an exception if the validation fails
-        pass
+        called.append(True)
 
     validation_config = TokenValidationConfig(
         perform_disco=True,
@@ -182,6 +182,7 @@ def test_claim_validation_function_succeeds(
 
     assert decoded_token
     assert decoded_token["iss"]
+    assert called, "claims_validator was never invoked"
 
 
 @pytest.mark.integration

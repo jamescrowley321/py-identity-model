@@ -28,10 +28,11 @@ class TestAsyncTokenValidation:
     ):
         """Test async claims validator that succeeds."""
         assert client_credentials_token.token is not None
+        called = []
 
-        async def async_validate_claims(token: dict):
+        async def async_validate_claims(token: dict):  # noqa: ARG001
             """Async claims validator."""
-            # Validation passes
+            called.append(True)
 
         validation_config = TokenValidationConfig(
             perform_disco=True,
@@ -50,6 +51,7 @@ class TestAsyncTokenValidation:
 
             assert decoded_token
             assert decoded_token["iss"]
+            assert called, "async claims_validator was never invoked"
         finally:
             await close_async_http_client()
 
@@ -90,10 +92,11 @@ class TestAsyncTokenValidation:
     ):
         """Test that sync claims validator works in async validation."""
         assert client_credentials_token.token is not None
+        called = []
 
-        def sync_validate_claims(token: dict):
+        def sync_validate_claims(token: dict):  # noqa: ARG001
             """Sync claims validator."""
-            # Validation passes
+            called.append(True)
 
         validation_config = TokenValidationConfig(
             perform_disco=True,
@@ -112,5 +115,6 @@ class TestAsyncTokenValidation:
 
             assert decoded_token
             assert decoded_token["iss"]
+            assert called, "sync claims_validator was never invoked in async context"
         finally:
             await close_async_http_client()
