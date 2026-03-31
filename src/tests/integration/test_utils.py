@@ -113,4 +113,7 @@ def get_config(env_file: str | None = None) -> dict:
         "TEST_PKCE_PUBLIC_REDIRECT_URI": os.environ.get(
             "TEST_PKCE_PUBLIC_REDIRECT_URI", ""
         ),
+        # Opaque token client for introspection/revocation tests
+        "TEST_OPAQUE_CLIENT_ID": os.environ.get("TEST_OPAQUE_CLIENT_ID", ""),
+        "TEST_OPAQUE_CLIENT_SECRET": os.environ.get("TEST_OPAQUE_CLIENT_SECRET", ""),
     }

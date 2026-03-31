@@ -1,53 +1,255 @@
-"""Integration tests for OAuth 2.0 Token Introspection."""
+"""Integration tests for OAuth 2.0 Token Introspection (RFC 7662).
 
+Tests exercise the full introspection protocol against a live OIDC
+provider.  Constructor/model tests belong in unit tests — this file
+only contains tests that require a running provider.
+"""
+
+import httpx
 import pytest
 
-from py_identity_model import BaseRequest, TokenIntrospectionRequest
+from py_identity_model import (
+    TokenIntrospectionRequest,
+    TokenRevocationRequest,
+    introspect_token,
+    revoke_token,
+)
+from py_identity_model.aio.introspection import (
+    introspect_token as aio_introspect_token,
+)
+
+
+HTTP_OK = 200
+
+
+def _require_introspection(provider_capabilities):
+    if "introspection" not in provider_capabilities:
+        pytest.skip("Provider does not expose introspection_endpoint")
+
+
+def _get_fresh_opaque_token(raw_discovery, test_config) -> str:
+    """Get a fresh opaque token via direct httpx call.
+
+    Uses the opaque client to avoid JWT tokens that some providers
+    cannot introspect.  Avoids consuming the shared session fixture.
+    """
+    opaque_id = test_config.get("TEST_OPAQUE_CLIENT_ID")
+    opaque_secret = test_config.get("TEST_OPAQUE_CLIENT_SECRET")
+    if not opaque_id or not opaque_secret:
+        pytest.skip("TEST_OPAQUE_CLIENT_ID not configured")
+
+    resp = httpx.post(
+        raw_discovery["token_endpoint"],
+        data={
+            "grant_type": "client_credentials",
+            "scope": test_config.get("TEST_SCOPE", "openid"),
+        },
+        auth=(opaque_id, opaque_secret),
+        timeout=10.0,
+    )
+    assert resp.status_code == HTTP_OK, (
+        f"Failed to get opaque token: {resp.status_code} {resp.text}"
+    )
+    return resp.json()["access_token"]
 
 
 @pytest.mark.integration
-class TestIntrospectionIntegration:
-    def test_request_model_inherits_base(self):
-        """TokenIntrospectionRequest is a BaseRequest."""
-        req = TokenIntrospectionRequest(
-            address="https://auth.example.com/introspect",
-            token="test_token",
-            client_id="test_client",
+class TestIntrospectionSync:
+    """Synchronous introspection against live provider."""
+
+    def test_active_token(
+        self,
+        provider_capabilities,
+        raw_discovery,
+        opaque_access_token,
+        test_config,
+    ):
+        """Introspecting a valid access token returns active=True."""
+        _require_introspection(provider_capabilities)
+        endpoint = raw_discovery["introspection_endpoint"]
+
+        response = introspect_token(
+            TokenIntrospectionRequest(
+                address=endpoint,
+                token=opaque_access_token,
+                client_id=test_config["TEST_OPAQUE_CLIENT_ID"],
+                client_secret=test_config["TEST_OPAQUE_CLIENT_SECRET"],
+                token_type_hint="access_token",
+            )
         )
-        assert isinstance(req, BaseRequest)
 
-    def test_introspection_endpoint_in_discovery(self, discovery_document):
-        """Verify identity provider exposes introspection endpoint."""
-        # Not all providers expose introspection_endpoint in discovery
-        # This test verifies the field exists (may be None)
-        assert hasattr(discovery_document, "introspection_endpoint")
+        assert response.is_successful, f"Introspection failed: {response.error}"
+        assert response.claims is not None
+        assert response.claims["active"] is True
 
-    def test_request_with_token_endpoint(self, discovery_document):
-        """Build introspection request using token endpoint as fallback.
+    def test_active_token_contains_standard_claims(
+        self,
+        provider_capabilities,
+        raw_discovery,
+        opaque_access_token,
+        test_config,
+    ):
+        """Active token introspection includes RFC 7662 §2.2 claims."""
+        _require_introspection(provider_capabilities)
+        endpoint = raw_discovery["introspection_endpoint"]
 
-        Many providers use token_endpoint for introspection or expose
-        a separate introspection_endpoint. We use token_endpoint here
-        as it's always available.
+        response = introspect_token(
+            TokenIntrospectionRequest(
+                address=endpoint,
+                token=opaque_access_token,
+                client_id=test_config["TEST_OPAQUE_CLIENT_ID"],
+                client_secret=test_config["TEST_OPAQUE_CLIENT_SECRET"],
+            )
+        )
+
+        assert response.is_successful
+        claims = response.claims
+        assert claims is not None
+        assert claims["active"] is True
+        # RFC 7662 §2.2 — active tokens SHOULD include these
+        assert "client_id" in claims
+        assert claims["client_id"] == test_config["TEST_OPAQUE_CLIENT_ID"]
+
+    def test_invalid_token_returns_inactive(
+        self,
+        provider_capabilities,
+        raw_discovery,
+        test_config,
+    ):
+        """Introspecting a garbage token returns active=False."""
+        _require_introspection(provider_capabilities)
+        endpoint = raw_discovery["introspection_endpoint"]
+
+        response = introspect_token(
+            TokenIntrospectionRequest(
+                address=endpoint,
+                token="invalid-token-value",
+                client_id=test_config["TEST_OPAQUE_CLIENT_ID"],
+                client_secret=test_config["TEST_OPAQUE_CLIENT_SECRET"],
+            )
+        )
+
+        assert response.is_successful
+        assert response.claims is not None
+        assert response.claims["active"] is False
+
+    def test_token_type_hint_refresh_token(
+        self,
+        provider_capabilities,
+        raw_discovery,
+        test_config,
+    ):
+        """Introspecting with refresh_token hint on an invalid token."""
+        _require_introspection(provider_capabilities)
+        endpoint = raw_discovery["introspection_endpoint"]
+
+        response = introspect_token(
+            TokenIntrospectionRequest(
+                address=endpoint,
+                token="not-a-real-refresh-token",
+                client_id=test_config["TEST_OPAQUE_CLIENT_ID"],
+                client_secret=test_config["TEST_OPAQUE_CLIENT_SECRET"],
+                token_type_hint="refresh_token",
+            )
+        )
+
+        assert response.is_successful
+        assert response.claims is not None
+        assert response.claims["active"] is False
+
+    def test_revoked_token_is_inactive(
+        self,
+        provider_capabilities,
+        raw_discovery,
+        test_config,
+    ):
+        """After revocation, introspection returns active=False.
+
+        Tests the introspection+revocation interplay: revoke a token,
+        then introspect to confirm the server considers it dead.
         """
-        req = TokenIntrospectionRequest(
-            address=discovery_document.token_endpoint or "",
-            token="test_token",
-            client_id="test_client",
-            client_secret="test_secret",
-            token_type_hint="access_token",
-        )
-        assert req.address != ""
-        assert req.token_type_hint == "access_token"
+        _require_introspection(provider_capabilities)
+        if "revocation" not in provider_capabilities:
+            pytest.skip("Provider does not expose revocation_endpoint")
 
-    def test_request_model_with_real_endpoint(self, discovery_document):
-        """Build introspection request from discovery document."""
-        endpoint = discovery_document.introspection_endpoint
-        if endpoint is None:
-            pytest.skip("Provider does not expose introspection_endpoint")
+        fresh_token = _get_fresh_opaque_token(raw_discovery, test_config)
 
-        req = TokenIntrospectionRequest(
-            address=endpoint,
-            token="test_token",
-            client_id="test_client",
+        # Revoke it
+        revoke_response = revoke_token(
+            TokenRevocationRequest(
+                address=raw_discovery["revocation_endpoint"],
+                token=fresh_token,
+                client_id=test_config["TEST_OPAQUE_CLIENT_ID"],
+                client_secret=test_config["TEST_OPAQUE_CLIENT_SECRET"],
+                token_type_hint="access_token",
+            )
         )
-        assert req.address == endpoint
+        assert revoke_response.is_successful
+
+        # Introspect — should be inactive
+        introspect_response = introspect_token(
+            TokenIntrospectionRequest(
+                address=raw_discovery["introspection_endpoint"],
+                token=fresh_token,
+                client_id=test_config["TEST_OPAQUE_CLIENT_ID"],
+                client_secret=test_config["TEST_OPAQUE_CLIENT_SECRET"],
+            )
+        )
+        assert introspect_response.is_successful
+        assert introspect_response.claims is not None
+        assert introspect_response.claims["active"] is False
+
+
+@pytest.mark.integration
+class TestIntrospectionAsync:
+    """Async introspection against live provider."""
+
+    @pytest.mark.asyncio
+    async def test_active_token(
+        self,
+        provider_capabilities,
+        raw_discovery,
+        opaque_access_token,
+        test_config,
+    ):
+        """Async introspection of a valid token returns active=True."""
+        _require_introspection(provider_capabilities)
+        endpoint = raw_discovery["introspection_endpoint"]
+
+        response = await aio_introspect_token(
+            TokenIntrospectionRequest(
+                address=endpoint,
+                token=opaque_access_token,
+                client_id=test_config["TEST_OPAQUE_CLIENT_ID"],
+                client_secret=test_config["TEST_OPAQUE_CLIENT_SECRET"],
+            )
+        )
+
+        assert response.is_successful, f"Async introspection failed: {response.error}"
+        assert response.claims is not None
+        assert response.claims["active"] is True
+        assert "client_id" in response.claims
+
+    @pytest.mark.asyncio
+    async def test_invalid_token_returns_inactive(
+        self,
+        provider_capabilities,
+        raw_discovery,
+        test_config,
+    ):
+        """Async introspection of garbage token returns active=False."""
+        _require_introspection(provider_capabilities)
+        endpoint = raw_discovery["introspection_endpoint"]
+
+        response = await aio_introspect_token(
+            TokenIntrospectionRequest(
+                address=endpoint,
+                token="garbage-token-async",
+                client_id=test_config["TEST_OPAQUE_CLIENT_ID"],
+                client_secret=test_config["TEST_OPAQUE_CLIENT_SECRET"],
+            )
+        )
+
+        assert response.is_successful
+        assert response.claims is not None
+        assert response.claims["active"] is False

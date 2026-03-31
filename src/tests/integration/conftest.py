@@ -349,6 +349,45 @@ def jwt_signing_key(jwks_response, jwt_access_token):
         pytest.skip(f"Key {kid} not found in JWKS")
 
 
+@pytest.fixture(scope="session")
+def opaque_access_token(test_config, token_endpoint):
+    """Opaque access token for introspection/revocation tests.
+
+    Some providers (e.g. node-oidc-provider) cannot introspect or revoke
+    JWT-format tokens.  This fixture uses a dedicated client that receives
+    opaque tokens.  Skips when the opaque client is not configured.
+    """
+    opaque_id = test_config.get("TEST_OPAQUE_CLIENT_ID")
+    opaque_secret = test_config.get("TEST_OPAQUE_CLIENT_SECRET")
+    if not opaque_id or not opaque_secret:
+        pytest.skip("TEST_OPAQUE_CLIENT_ID not configured")
+
+    @retry_with_backoff()
+    def fetch_token():
+        response = request_client_credentials_token(
+            ClientCredentialsTokenRequest(
+                client_id=opaque_id,
+                client_secret=opaque_secret,
+                address=token_endpoint,
+                scope=test_config["TEST_SCOPE"],
+            )
+        )
+        if not response.is_successful and "429" in str(response.error):
+            request = httpx.Request("POST", token_endpoint)
+            raise httpx.HTTPStatusError(
+                RATE_LIMIT_ERROR_MESSAGE,
+                request=request,
+                response=httpx.Response(429),
+            )
+        return response
+
+    response = fetch_token()
+    if not response.is_successful:
+        pytest.fail(f"Failed to obtain opaque token: {response.error}")
+    assert response.token is not None, "Token response has no token dict"
+    return response.token["access_token"]
+
+
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_http_client():
     """Close the persistent HTTP client after all tests complete."""

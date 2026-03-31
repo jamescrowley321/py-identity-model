@@ -113,6 +113,17 @@ async function startProvider() {
         scope: "openid api",
         token_endpoint_auth_method: "client_secret_basic",
       },
+      {
+        // Client for introspection/revocation tests — issues opaque tokens
+        // because defaultResource excludes this client (JWT tokens cannot
+        // be introspected or revoked via oidc-provider's built-in endpoints).
+        client_id: "test-opaque",
+        client_secret: "test-opaque-secret",
+        grant_types: ["client_credentials"],
+        response_types: [],
+        scope: "openid api",
+        token_endpoint_auth_method: "client_secret_basic",
+      },
       // FAPI 2.0 client deferred to T125 — requires private_key_jwt,
       // signed request objects, and PAR enforcement.
     ],
@@ -158,7 +169,12 @@ async function startProvider() {
         // Default to urn:test:api so tokens are issued as JWTs.
         // This allows integration tests to validate tokens without
         // explicitly passing a resource parameter.
-        defaultResource: () => "urn:test:api",
+        // Exception: test-opaque client gets no resource → opaque tokens
+        // for introspection/revocation testing.
+        defaultResource: (ctx) => {
+          if (ctx.oidc?.client?.clientId === "test-opaque") return undefined;
+          return "urn:test:api";
+        },
         getResourceServerInfo: (ctx, resourceIndicator) => {
           if (resourceIndicator !== "urn:test:api") {
             return undefined;
