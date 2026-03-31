@@ -15,7 +15,7 @@ def test_get_discovery_document_is_successful(discovery_document):
     assert discovery_document.authorization_endpoint
 
 
-@pytest.mark.usefixtures("_env_file")
+@pytest.mark.usefixtures("env_file")
 def test_get_discovery_document_fails():
     disco_doc_request = DiscoveryDocumentRequest(address="https://google.com")
     disco_doc_response = get_discovery_document(disco_doc_request)
