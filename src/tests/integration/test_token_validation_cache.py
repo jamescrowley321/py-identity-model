@@ -21,6 +21,7 @@ from py_identity_model.exceptions import (
     TokenExpiredException,
     TokenValidationException,
 )
+from py_identity_model.sync.http_client import _reset_http_client
 from py_identity_model.sync.token_validation import (
     _get_disco_response,
     _get_jwks_response,
@@ -45,10 +46,12 @@ def clear_validation_caches():
     _get_jwks_response.cache_clear()
     _get_public_key_by_kid.cache_clear()
     yield
-    # Also clear after test for isolation
+    # Clear caches and close the HTTP client to release pooled connections.
+    # Without this, pooled transports leak ResourceWarnings during GC.
     _get_disco_response.cache_clear()
     _get_jwks_response.cache_clear()
     _get_public_key_by_kid.cache_clear()
+    _reset_http_client()
 
 
 @pytest.fixture

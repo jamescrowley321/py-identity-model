@@ -1,6 +1,7 @@
 import pytest
 
 from py_identity_model import JwksRequest, get_jwks
+from py_identity_model.sync.http_client import _reset_http_client
 
 
 def test_get_jwks_is_successful(jwks_response):
@@ -28,6 +29,9 @@ def test_get_jwks_is_successful(jwks_response):
 
 @pytest.mark.usefixtures("env_file")
 def test_get_jwks_fails():
+    """Test get_jwks with non-JWKS endpoint."""
     jwks_request = JwksRequest(address="https://google.com")
     jwks_response = get_jwks(jwks_request)
     assert jwks_response.is_successful is False
+    # Reset persistent client to close pooled connection to google.com
+    _reset_http_client()
