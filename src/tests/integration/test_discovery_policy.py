@@ -7,7 +7,20 @@ from py_identity_model import (
     DiscoveryEndpoint,
     DiscoveryPolicy,
 )
+from py_identity_model.aio import (
+    DiscoveryEndpoint as AioDiscoveryEndpoint,
+)
+from py_identity_model.aio import (
+    DiscoveryPolicy as AioDiscoveryPolicy,
+)
+from py_identity_model.aio import (
+    parse_discovery_url as aio_parse_discovery_url,
+)
 from py_identity_model.core.discovery_policy import parse_discovery_url
+
+
+# Expected count of additional endpoint base addresses
+EXPECTED_ADDITIONAL_ADDRESS_COUNT = 2
 
 
 @pytest.mark.integration
@@ -46,26 +59,17 @@ class TestDiscoveryPolicyIntegration:
                 "https://backup.example.com",
             ]
         )
-        assert len(policy.additional_endpoint_base_addresses) == 2
-
-    def test_top_level_import(self):
-        from py_identity_model import (
-            DiscoveryEndpoint,
-            DiscoveryPolicy,
-            parse_discovery_url,
+        assert (
+            len(policy.additional_endpoint_base_addresses)
+            == EXPECTED_ADDITIONAL_ADDRESS_COUNT
         )
 
+    def test_top_level_import(self):
         assert DiscoveryPolicy is not None
         assert DiscoveryEndpoint is not None
         assert callable(parse_discovery_url)
 
     def test_aio_import(self):
-        from py_identity_model.aio import (
-            DiscoveryEndpoint,
-            DiscoveryPolicy,
-            parse_discovery_url,
-        )
-
-        assert DiscoveryPolicy is not None
-        assert DiscoveryEndpoint is not None
-        assert callable(parse_discovery_url)
+        assert AioDiscoveryPolicy is not None
+        assert AioDiscoveryEndpoint is not None
+        assert callable(aio_parse_discovery_url)

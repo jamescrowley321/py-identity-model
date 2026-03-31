@@ -9,6 +9,10 @@ from py_identity_model import (
 from py_identity_model.exceptions import FailedResponseAccessError
 
 
+# JWT format: three dot-separated segments
+JWT_SEGMENT_SEPARATOR_COUNT = 2
+
+
 def test_request_client_credentials_token_is_successful(
     test_config, token_endpoint
 ):
@@ -106,7 +110,9 @@ class TestJwtAccessToken:
         """JWT access token has correct structure."""
         assert "access_token" in jwt_access_token
         access_token = jwt_access_token["access_token"]
-        assert access_token.count(".") == 2, "Expected JWT format"
+        assert access_token.count(".") == JWT_SEGMENT_SEPARATOR_COUNT, (
+            "Expected JWT format"
+        )
 
     def test_jwt_access_token_custom_claims(
         self, jwt_access_token, jwt_signing_key, issuer

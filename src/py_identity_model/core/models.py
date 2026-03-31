@@ -6,12 +6,17 @@ This module contains all dataclasses and models used by both sync and async impl
 
 from __future__ import annotations
 
+from base64 import urlsafe_b64decode
 from dataclasses import dataclass, fields
 from enum import Enum
 import json
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from ..exceptions import ConfigurationException
+from ..exceptions import (
+    ConfigurationException,
+    FailedResponseAccessError,
+    SuccessfulResponseAccessError,
+)
 
 
 if TYPE_CHECKING:
@@ -47,14 +52,10 @@ class _GuardedResponseMixin:
             is_successful = object.__getattribute__(self, "is_successful")
             if not is_successful:
                 error = object.__getattribute__(self, "error")
-                from ..exceptions import FailedResponseAccessError
-
                 raise FailedResponseAccessError(name, error)
         elif name in object.__getattribute__(self, "_error_fields"):
             is_successful = object.__getattribute__(self, "is_successful")
             if is_successful:
-                from ..exceptions import SuccessfulResponseAccessError
-
                 raise SuccessfulResponseAccessError(name)
         return object.__getattribute__(self, name)
 
@@ -319,8 +320,6 @@ class JsonWebKey:
             valid_fields = {field.name for field in fields(cls)}
 
             # Map JWK parameter names to Python field names
-            from typing import Any
-
             mapped_data: dict[str, Any] = {}
             for k, v in data.items():
                 if k == JsonWebKeyParameterNames.X5T_S256.value:
@@ -389,8 +388,6 @@ class JsonWebKey:
         """Decode a base64url-encoded string"""
         if not input_str:
             return b""
-        from base64 import urlsafe_b64decode
-
         padding = "=" * (4 - len(input_str) % 4)
         return urlsafe_b64decode(input_str + padding)
 

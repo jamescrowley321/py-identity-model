@@ -21,6 +21,12 @@ from py_identity_model.sync.device_auth import (
 DEVICE_AUTH_URL = "https://auth.example.com/device/authorize"
 TOKEN_URL = "https://auth.example.com/token"
 
+# Expected values from device authorization responses
+EXPECTED_EXPIRES_IN = 1800
+EXPECTED_INTERVAL = 5
+EXPECTED_TOKEN_EXPIRES_IN = 3600
+SLOW_DOWN_INTERVAL = 10
+
 DEVICE_AUTH_RESPONSE = {
     "device_code": "GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS",
     "user_code": "WDJB-MJHT",
@@ -50,8 +56,8 @@ class TestRequestDeviceAuthorization:
         assert response.user_code == "WDJB-MJHT"
         assert response.verification_uri == "https://auth.example.com/device"
         assert response.verification_uri_complete is not None
-        assert response.expires_in == 1800
-        assert response.interval == 5
+        assert response.expires_in == EXPECTED_EXPIRES_IN
+        assert response.interval == EXPECTED_INTERVAL
 
     @respx.mock
     def test_device_auth_without_client_secret(self):
@@ -184,7 +190,7 @@ class TestRequestDeviceAuthorization:
             )
         )
         assert response.is_successful is True
-        assert response.interval == 5
+        assert response.interval == EXPECTED_INTERVAL
         assert isinstance(response.interval, int)
 
     @respx.mock
@@ -251,7 +257,7 @@ class TestRequestDeviceAuthorization:
             )
         )
         assert response.is_successful is True
-        assert response.expires_in == 1800
+        assert response.expires_in == EXPECTED_EXPIRES_IN
         assert isinstance(response.expires_in, int)
 
 
@@ -320,7 +326,7 @@ class TestPollDeviceToken:
         )
         assert response.is_successful is False
         assert response.error_code == "slow_down"
-        assert response.interval == 10
+        assert response.interval == SLOW_DOWN_INTERVAL
 
     @respx.mock
     def test_slow_down_float_interval(self):
@@ -343,7 +349,7 @@ class TestPollDeviceToken:
         )
         assert response.is_successful is False
         assert response.error_code == "slow_down"
-        assert response.interval == 10
+        assert response.interval == SLOW_DOWN_INTERVAL
         assert isinstance(response.interval, int)
 
     @respx.mock

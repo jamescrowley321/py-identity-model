@@ -12,6 +12,10 @@ from py_identity_model.ssl_config import (
 )
 
 
+# Expected concurrent thread result count
+EXPECTED_THREAD_RESULT_COUNT = 100
+
+
 @pytest.fixture(autouse=True)
 def clear_ssl_cache():
     """Clear get_ssl_verify cache before and after each test."""
@@ -202,7 +206,7 @@ class TestGetSSLVerify:
             assert len(errors) == 0, f"Errors occurred: {errors}"
 
             # All threads should get the same result
-            assert len(results) == 100
+            assert len(results) == EXPECTED_THREAD_RESULT_COUNT
             assert all(r == "/path/to/bundle.crt" for r in results)
 
     def test_get_ssl_verify_caching(self):

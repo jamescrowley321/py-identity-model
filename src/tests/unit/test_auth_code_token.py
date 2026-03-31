@@ -4,6 +4,7 @@ import httpx
 import pytest
 import respx
 
+from py_identity_model import BaseResponse
 from py_identity_model.aio.token_client import (
     request_authorization_code_token as request_authorization_code_token_async,
 )
@@ -101,8 +102,6 @@ class TestAuthCodeTokenExchange:
         assert req.scope == "openid"
 
     def test_response_is_base_response(self):
-        from py_identity_model import BaseResponse
-
         resp = AuthorizationCodeTokenResponse(is_successful=True, token={})
         assert isinstance(resp, BaseResponse)
 

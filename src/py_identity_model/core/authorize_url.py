@@ -22,7 +22,7 @@ _RESERVED_PARAMS = frozenset(
 )
 
 
-def build_authorization_url(
+def build_authorization_url(  # noqa: PLR0913  # RFC 6749 §4.1.1 + RFC 7636 §4.3 define these params
     authorization_endpoint: str,
     client_id: str,
     redirect_uri: str,

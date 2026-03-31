@@ -6,6 +6,7 @@ for roles, permissions, and custom claims.
 """
 
 from collections.abc import Callable
+from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 
@@ -19,6 +20,10 @@ from examples.fastapi.dependencies import (
 
 
 __all__ = [
+    # Annotated type aliases
+    "Claims",
+    "DescopePermissions",
+    "DescopeRoles",
     # Re-export base dependencies
     "get_claims",
     "get_current_user",
@@ -32,10 +37,14 @@ __all__ = [
 ]
 
 
+# Annotated type aliases for FastAPI dependency injection (avoids B008)
+Claims = Annotated[dict, Depends(get_claims)]
+
+
 # Descope-Specific Dependencies
 
 
-def get_descope_roles(claims: dict = Depends(get_claims)) -> list:
+def get_descope_roles(claims: Claims) -> list:
     """
     Dependency to extract Descope roles from token claims.
 
@@ -76,7 +85,7 @@ def get_descope_roles(claims: dict = Depends(get_claims)) -> list:
     return []
 
 
-def get_descope_permissions(claims: dict = Depends(get_claims)) -> list:
+def get_descope_permissions(claims: Claims) -> list:
     """
     Dependency to extract Descope permissions from token claims.
 
@@ -116,6 +125,10 @@ def get_descope_permissions(claims: dict = Depends(get_claims)) -> list:
     return []
 
 
+DescopeRoles = Annotated[list, Depends(get_descope_roles)]
+DescopePermissions = Annotated[list, Depends(get_descope_permissions)]
+
+
 def require_descope_role(role: str) -> Callable[..., None]:
     """
     Factory function to create a dependency that requires a specific Descope role.
@@ -140,7 +153,7 @@ def require_descope_role(role: str) -> Callable[..., None]:
         ```
     """
 
-    def _check_role(roles: list = Depends(get_descope_roles)) -> None:
+    def _check_role(roles: DescopeRoles) -> None:
         if role not in roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -177,7 +190,7 @@ def require_descope_permission(permission: str) -> Callable[..., None]:
     """
 
     def _check_permission(
-        permissions: list = Depends(get_descope_permissions),
+        permissions: DescopePermissions,
     ) -> None:
         if permission not in permissions:
             raise HTTPException(

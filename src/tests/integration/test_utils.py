@@ -1,11 +1,15 @@
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
+
+from py_identity_model.aio.http_client import _reset_async_http_client
+from py_identity_model.ssl_config import get_ssl_verify
+from py_identity_model.sync.http_client import _reset_http_client
 
 
-# Global variable to store the current env file path
-_current_env_file: str | None = None
+# JWT format: three dot-separated segments
+JWT_SEGMENT_SEPARATOR_COUNT = 2
 
 
 def set_env_file(env_file_path: str | None) -> None:
@@ -15,9 +19,6 @@ def set_env_file(env_file_path: str | None) -> None:
     Args:
         env_file_path: Path to the environment file, or None to use default
     """
-    global _current_env_file
-    _current_env_file = env_file_path
-
     if env_file_path and Path(env_file_path).is_file():
         # Load the specified env file only if it exists
         load_dotenv(env_file_path, override=True)
@@ -39,10 +40,6 @@ def set_env_file(env_file_path: str | None) -> None:
     # Clear all SSL and HTTP client caches to pick up environment changes.
     # This is safe in parallel execution because each worker has its own process
     # and environment, and this only runs once per session during fixture initialization.
-    from py_identity_model.aio.http_client import _reset_async_http_client
-    from py_identity_model.ssl_config import get_ssl_verify
-    from py_identity_model.sync.http_client import _reset_http_client
-
     get_ssl_verify.cache_clear()
     _reset_http_client()
     _reset_async_http_client()
@@ -50,7 +47,7 @@ def set_env_file(env_file_path: str | None) -> None:
 
 def _is_valid_jwt_format(token: str) -> bool:
     """Check if a string looks like a JWT (3 dot-separated segments)."""
-    return token.count(".") == 2 and all(
+    return token.count(".") == JWT_SEGMENT_SEPARATOR_COUNT and all(
         len(part) > 0 for part in token.split(".")
     )
 
@@ -71,8 +68,6 @@ def get_alternate_provider_expired_token() -> str | None:
         return None
 
     # Temporarily load .env.local to get the token without affecting current env
-    from dotenv import dotenv_values
-
     local_config = dotenv_values(env_local_path)
     token = local_config.get("TEST_EXPIRED_TOKEN")
     if token and not _is_valid_jwt_format(token):

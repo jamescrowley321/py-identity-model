@@ -7,6 +7,10 @@ from py_identity_model.aio.managed_client import AsyncHTTPClient
 from py_identity_model.sync.managed_client import HTTPClient
 
 
+# Custom timeout value for testing (seconds)
+CUSTOM_TIMEOUT = 60.0
+
+
 @pytest.mark.unit
 class TestHTTPClient:
     """Tests for the sync HTTPClient wrapper."""
@@ -51,8 +55,8 @@ class TestHTTPClient:
         raw.close()
 
     def test_custom_timeout(self):
-        client = HTTPClient(timeout=60.0)
-        assert client.client.timeout.connect == 60.0
+        client = HTTPClient(timeout=CUSTOM_TIMEOUT)
+        assert client.client.timeout.connect == CUSTOM_TIMEOUT
         client.close()
 
     def test_custom_verify_false(self):
@@ -137,8 +141,8 @@ class TestAsyncHTTPClient:
         await raw.aclose()
 
     def test_custom_timeout(self):
-        client = AsyncHTTPClient(timeout=60.0)
-        assert client.client.timeout.connect == 60.0
+        client = AsyncHTTPClient(timeout=CUSTOM_TIMEOUT)
+        assert client.client.timeout.connect == CUSTOM_TIMEOUT
 
     def test_custom_verify_false(self):
         client = AsyncHTTPClient(verify=False)

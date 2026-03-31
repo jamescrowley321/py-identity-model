@@ -6,9 +6,13 @@ an identity server and properly validates tokens.
 """
 
 import os
+import pathlib
+import sys
 import time
+import traceback
 
 import requests
+import urllib3
 
 from py_identity_model import (
     ClientCredentialsTokenRequest,
@@ -18,7 +22,14 @@ from py_identity_model import (
     get_userinfo,
     request_client_credentials_token,
 )
+from py_identity_model.core.discovery_policy import DiscoveryPolicy
 
+
+# HTTP status codes
+HTTP_OK = 200
+HTTP_UNAUTHORIZED = 401
+HTTP_FORBIDDEN = 403
+HTTP_INTERNAL_SERVER_ERROR = 500
 
 # Configuration from environment
 DISCOVERY_URL = os.getenv(
@@ -45,7 +56,7 @@ def _make_request(
 ) -> requests.Response:
     """Helper to make HTTP requests to the FastAPI service."""
     url = f"{FASTAPI_URL}{endpoint}"
-    return requests.request(method, url, headers=headers, **kwargs)
+    return requests.request(method, url, headers=headers, timeout=30, **kwargs)
 
 
 def _create_auth_headers(token: str) -> dict:
@@ -65,8 +76,6 @@ def get_access_token() -> tuple[str | None, str | None]:
         # Get discovery document using py-identity-model
         # Disable endpoint validation for Docker: the identity server's
         # internal hostname differs from the external discovery URL.
-        from py_identity_model.core.discovery_policy import DiscoveryPolicy
-
         policy = DiscoveryPolicy(validate_endpoints=False)
         disco_request = DiscoveryDocumentRequest(
             address=DISCOVERY_URL, policy=policy
@@ -123,7 +132,7 @@ def wait_for_service(url: str, max_attempts: int = 30) -> bool:
     for attempt in range(max_attempts):
         try:
             response = requests.get(url, timeout=5, verify=_get_ssl_verify())
-            if response.status_code < 500:
+            if response.status_code < HTTP_INTERNAL_SERVER_ERROR:
                 print(f"✅ Service available at {url}")
                 return True
         except requests.exceptions.RequestException as e:
@@ -143,7 +152,7 @@ def test_public_endpoints():
 
     # Test root endpoint
     response = _make_request("GET", "/")
-    assert response.status_code == 200, (
+    assert response.status_code == HTTP_OK, (
         f"Root endpoint failed: {response.text}"
     )
     data = response.json()
@@ -152,7 +161,7 @@ def test_public_endpoints():
 
     # Test health endpoint
     response = _make_request("GET", "/health")
-    assert response.status_code == 200, (
+    assert response.status_code == HTTP_OK, (
         f"Health endpoint failed: {response.text}"
     )
     data = response.json()
@@ -174,7 +183,7 @@ def test_protected_endpoints_without_token():
 
     for endpoint in protected_endpoints:
         response = _make_request("GET", endpoint)
-        assert response.status_code == 401, (
+        assert response.status_code == HTTP_UNAUTHORIZED, (
             f"Expected 401 for {endpoint} without token, got {response.status_code}"
         )
         print(f"✅ {endpoint} correctly rejects request without token")
@@ -186,7 +195,7 @@ def test_protected_endpoints_with_invalid_token():
 
     headers = {"Authorization": "Bearer invalid-token-123"}
     response = _make_request("GET", "/api/me", headers=headers)
-    assert response.status_code == 401, (
+    assert response.status_code == HTTP_UNAUTHORIZED, (
         f"Expected 401 for invalid token, got {response.status_code}"
     )
     print("✅ Protected endpoint correctly rejects invalid token")
@@ -200,7 +209,7 @@ def test_protected_endpoints_with_valid_token(token: str):
 
     # Test /api/me
     response = _make_request("GET", "/api/me", headers=headers)
-    assert response.status_code == 200, f"/api/me failed: {response.text}"
+    assert response.status_code == HTTP_OK, f"/api/me failed: {response.text}"
     data = response.json()
     assert data["authenticated"] is True, (
         f"Expected authenticated=True, got {data.get('authenticated')}"
@@ -212,7 +221,9 @@ def test_protected_endpoints_with_valid_token(token: str):
 
     # Test /api/claims
     response = _make_request("GET", "/api/claims", headers=headers)
-    assert response.status_code == 200, f"/api/claims failed: {response.text}"
+    assert response.status_code == HTTP_OK, (
+        f"/api/claims failed: {response.text}"
+    )
     data = response.json()
     assert "claims" in data
     assert "scope" in data["claims"] or "scp" in data["claims"]
@@ -220,7 +231,7 @@ def test_protected_endpoints_with_valid_token(token: str):
 
     # Test /api/token-info
     response = _make_request("GET", "/api/token-info", headers=headers)
-    assert response.status_code == 200, (
+    assert response.status_code == HTTP_OK, (
         f"/api/token-info failed: {response.text}"
     )
     data = response.json()
@@ -230,14 +241,18 @@ def test_protected_endpoints_with_valid_token(token: str):
 
     # Test /api/profile
     response = _make_request("GET", "/api/profile", headers=headers)
-    assert response.status_code == 200, f"/api/profile failed: {response.text}"
+    assert response.status_code == HTTP_OK, (
+        f"/api/profile failed: {response.text}"
+    )
     data = response.json()
     assert "user_id" in data
     print("✅ /api/profile works with valid token")
 
     # Test /api/data (requires scope)
     response = _make_request("GET", "/api/data", headers=headers)
-    assert response.status_code == 200, f"/api/data failed: {response.text}"
+    assert response.status_code == HTTP_OK, (
+        f"/api/data failed: {response.text}"
+    )
     data = response.json()
     assert "data" in data
     assert len(data["data"]) > 0
@@ -258,7 +273,9 @@ def test_scope_based_authorization(token: str):
         params={"name": "Test Item"},
     )
     # This should fail because the token doesn't have write scope
-    assert response.status_code == 403, "Expected 403 for missing write scope"
+    assert response.status_code == HTTP_FORBIDDEN, (
+        "Expected 403 for missing write scope"
+    )
     print("✅ Write endpoint correctly rejects token without write scope")
 
 
@@ -270,7 +287,7 @@ def test_admin_endpoints_without_role(token: str):
 
     # Test admin endpoints (should fail without admin role)
     response = _make_request("DELETE", "/api/admin/users/123", headers=headers)
-    assert response.status_code == 403, (
+    assert response.status_code == HTTP_FORBIDDEN, (
         f"Expected 403 for missing admin role, got {response.status_code}: {response.text}"
     )
     print(
@@ -278,7 +295,9 @@ def test_admin_endpoints_without_role(token: str):
     )
 
     response = _make_request("GET", "/api/admin/stats", headers=headers)
-    assert response.status_code == 403, "Expected 403 for missing admin role"
+    assert response.status_code == HTTP_FORBIDDEN, (
+        "Expected 403 for missing admin role"
+    )
     print("✅ Admin stats endpoint correctly rejects token without admin role")
 
 
@@ -334,16 +353,12 @@ def run_tests():
     # Check if CA bundle exists
     ca_bundle = os.getenv("REQUESTS_CA_BUNDLE")
     if ca_bundle:
-        import pathlib
-
         if pathlib.Path(ca_bundle).exists():
             print("  ✅ CA bundle file exists")
         else:
             print(f"  ⚠️  CA bundle file not found at {ca_bundle}")
 
     # Disable SSL warnings for local testing
-    import urllib3
-
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     # Wait for services to be ready
@@ -388,14 +403,10 @@ def run_tests():
             else "Unexpected error"
         )
         print(f"\n❌ {error_type}: {e}")
-        import traceback
-
         traceback.print_exc()
         return 1
 
 
 if __name__ == "__main__":
-    import sys
-
     exit_code = run_tests()
     sys.exit(exit_code)

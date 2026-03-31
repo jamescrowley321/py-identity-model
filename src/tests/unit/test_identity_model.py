@@ -8,6 +8,13 @@ from py_identity_model.identity import (
 )
 
 
+# Expected claim counts for test assertions
+AUTHENTICATED_IDENTITY_CLAIM_COUNT = 3
+PRINCIPAL_CLAIM_COUNT = 4
+ROLE_CLAIM_COUNT = 2
+PRINCIPAL_WITH_EXTRA_CLAIMS_COUNT = 3
+
+
 class TestClaim:
     def test_claim_creation_basic(self):
         """Test basic claim creation"""
@@ -40,7 +47,7 @@ class TestClaimsIdentity:
         assert identity.name == "John Doe"
         assert identity.authentication_type == "Bearer"
         assert identity.is_authenticated() is True
-        assert len(identity.claims) == 3
+        assert len(identity.claims) == AUTHENTICATED_IDENTITY_CLAIM_COUNT
 
     def test_claims_identity_unauthenticated(self):
         """Test unauthenticated ClaimsIdentity"""
@@ -65,7 +72,7 @@ class TestClaimsPrincipal:
 
         assert principal.identity is not None
         assert principal.identity.name == "Jane Smith"
-        assert len(principal.claims) == 4
+        assert len(principal.claims) == PRINCIPAL_CLAIM_COUNT
 
     def test_claims_principal_has_claim(self):
         """Test has_claim functionality"""
@@ -112,7 +119,7 @@ class TestClaimsPrincipal:
         assert name_claim.value == "Jane Smith"
 
         role_claims = principal.find_all(ClaimType.Role.value)
-        assert len(role_claims) == 2
+        assert len(role_claims) == ROLE_CLAIM_COUNT
         role_values = [claim.value for claim in role_claims]
         assert "Admin" in role_values
         assert "User" in role_values
@@ -130,6 +137,6 @@ class TestClaimsPrincipal:
 
         principal = ClaimsPrincipal(identity, extra_claims)
 
-        assert len(principal.claims) == 3
+        assert len(principal.claims) == PRINCIPAL_WITH_EXTRA_CLAIMS_COUNT
         assert principal.has_claim(ClaimType.Country.value) is True
         assert principal.is_in_role("Manager") is True

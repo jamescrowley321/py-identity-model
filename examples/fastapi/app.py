@@ -9,6 +9,7 @@ This example shows how to use py-identity-model with FastAPI to:
 """
 
 import os
+from typing import Annotated
 
 import urllib3
 import uvicorn
@@ -51,15 +52,17 @@ if os.getenv("DISABLE_SSL_VERIFICATION", "false").lower() == "true":
     requests.post = patched_post
 
 from dependencies import (
-    get_claims,
-    get_current_user,
+    Claims,
+    CurrentUser,
     get_token,
     require_claim,
     require_scope,
 )
 from middleware import TokenValidationMiddleware
 
-from py_identity_model.identity import ClaimsPrincipal
+
+# Annotated type alias for raw token dependency
+Token = Annotated[str, Depends(get_token)]
 
 
 DISCOVERY_URL = os.getenv(
@@ -104,7 +107,7 @@ async def health():
 # Protected routes (authentication required)
 @app.get("/api/me", tags=["protected"])
 async def get_current_user_info(
-    user: ClaimsPrincipal = Depends(get_current_user),
+    user: CurrentUser,
 ):
     """
     Get information about the currently authenticated user.
@@ -123,7 +126,7 @@ async def get_current_user_info(
 
 
 @app.get("/api/claims", tags=["protected"])
-async def get_user_claims(claims: dict = Depends(get_claims)):
+async def get_user_claims(claims: Claims):
     """
     Get all claims from the authenticated user's token.
 
@@ -133,7 +136,7 @@ async def get_user_claims(claims: dict = Depends(get_claims)):
 
 
 @app.get("/api/token-info", tags=["protected"])
-async def get_token_info(token: str = Depends(get_token)):
+async def get_token_info(token: Token):
     """
     Get information about the current access token.
 
@@ -148,7 +151,7 @@ async def get_token_info(token: str = Depends(get_token)):
 # Routes using specific claim extraction
 @app.get("/api/profile", tags=["protected"])
 async def get_profile(
-    user: ClaimsPrincipal = Depends(get_current_user),
+    user: CurrentUser,
 ):
     """
     Get the user's profile information from specific claims.
@@ -254,7 +257,7 @@ async def get_admin_stats():
 
 # Error handlers
 @app.exception_handler(HTTPException)
-async def http_exception_handler(request, exc):
+async def http_exception_handler(_request, exc):
     """Custom error handler for HTTP exceptions."""
     return JSONResponse(
         status_code=exc.status_code,
@@ -277,4 +280,4 @@ if __name__ == "__main__":
         '   curl -H "Authorization: Bearer <token>" http://localhost:8000/api/me',
     )
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=os.environ.get("HOST", "127.0.0.1"), port=8000)

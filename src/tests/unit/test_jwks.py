@@ -19,6 +19,10 @@ from py_identity_model.jwks import (
 )
 
 
+# Expected JWKS key count
+EXPECTED_KEY_COUNT = 2
+
+
 class TestJwksRequest:
     def test_jwks_request_creation(self):
         address = "https://example.com/jwks"
@@ -570,7 +574,7 @@ class TestGetJwks:
 
         assert result.is_successful is True
         assert result.keys is not None
-        assert len(result.keys) == 2
+        assert len(result.keys) == EXPECTED_KEY_COUNT
         assert result.keys[0].kty == "RSA"
         assert result.keys[0].kid == "key1"
         assert result.keys[1].kty == "EC"

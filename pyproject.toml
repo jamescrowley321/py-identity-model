@@ -140,34 +140,17 @@ select = [
     "RUF", # ruff-specific rules
 ]
 ignore = [
-    "E501",      # line too long (handled by formatter)
-    "COM812",    # trailing comma missing (conflicts with formatter)
-    "ISC001",    # implicit string concatenation (conflicts with formatter)
+    # Formatter conflicts — these rules contradict ruff format output
+    "E501",      # line too long
+    "COM812",    # trailing comma missing
+    "ISC001",    # implicit string concatenation
+    # OIDC protocol naming — *_token, *_secret, *_password are RFC field names
     "S101",      # use of assert (needed for tests)
-    "S104",      # possible binding to all interfaces
-    "S105",      # possible hardcoded password
-    "S106",      # possible hardcoded password
-    "S107",      # possible hardcoded password in function default
-    "S113",      # probable use of requests call without timeout
-    "B008",      # function calls in argument defaults (FastAPI pattern)
-    "PLR0911",   # too many return statements
-    "PLR0913",   # too many arguments
-    "PLR2004",   # magic value used in comparison
-    "PLC0415",   # import should be at top-level (some are intentional)
-    "ARG001",    # unused function argument (e.g., FastAPI Request)
-    "RUF003",    # ambiguous unicode character in comment
-    "PERF401",   # use list comprehension (less readable in some cases)
-    "PERF403",   # use dict comprehension (less readable in some cases)
-    "RET504",    # unnecessary assignment before return (improves readability)
-    "A001",      # variable shadowing builtin (format is acceptable)
-    "A002",      # argument shadowing builtin (format is acceptable)
-    "PIE796",    # enum duplicate values (intentional for constants)
-    "PT011",     # pytest.raises too broad (acceptable for integration tests)
-    "DTZ005",    # datetime without timezone (acceptable for benchmarks)
-    "PLW0603",   # global statement (acceptable for test fixtures)
-    "PTH113",    # use pathlib (os.path is acceptable)
-    "PLR1722",   # use sys.exit (exit is acceptable)
-    "RUF043",    # regex metacharacters (not actual regex patterns)
+    "S105",      # possible hardcoded password assigned to variable (OIDC field names)
+    "S106",      # possible hardcoded password assigned to argument (OIDC field names)
+    "S107",      # possible hardcoded password in function default (OIDC field names)
+    # Spec-sourced content that cannot be changed
+    "RUF003",    # ambiguous unicode character (OIDC spec comments with non-breaking hyphens)
 ]
 
 [tool.ruff.lint.isort]

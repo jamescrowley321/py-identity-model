@@ -5,6 +5,7 @@ import pytest
 import respx
 
 from py_identity_model import (
+    BaseResponse,
     TokenIntrospectionRequest,
     TokenIntrospectionResponse,
 )
@@ -145,8 +146,6 @@ class TestAsyncIntrospection:
         assert "Connection refused" in response.error
 
     async def test_response_inherits_base(self):
-        from py_identity_model import BaseResponse
-
         resp = TokenIntrospectionResponse(is_successful=True, claims={})
         assert isinstance(resp, BaseResponse)
 

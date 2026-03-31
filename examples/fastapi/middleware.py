@@ -24,6 +24,10 @@ from py_identity_model import (
 from py_identity_model.aio import validate_token
 
 
+# Expected number of parts in "Bearer <token>" authorization header
+_BEARER_HEADER_PART_COUNT = 2
+
+
 class TokenValidationMiddleware(BaseHTTPMiddleware):
     """
     Middleware for validating Bearer tokens on incoming requests.
@@ -76,7 +80,10 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
 
         # Parse Bearer token
         parts = authorization.split()
-        if len(parts) != 2 or parts[0].lower() != "bearer":
+        if (
+            len(parts) != _BEARER_HEADER_PART_COUNT
+            or parts[0].lower() != "bearer"
+        ):
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={

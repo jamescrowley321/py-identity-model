@@ -7,6 +7,7 @@ Includes:
 """
 
 from contextlib import suppress
+from dataclasses import dataclass
 import secrets
 from types import MappingProxyType
 from urllib.parse import urlencode, urlparse
@@ -33,15 +34,26 @@ from py_identity_model import (
     request_client_credentials_token,
     validate_authorize_callback_state,
 )
+from py_identity_model.core.discovery_policy import DiscoveryPolicy
 from py_identity_model.core.models import DiscoveryDocumentResponse
 from py_identity_model.core.parsers import (
     extract_kid_from_jwt,
     find_key_by_kid,
 )
 from py_identity_model.core.pkce import generate_pkce_pair
+from py_identity_model.exceptions import TokenValidationException
 from py_identity_model.sync.http_client import close_http_client
 
 from .test_utils import get_config
+
+
+# HTTP status codes
+HTTP_OK = 200
+HTTP_BAD_REQUEST = 400
+HTTP_TOO_MANY_REQUESTS = 429
+
+# JWT format: three dot-separated segments
+JWT_SEGMENT_SEPARATOR_COUNT = 2
 
 
 # ============================================================================
@@ -77,10 +89,6 @@ def discovery_document(test_config):
 
     @retry_with_backoff()
     def fetch_discovery():
-        from py_identity_model.core.discovery_policy import (
-            DiscoveryPolicy,
-        )
-
         require_https = test_config.get("TEST_REQUIRE_HTTPS", True)
         policy = DiscoveryPolicy(require_https=require_https)
         disco_doc_req = DiscoveryDocumentRequest(
@@ -118,7 +126,7 @@ def raw_discovery(test_config):
     @retry_with_backoff()
     def fetch_raw():
         resp = httpx.get(address, timeout=10.0)
-        if resp.status_code == 429:
+        if resp.status_code == HTTP_TOO_MANY_REQUESTS:
             raise httpx.HTTPStatusError(
                 RATE_LIMIT_ERROR_MESSAGE,
                 request=resp.request,
@@ -130,7 +138,7 @@ def raw_discovery(test_config):
         resp = fetch_raw()
     except httpx.TransportError as exc:
         pytest.fail(f"raw_discovery: cannot reach {address}: {exc}")
-    if resp.status_code != 200:
+    if resp.status_code != HTTP_OK:
         pytest.fail(f"raw_discovery: HTTP {resp.status_code} from {address}")
     try:
         return resp.json()
@@ -296,7 +304,7 @@ def jwt_access_token(client_credentials_token, test_config, token_endpoint):
     # Check if standard token is already JWT
     token = client_credentials_token.token
     access_token = token.get("access_token", "")
-    if access_token.count(".") == 2:
+    if access_token.count(".") == JWT_SEGMENT_SEPARATOR_COUNT:
         return token
 
     # Fallback: request with resource param to force JWT format
@@ -315,7 +323,7 @@ def jwt_access_token(client_credentials_token, test_config, token_endpoint):
             ),
             timeout=10.0,
         )
-        if r.status_code == 429:
+        if r.status_code == HTTP_TOO_MANY_REQUESTS:
             raise httpx.HTTPStatusError(
                 RATE_LIMIT_ERROR_MESSAGE,
                 request=r.request,
@@ -324,9 +332,12 @@ def jwt_access_token(client_credentials_token, test_config, token_endpoint):
         return r
 
     resp = fetch_jwt_with_resource()
-    if resp.status_code == 200:
+    if resp.status_code == HTTP_OK:
         data = resp.json()
-        if data.get("access_token", "").count(".") == 2:
+        if (
+            data.get("access_token", "").count(".")
+            == JWT_SEGMENT_SEPARATOR_COUNT
+        ):
             return data
 
     pytest.skip("Provider does not return JWT-format access tokens")
@@ -335,8 +346,6 @@ def jwt_access_token(client_credentials_token, test_config, token_endpoint):
 @pytest.fixture(scope="session")
 def jwt_signing_key(jwks_response, jwt_access_token):
     """Extract the signing key and algorithm for a JWT from JWKS."""
-    from py_identity_model.exceptions import TokenValidationException
-
     jwt_token = jwt_access_token["access_token"]
     kid = extract_kid_from_jwt(jwt_token)
     try:
@@ -442,25 +451,37 @@ def _follow_redirects_counted(
     return None, resp
 
 
+@dataclass(frozen=True)
+class AuthCodeFlowConfig:
+    """Optional configuration for :func:`perform_auth_code_flow`."""
+
+    client_secret: str | None = None
+    scope: str = "openid profile email offline_access"
+    resource: str | None = None
+    login_hint: str = "test-user"
+    login_password: str = "test"
+
+
 def perform_auth_code_flow(
     discovery: DiscoveryDocumentResponse,
     client_id: str,
     redirect_uri: str,
-    client_secret: str | None = None,
-    scope: str = "openid profile email offline_access",
-    resource: str | None = None,
-    login_hint: str = "test-user",
-    login_password: str = "test",
+    config: AuthCodeFlowConfig | None = None,
 ) -> MappingProxyType:
     """Perform a full auth code + PKCE flow using devInteractions.
 
     Args:
-        login_hint: Username for devInteractions login form.
-        login_password: Password for devInteractions login form.
+        discovery: Discovery document response.
+        client_id: OAuth client identifier.
+        redirect_uri: Registered redirect URI.
+        config: Optional flow configuration (scope, credentials, etc.).
+            Defaults to ``AuthCodeFlowConfig()`` when ``None``.
 
     Returns dict with token_response, state, callback,
     state_result, code_verifier.
     """
+    if config is None:
+        config = AuthCodeFlowConfig()
     code_verifier, code_challenge = generate_pkce_pair()
     state = secrets.token_urlsafe(32)
 
@@ -472,13 +493,13 @@ def perform_auth_code_flow(
         "client_id": client_id,
         "redirect_uri": redirect_uri,
         "response_type": "code",
-        "scope": scope,
+        "scope": config.scope,
         "state": state,
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
     }
-    if resource:
-        auth_params["resource"] = resource
+    if config.resource:
+        auth_params["resource"] = config.resource
 
     auth_url = f"{discovery.authorization_endpoint}?{urlencode(auth_params)}"
 
@@ -498,7 +519,7 @@ def perform_auth_code_flow(
                 pytest.fail(f"Too many redirects (>{MAX_REDIRECTS})")
             resp = client.get(location)
 
-        if resp.status_code >= 400:
+        if resp.status_code >= HTTP_BAD_REQUEST:
             pytest.fail(
                 f"Auth request failed: {resp.status_code} at {resp.url}"
             )
@@ -508,8 +529,8 @@ def perform_auth_code_flow(
             interaction_url,
             data={
                 "prompt": "login",
-                "login": login_hint,
-                "password": login_password,
+                "login": config.login_hint,
+                "password": config.login_password,
             },
         )
 
@@ -547,7 +568,7 @@ def perform_auth_code_flow(
         code=callback.code,
         redirect_uri=redirect_uri,
         code_verifier=code_verifier,
-        client_secret=client_secret,
+        client_secret=config.client_secret,
     )
     token_response = request_authorization_code_token(token_request)
 
@@ -590,9 +611,11 @@ def auth_code_result(provider_capabilities, discovery_document, test_config):
         discovery=discovery_document,
         client_id=client_id,
         redirect_uri=redirect_uri,
-        client_secret=client_secret,
-        scope="openid profile email offline_access",
-        resource="urn:test:api",
+        config=AuthCodeFlowConfig(
+            client_secret=client_secret,
+            scope="openid profile email offline_access",
+            resource="urn:test:api",
+        ),
     )
 
 
@@ -625,6 +648,8 @@ def public_auth_code_result(
         discovery=discovery_document,
         client_id=client_id,
         redirect_uri=redirect_uri,
-        scope="openid profile email offline_access",
-        resource="urn:test:api",
+        config=AuthCodeFlowConfig(
+            scope="openid profile email offline_access",
+            resource="urn:test:api",
+        ),
     )

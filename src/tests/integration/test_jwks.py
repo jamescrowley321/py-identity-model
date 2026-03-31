@@ -1,3 +1,5 @@
+import pytest
+
 from py_identity_model import JwksRequest, get_jwks
 
 
@@ -24,7 +26,8 @@ def test_get_jwks_is_successful(jwks_response):
             assert key.x5c
 
 
-def test_get_jwks_fails(env_file):
+@pytest.mark.usefixtures("_env_file")
+def test_get_jwks_fails():
     jwks_request = JwksRequest(address="https://google.com")
     jwks_response = get_jwks(jwks_request)
     assert jwks_response.is_successful is False

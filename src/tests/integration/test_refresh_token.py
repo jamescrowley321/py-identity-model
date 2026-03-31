@@ -5,7 +5,7 @@ import pytest
 from py_identity_model import BaseRequest, RefreshTokenRequest
 from py_identity_model.sync.token_client import refresh_token
 
-from .conftest import perform_auth_code_flow
+from .conftest import AuthCodeFlowConfig, perform_auth_code_flow
 
 
 @pytest.mark.integration
@@ -58,8 +58,10 @@ class TestLiveRefreshToken:
             discovery=discovery_document,
             client_id=test_config["TEST_AUTH_CODE_CLIENT_ID"],
             redirect_uri=test_config["TEST_AUTH_CODE_REDIRECT_URI"],
-            client_secret=test_config.get("TEST_AUTH_CODE_CLIENT_SECRET"),
-            scope="openid profile email offline_access",
+            config=AuthCodeFlowConfig(
+                client_secret=test_config.get("TEST_AUTH_CODE_CLIENT_SECRET"),
+                scope="openid profile email offline_access",
+            ),
         )
         token_response = result["token_response"]
         assert token_response.is_successful, (

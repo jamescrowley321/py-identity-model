@@ -1,5 +1,12 @@
 import pytest
 
+from py_identity_model.aio.http_client import _reset_async_http_client
+from py_identity_model.aio.token_validation import (
+    _get_disco_response,
+    _get_jwks_response,
+    _get_public_key_by_kid,
+)
+
 
 def pytest_addoption(parser):
     """Add command line options for test configuration."""
@@ -35,7 +42,7 @@ def env_file(request) -> str | None:
     return getattr(request.config, "_env_file", None)
 
 
-def pytest_collection_modifyitems(config, items):
+def pytest_collection_modifyitems(config, items):  # noqa: ARG001  # pytest hook spec requires `config` parameter name
     """Automatically mark tests based on their location."""
     for item in items:
         # Get the path relative to the tests directory
@@ -65,12 +72,6 @@ def _clear_async_caches():
     stale caches from a previous loop cause RuntimeError. Clearing
     them and resetting the loop binding before each test prevents this.
     """
-    from py_identity_model.aio.token_validation import (
-        _get_disco_response,
-        _get_jwks_response,
-        _get_public_key_by_kid,
-    )
-
     for cache_fn in (
         _get_disco_response,
         _get_jwks_response,
@@ -84,6 +85,4 @@ def _clear_async_caches():
 
     # Reset the singleton async HTTP client so it gets recreated
     # on the new event loop
-    from py_identity_model.aio.http_client import _reset_async_http_client
-
     _reset_async_http_client()

@@ -12,6 +12,7 @@ This is useful for:
 
 import asyncio
 import os
+import time
 
 # Import both sync and async versions
 from py_identity_model import (
@@ -232,8 +233,6 @@ async def concurrent_async_example():
     ]
 
     # Execute all requests concurrently
-    import time
-
     start = time.time()
     responses = await asyncio.gather(
         *[async_request_token(req) for req in token_requests]
@@ -336,8 +335,7 @@ def mixed_app_example():
             access_token = token_response.token["access_token"]
 
             async def test_endpoint():
-                result = await app.api_endpoint(access_token)
-                return result
+                return await app.api_endpoint(access_token)
 
             result = asyncio.run(test_endpoint())
             print(f"\n[Result] {result['status']}")

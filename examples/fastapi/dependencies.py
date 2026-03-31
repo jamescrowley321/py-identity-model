@@ -6,6 +6,7 @@ validated token information and user claims.
 """
 
 from collections.abc import Callable
+from typing import Annotated
 
 from fastapi import (  # type: ignore[attr-defined]
     Depends,
@@ -115,6 +116,11 @@ def get_token(request: Request) -> str:
     return request.state.token
 
 
+# Annotated type aliases for FastAPI dependency injection (avoids B008)
+CurrentUser = Annotated[ClaimsPrincipal, Depends(get_current_user)]
+Claims = Annotated[dict, Depends(get_claims)]
+
+
 def get_claim_value(claim_type: str) -> Callable[..., str | None]:
     """
     Factory function to create a dependency that extracts a specific claim value.
@@ -138,7 +144,7 @@ def get_claim_value(claim_type: str) -> Callable[..., str | None]:
     """
 
     def _get_claim(
-        user: ClaimsPrincipal = Depends(get_current_user),
+        user: CurrentUser,
     ) -> str | None:
         if user.identity is None:
             return None
@@ -175,7 +181,7 @@ def get_claim_values(claim_type: str) -> Callable[..., list[str]]:
     """
 
     def _get_claims(
-        user: ClaimsPrincipal = Depends(get_current_user),
+        user: CurrentUser,
     ) -> list[str]:
         if user.identity is None:
             return []
@@ -218,7 +224,7 @@ def require_claim(
     """
 
     def _check_claim(
-        user: ClaimsPrincipal = Depends(get_current_user),
+        user: CurrentUser,
     ) -> None:
         if not user.has_claim(claim_type, claim_value):
             if claim_value is None:
@@ -258,7 +264,7 @@ def require_scope(scope: str) -> Callable[..., None]:
         ```
     """
 
-    def _check_scope(claims: dict = Depends(get_claims)) -> None:
+    def _check_scope(claims: Claims) -> None:
         # Scopes can be in 'scope' (space-separated string) or 'scp' (array)
         scope_claim = claims.get("scope") or claims.get("scp")
 

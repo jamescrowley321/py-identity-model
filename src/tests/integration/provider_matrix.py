@@ -18,6 +18,10 @@ from dotenv import dotenv_values
 import httpx
 
 
+# HTTP status codes
+HTTP_OK = 200
+
+
 # ============================================================================
 # Capability definitions
 # ============================================================================
@@ -95,7 +99,7 @@ def fetch_discovery(address: str) -> dict | None:
     """Fetch raw discovery JSON. Returns None if unreachable."""
     try:
         resp = httpx.get(address, timeout=10.0)
-        if resp.status_code == 200:
+        if resp.status_code == HTTP_OK:
             return resp.json()
     except (httpx.TransportError, ValueError):
         pass

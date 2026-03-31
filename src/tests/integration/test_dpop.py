@@ -11,6 +11,10 @@ from py_identity_model.core.dpop import (
 )
 
 
+# Minimum expected length for a Base64url SHA-256 JWK thumbprint
+MIN_JKT_LENGTH = 20
+
+
 @pytest.mark.integration
 class TestDPoPIntegration:
     def test_full_token_request_flow(self):
@@ -46,4 +50,4 @@ class TestDPoPIntegration:
         """Generate dpop_jkt parameter for authorization URL."""
         key = generate_dpop_key()
         jkt = key.jwk_thumbprint
-        assert len(jkt) > 20  # Base64url SHA-256 hash
+        assert len(jkt) > MIN_JKT_LENGTH  # Base64url SHA-256 hash

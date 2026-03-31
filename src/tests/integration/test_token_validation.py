@@ -21,6 +21,10 @@ from py_identity_model.sync.token_validation import (
 from .test_utils import _is_valid_jwt_format
 
 
+# JWT format: three dot-separated segments
+JWT_SEGMENT_SEPARATOR_COUNT = 2
+
+
 # Token validation options - only override defaults where needed
 DEFAULT_OPTIONS = {
     "verify_aud": False,  # Audience validation disabled for these tests
@@ -169,7 +173,7 @@ def test_claim_validation_function_succeeds(
     """Test claim validation success using cached fixtures."""
     assert client_credentials_token.token is not None
 
-    def validate_claims(token: dict):
+    def validate_claims(_token: dict):
         # Do some token validation here
         # and raise an exception if the validation fails
         pass
@@ -283,7 +287,7 @@ class TestManualKeyValidation:
         token_response = auth_code_result["token_response"]
         access_token = token_response.token["access_token"]
 
-        assert access_token.count(".") == 2, (
+        assert access_token.count(".") == JWT_SEGMENT_SEPARATOR_COUNT, (
             "Expected JWT but got opaque token"
         )
 
@@ -306,7 +310,7 @@ def test_claim_validation_function_fails(
     """Test claim validation failure using cached fixtures."""
     assert client_credentials_token.token is not None
 
-    def validate_claims(token: dict):
+    def validate_claims(_token: dict):
         raise PyIdentityModelException("Validation failed!")
 
     validation_config = TokenValidationConfig(

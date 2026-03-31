@@ -10,6 +10,11 @@ from __future__ import annotations
 from typing import Any
 
 
+# Thresholds for redacting sensitive string values
+_REDACTION_LENGTH_THRESHOLD = 100
+_MIN_TOKEN_DISPLAY_LENGTH = 20
+
+
 def redact_sensitive(data: dict[str, Any]) -> dict[str, Any]:
     """
     Redact sensitive information from a dictionary for safe logging.
@@ -43,9 +48,14 @@ def redact_sensitive(data: dict[str, Any]) -> dict[str, Any]:
         key_lower = key.lower().replace("-", "_")
         if key_lower in sensitive_keys:
             redacted[key] = "***REDACTED***"
-        elif isinstance(redacted[key], str) and len(redacted[key]) > 100:
+        elif (
+            isinstance(redacted[key], str)
+            and len(redacted[key]) > _REDACTION_LENGTH_THRESHOLD
+        ):
             # Likely a token or long sensitive string - truncate and redact
-            redacted[key] = redacted[key][:20] + "...***REDACTED***"
+            redacted[key] = (
+                redacted[key][:_MIN_TOKEN_DISPLAY_LENGTH] + "...***REDACTED***"
+            )
 
     return redacted
 
@@ -64,7 +74,7 @@ def redact_token(token: str) -> str:
         >>> redact_token("eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...")
         'eyJh...VCJ9'
     """
-    if len(token) < 20:
+    if len(token) < _MIN_TOKEN_DISPLAY_LENGTH:
         return "***REDACTED***"
     return f"{token[:4]}...{token[-4:]}"
 

@@ -5,10 +5,30 @@ import pytest
 from py_identity_model import (
     FAPI2_ALLOWED_AUTH_METHODS,
     FAPI2_ALLOWED_SIGNING_ALGORITHMS,
+    FAPI2_REQUIRED_PKCE_METHOD,
+    FAPI2_REQUIRED_RESPONSE_TYPE,
     FAPIValidationResult,
     validate_fapi_authorization_request,
     validate_fapi_client_config,
     validate_fapi_discovery,
+)
+from py_identity_model.aio import (
+    FAPI2_ALLOWED_AUTH_METHODS as AIO_FAPI2_ALLOWED_AUTH_METHODS,
+)
+from py_identity_model.aio import (
+    FAPI2_ALLOWED_SIGNING_ALGORITHMS as AIO_FAPI2_ALLOWED_SIGNING_ALGORITHMS,
+)
+from py_identity_model.aio import (
+    FAPIValidationResult as AioFAPIValidationResult,
+)
+from py_identity_model.aio import (
+    validate_fapi_authorization_request as aio_validate_fapi_authorization_request,
+)
+from py_identity_model.aio import (
+    validate_fapi_client_config as aio_validate_fapi_client_config,
+)
+from py_identity_model.aio import (
+    validate_fapi_discovery as aio_validate_fapi_discovery,
 )
 from py_identity_model.core.models import DiscoveryDocumentResponse
 
@@ -65,15 +85,6 @@ class TestFAPIIntegration:
         assert result.is_compliant is True
 
     def test_top_level_import(self):
-        from py_identity_model import (
-            FAPI2_REQUIRED_PKCE_METHOD,
-            FAPI2_REQUIRED_RESPONSE_TYPE,
-            FAPIValidationResult,
-            validate_fapi_authorization_request,
-            validate_fapi_client_config,
-            validate_fapi_discovery,
-        )
-
         assert callable(validate_fapi_authorization_request)
         assert callable(validate_fapi_client_config)
         assert callable(validate_fapi_discovery)
@@ -84,18 +95,9 @@ class TestFAPIIntegration:
         assert FAPI2_REQUIRED_RESPONSE_TYPE is not None
 
     def test_aio_import(self):
-        from py_identity_model.aio import (
-            FAPI2_ALLOWED_AUTH_METHODS,
-            FAPI2_ALLOWED_SIGNING_ALGORITHMS,
-            FAPIValidationResult,
-            validate_fapi_authorization_request,
-            validate_fapi_client_config,
-            validate_fapi_discovery,
-        )
-
-        assert callable(validate_fapi_authorization_request)
-        assert callable(validate_fapi_client_config)
-        assert callable(validate_fapi_discovery)
-        assert FAPIValidationResult is not None
-        assert FAPI2_ALLOWED_AUTH_METHODS is not None
-        assert FAPI2_ALLOWED_SIGNING_ALGORITHMS is not None
+        assert callable(aio_validate_fapi_authorization_request)
+        assert callable(aio_validate_fapi_client_config)
+        assert callable(aio_validate_fapi_discovery)
+        assert AioFAPIValidationResult is not None
+        assert AIO_FAPI2_ALLOWED_AUTH_METHODS is not None
+        assert AIO_FAPI2_ALLOWED_SIGNING_ALGORITHMS is not None
