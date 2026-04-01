@@ -37,13 +37,6 @@ from .test_utils import (
 MIN_EXPECTED_CACHE_HITS = 2
 
 
-# Token validation options - only override defaults where needed
-DEFAULT_OPTIONS = {
-    "verify_aud": False,
-    "require_aud": False,
-}
-
-
 @pytest.fixture
 def clear_validation_caches():
     """Clear all token validation caches before and after test."""
@@ -58,12 +51,12 @@ def clear_validation_caches():
 
 
 @pytest.fixture
-def validation_config(test_config, require_https):
+def validation_config(test_config, require_https, default_validation_options):
     """Create standard validation config for tests."""
     return TokenValidationConfig(
         perform_disco=True,
         audience=test_config["TEST_AUDIENCE"],
-        options=DEFAULT_OPTIONS,
+        options=default_validation_options,
         require_https=require_https,
     )
 
@@ -175,7 +168,9 @@ class TestCacheIsolationBetweenProviders:
             f"Expected kid/key mismatch error, got: {exc_info.value}"
         )
 
-    def test_expired_token_from_same_provider_fails(self, test_config, require_https):
+    def test_expired_token_from_same_provider_fails(
+        self, test_config, require_https, default_validation_options
+    ):
         """
         Test that an expired token from the same provider fails with
         the correct error (expiration, not cache issues).
@@ -188,7 +183,7 @@ class TestCacheIsolationBetweenProviders:
 
         # Descope session tokens use a different issuer format than OIDC discovery.
         # Disable issuer verification so we test expiration, not issuer mismatch.
-        expired_options = {**DEFAULT_OPTIONS, "verify_iss": False}
+        expired_options = {**default_validation_options, "verify_iss": False}
         validation_config = TokenValidationConfig(
             perform_disco=True,
             options=expired_options,

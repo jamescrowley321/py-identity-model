@@ -25,14 +25,9 @@ from .test_utils import _is_valid_jwt_format
 JWT_SEGMENT_SEPARATOR_COUNT = 2
 
 
-# Token validation options - only override defaults where needed
-DEFAULT_OPTIONS = {
-    "verify_aud": False,  # Audience validation disabled for these tests
-    "require_aud": False,
-}
-
-
-def test_token_validation_expired_token(test_config, require_https):
+def test_token_validation_expired_token(
+    test_config, require_https, default_validation_options
+):
     """Test expired token validation using cached config."""
     expired_token = test_config.get("TEST_EXPIRED_TOKEN", "")
     if not expired_token or not _is_valid_jwt_format(expired_token):
@@ -41,7 +36,7 @@ def test_token_validation_expired_token(test_config, require_https):
     # Descope session tokens use issuer format https://api.descope.com/v1/apps/{id}
     # which differs from the OIDC discovery issuer https://api.descope.com/{id}.
     # Disable issuer verification so we test expiration, not issuer mismatch.
-    expired_options = {**DEFAULT_OPTIONS, "verify_iss": False}
+    expired_options = {**default_validation_options, "verify_iss": False}
 
     with pytest.raises(TokenExpiredException):
         validate_token(
@@ -56,7 +51,7 @@ def test_token_validation_expired_token(test_config, require_https):
 
 
 def test_token_validation_succeeds(
-    test_config, client_credentials_token, require_https
+    test_config, client_credentials_token, require_https, default_validation_options
 ):
     """Test token validation using cached fixtures."""
     assert client_credentials_token.token is not None
@@ -64,7 +59,7 @@ def test_token_validation_succeeds(
     validation_config = TokenValidationConfig(
         perform_disco=True,
         audience=test_config["TEST_AUDIENCE"],
-        options=DEFAULT_OPTIONS,
+        options=default_validation_options,
         require_https=require_https,
     )
 
@@ -80,7 +75,7 @@ def test_token_validation_succeeds(
 
 
 def test_token_validation_with_invalid_config_throws_exception(
-    test_config, client_credentials_token, require_https
+    test_config, client_credentials_token, require_https, default_validation_options
 ):
     """Test invalid config using cached fixtures."""
     assert client_credentials_token.token is not None
@@ -88,7 +83,7 @@ def test_token_validation_with_invalid_config_throws_exception(
     validation_config = TokenValidationConfig(
         perform_disco=False,
         audience=test_config["TEST_AUDIENCE"],
-        options=DEFAULT_OPTIONS,
+        options=default_validation_options,
         require_https=require_https,
     )
 
@@ -100,14 +95,16 @@ def test_token_validation_with_invalid_config_throws_exception(
         )
 
 
-def test_cache_succeeds(test_config, client_credentials_token, require_https):
+def test_cache_succeeds(
+    test_config, client_credentials_token, require_https, default_validation_options
+):
     """Test caching using cached fixtures."""
     assert client_credentials_token.token is not None
 
     validation_config = TokenValidationConfig(
         perform_disco=True,
         audience=test_config["TEST_AUDIENCE"],
-        options=DEFAULT_OPTIONS,
+        options=default_validation_options,
         require_https=require_https,
     )
 
@@ -121,21 +118,23 @@ def test_cache_succeeds(test_config, client_credentials_token, require_https):
     cache_info = _get_disco_response.cache_info()
     print(cache_info)
     assert cache_info
-    assert cache_info[0] > 0
+    assert cache_info.hits > 0
 
     cache_info = _get_jwks_response.cache_info()
     print(cache_info)
     assert cache_info
-    assert cache_info[0] > 0
+    assert cache_info.hits > 0
 
 
-def test_benchmark_validation(test_config, client_credentials_token, require_https):
+def test_benchmark_validation(
+    test_config, client_credentials_token, require_https, default_validation_options
+):
     """Test benchmark using cached fixtures."""
     assert client_credentials_token.token is not None
     validation_config = TokenValidationConfig(
         perform_disco=True,
         audience=test_config["TEST_AUDIENCE"],
-        options=DEFAULT_OPTIONS,
+        options=default_validation_options,
         require_https=require_https,
     )
 
@@ -166,7 +165,7 @@ def test_benchmark_validation(test_config, client_credentials_token, require_htt
 
 
 def test_claim_validation_function_succeeds(
-    test_config, client_credentials_token, require_https
+    test_config, client_credentials_token, require_https, default_validation_options
 ):
     """Test claim validation success using cached fixtures."""
     assert client_credentials_token.token is not None
@@ -179,7 +178,7 @@ def test_claim_validation_function_succeeds(
     validation_config = TokenValidationConfig(
         perform_disco=True,
         audience=test_config["TEST_AUDIENCE"],
-        options=DEFAULT_OPTIONS,
+        options=default_validation_options,
         claims_validator=validate_claims,
         require_https=require_https,
     )
@@ -299,7 +298,7 @@ class TestManualKeyValidation:
 
 
 def test_claim_validation_function_fails(
-    test_config, client_credentials_token, require_https
+    test_config, client_credentials_token, require_https, default_validation_options
 ):
     """Test claim validation failure using cached fixtures."""
     assert client_credentials_token.token is not None
@@ -310,7 +309,7 @@ def test_claim_validation_function_fails(
     validation_config = TokenValidationConfig(
         perform_disco=True,
         audience=test_config["TEST_AUDIENCE"],
-        options=DEFAULT_OPTIONS,
+        options=default_validation_options,
         claims_validator=validate_claims,
         require_https=require_https,
     )

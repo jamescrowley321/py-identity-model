@@ -12,13 +12,6 @@ from py_identity_model.core.models import TokenValidationConfig
 from py_identity_model.exceptions import TokenValidationException
 
 
-# Token validation options - only override defaults where needed
-DEFAULT_OPTIONS = {
-    "verify_aud": False,  # Audience validation disabled for these tests
-    "require_aud": False,
-}
-
-
 @pytest.mark.integration
 class TestAsyncTokenValidation:
     """Test async token validation with real tokens.
@@ -29,7 +22,11 @@ class TestAsyncTokenValidation:
 
     @pytest.mark.asyncio
     async def test_async_claims_validator_success(
-        self, test_config, client_credentials_token, require_https
+        self,
+        test_config,
+        client_credentials_token,
+        require_https,
+        default_validation_options,
     ):
         """Test async claims validator that succeeds."""
         assert client_credentials_token.token is not None
@@ -41,7 +38,7 @@ class TestAsyncTokenValidation:
         validation_config = TokenValidationConfig(
             perform_disco=True,
             audience=test_config["TEST_AUDIENCE"],
-            options=DEFAULT_OPTIONS,
+            options=default_validation_options,
             claims_validator=async_validate_claims,
             require_https=require_https,
         )
@@ -60,7 +57,11 @@ class TestAsyncTokenValidation:
 
     @pytest.mark.asyncio
     async def test_async_claims_validator_failure(
-        self, test_config, client_credentials_token, require_https
+        self,
+        test_config,
+        client_credentials_token,
+        require_https,
+        default_validation_options,
     ):
         """Test async claims validator that fails."""
         assert client_credentials_token.token is not None
@@ -72,7 +73,7 @@ class TestAsyncTokenValidation:
         validation_config = TokenValidationConfig(
             perform_disco=True,
             audience=test_config["TEST_AUDIENCE"],
-            options=DEFAULT_OPTIONS,
+            options=default_validation_options,
             claims_validator=async_validate_claims,
             require_https=require_https,
         )
@@ -91,7 +92,11 @@ class TestAsyncTokenValidation:
 
     @pytest.mark.asyncio
     async def test_sync_claims_validator_in_async_context(
-        self, test_config, client_credentials_token, require_https
+        self,
+        test_config,
+        client_credentials_token,
+        require_https,
+        default_validation_options,
     ):
         """Test that sync claims validator works in async validation."""
         assert client_credentials_token.token is not None
@@ -103,7 +108,7 @@ class TestAsyncTokenValidation:
         validation_config = TokenValidationConfig(
             perform_disco=True,
             audience=test_config["TEST_AUDIENCE"],
-            options=DEFAULT_OPTIONS,
+            options=default_validation_options,
             claims_validator=sync_validate_claims,
             require_https=require_https,
         )

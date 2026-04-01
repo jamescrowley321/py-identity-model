@@ -642,3 +642,9 @@ def public_auth_code_result(provider_capabilities, discovery_document, test_conf
             resource="urn:test:api",
         ),
     )
+
+
+@pytest.fixture
+def default_validation_options():
+    """Shared token validation options — fresh dict per test to prevent cross-test mutation."""
+    return {"verify_aud": False, "require_aud": False}
