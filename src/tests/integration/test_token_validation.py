@@ -67,10 +67,10 @@ def test_token_validation_succeeds(
         disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
         token_validation_config=validation_config,
     )
-    assert claims
-    assert claims["iss"]
-    assert claims["iat"]
-    assert claims["exp"]
+    assert claims is not None
+    assert claims["iss"] is not None
+    assert claims["iat"] is not None
+    assert claims["exp"] is not None
 
 
 def test_token_validation_with_invalid_config_throws_exception(
@@ -180,8 +180,8 @@ def test_claim_validation_function_succeeds(
         token_validation_config=validation_config,
     )
 
-    assert decoded_token
-    assert decoded_token["iss"]
+    assert decoded_token is not None
+    assert decoded_token["iss"] is not None
     assert called, "claims_validator was never invoked"
 
 

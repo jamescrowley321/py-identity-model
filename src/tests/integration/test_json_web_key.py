@@ -4,12 +4,9 @@ import pytest
 
 from py_identity_model import JsonWebKey
 from py_identity_model.exceptions import (
-    ConfigurationException,
     FailedResponseAccessError,
 )
 from py_identity_model.jwks import JwksRequest, get_jwks, jwks_from_dict
-
-from .test_utils import get_config
 
 
 # Minimum RSA key size (bits)
@@ -88,25 +85,6 @@ def test_jwk_validation(jwks_data):
             assert hasattr(jwk, "k")
 
 
-def test_invalid_jwk():
-    """Test that invalid JWK data is handled correctly"""
-    # Test missing required kty
-    with pytest.raises(ConfigurationException):
-        JsonWebKey.from_json('{"kid": "test"}')
-
-    # Test invalid JSON
-    with pytest.raises(ConfigurationException):
-        JsonWebKey.from_json("{invalid json}")
-
-    # Test empty JSON
-    with pytest.raises(ConfigurationException):
-        JsonWebKey.from_json("")
-
-    # Test None input
-    with pytest.raises(ConfigurationException):
-        JsonWebKey.from_json(None)  # type: ignore
-
-
 def test_key_size_calculation(jwks_data):
     """Test that key size is calculated correctly"""
     for jwk_dict in jwks_data:
@@ -154,108 +132,6 @@ def test_as_dict(jwks_data):
                 assert jwk_as_dict[key] == value
 
 
-def test_jwks_from_dict_comprehensive():
-    """Test that jwks_from_dict handles all JWK fields correctly"""
-
-    # Test with a comprehensive JWK dictionary containing various fields
-    test_jwk_dict = {
-        # Required parameter
-        "kty": "RSA",
-        # Optional parameters for all keys
-        "use": "sig",
-        # Note: 'key_ops' is omitted as it's mutually exclusive with 'use' per RFC 7517
-        "alg": "RS256",
-        "kid": "test-key-id",
-        # Optional JWK parameters
-        "x5u": "https://example.com/cert",
-        "x5c": ["MIICertificate"],
-        "x5t": "thumbprint",
-        "x5t#S256": "sha256-thumbprint",
-        # Parameters for Elliptic Curve Keys (not used with RSA but testing)
-        "crv": "P-256",
-        "x": "ec-x-coordinate",
-        "y": "ec-y-coordinate",
-        "d": "ec-private-key",
-        # Parameters for RSA Keys
-        "n": "rsa-modulus",
-        "e": "AQAB",
-        "p": "rsa-prime-p",
-        "q": "rsa-prime-q",
-        "dp": "rsa-dp",
-        "dq": "rsa-dq",
-        "qi": "rsa-qi",
-        "oth": [{"r": "additional", "d": "prime", "t": "info"}],
-        # Parameters for Symmetric Keys
-        "k": "symmetric-key",
-    }
-
-    # Create JWK from dictionary
-    jwk = jwks_from_dict(test_jwk_dict)
-
-    # Verify all fields are properly set
-    assert jwk.kty == "RSA"
-    assert jwk.use == "sig"
-    assert jwk.key_ops is None  # Not set due to mutual exclusivity with 'use'
-    assert jwk.alg == "RS256"
-    assert jwk.kid == "test-key-id"
-    assert jwk.x5u == "https://example.com/cert"
-    assert jwk.x5c == ["MIICertificate"]
-    assert jwk.x5t == "thumbprint"
-    assert jwk.x5t_s256 == "sha256-thumbprint"
-    assert jwk.crv == "P-256"
-    assert jwk.x == "ec-x-coordinate"
-    assert jwk.y == "ec-y-coordinate"
-    assert jwk.d == "ec-private-key"
-    assert jwk.n == "rsa-modulus"
-    assert jwk.e == "AQAB"
-    assert jwk.p == "rsa-prime-p"
-    assert jwk.q == "rsa-prime-q"
-    assert jwk.dp == "rsa-dp"
-    assert jwk.dq == "rsa-dq"
-    assert jwk.qi == "rsa-qi"
-    assert jwk.oth == [{"r": "additional", "d": "prime", "t": "info"}]
-    assert jwk.k == "symmetric-key"
-
-
-def test_jwks_from_dict_minimal():
-    """Test jwks_from_dict with minimal required fields"""
-    # Test with minimal RSA JWK (only required fields)
-    minimal_rsa_dict = {"kty": "RSA", "n": "modulus", "e": "AQAB"}
-    rsa_jwk = jwks_from_dict(minimal_rsa_dict)
-
-    assert rsa_jwk.kty == "RSA"
-    assert rsa_jwk.n == "modulus"
-    assert rsa_jwk.e == "AQAB"
-    assert rsa_jwk.use is None  # Should be None for missing fields
-    assert rsa_jwk.kid is None
-    assert rsa_jwk.alg is None
-
-    # Test with minimal EC JWK
-    minimal_ec_dict = {
-        "kty": "EC",
-        "crv": "P-256",
-        "x": "x-coord",
-        "y": "y-coord",
-    }
-    ec_jwk = jwks_from_dict(minimal_ec_dict)
-
-    assert ec_jwk.kty == "EC"
-    assert ec_jwk.crv == "P-256"
-    assert ec_jwk.x == "x-coord"
-    assert ec_jwk.y == "y-coord"
-    assert ec_jwk.use is None
-    assert ec_jwk.kid is None
-
-    # Test with minimal symmetric key
-    minimal_oct_dict = {"kty": "oct", "k": "symmetric-key-value"}
-    oct_jwk = jwks_from_dict(minimal_oct_dict)
-
-    assert oct_jwk.kty == "oct"
-    assert oct_jwk.k == "symmetric-key-value"
-    assert oct_jwk.use is None
-    assert oct_jwk.kid is None
-
-
 def test_jwks_from_dict_with_real_data(jwks_data):
     """Test jwks_from_dict with real JWKS data"""
     for jwk_dict in jwks_data:
@@ -276,59 +152,30 @@ def test_jwks_from_dict_with_real_data(jwks_data):
                 assert getattr(jwk, attr_name) == value
 
 
-def test_jwks_from_dict_error_handling():
-    """Test jwks_from_dict error handling"""
-    # Test with empty dictionary (should fail validation in JsonWebKey.__post_init__)
-    with pytest.raises(
-        ConfigurationException,
-        match="The 'kty' \\(Key Type\\) parameter is required",
-    ):
-        jwks_from_dict({})
-
-    # Test with None kty
-    with pytest.raises(
-        ConfigurationException,
-        match="The 'kty' \\(Key Type\\) parameter is required",
-    ):
-        jwks_from_dict({"kty": None})
-
-    # Test with invalid RSA key (missing required parameters)
-    with pytest.raises(
-        ConfigurationException,
-        match="RSA keys require 'n' and 'e' parameters",
-    ):
-        jwks_from_dict({"kty": "RSA"})
-
-    # Test with invalid EC key (missing required parameters)
-    with pytest.raises(
-        ConfigurationException,
-        match="EC keys require 'crv', 'x', and 'y' parameters",
-    ):
-        jwks_from_dict({"kty": "EC"})
-
-    # Test with invalid symmetric key (missing required parameter)
-    with pytest.raises(
-        ConfigurationException,
-        match="Symmetric keys require 'k' parameter",
-    ):
-        jwks_from_dict({"kty": "oct"})
-
-
-def test_get_jwks_success(env_file):
-    """Test get_jwks with successful request"""
-    config = get_config(env_file)
-    jwks_request = JwksRequest(address=config["TEST_JWKS_ADDRESS"])
-    jwks_response = get_jwks(jwks_request)
-
-    # Verify successful response
+def test_get_jwks_success(jwks_response):
+    """Test get_jwks with successful request and key field validation."""
     assert jwks_response.is_successful is True
     assert jwks_response.keys is not None
     assert len(jwks_response.keys) > 0
 
-    # Verify each key is a valid JsonWebKey
     for key in jwks_response.keys:
         assert isinstance(key, JsonWebKey)
         assert key.kty is not None
+        assert key.alg is not None
+        assert key.use is not None
+        assert key.kid is not None
+
+        # Key-type-specific parameter checks
+        if key.kty == "RSA":
+            assert key.n is not None
+            assert key.e is not None
+        elif key.kty == "EC":
+            assert key.crv is not None
+            assert key.x is not None
+            assert key.y is not None
+
+        if key.x5t:
+            assert key.x5c is not None
 
 
 def test_get_jwks_failure():

@@ -103,7 +103,7 @@ class TestRevocationSync:
             )
         )
 
-        assert response.is_successful
+        assert response.is_successful is True
 
     def test_revoked_token_fails_introspection(
         self,
@@ -127,7 +127,7 @@ class TestRevocationSync:
                 client_secret=test_config["TEST_OPAQUE_CLIENT_SECRET"],
             )
         )
-        assert pre_response.is_successful
+        assert pre_response.is_successful is True
         assert pre_response.claims is not None
         assert pre_response.claims["active"] is True
 
@@ -141,7 +141,7 @@ class TestRevocationSync:
                 token_type_hint="access_token",
             )
         )
-        assert revoke_response.is_successful
+        assert revoke_response.is_successful is True
 
         # Verify inactive after revocation
         post_response = introspect_token(
@@ -152,7 +152,7 @@ class TestRevocationSync:
                 client_secret=test_config["TEST_OPAQUE_CLIENT_SECRET"],
             )
         )
-        assert post_response.is_successful
+        assert post_response.is_successful is True
         assert post_response.claims is not None
         assert post_response.claims["active"] is False
 
@@ -176,7 +176,7 @@ class TestRevocationSync:
             )
         )
 
-        assert response.is_successful
+        assert response.is_successful is True
 
     def test_double_revocation_succeeds(
         self,
@@ -201,10 +201,10 @@ class TestRevocationSync:
         )
 
         first = revoke_token(request)
-        assert first.is_successful
+        assert first.is_successful is True
 
         second = revoke_token(request)
-        assert second.is_successful
+        assert second.is_successful is True
 
 
 @pytest.mark.integration
@@ -253,4 +253,4 @@ class TestRevocationAsync:
             )
         )
 
-        assert response.is_successful
+        assert response.is_successful is True

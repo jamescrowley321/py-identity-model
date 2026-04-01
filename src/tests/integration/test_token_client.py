@@ -23,9 +23,9 @@ def test_request_client_credentials_token_is_successful(test_config, token_endpo
     )
     client_creds_token = request_client_credentials_token(client_creds_req)
 
-    assert client_creds_token
-    assert client_creds_token.is_successful
-    assert client_creds_token.token
+    assert client_creds_token is not None
+    assert client_creds_token.is_successful is True
+    assert client_creds_token.token is not None
 
 
 def test_request_client_credentials_token_fails_invalid_credentials(
@@ -41,9 +41,9 @@ def test_request_client_credentials_token_fails_invalid_credentials(
         ),
     )
 
-    assert client_creds_token
+    assert client_creds_token is not None
     assert client_creds_token.is_successful is False
-    assert client_creds_token.error
+    assert client_creds_token.error is not None
     with pytest.raises(FailedResponseAccessError):
         _ = client_creds_token.token
 
@@ -66,13 +66,13 @@ def test_request_client_credentials_token_fails_invalid_scope(
         ),
     )
 
-    assert client_creds_token
+    assert client_creds_token is not None
     if client_creds_token.is_successful:
         # Provider accepts unknown scopes (e.g., Descope)
         assert client_creds_token.token is not None
     else:
         # Provider rejects unknown scopes (e.g., Ory)
-        assert client_creds_token.error
+        assert client_creds_token.error is not None
         with pytest.raises(FailedResponseAccessError):
             _ = client_creds_token.token
 
@@ -95,9 +95,9 @@ def test_request_client_credentials_token_fails_invalid_endpoint(
         ),
     )
 
-    assert client_creds_token
+    assert client_creds_token is not None
     assert client_creds_token.is_successful is False
-    assert client_creds_token.error
+    assert client_creds_token.error is not None
 
 
 @pytest.mark.integration

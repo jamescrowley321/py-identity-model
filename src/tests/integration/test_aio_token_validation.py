@@ -49,8 +49,8 @@ class TestAsyncTokenValidation:
                 token_validation_config=validation_config,
             )
 
-            assert decoded_token
-            assert decoded_token["iss"]
+            assert decoded_token is not None
+            assert decoded_token["iss"] is not None
             assert called, "async claims_validator was never invoked"
         finally:
             await close_async_http_client()
@@ -113,8 +113,8 @@ class TestAsyncTokenValidation:
                 token_validation_config=validation_config,
             )
 
-            assert decoded_token
-            assert decoded_token["iss"]
+            assert decoded_token is not None
+            assert decoded_token["iss"] is not None
             assert called, "sync claims_validator was never invoked in async context"
         finally:
             await close_async_http_client()

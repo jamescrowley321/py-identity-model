@@ -220,12 +220,6 @@ filterwarnings = [
     "error", # treat warnings as errors
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
-    # httpx uses async transports internally even for sync clients.
-    # Python 3.13's stricter __del__ raises ResourceWarning when these
-    # transports are GC'd with open sockets during pytest teardown.
-    # Root cause (missing finally blocks) is fixed — this handles the
-    # remaining GC timing issue between pytest phases.
-    "ignore::pytest.PytestUnraisableExceptionWarning",
 ]
 
 [tool.coverage.run]

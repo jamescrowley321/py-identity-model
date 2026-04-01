@@ -1,6 +1,9 @@
 import pytest
 
-from py_identity_model.aio.http_client import _reset_async_http_client
+from py_identity_model.aio.http_client import (
+    _reset_async_http_client,
+    close_async_http_client,
+)
 from py_identity_model.aio.token_validation import (
     _get_disco_response,
     _get_jwks_response,
@@ -55,6 +58,25 @@ def pytest_collection_modifyitems(config, items):  # noqa: ARG001  # pytest hook
 
 
 @pytest.fixture(autouse=True)
+async def _close_async_http_client():
+    """Close the async HTTP client while the event loop is still alive.
+
+    ``_reset_async_http_client()`` only nullifies the singleton reference.
+    If the client has open connections when the reference is dropped, the
+    orphaned ``AsyncClient`` is garbage-collected with live sockets and
+    Python 3.13's stricter ``__del__`` raises ``ResourceWarning``, which
+    pytest surfaces as ``PytestUnraisableExceptionWarning``.
+
+    This async fixture runs its teardown *before* pytest-asyncio destroys
+    the event loop, so ``await aclose()`` succeeds.  By the time the next
+    test's setup calls ``_reset_async_http_client()``, the client is
+    already closed and the reference is None — no orphaning.
+    """
+    yield
+    await close_async_http_client()
+
+
+@pytest.fixture(autouse=True)
 def _clear_async_caches():
     """Clear async LRU caches between tests.
 
@@ -75,5 +97,6 @@ def _clear_async_caches():
             setattr(cache_fn, loop_attr, None)
 
     # Reset the singleton async HTTP client so it gets recreated
-    # on the new event loop
+    # on the new event loop.  The client is already closed by the
+    # _close_async_http_client fixture's teardown phase.
     _reset_async_http_client()

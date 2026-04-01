@@ -75,6 +75,21 @@ class TestPAR:
         )
         assert isinstance(req, BaseRequest)
 
+    def test_request_with_all_params(self):
+        req = PushedAuthorizationRequest(
+            address=PAR_URL,
+            client_id="app",
+            redirect_uri="https://app.com/cb",
+            scope="openid profile",
+            state="csrf",
+            nonce="nonce",
+            code_challenge="challenge",
+            code_challenge_method="S256",
+            client_secret="secret",
+        )
+        assert req.scope == "openid profile"
+        assert req.code_challenge_method == "S256"
+
     @respx.mock
     def test_confidential_client_uses_basic_auth_not_body(self):
         """M1: client_id must NOT appear in body when using Basic Auth."""

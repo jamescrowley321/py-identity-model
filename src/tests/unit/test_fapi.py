@@ -489,3 +489,28 @@ class TestFAPIConstants:
 
     def test_required_response_type(self):
         assert FAPI2_REQUIRED_RESPONSE_TYPE == "code"
+
+
+@pytest.mark.unit
+class TestValidateFAPIDiscoveryAuthMethods:
+    def test_discovery_with_tls_client_auth(self):
+        disco = DiscoveryDocumentResponse(
+            is_successful=True,
+            issuer="https://fapi.example.com",
+            grant_types_supported=["authorization_code"],
+            token_endpoint_auth_methods_supported=["tls_client_auth"],
+            id_token_signing_alg_values_supported=["PS256"],
+        )
+        result = validate_fapi_discovery(disco)
+        assert result.is_compliant is True
+
+    def test_discovery_with_self_signed_tls(self):
+        disco = DiscoveryDocumentResponse(
+            is_successful=True,
+            issuer="https://fapi.example.com",
+            grant_types_supported=["authorization_code"],
+            token_endpoint_auth_methods_supported=["self_signed_tls_client_auth"],
+            id_token_signing_alg_values_supported=["ES256"],
+        )
+        result = validate_fapi_discovery(disco)
+        assert result.is_compliant is True

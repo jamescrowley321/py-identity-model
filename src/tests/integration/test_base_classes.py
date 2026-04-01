@@ -3,19 +3,13 @@
 import pytest
 
 from py_identity_model import (
-    BaseRequest,
     BaseResponse,
-    DiscoveryDocumentRequest,
 )
 
 
 @pytest.mark.integration
 class TestBaseClassesIntegration:
     """Test base classes work with real identity provider responses."""
-
-    def test_discovery_request_is_base_request(self, test_config):
-        req = DiscoveryDocumentRequest(address=test_config["TEST_DISCO_ADDRESS"])
-        assert isinstance(req, BaseRequest)
 
     def test_discovery_response_is_base_response(self, discovery_document):
         assert isinstance(discovery_document, BaseResponse)

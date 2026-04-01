@@ -109,7 +109,7 @@ class TestMultipleTokensFromSameProvider:
                 disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
                 token_validation_config=validation_config,
             )
-            assert claims, f"Token {i + 1} validation failed"
+            assert claims is not None, f"Token {i + 1} validation failed"
             validated_claims.append(claims)
 
         # If provider includes jti, verify uniqueness

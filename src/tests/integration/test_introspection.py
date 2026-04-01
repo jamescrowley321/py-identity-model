@@ -104,7 +104,7 @@ class TestIntrospectionSync:
             )
         )
 
-        assert response.is_successful
+        assert response.is_successful is True
         claims = response.claims
         assert claims is not None
         assert claims["active"] is True
@@ -131,7 +131,7 @@ class TestIntrospectionSync:
             )
         )
 
-        assert response.is_successful
+        assert response.is_successful is True
         assert response.claims is not None
         assert response.claims["active"] is False
 
@@ -155,7 +155,7 @@ class TestIntrospectionSync:
             )
         )
 
-        assert response.is_successful
+        assert response.is_successful is True
         assert response.claims is not None
         assert response.claims["active"] is False
 
@@ -186,7 +186,7 @@ class TestIntrospectionSync:
                 token_type_hint="access_token",
             )
         )
-        assert revoke_response.is_successful
+        assert revoke_response.is_successful is True
 
         # Introspect — should be inactive
         introspect_response = introspect_token(
@@ -197,7 +197,7 @@ class TestIntrospectionSync:
                 client_secret=test_config["TEST_OPAQUE_CLIENT_SECRET"],
             )
         )
-        assert introspect_response.is_successful
+        assert introspect_response.is_successful is True
         assert introspect_response.claims is not None
         assert introspect_response.claims["active"] is False
 
@@ -252,6 +252,6 @@ class TestIntrospectionAsync:
             )
         )
 
-        assert response.is_successful
+        assert response.is_successful is True
         assert response.claims is not None
         assert response.claims["active"] is False
