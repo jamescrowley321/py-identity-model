@@ -72,6 +72,7 @@ def request_client_credentials_token(
     log_token_request(request)
     params, headers = prepare_token_request_data(request)
 
+    response = None
     try:
         client = http_client.client if http_client else get_http_client()
         response = _request_token(
@@ -81,12 +82,12 @@ def request_client_credentials_token(
             headers,
             (request.client_id, request.client_secret),
         )
-        result = process_token_response(response)
-        # Explicitly close the response to ensure the connection is released
-        response.close()
-        return result
+        return process_token_response(response)
     except Exception as e:
         return handle_token_error(e)
+    finally:
+        if response is not None:
+            response.close()
 
 
 def request_authorization_code_token(
@@ -105,14 +106,16 @@ def request_authorization_code_token(
     log_auth_code_token_request(request)
     params, headers, auth = prepare_auth_code_token_request_data(request)
 
+    response = None
     try:
         client = http_client.client if http_client else get_http_client()
         response = _request_token(client, request.address, params, headers, auth)
-        result = process_auth_code_token_response(response)
-        response.close()
-        return result
+        return process_auth_code_token_response(response)
     except Exception as e:
         return handle_auth_code_token_error(e)
+    finally:
+        if response is not None:
+            response.close()
 
 
 def refresh_token(
@@ -131,14 +134,16 @@ def refresh_token(
     log_refresh_token_request(request)
     params, headers, auth = prepare_refresh_token_request_data(request)
 
+    response = None
     try:
         client = http_client.client if http_client else get_http_client()
         response = _request_token(client, request.address, params, headers, auth)
-        result = process_refresh_token_response(response)
-        response.close()
-        return result
+        return process_refresh_token_response(response)
     except Exception as e:
         return handle_refresh_token_error(e)
+    finally:
+        if response is not None:
+            response.close()
 
 
 __all__ = [

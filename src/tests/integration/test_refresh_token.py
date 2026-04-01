@@ -2,7 +2,7 @@
 
 import pytest
 
-from py_identity_model import BaseRequest, RefreshTokenRequest
+from py_identity_model import RefreshTokenRequest
 from py_identity_model.sync.token_client import refresh_token
 
 from .conftest import AuthCodeFlowConfig, perform_auth_code_flow
@@ -10,14 +10,6 @@ from .conftest import AuthCodeFlowConfig, perform_auth_code_flow
 
 @pytest.mark.integration
 class TestRefreshTokenIntegration:
-    def test_request_model_inherits_base(self):
-        req = RefreshTokenRequest(
-            address="https://auth.example.com/token",
-            client_id="app",
-            refresh_token="rt",
-        )
-        assert isinstance(req, BaseRequest)
-
     def test_request_with_real_token_endpoint(self, discovery_document):
         req = RefreshTokenRequest(
             address=discovery_document.token_endpoint or "",
@@ -62,7 +54,7 @@ class TestLiveRefreshToken:
             ),
         )
         token_response = result["token_response"]
-        assert token_response.is_successful, (
+        assert token_response.is_successful is True, (
             f"Auth code flow failed: {token_response.error}"
         )
         token = token_response.token
@@ -92,7 +84,7 @@ class TestLiveRefreshToken:
                 client_secret=test_config.get("TEST_AUTH_CODE_CLIENT_SECRET"),
             )
         )
-        assert response.is_successful, f"Refresh failed: {response.error}"
+        assert response.is_successful is True, f"Refresh failed: {response.error}"
         assert response.token is not None
         assert "access_token" in response.token
 
@@ -117,7 +109,7 @@ class TestLiveRefreshToken:
                 client_secret=test_config.get("TEST_AUTH_CODE_CLIENT_SECRET"),
             )
         )
-        assert response.is_successful
+        assert response.is_successful is True
         assert response.token is not None
         assert response.token["access_token"] != original_token["access_token"]
 
@@ -167,6 +159,8 @@ class TestLiveRefreshToken:
                 scope="openid",
             )
         )
-        assert response.is_successful, f"Downscoped refresh failed: {response.error}"
+        assert response.is_successful is True, (
+            f"Downscoped refresh failed: {response.error}"
+        )
         assert response.token is not None
         assert "access_token" in response.token

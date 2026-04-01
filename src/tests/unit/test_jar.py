@@ -7,10 +7,12 @@ from cryptography.hazmat.primitives.serialization import (
     Encoding,
     NoEncryption,
     PrivateFormat,
+    PublicFormat,
 )
 import jwt as pyjwt
 import pytest
 
+from py_identity_model import generate_pkce_pair
 from py_identity_model.core.jar import (
     _RESERVED_CLAIMS,
     _SUPPORTED_ALGORITHMS,
@@ -514,3 +516,113 @@ class TestBuildJARAuthorizationUrl:
             request_object="jwt",
         )
         assert url.startswith(AUTH_ENDPOINT + "?")
+
+
+def _ec_key_pair() -> tuple[bytes, bytes]:
+    key = ec.generate_private_key(ec.SECP256R1())
+    priv = key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
+    pub = key.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
+    return priv, pub
+
+
+def _rsa_key_pair() -> tuple[bytes, bytes]:
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    priv = key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
+    pub = key.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
+    return priv, pub
+
+
+@pytest.mark.unit
+class TestJARSignatureVerification:
+    def test_ec256_signature_verifiable(self):
+        """Create request object with EC key and verify signature with public key."""
+        priv, pub = _ec_key_pair()
+        request_jwt = create_request_object(
+            private_key=priv,
+            algorithm="ES256",
+            client_id="sig-test-app",
+            audience="https://auth.example.com",
+            redirect_uri="https://app.com/callback",
+            scope="openid profile",
+            state="test-state",
+        )
+        decoded = pyjwt.decode(
+            request_jwt,
+            pub,
+            algorithms=["ES256"],
+            audience="https://auth.example.com",
+        )
+        assert decoded["iss"] == "sig-test-app"
+        assert decoded["scope"] == "openid profile"
+        assert decoded["state"] == "test-state"
+
+    def test_ps256_signature_verifiable(self):
+        """Verify PS256 (RSA-PSS) algorithm produces verifiable signatures."""
+        priv, pub = _rsa_key_pair()
+        request_jwt = create_request_object(
+            private_key=priv,
+            algorithm="PS256",
+            client_id="ps256-app",
+            audience="https://auth.example.com",
+            redirect_uri="https://app.com/cb",
+        )
+        decoded = pyjwt.decode(
+            request_jwt,
+            pub,
+            algorithms=["PS256"],
+            audience="https://auth.example.com",
+        )
+        assert decoded["iss"] == "ps256-app"
+
+    def test_jar_with_pkce_signature_verifiable(self):
+        """Combine JAR with PKCE and verify the signed JWT."""
+        priv, pub = _ec_key_pair()
+        _verifier, challenge = generate_pkce_pair()
+        request_jwt = create_request_object(
+            private_key=priv,
+            algorithm="ES256",
+            client_id="pkce-app",
+            audience="https://auth.example.com",
+            redirect_uri="https://app.com/cb",
+            code_challenge=challenge,
+            code_challenge_method="S256",
+        )
+        decoded = pyjwt.decode(
+            request_jwt,
+            pub,
+            algorithms=["ES256"],
+            audience="https://auth.example.com",
+        )
+        assert decoded["code_challenge"] == challenge
+        assert decoded["code_challenge_method"] == "S256"
+
+    def test_build_url_jwt_signature_verifiable(self):
+        """Build authorization URL and verify the embedded JWT signature."""
+        priv, pub = _ec_key_pair()
+        request_jwt = create_request_object(
+            private_key=priv,
+            algorithm="ES256",
+            client_id="url-app",
+            audience="https://auth.example.com",
+            redirect_uri="https://app.com/cb",
+        )
+        url = build_jar_authorization_url(
+            authorization_endpoint="https://auth.example.com/authorize",
+            client_id="url-app",
+            request_object=request_jwt,
+            scope="openid",
+            response_type="code",
+        )
+        parsed = urlparse(url)
+        params = parse_qs(parsed.query)
+        assert params["client_id"] == ["url-app"]
+
+        extracted_jwt = params["request"][0]
+        decoded = pyjwt.decode(
+            extracted_jwt,
+            pub,
+            algorithms=["ES256"],
+            audience="https://auth.example.com",
+        )
+        assert decoded["client_id"] == "url-app"
+        assert decoded["redirect_uri"] == "https://app.com/cb"

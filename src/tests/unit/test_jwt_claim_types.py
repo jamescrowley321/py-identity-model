@@ -1,6 +1,4 @@
-"""
-Tests for the JwtClaimTypes class
-"""
+"""Tests for the JwtClaimTypes class."""
 
 import pytest
 

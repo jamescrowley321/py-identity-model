@@ -75,6 +75,18 @@ def get_alternate_provider_expired_token() -> str | None:
     return token
 
 
+# Required env vars for integration tests.  Missing any of these will
+# fail the ``test_config`` fixture immediately with a clear message
+# pointing to ``.env.example``.
+_REQUIRED_ENV_VARS = (
+    "TEST_DISCO_ADDRESS",
+    "TEST_JWKS_ADDRESS",
+    "TEST_CLIENT_ID",
+    "TEST_CLIENT_SECRET",
+    "TEST_SCOPE",
+)
+
+
 def get_config(env_file: str | None = None) -> dict:
     """
     Get test configuration from environment variables.
@@ -85,12 +97,15 @@ def get_config(env_file: str | None = None) -> dict:
 
     Returns:
         Dictionary containing test configuration
+
+    Raises:
+        RuntimeError: When required environment variables are missing or empty.
     """
     # If env_file parameter is provided, use it
     if env_file is not None:
         set_env_file(env_file)
 
-    return {
+    config = {
         "TEST_DISCO_ADDRESS": os.environ.get("TEST_DISCO_ADDRESS", ""),
         "TEST_JWKS_ADDRESS": os.environ.get("TEST_JWKS_ADDRESS", ""),
         "TEST_CLIENT_ID": os.environ.get("TEST_CLIENT_ID", ""),
@@ -113,4 +128,17 @@ def get_config(env_file: str | None = None) -> dict:
         "TEST_PKCE_PUBLIC_REDIRECT_URI": os.environ.get(
             "TEST_PKCE_PUBLIC_REDIRECT_URI", ""
         ),
+        # Opaque token client for introspection/revocation tests
+        "TEST_OPAQUE_CLIENT_ID": os.environ.get("TEST_OPAQUE_CLIENT_ID", ""),
+        "TEST_OPAQUE_CLIENT_SECRET": os.environ.get("TEST_OPAQUE_CLIENT_SECRET", ""),
     }
+
+    # Fail fast on missing required config
+    missing = [var for var in _REQUIRED_ENV_VARS if not config.get(var)]
+    if missing:
+        raise RuntimeError(
+            f"Missing required integration test config: {', '.join(missing)}. "
+            "Copy .env.example to .env and fill in values for your OIDC provider."
+        )
+
+    return config

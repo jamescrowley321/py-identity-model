@@ -29,7 +29,7 @@ class TestSyncDIIntegration:
                 http_client=client,
             )
 
-        assert response.is_successful
+        assert response.is_successful is True
         assert response.issuer is not None
 
     def test_shared_client_across_calls(self, test_config):
@@ -44,13 +44,13 @@ class TestSyncDIIntegration:
                 ),
                 http_client=client,
             )
-            assert disco.is_successful
+            assert disco.is_successful is True
 
             jwks = get_jwks(
                 JwksRequest(address=test_config["TEST_JWKS_ADDRESS"]),
                 http_client=client,
             )
-            assert jwks.is_successful
+            assert jwks.is_successful is True
 
     def test_custom_timeout_client(self, test_config):
         """Use client with custom timeout."""
@@ -65,4 +65,4 @@ class TestSyncDIIntegration:
                 http_client=client,
             )
 
-        assert response.is_successful
+        assert response.is_successful is True

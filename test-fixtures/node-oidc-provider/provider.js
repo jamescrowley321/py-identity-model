@@ -71,7 +71,11 @@ async function startProvider() {
       {
         client_id: "test-client-credentials",
         client_secret: "test-client-credentials-secret",
-        grant_types: ["client_credentials"],
+        grant_types: [
+          "client_credentials",
+          "urn:ietf:params:oauth:grant-type:device_code",
+          "urn:ietf:params:oauth:grant-type:token-exchange",
+        ],
         response_types: [],
         scope: "openid api",
         token_endpoint_auth_method: "client_secret_basic",
@@ -109,6 +113,17 @@ async function startProvider() {
         client_id: "test-token-exchange",
         client_secret: "test-token-exchange-secret",
         grant_types: ["urn:ietf:params:oauth:grant-type:token-exchange"],
+        response_types: [],
+        scope: "openid api",
+        token_endpoint_auth_method: "client_secret_basic",
+      },
+      {
+        // Client for introspection/revocation tests — issues opaque tokens
+        // because defaultResource excludes this client (JWT tokens cannot
+        // be introspected or revoked via oidc-provider's built-in endpoints).
+        client_id: "test-opaque",
+        client_secret: "test-opaque-secret",
+        grant_types: ["client_credentials"],
         response_types: [],
         scope: "openid api",
         token_endpoint_auth_method: "client_secret_basic",
@@ -158,7 +173,12 @@ async function startProvider() {
         // Default to urn:test:api so tokens are issued as JWTs.
         // This allows integration tests to validate tokens without
         // explicitly passing a resource parameter.
-        defaultResource: () => "urn:test:api",
+        // Exception: test-opaque client gets no resource → opaque tokens
+        // for introspection/revocation testing.
+        defaultResource: (ctx) => {
+          if (ctx.oidc?.client?.clientId === "test-opaque") return undefined;
+          return "urn:test:api";
+        },
         getResourceServerInfo: (ctx, resourceIndicator) => {
           if (resourceIndicator !== "urn:test:api") {
             return undefined;

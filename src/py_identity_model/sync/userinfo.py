@@ -51,14 +51,16 @@ def get_userinfo(
     log_userinfo_request(request)
     headers = prepare_userinfo_headers(request.token)
 
+    response = None
     try:
         client = http_client.client if http_client else get_http_client()
         response = _request_userinfo(client, request.address, headers)
-        result = process_userinfo_response(response)
-        response.close()
-        return result
+        return process_userinfo_response(response)
     except Exception as e:
         return handle_userinfo_error(e)
+    finally:
+        if response is not None:
+            response.close()
 
 
 __all__ = [

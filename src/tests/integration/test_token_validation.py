@@ -18,18 +18,12 @@ from py_identity_model.sync.token_validation import (
     _get_jwks_response,
 )
 
+from .conftest import DEFAULT_VALIDATION_OPTIONS as DEFAULT_OPTIONS
 from .test_utils import _is_valid_jwt_format
 
 
 # JWT format: three dot-separated segments
 JWT_SEGMENT_SEPARATOR_COUNT = 2
-
-
-# Token validation options - only override defaults where needed
-DEFAULT_OPTIONS = {
-    "verify_aud": False,  # Audience validation disabled for these tests
-    "require_aud": False,
-}
 
 
 def test_token_validation_expired_token(test_config, require_https):
@@ -73,10 +67,10 @@ def test_token_validation_succeeds(
         disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
         token_validation_config=validation_config,
     )
-    assert claims
-    assert claims["iss"]
-    assert claims["iat"]
-    assert claims["exp"]
+    assert claims is not None
+    assert claims["iss"] is not None
+    assert claims["iat"] is not None
+    assert claims["exp"] is not None
 
 
 def test_token_validation_with_invalid_config_throws_exception(
@@ -119,14 +113,10 @@ def test_cache_succeeds(test_config, client_credentials_token, require_https):
         )
 
     cache_info = _get_disco_response.cache_info()
-    print(cache_info)
-    assert cache_info
-    assert cache_info[0] > 0
+    assert cache_info.hits > 0
 
     cache_info = _get_jwks_response.cache_info()
-    print(cache_info)
-    assert cache_info
-    assert cache_info[0] > 0
+    assert cache_info.hits > 0
 
 
 def test_benchmark_validation(test_config, client_credentials_token, require_https):
@@ -171,10 +161,10 @@ def test_claim_validation_function_succeeds(
     """Test claim validation success using cached fixtures."""
     assert client_credentials_token.token is not None
 
+    called = []
+
     def validate_claims(_token: dict):
-        # Do some token validation here
-        # and raise an exception if the validation fails
-        pass
+        called.append(True)
 
     validation_config = TokenValidationConfig(
         perform_disco=True,
@@ -190,8 +180,9 @@ def test_claim_validation_function_succeeds(
         token_validation_config=validation_config,
     )
 
-    assert decoded_token
-    assert decoded_token["iss"]
+    assert decoded_token is not None
+    assert decoded_token["iss"] is not None
+    assert len(called) == 1, "claims_validator should be invoked exactly once"
 
 
 @pytest.mark.integration

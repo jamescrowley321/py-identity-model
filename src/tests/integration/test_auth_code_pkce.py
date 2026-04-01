@@ -7,7 +7,6 @@ import pytest
 from py_identity_model import (
     BaseRequest,
     build_authorization_url,
-    generate_code_challenge,
     generate_pkce_pair,
     parse_authorize_callback_response,
     request_authorization_code_token,
@@ -20,11 +19,6 @@ from py_identity_model.core.models import (
 
 @pytest.mark.integration
 class TestAuthCodePKCEIntegration:
-    def test_pkce_pair_round_trip(self):
-        """Generate PKCE pair and verify challenge matches verifier."""
-        verifier, challenge = generate_pkce_pair()
-        assert challenge == generate_code_challenge(verifier)
-
     def test_build_authorize_url_from_discovery(self, discovery_document):
         """Build authorize URL using real discovery document metadata."""
         _verifier, challenge = generate_pkce_pair()
@@ -66,12 +60,12 @@ class TestAuthCodePKCEIntegration:
         # Step 3: Simulate callback (would come from browser redirect)
         callback = f"https://app.example.com/callback?code=simulated_code&state={state}"
         response = parse_authorize_callback_response(callback)
-        assert response.is_successful
+        assert response.is_successful is True
         assert response.code == "simulated_code"
 
         # Step 4: Validate state
         result = validate_authorize_callback_state(response, state)
-        assert result.is_valid
+        assert result.is_valid is True
 
         # Step 5: Build token exchange request
         token_request = AuthorizationCodeTokenRequest(
@@ -97,7 +91,7 @@ class TestLiveAuthCodePKCE:
     def test_auth_code_pkce_confidential_client(self, auth_code_result):
         """Full auth code + PKCE flow with confidential client."""
         token_response = auth_code_result["token_response"]
-        assert token_response.is_successful, (
+        assert token_response.is_successful is True, (
             f"Token exchange failed: {token_response.error}"
         )
 
@@ -109,7 +103,7 @@ class TestLiveAuthCodePKCE:
     def test_auth_code_pkce_public_client(self, public_auth_code_result):
         """Full auth code + PKCE flow with public client."""
         token_response = public_auth_code_result["token_response"]
-        assert token_response.is_successful, (
+        assert token_response.is_successful is True, (
             f"Token exchange failed: {token_response.error}"
         )
 

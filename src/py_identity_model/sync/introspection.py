@@ -49,14 +49,16 @@ def introspect_token(
     log_introspection_request(request)
     params, headers, auth = prepare_introspection_request_data(request)
 
+    response = None
     try:
         client = http_client.client if http_client else get_http_client()
         response = _introspect_token(client, request.address, params, headers, auth)
-        result = process_introspection_response(response)
-        response.close()
-        return result
+        return process_introspection_response(response)
     except Exception as e:
         return handle_introspection_error(e)
+    finally:
+        if response is not None:
+            response.close()
 
 
 __all__ = [

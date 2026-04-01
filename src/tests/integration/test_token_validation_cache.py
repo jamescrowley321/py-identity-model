@@ -27,6 +27,7 @@ from py_identity_model.sync.token_validation import (
     _get_public_key_by_kid,
 )
 
+from .conftest import DEFAULT_VALIDATION_OPTIONS as DEFAULT_OPTIONS
 from .test_utils import (
     _is_valid_jwt_format,
     get_alternate_provider_expired_token,
@@ -35,13 +36,6 @@ from .test_utils import (
 
 # Minimum expected cache hits after validating multiple tokens
 MIN_EXPECTED_CACHE_HITS = 2
-
-
-# Token validation options - only override defaults where needed
-DEFAULT_OPTIONS = {
-    "verify_aud": False,
-    "require_aud": False,
-}
 
 
 @pytest.fixture
@@ -80,7 +74,7 @@ def generate_tokens(test_config: dict, token_endpoint: str, count: int) -> list[
                 scope=test_config["TEST_SCOPE"],
             )
         )
-        assert response.is_successful, "Failed to generate token"
+        assert response.is_successful is True, "Failed to generate token"
         assert response.token is not None
         tokens.append(response.token["access_token"])
     return tokens
@@ -115,7 +109,7 @@ class TestMultipleTokensFromSameProvider:
                 disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
                 token_validation_config=validation_config,
             )
-            assert claims, f"Token {i + 1} validation failed"
+            assert claims is not None, f"Token {i + 1} validation failed"
             validated_claims.append(claims)
 
         # If provider includes jti, verify uniqueness
