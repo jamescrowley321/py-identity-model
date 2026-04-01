@@ -396,9 +396,16 @@ def opaque_access_token(test_config, token_endpoint):
     return response.token["access_token"]
 
 
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_http_client():
-    """Close the persistent HTTP client after all tests complete."""
+@pytest.fixture(autouse=True)
+def _cleanup_http_client_per_test():
+    """Close the persistent HTTP client after each integration test.
+
+    httpx.Client keeps connections pooled in the thread-local singleton.
+    Python 3.13's stricter ``__del__`` raises ``ResourceWarning`` when
+    pooled transports are garbage-collected with open sockets.  Closing
+    the client after every test ensures no connections leak between
+    tests and prevents ``PytestUnraisableExceptionWarning`` failures.
+    """
     yield
     with suppress(Exception):
         close_http_client()
