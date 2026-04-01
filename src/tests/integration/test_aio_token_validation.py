@@ -51,7 +51,9 @@ class TestAsyncTokenValidation:
 
             assert decoded_token is not None
             assert decoded_token["iss"] is not None
-            assert called, "async claims_validator was never invoked"
+            assert len(called) == 1, (
+                "async claims_validator should be invoked exactly once"
+            )
         finally:
             await close_async_http_client()
 
@@ -115,6 +117,8 @@ class TestAsyncTokenValidation:
 
             assert decoded_token is not None
             assert decoded_token["iss"] is not None
-            assert called, "sync claims_validator was never invoked in async context"
+            assert len(called) == 1, (
+                "sync claims_validator should be invoked exactly once in async context"
+            )
         finally:
             await close_async_http_client()

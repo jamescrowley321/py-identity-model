@@ -182,7 +182,7 @@ def test_claim_validation_function_succeeds(
 
     assert decoded_token is not None
     assert decoded_token["iss"] is not None
-    assert called, "claims_validator was never invoked"
+    assert len(called) == 1, "claims_validator should be invoked exactly once"
 
 
 @pytest.mark.integration

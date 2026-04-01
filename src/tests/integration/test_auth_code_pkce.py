@@ -91,7 +91,7 @@ class TestLiveAuthCodePKCE:
     def test_auth_code_pkce_confidential_client(self, auth_code_result):
         """Full auth code + PKCE flow with confidential client."""
         token_response = auth_code_result["token_response"]
-        assert token_response.is_successful, (
+        assert token_response.is_successful is True, (
             f"Token exchange failed: {token_response.error}"
         )
 
@@ -103,7 +103,7 @@ class TestLiveAuthCodePKCE:
     def test_auth_code_pkce_public_client(self, public_auth_code_result):
         """Full auth code + PKCE flow with public client."""
         token_response = public_auth_code_result["token_response"]
-        assert token_response.is_successful, (
+        assert token_response.is_successful is True, (
             f"Token exchange failed: {token_response.error}"
         )
 

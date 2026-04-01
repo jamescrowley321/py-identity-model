@@ -76,8 +76,8 @@ class TestAsyncPAR:
         assert isinstance(req, BaseRequest)
 
     @respx.mock
-    async def test_confidential_client_uses_basic_auth_not_body(self):
-        """M1: client_id must NOT appear in body when using Basic Auth."""
+    async def test_confidential_client_uses_basic_auth_and_body(self):
+        """M1: confidential clients use Basic Auth AND include client_id in body (RFC 9126 §2)."""
         route = respx.post(PAR_URL).mock(
             return_value=httpx.Response(201, json=PAR_RESPONSE)
         )
@@ -92,7 +92,7 @@ class TestAsyncPAR:
         request = route.calls[0].request
         assert request.headers.get("authorization") is not None
         assert request.headers["authorization"].startswith("Basic ")
-        assert "client_id" not in request.content.decode()
+        assert "client_id=app1" in request.content.decode()
 
     @respx.mock
     async def test_public_client_sends_client_id_in_body(self):

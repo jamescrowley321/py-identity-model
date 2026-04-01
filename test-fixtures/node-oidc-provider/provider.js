@@ -71,7 +71,11 @@ async function startProvider() {
       {
         client_id: "test-client-credentials",
         client_secret: "test-client-credentials-secret",
-        grant_types: ["client_credentials"],
+        grant_types: [
+          "client_credentials",
+          "urn:ietf:params:oauth:grant-type:device_code",
+          "urn:ietf:params:oauth:grant-type:token-exchange",
+        ],
         response_types: [],
         scope: "openid api",
         token_endpoint_auth_method: "client_secret_basic",

@@ -54,7 +54,7 @@ class TestLiveRefreshToken:
             ),
         )
         token_response = result["token_response"]
-        assert token_response.is_successful, (
+        assert token_response.is_successful is True, (
             f"Auth code flow failed: {token_response.error}"
         )
         token = token_response.token
@@ -84,7 +84,7 @@ class TestLiveRefreshToken:
                 client_secret=test_config.get("TEST_AUTH_CODE_CLIENT_SECRET"),
             )
         )
-        assert response.is_successful, f"Refresh failed: {response.error}"
+        assert response.is_successful is True, f"Refresh failed: {response.error}"
         assert response.token is not None
         assert "access_token" in response.token
 
@@ -159,6 +159,8 @@ class TestLiveRefreshToken:
                 scope="openid",
             )
         )
-        assert response.is_successful, f"Downscoped refresh failed: {response.error}"
+        assert response.is_successful is True, (
+            f"Downscoped refresh failed: {response.error}"
+        )
         assert response.token is not None
         assert "access_token" in response.token

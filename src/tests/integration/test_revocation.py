@@ -79,7 +79,7 @@ class TestRevocationSync:
             )
         )
 
-        assert response.is_successful, f"Revocation failed: {response.error}"
+        assert response.is_successful is True, f"Revocation failed: {response.error}"
 
     def test_revoke_invalid_token_succeeds(
         self,
@@ -232,7 +232,9 @@ class TestRevocationAsync:
             )
         )
 
-        assert response.is_successful, f"Async revocation failed: {response.error}"
+        assert response.is_successful is True, (
+            f"Async revocation failed: {response.error}"
+        )
 
     @pytest.mark.asyncio
     async def test_revoke_invalid_token_succeeds(

@@ -58,10 +58,15 @@ class TestPARLive:
         endpoint = raw_discovery["pushed_authorization_request_endpoint"]
         _verifier, challenge = generate_pkce_pair()
 
+        auth_code_client_id = test_config.get("TEST_AUTH_CODE_CLIENT_ID")
+        auth_code_client_secret = test_config.get("TEST_AUTH_CODE_CLIENT_SECRET")
+        if not auth_code_client_id:
+            pytest.skip("TEST_AUTH_CODE_CLIENT_ID not configured")
+
         response = push_authorization_request(
             PushedAuthorizationRequest(
                 address=endpoint,
-                client_id=test_config["TEST_CLIENT_ID"],
+                client_id=auth_code_client_id,
                 redirect_uri=test_config.get(
                     "TEST_AUTH_CODE_REDIRECT_URI", "https://localhost/callback"
                 ),
@@ -69,7 +74,7 @@ class TestPARLive:
                 code_challenge=challenge,
                 code_challenge_method="S256",
                 state=secrets.token_urlsafe(32),
-                client_secret=test_config.get("TEST_CLIENT_SECRET"),
+                client_secret=auth_code_client_secret,
             )
         )
 

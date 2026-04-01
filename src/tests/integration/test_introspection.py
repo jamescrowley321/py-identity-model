@@ -80,7 +80,7 @@ class TestIntrospectionSync:
             )
         )
 
-        assert response.is_successful, f"Introspection failed: {response.error}"
+        assert response.is_successful is True, f"Introspection failed: {response.error}"
         assert response.claims is not None
         assert response.claims["active"] is True
 
@@ -227,7 +227,9 @@ class TestIntrospectionAsync:
             )
         )
 
-        assert response.is_successful, f"Async introspection failed: {response.error}"
+        assert response.is_successful is True, (
+            f"Async introspection failed: {response.error}"
+        )
         assert response.claims is not None
         assert response.claims["active"] is True
         assert "client_id" in response.claims

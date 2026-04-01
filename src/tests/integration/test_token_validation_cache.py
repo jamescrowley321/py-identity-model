@@ -74,7 +74,7 @@ def generate_tokens(test_config: dict, token_endpoint: str, count: int) -> list[
                 scope=test_config["TEST_SCOPE"],
             )
         )
-        assert response.is_successful, "Failed to generate token"
+        assert response.is_successful is True, "Failed to generate token"
         assert response.token is not None
         tokens.append(response.token["access_token"])
     return tokens

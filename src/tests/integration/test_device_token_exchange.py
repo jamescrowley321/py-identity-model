@@ -48,7 +48,11 @@ class TestDeviceAuthLive:
 
         # The provider may expose the endpoint but the test client may
         # not have the device_code grant assigned.
-        if not response.is_successful and "invalid_grant" in str(response.error):
+        if (
+            not response.is_successful
+            and response.error
+            and "invalid_grant" in response.error
+        ):
             pytest.skip("Test client does not have device_code grant assigned")
 
         return response
@@ -117,6 +121,8 @@ class TestDeviceAuthLive:
         """Polling with an invalid device code returns an error."""
         if "device_authorization" not in provider_capabilities:
             pytest.skip("Provider does not support device authorization grant")
+        if "device_authorization_endpoint" not in provider_capabilities:
+            pytest.skip("Provider does not expose device_authorization_endpoint")
 
         response = poll_device_token(
             DeviceTokenRequest(
@@ -194,12 +200,10 @@ class TestTokenExchangeLive:
             )
         )
 
-        # Provider may accept or reject audience-scoped exchange
-        if response.is_successful:
-            assert response.token is not None
-            assert "access_token" in response.token
-        else:
-            assert response.error is not None
+        if not response.is_successful:
+            pytest.skip(f"Provider rejected audience-scoped exchange: {response.error}")
+        assert response.token is not None
+        assert "access_token" in response.token
 
     def test_exchange_invalid_token(
         self,
