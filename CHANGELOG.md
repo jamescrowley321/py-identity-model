@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.17.2 (2026-04-05)
+
+### Bug Fixes
+
+- **test**: Extract mutable DEFAULT_OPTIONS to shared fixture and use cache_info.hits
+  ([#302](https://github.com/jamescrowley321/py-identity-model/pull/302),
+  [`0ae7a08`](https://github.com/jamescrowley321/py-identity-model/commit/0ae7a08cacc1470f29e091897cd461ab3260cfea))
+
+
 ## v2.17.1 (2026-03-30)
 
 ### Bug Fixes
