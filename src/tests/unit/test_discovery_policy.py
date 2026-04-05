@@ -383,3 +383,22 @@ class TestValidateEndpointAuthority:
             self._make_response(),
             policy,
         )
+
+
+# Expected count of additional endpoint base addresses
+EXPECTED_ADDITIONAL_ADDRESS_COUNT = 2
+
+
+@pytest.mark.unit
+class TestDiscoveryPolicyAdditionalAddresses:
+    def test_policy_with_additional_addresses(self):
+        policy = DiscoveryPolicy(
+            additional_endpoint_base_addresses=[
+                "https://cdn.example.com",
+                "https://backup.example.com",
+            ]
+        )
+        assert (
+            len(policy.additional_endpoint_base_addresses)
+            == EXPECTED_ADDITIONAL_ADDRESS_COUNT
+        )

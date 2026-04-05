@@ -27,6 +27,7 @@ from py_identity_model.sync.token_validation import (
     _get_public_key_by_kid,
 )
 
+from .conftest import DEFAULT_VALIDATION_OPTIONS as DEFAULT_OPTIONS
 from .test_utils import (
     _is_valid_jwt_format,
     get_alternate_provider_expired_token,
@@ -51,12 +52,12 @@ def clear_validation_caches():
 
 
 @pytest.fixture
-def validation_config(test_config, require_https, default_validation_options):
+def validation_config(test_config, require_https):
     """Create standard validation config for tests."""
     return TokenValidationConfig(
         perform_disco=True,
         audience=test_config["TEST_AUDIENCE"],
-        options=default_validation_options,
+        options=DEFAULT_OPTIONS,
         require_https=require_https,
     )
 
@@ -73,7 +74,7 @@ def generate_tokens(test_config: dict, token_endpoint: str, count: int) -> list[
                 scope=test_config["TEST_SCOPE"],
             )
         )
-        assert response.is_successful, "Failed to generate token"
+        assert response.is_successful is True, "Failed to generate token"
         assert response.token is not None
         tokens.append(response.token["access_token"])
     return tokens
@@ -108,7 +109,7 @@ class TestMultipleTokensFromSameProvider:
                 disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
                 token_validation_config=validation_config,
             )
-            assert claims, f"Token {i + 1} validation failed"
+            assert claims is not None, f"Token {i + 1} validation failed"
             validated_claims.append(claims)
 
         # If provider includes jti, verify uniqueness
@@ -168,9 +169,7 @@ class TestCacheIsolationBetweenProviders:
             f"Expected kid/key mismatch error, got: {exc_info.value}"
         )
 
-    def test_expired_token_from_same_provider_fails(
-        self, test_config, require_https, default_validation_options
-    ):
+    def test_expired_token_from_same_provider_fails(self, test_config, require_https):
         """
         Test that an expired token from the same provider fails with
         the correct error (expiration, not cache issues).
@@ -183,7 +182,7 @@ class TestCacheIsolationBetweenProviders:
 
         # Descope session tokens use a different issuer format than OIDC discovery.
         # Disable issuer verification so we test expiration, not issuer mismatch.
-        expired_options = {**default_validation_options, "verify_iss": False}
+        expired_options = {**DEFAULT_OPTIONS, "verify_iss": False}
         validation_config = TokenValidationConfig(
             perform_disco=True,
             options=expired_options,

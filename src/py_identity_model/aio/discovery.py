@@ -46,6 +46,7 @@ async def get_discovery_document(
         DiscoveryDocumentResponse: Discovery document response
     """
     log_discovery_request(disco_doc_req)
+    response = None
     try:
         # Pre-flight: validate URL scheme BEFORE making the HTTP request
         # to prevent sending plaintext requests to non-loopback hosts
@@ -57,6 +58,9 @@ async def get_discovery_document(
         return process_discovery_response(response, policy)
     except Exception as e:
         return handle_discovery_error(e)
+    finally:
+        if response is not None:
+            await response.aclose()
 
 
 __all__ = [

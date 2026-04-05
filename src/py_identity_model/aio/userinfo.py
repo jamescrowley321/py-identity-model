@@ -51,12 +51,16 @@ async def get_userinfo(
     log_userinfo_request(request)
     headers = prepare_userinfo_headers(request.token)
 
+    response = None
     try:
         client = http_client.client if http_client else get_async_http_client()
         response = await _request_userinfo(client, request.address, headers)
         return process_userinfo_response(response)
     except Exception as e:
         return handle_userinfo_error(e)
+    finally:
+        if response is not None:
+            await response.aclose()
 
 
 __all__ = [

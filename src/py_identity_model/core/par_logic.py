@@ -33,6 +33,7 @@ def prepare_par_request_data(
         )
 
     params: dict[str, str] = {
+        "client_id": request.client_id,
         "redirect_uri": request.redirect_uri,
         "scope": request.scope,
         "response_type": request.response_type,
@@ -51,8 +52,6 @@ def prepare_par_request_data(
     auth: tuple[str, str] | None = None
     if request.client_secret:
         auth = (request.client_id, request.client_secret)
-    else:
-        params["client_id"] = request.client_id
 
     return params, headers, auth
 

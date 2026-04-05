@@ -55,6 +55,14 @@ HTTP_TOO_MANY_REQUESTS = 429
 # JWT format: three dot-separated segments
 JWT_SEGMENT_SEPARATOR_COUNT = 2
 
+# Shared token validation options — audience validation disabled for
+# integration tests because provider-issued tokens may not include an
+# audience matching the test client.
+DEFAULT_VALIDATION_OPTIONS: dict[str, bool] = {
+    "verify_aud": False,
+    "require_aud": False,
+}
+
 
 # ============================================================================
 # Generic provider fixtures
@@ -85,29 +93,18 @@ def test_config(env_file, tmp_path_factory):
 
 @pytest.fixture(scope="session")
 def discovery_document(test_config):
-    """Cached discovery document with retry logic for rate limits."""
+    """Cached discovery document (session-scoped).
 
-    @retry_with_backoff()
-    def fetch_discovery():
-        require_https = test_config.get("TEST_REQUIRE_HTTPS", True)
-        policy = DiscoveryPolicy(require_https=require_https)
-        disco_doc_req = DiscoveryDocumentRequest(
-            address=test_config["TEST_DISCO_ADDRESS"],
-            policy=policy,
-        )
-        response = get_discovery_document(disco_doc_req)
-
-        if not response.is_successful and "429" in str(response.error):
-            request = httpx.Request("GET", test_config["TEST_DISCO_ADDRESS"])
-            raise httpx.HTTPStatusError(
-                RATE_LIMIT_ERROR_MESSAGE,
-                request=request,
-                response=httpx.Response(429),
-            )
-
-        return response
-
-    response = fetch_discovery()
+    The library's ``get_discovery_document`` already retries 3x on
+    429/5xx via ``@retry_with_backoff``.  No outer retry needed.
+    """
+    require_https = test_config.get("TEST_REQUIRE_HTTPS", True)
+    policy = DiscoveryPolicy(require_https=require_https)
+    disco_doc_req = DiscoveryDocumentRequest(
+        address=test_config["TEST_DISCO_ADDRESS"],
+        policy=policy,
+    )
+    response = get_discovery_document(disco_doc_req)
     if not response.is_successful:
         pytest.fail(f"Failed to fetch discovery document: {response.error}")
     return response
@@ -206,24 +203,12 @@ def provider_capabilities(raw_discovery):
 
 @pytest.fixture(scope="session")
 def jwks_response(test_config):
-    """Cached JWKS response with retry logic for rate limits."""
+    """Cached JWKS response (session-scoped).
 
-    @retry_with_backoff()
-    def fetch_jwks():
-        jwks_req = JwksRequest(address=test_config["TEST_JWKS_ADDRESS"])
-        response = get_jwks(jwks_req)
-
-        if not response.is_successful and "429" in str(response.error):
-            request = httpx.Request("GET", test_config["TEST_JWKS_ADDRESS"])
-            raise httpx.HTTPStatusError(
-                RATE_LIMIT_ERROR_MESSAGE,
-                request=request,
-                response=httpx.Response(429),
-            )
-
-        return response
-
-    response = fetch_jwks()
+    The library's ``get_jwks`` already retries 3x on 429/5xx.
+    """
+    jwks_req = JwksRequest(address=test_config["TEST_JWKS_ADDRESS"])
+    response = get_jwks(jwks_req)
     if not response.is_successful:
         pytest.fail(f"Failed to fetch JWKS: {response.error}")
     return response
@@ -261,30 +246,19 @@ def require_https(test_config):
 
 @pytest.fixture(scope="session")
 def client_credentials_token(test_config, token_endpoint):
-    """Cached client credentials token with retry logic for rate limits."""
+    """Cached client credentials token (session-scoped).
 
-    @retry_with_backoff()
-    def fetch_token():
-        response = request_client_credentials_token(
-            ClientCredentialsTokenRequest(
-                client_id=test_config["TEST_CLIENT_ID"],
-                client_secret=test_config["TEST_CLIENT_SECRET"],
-                address=token_endpoint,
-                scope=test_config["TEST_SCOPE"],
-            )
+    The library's ``request_client_credentials_token`` already retries
+    3x on 429/5xx.
+    """
+    response = request_client_credentials_token(
+        ClientCredentialsTokenRequest(
+            client_id=test_config["TEST_CLIENT_ID"],
+            client_secret=test_config["TEST_CLIENT_SECRET"],
+            address=token_endpoint,
+            scope=test_config["TEST_SCOPE"],
         )
-
-        if not response.is_successful and "429" in str(response.error):
-            request = httpx.Request("POST", token_endpoint)
-            raise httpx.HTTPStatusError(
-                RATE_LIMIT_ERROR_MESSAGE,
-                request=request,
-                response=httpx.Response(429),
-            )
-
-        return response
-
-    response = fetch_token()
+    )
     if not response.is_successful:
         pytest.fail(f"Failed to obtain token: {response.error}")
     return response
@@ -349,9 +323,43 @@ def jwt_signing_key(jwks_response, jwt_access_token):
         pytest.skip(f"Key {kid} not found in JWKS")
 
 
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_http_client():
-    """Close the persistent HTTP client after all tests complete."""
+@pytest.fixture(scope="session")
+def opaque_access_token(test_config, token_endpoint):
+    """Opaque access token for introspection/revocation tests.
+
+    Some providers (e.g. node-oidc-provider) cannot introspect or revoke
+    JWT-format tokens.  This fixture uses a dedicated client that receives
+    opaque tokens.  Skips when the opaque client is not configured.
+    """
+    opaque_id = test_config.get("TEST_OPAQUE_CLIENT_ID")
+    opaque_secret = test_config.get("TEST_OPAQUE_CLIENT_SECRET")
+    if not opaque_id or not opaque_secret:
+        pytest.skip("TEST_OPAQUE_CLIENT_ID not configured")
+
+    response = request_client_credentials_token(
+        ClientCredentialsTokenRequest(
+            client_id=opaque_id,
+            client_secret=opaque_secret,
+            address=token_endpoint,
+            scope=test_config["TEST_SCOPE"],
+        )
+    )
+    if not response.is_successful:
+        pytest.fail(f"Failed to obtain opaque token: {response.error}")
+    assert response.token is not None, "Token response has no token dict"
+    return response.token["access_token"]
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_http_client_per_test():
+    """Close the persistent HTTP client after each integration test.
+
+    httpx.Client keeps connections pooled in the thread-local singleton.
+    Python 3.13's stricter ``__del__`` raises ``ResourceWarning`` when
+    pooled transports are garbage-collected with open sockets.  Closing
+    the client after every test ensures no connections leak between
+    tests and prevents ``PytestUnraisableExceptionWarning`` failures.
+    """
     yield
     with suppress(Exception):
         close_http_client()
@@ -642,9 +650,3 @@ def public_auth_code_result(provider_capabilities, discovery_document, test_conf
             resource="urn:test:api",
         ),
     )
-
-
-@pytest.fixture
-def default_validation_options():
-    """Shared token validation options — fresh dict per test to prevent cross-test mutation."""
-    return {"verify_aud": False, "require_aud": False}
