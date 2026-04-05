@@ -24,7 +24,10 @@ class TestAsyncTokenValidation:
 
     @pytest.mark.asyncio
     async def test_async_claims_validator_success(
-        self, test_config, client_credentials_token, require_https
+        self,
+        test_config,
+        client_credentials_token,
+        require_https,
     ):
         """Test async claims validator that succeeds."""
         assert client_credentials_token.token is not None
@@ -59,7 +62,10 @@ class TestAsyncTokenValidation:
 
     @pytest.mark.asyncio
     async def test_async_claims_validator_failure(
-        self, test_config, client_credentials_token, require_https
+        self,
+        test_config,
+        client_credentials_token,
+        require_https,
     ):
         """Test async claims validator that fails."""
         assert client_credentials_token.token is not None
@@ -90,7 +96,10 @@ class TestAsyncTokenValidation:
 
     @pytest.mark.asyncio
     async def test_sync_claims_validator_in_async_context(
-        self, test_config, client_credentials_token, require_https
+        self,
+        test_config,
+        client_credentials_token,
+        require_https,
     ):
         """Test that sync claims validator works in async validation."""
         assert client_credentials_token.token is not None
