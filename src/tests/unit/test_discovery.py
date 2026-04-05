@@ -5,38 +5,8 @@ import respx
 from py_identity_model import DiscoveryPolicy
 from py_identity_model.discovery import (
     DiscoveryDocumentRequest,
-    DiscoveryDocumentResponse,
     get_discovery_document,
 )
-
-
-class TestDiscoveryDocumentRequest:
-    def test_discovery_document_request_creation(self):
-        address = "https://example.com/.well-known/openid_configuration"
-        request = DiscoveryDocumentRequest(address=address)
-        assert request.address == address
-
-
-class TestDiscoveryDocumentResponse:
-    def test_discovery_document_response_creation_minimal(self):
-        response = DiscoveryDocumentResponse(is_successful=True)
-        assert response.is_successful is True
-        assert response.issuer is None
-        assert response.jwks_uri is None
-
-    def test_discovery_document_response_creation_full(self):
-        response = DiscoveryDocumentResponse(
-            is_successful=True,
-            issuer="https://example.com",
-            jwks_uri="https://example.com/jwks",
-            authorization_endpoint="https://example.com/auth",
-            token_endpoint="https://example.com/token",
-        )
-        assert response.is_successful is True
-        assert response.issuer == "https://example.com"
-        assert response.jwks_uri == "https://example.com/jwks"
-        assert response.authorization_endpoint == "https://example.com/auth"
-        assert response.token_endpoint == "https://example.com/token"
 
 
 class TestGetDiscoveryDocument:

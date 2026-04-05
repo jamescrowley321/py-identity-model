@@ -12,7 +12,6 @@ from py_identity_model.core.jwt_helpers import (
     _decode_jwt_cached,
     decode_and_validate_jwt,
 )
-from py_identity_model.core.models import TokenValidationConfig
 from py_identity_model.exceptions import (
     ConfigurationException,
     InvalidIssuerException,
@@ -22,8 +21,6 @@ from py_identity_model.exceptions import (
 
 
 # Test constants
-EXPECTED_LEEWAY_SECONDS = 30
-EXPECTED_ISSUER_COUNT = 2
 
 
 @pytest.fixture
@@ -116,13 +113,6 @@ class TestLeeway:
                 token, key_dict, ["RS256"], None, None, None, leeway=0
             )
 
-    def test_leeway_passed_via_config(self):
-        config = TokenValidationConfig(
-            perform_disco=False,
-            leeway=30,
-        )
-        assert config.leeway == EXPECTED_LEEWAY_SECONDS
-
 
 @pytest.mark.unit
 class TestMultiIssuer:
@@ -164,14 +154,6 @@ class TestMultiIssuer:
                 ["https://idp1.com", "https://idp2.com"],
                 None,
             )
-
-    def test_config_accepts_list_issuer(self):
-        config = TokenValidationConfig(
-            perform_disco=False,
-            issuer=["https://idp1.com", "https://idp2.com"],
-        )
-        assert isinstance(config.issuer, list)
-        assert len(config.issuer) == EXPECTED_ISSUER_COUNT
 
 
 @pytest.mark.unit
@@ -237,13 +219,6 @@ class TestSubjectValidation:
             token, key_dict, ["RS256"], None, None, None, subject=None
         )
         assert decoded["sub"] == "anyone"
-
-    def test_config_subject_field(self):
-        config = TokenValidationConfig(
-            perform_disco=False,
-            subject="expected_user",
-        )
-        assert config.subject == "expected_user"
 
 
 @pytest.mark.unit

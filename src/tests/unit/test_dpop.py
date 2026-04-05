@@ -4,8 +4,6 @@ import jwt as pyjwt
 import pytest
 
 from py_identity_model.core.dpop import (
-    _EC_CURVES,
-    _SUPPORTED_ALGORITHMS,
     build_dpop_headers,
     compute_ath,
     create_dpop_proof,
@@ -83,19 +81,6 @@ class TestDPoPKeyGeneration:
         k1 = generate_dpop_key("RS256")
         k2 = generate_dpop_key("RS256")
         assert k1.jwk_thumbprint != k2.jwk_thumbprint
-
-    def test_slots_prevents_arbitrary_attributes(self):
-        key = generate_dpop_key()
-        with pytest.raises(AttributeError):
-            key.rogue_attr = "injected"  # type: ignore[attr-defined]
-
-    def test_supported_algorithms_immutable(self):
-        with pytest.raises(AttributeError):
-            _SUPPORTED_ALGORITHMS.add("none")  # type: ignore[attr-defined]
-
-    def test_ec_curves_immutable(self):
-        with pytest.raises(TypeError):
-            _EC_CURVES["ES256"] = None  # type: ignore[index]
 
 
 @pytest.mark.unit

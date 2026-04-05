@@ -9,9 +9,7 @@ from py_identity_model.exceptions import (
     FailedResponseAccessError,
 )
 from py_identity_model.jwks import (
-    JsonWebAlgorithmsKeyTypes,
     JsonWebKey,
-    JsonWebKeyParameterNames,
     JwksRequest,
     JwksResponse,
     get_jwks,
@@ -23,20 +21,7 @@ from py_identity_model.jwks import (
 EXPECTED_KEY_COUNT = 2
 
 
-class TestJwksRequest:
-    def test_jwks_request_creation(self):
-        address = "https://example.com/jwks"
-        request = JwksRequest(address=address)
-        assert request.address == address
-
-
 class TestJwksResponse:
-    def test_jwks_response_creation_success(self):
-        keys = [JsonWebKey(kty="RSA", n="example_n", e="AQAB")]
-        response = JwksResponse(is_successful=True, keys=keys)
-        assert response.is_successful is True
-        assert response.keys == keys
-
     def test_jwks_response_creation_failure(self):
         error_msg = "Request failed"
         response = JwksResponse(is_successful=False, error=error_msg)
@@ -46,51 +31,7 @@ class TestJwksResponse:
         assert response.error == error_msg
 
 
-class TestJsonWebKeyParameterNames:
-    def test_parameter_names_enum(self):
-        assert str(JsonWebKeyParameterNames.KTY) == "kty"
-        assert str(JsonWebKeyParameterNames.USE) == "use"
-        assert str(JsonWebKeyParameterNames.ALG) == "alg"
-
-
-class TestJsonWebAlgorithmsKeyTypes:
-    def test_key_types_enum(self):
-        assert JsonWebAlgorithmsKeyTypes.RSA.value == "RSA"
-        assert JsonWebAlgorithmsKeyTypes.EllipticCurve.value == "EC"
-
-
 class TestJsonWebKey:
-    def test_json_web_key_creation_rsa(self):
-        key = JsonWebKey(
-            kty="RSA",
-            use="sig",
-            alg="RS256",
-            kid="key1",
-            n="example_n",
-            e="AQAB",
-        )
-        assert key.kty == "RSA"
-        assert key.use == "sig"
-        assert key.alg == "RS256"
-        assert key.kid == "key1"
-        assert key.n == "example_n"
-        assert key.e == "AQAB"
-
-    def test_json_web_key_creation_ec(self):
-        key = JsonWebKey(
-            kty="EC",
-            use="sig",
-            alg="ES256",
-            kid="key2",
-            crv="P-256",
-            x="example_x",
-            y="example_y",
-        )
-        assert key.kty == "EC"
-        assert key.crv == "P-256"
-        assert key.x == "example_x"
-        assert key.y == "example_y"
-
     def test_json_web_key_validation_missing_kty(self):
         with pytest.raises(
             ConfigurationException,

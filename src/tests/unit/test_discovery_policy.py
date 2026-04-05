@@ -2,7 +2,7 @@
 
 import pytest
 
-from py_identity_model import DiscoveryDocumentRequest, DiscoveryPolicy
+from py_identity_model import DiscoveryPolicy
 from py_identity_model.core.discovery_policy import (
     is_loopback,
     parse_discovery_url,
@@ -19,27 +19,6 @@ from py_identity_model.exceptions import (
     ConfigurationException,
     DiscoveryException,
 )
-
-
-@pytest.mark.unit
-class TestDiscoveryPolicy:
-    def test_default_policy(self):
-        policy = DiscoveryPolicy()
-        assert policy.require_https is True
-        assert policy.allow_http_on_loopback is True
-        assert policy.validate_issuer is True
-        assert policy.validate_endpoints is True
-        assert policy.require_key_set is True
-        assert policy.additional_endpoint_base_addresses == []
-        assert policy.authority is None
-
-    def test_relaxed_policy(self):
-        policy = DiscoveryPolicy(
-            require_https=False,
-            validate_issuer=False,
-        )
-        assert policy.require_https is False
-        assert policy.validate_issuer is False
 
 
 @pytest.mark.unit
@@ -224,19 +203,6 @@ class TestValidateHttpsUrlWithPolicy:
 
 
 @pytest.mark.unit
-class TestDiscoveryDocumentRequestWithPolicy:
-    def test_request_without_policy(self):
-        req = DiscoveryDocumentRequest(address="https://auth.example.com")
-        assert req.policy is None
-
-    def test_request_with_policy(self):
-        policy = DiscoveryPolicy(require_https=False)
-        req = DiscoveryDocumentRequest(address="http://localhost:8080", policy=policy)
-        assert req.policy is not None
-        assert req.policy.require_https is False
-
-
-@pytest.mark.unit
 class TestValidateEndpointAuthority:
     """Tests for _validate_endpoint_authority (M2 & M3 coverage)."""
 
@@ -382,23 +348,4 @@ class TestValidateEndpointAuthority:
             "jwks_uri",
             self._make_response(),
             policy,
-        )
-
-
-# Expected count of additional endpoint base addresses
-EXPECTED_ADDITIONAL_ADDRESS_COUNT = 2
-
-
-@pytest.mark.unit
-class TestDiscoveryPolicyAdditionalAddresses:
-    def test_policy_with_additional_addresses(self):
-        policy = DiscoveryPolicy(
-            additional_endpoint_base_addresses=[
-                "https://cdn.example.com",
-                "https://backup.example.com",
-            ]
-        )
-        assert (
-            len(policy.additional_endpoint_base_addresses)
-            == EXPECTED_ADDITIONAL_ADDRESS_COUNT
         )

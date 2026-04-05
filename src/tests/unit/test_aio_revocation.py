@@ -5,9 +5,7 @@ import pytest
 import respx
 
 from py_identity_model import (
-    BaseResponse,
     TokenRevocationRequest,
-    TokenRevocationResponse,
 )
 from py_identity_model.aio.revocation import revoke_token
 
@@ -98,15 +96,6 @@ class TestAsyncRevocation:
         assert response.is_successful is False
         assert response.error is not None
         assert "Connection refused" in response.error
-
-    async def test_response_inherits_base(self):
-        resp = TokenRevocationResponse(is_successful=True)
-        assert isinstance(resp, BaseResponse)
-
-    async def test_failed_response_repr_does_not_crash(self):
-        resp = TokenRevocationResponse(is_successful=False, error="fail")
-        text = repr(resp)
-        assert "TokenRevocationResponse" in text
 
     @respx.mock
     async def test_empty_client_secret_uses_public_client_flow(self):

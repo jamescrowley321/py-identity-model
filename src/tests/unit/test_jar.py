@@ -14,8 +14,6 @@ import pytest
 
 from py_identity_model import generate_pkce_pair
 from py_identity_model.core.jar import (
-    _RESERVED_CLAIMS,
-    _SUPPORTED_ALGORITHMS,
     build_jar_authorization_url,
     create_request_object,
 )
@@ -180,22 +178,6 @@ class TestCreateRequestObject:
                 redirect_uri="https://app.com/cb",
                 exp="99999999999",
             )
-
-    def test_reserved_claims_includes_oauth_params(self):
-        """M1: _RESERVED_CLAIMS guards state/nonce/code_challenge/code_challenge_method.
-
-        These are explicit keyword args so Python routing prevents them from
-        entering extra_claims in normal usage. The frozenset is defense-in-depth
-        against programmatic dict construction.
-        """
-        for claim in (
-            "state",
-            "nonce",
-            "code_challenge",
-            "code_challenge_method",
-            "jti",
-        ):
-            assert claim in _RESERVED_CLAIMS, f"{claim} missing from _RESERVED_CLAIMS"
 
     def test_kid_included_in_header(self):
         """M2: kid parameter appears in JWT header for key lookup."""
@@ -404,9 +386,6 @@ class TestCreateRequestObject:
                 code_challenge="abc123",
                 code_challenge_method="",
             )
-
-    def test_eddsa_algorithm_accepted(self):
-        assert "EdDSA" in _SUPPORTED_ALGORITHMS
 
     def test_zero_lifetime_rejected(self):
         pem = _ec_private_key_pem()

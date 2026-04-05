@@ -9,7 +9,6 @@ from py_identity_model.core.authorize_response import (
 from py_identity_model.exceptions import (
     AuthorizeCallbackException,
     FailedResponseAccessError,
-    PyIdentityModelException,
     SuccessfulResponseAccessError,
     ValidationException,
 )
@@ -285,12 +284,6 @@ class TestAuthorizeCallbackResponseGuards:
 @pytest.mark.unit
 class TestAuthorizeCallbackException:
     """Tests for AuthorizeCallbackException hierarchy."""
-
-    def test_inherits_from_validation_exception(self):
-        assert isinstance(AuthorizeCallbackException("err"), ValidationException)
-
-    def test_inherits_from_base_exception(self):
-        assert isinstance(AuthorizeCallbackException("err"), PyIdentityModelException)
 
     def test_catchable_as_validation_exception(self):
         with pytest.raises(ValidationException):

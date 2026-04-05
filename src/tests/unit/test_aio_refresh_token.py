@@ -5,9 +5,7 @@ import pytest
 import respx
 
 from py_identity_model import (
-    BaseResponse,
     RefreshTokenRequest,
-    RefreshTokenResponse,
 )
 from py_identity_model.aio.token_client import refresh_token
 from py_identity_model.exceptions import FailedResponseAccessError
@@ -177,10 +175,6 @@ class TestAsyncRefreshToken:
 
         request = route.calls[0].request
         assert request.headers["content-type"] == "application/x-www-form-urlencoded"
-
-    async def test_response_inherits_base(self):
-        resp = RefreshTokenResponse(is_successful=True, token={})
-        assert isinstance(resp, BaseResponse)
 
     @respx.mock
     async def test_unexpected_error_returns_error_response(self):

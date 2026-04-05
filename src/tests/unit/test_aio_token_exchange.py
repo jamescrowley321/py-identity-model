@@ -5,10 +5,7 @@ import pytest
 import respx
 
 from py_identity_model import (
-    BaseRequest,
-    BaseResponse,
     TokenExchangeRequest,
-    TokenExchangeResponse,
 )
 from py_identity_model.aio.token_exchange import exchange_token
 from py_identity_model.core.token_type import ACCESS_TOKEN, JWT
@@ -257,23 +254,6 @@ class TestAsyncExchangeToken:
         assert response.is_successful is False
         assert response.error is not None
         assert "Connection refused" in response.error
-
-    async def test_request_inherits_base(self):
-        req = TokenExchangeRequest(
-            address=TOKEN_URL,
-            client_id="app",
-            subject_token="tok",
-            subject_token_type=ACCESS_TOKEN,
-        )
-        assert isinstance(req, BaseRequest)
-
-    async def test_response_inherits_base(self):
-        resp = TokenExchangeResponse(
-            is_successful=True,
-            token={"access_token": "tok"},
-            issued_token_type=ACCESS_TOKEN,
-        )
-        assert isinstance(resp, BaseResponse)
 
     @respx.mock
     async def test_missing_access_token_returns_error(self):

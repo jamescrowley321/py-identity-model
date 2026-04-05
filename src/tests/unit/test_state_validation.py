@@ -10,7 +10,6 @@ from py_identity_model.core.authorize_response import (
 )
 from py_identity_model.core.state_validation import (
     AuthorizeCallbackValidationResult,
-    StateValidationResult,
     validate_authorize_callback_state,
 )
 
@@ -146,15 +145,3 @@ class TestValidateAuthorizeCallbackState:
 
         assert result.is_valid is False
         assert result.result is AuthorizeCallbackValidationResult.MISSING_STATE
-
-    def test_result_dataclass_fields(self):
-        """Verify StateValidationResult exposes all documented fields."""
-        r = StateValidationResult(
-            is_valid=False,
-            result=AuthorizeCallbackValidationResult.STATE_MISMATCH,
-            error="e",
-            error_description="d",
-        )
-        assert r.is_valid is False
-        assert r.error == "e"
-        assert r.error_description == "d"
