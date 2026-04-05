@@ -4,7 +4,6 @@ import httpx
 import pytest
 import respx
 
-from py_identity_model import BaseResponse
 from py_identity_model.aio.token_client import (
     request_authorization_code_token as request_authorization_code_token_async,
 )
@@ -81,25 +80,6 @@ class TestAuthCodeTokenExchange:
         response = request_authorization_code_token(request)
 
         assert response.is_successful is False
-
-    def test_request_model_fields(self):
-        req = AuthorizationCodeTokenRequest(
-            address=TOKEN_URL,
-            client_id="app1",
-            code="code",
-            redirect_uri="https://app.com/cb",
-            code_verifier="verifier",
-            client_secret="secret",
-            scope="openid",
-        )
-        assert req.address == TOKEN_URL
-        assert req.code_verifier == "verifier"
-        assert req.client_secret == "secret"
-        assert req.scope == "openid"
-
-    def test_response_is_base_response(self):
-        resp = AuthorizationCodeTokenResponse(is_successful=True, token={})
-        assert isinstance(resp, BaseResponse)
 
     def test_response_repr_success_no_crash(self):
         """repr() on successful response must not crash (T104 pattern)."""

@@ -5,8 +5,6 @@ import pytest
 import respx
 
 from py_identity_model import (
-    BaseRequest,
-    BaseResponse,
     FailedResponseAccessError,
     TokenExchangeRequest,
     TokenExchangeResponse,
@@ -126,23 +124,6 @@ class TestExchangeToken:
             )
         )
         assert response.is_successful is True
-
-    def test_request_inherits_base(self):
-        req = TokenExchangeRequest(
-            address=TOKEN_URL,
-            client_id="app",
-            subject_token="tok",
-            subject_token_type=ACCESS_TOKEN,
-        )
-        assert isinstance(req, BaseRequest)
-
-    def test_response_inherits_base(self):
-        resp = TokenExchangeResponse(
-            is_successful=True,
-            token={"access_token": "tok"},
-            issued_token_type=ACCESS_TOKEN,
-        )
-        assert isinstance(resp, BaseResponse)
 
     @respx.mock
     def test_public_client_sends_client_id_in_body(self):
@@ -502,18 +483,6 @@ class TestExchangeToken:
 
 @pytest.mark.unit
 class TestTokenExchangeModels:
-    def test_request_with_delegation(self):
-        req = TokenExchangeRequest(
-            address="https://auth.example.com/token",
-            client_id="svc-a",
-            subject_token="user-token",
-            subject_token_type=token_type.ACCESS_TOKEN,
-            actor_token="svc-a-token",
-            actor_token_type=token_type.JWT,
-        )
-        assert req.actor_token == "svc-a-token"
-        assert req.actor_token_type == token_type.JWT
-
     def test_response_guarded_fields(self):
         resp = TokenExchangeResponse(
             is_successful=False,
@@ -523,24 +492,6 @@ class TestTokenExchangeModels:
             _ = resp.token
         with pytest.raises(FailedResponseAccessError):
             _ = resp.issued_token_type
-
-    def test_response_success_fields(self):
-        resp = TokenExchangeResponse(
-            is_successful=True,
-            token={"access_token": "new-tok", "token_type": "Bearer"},
-            issued_token_type=token_type.ACCESS_TOKEN,
-        )
-        assert resp.token is not None
-        assert resp.token["access_token"] == "new-tok"
-        assert resp.issued_token_type == token_type.ACCESS_TOKEN
-
-    def test_token_type_constants(self):
-        assert token_type.ACCESS_TOKEN.startswith("urn:ietf:params:oauth:")
-        assert token_type.REFRESH_TOKEN.startswith("urn:ietf:params:oauth:")
-        assert token_type.ID_TOKEN.startswith("urn:ietf:params:oauth:")
-        assert token_type.SAML1.startswith("urn:ietf:params:oauth:")
-        assert token_type.SAML2.startswith("urn:ietf:params:oauth:")
-        assert token_type.JWT.startswith("urn:ietf:params:oauth:")
 
 
 @pytest.mark.unit

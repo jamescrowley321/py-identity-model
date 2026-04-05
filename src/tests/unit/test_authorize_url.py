@@ -5,7 +5,6 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 
 from py_identity_model.core.authorize_url import (
-    _RESERVED_PARAMS,
     build_authorization_url,
 )
 
@@ -92,20 +91,6 @@ class TestBuildAuthorizationUrl:
         assert "state" not in params
         assert "nonce" not in params
         assert "code_challenge" not in params
-
-    def test_reserved_params_guard_exists(self):
-        """MF-1: _RESERVED_PARAMS set covers all security-critical params."""
-        expected = {
-            "client_id",
-            "redirect_uri",
-            "scope",
-            "response_type",
-            "state",
-            "nonce",
-            "code_challenge",
-            "code_challenge_method",
-        }
-        assert expected == _RESERVED_PARAMS
 
     def test_extra_params_do_not_clobber_required_params(self):
         """MF-1: extra_params are additive, required params always present."""

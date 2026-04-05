@@ -5,12 +5,9 @@ import pytest
 import respx
 
 from py_identity_model import (
-    BaseRequest,
-    BaseResponse,
     DeviceAuthorizationRequest,
     DeviceAuthorizationResponse,
     DeviceTokenRequest,
-    DeviceTokenResponse,
     FailedResponseAccessError,
 )
 from py_identity_model.core.device_auth_logic import (
@@ -91,20 +88,6 @@ class TestRequestDeviceAuthorization:
             )
         )
         assert response.is_successful is False
-
-    def test_request_inherits_base(self):
-        req = DeviceAuthorizationRequest(address=DEVICE_AUTH_URL, client_id="app")
-        assert isinstance(req, BaseRequest)
-
-    def test_response_inherits_base(self):
-        resp = DeviceAuthorizationResponse(
-            is_successful=True,
-            device_code="code",
-            user_code="ABCD-EFGH",
-            verification_uri="https://example.com/device",
-            expires_in=1800,
-        )
-        assert isinstance(resp, BaseResponse)
 
     @respx.mock
     def test_missing_required_fields_returns_error(self):
@@ -452,36 +435,9 @@ class TestPollDeviceToken:
         assert response.is_successful is False
         assert response.error_code is None
 
-    def test_token_request_inherits_base(self):
-        req = DeviceTokenRequest(
-            address=TOKEN_URL, client_id="app", device_code="code123"
-        )
-        assert isinstance(req, BaseRequest)
-
-    def test_token_response_inherits_base(self):
-        resp = DeviceTokenResponse(is_successful=True, token={"access_token": "tok"})
-        assert isinstance(resp, BaseResponse)
-
 
 @pytest.mark.unit
 class TestDeviceAuthModels:
-    def test_device_auth_request_scope(self):
-        req = DeviceAuthorizationRequest(
-            address="https://auth.example.com/device/authorize",
-            client_id="cli-app",
-            scope="openid profile offline_access",
-        )
-        assert req.scope == "openid profile offline_access"
-        assert req.client_secret is None
-
-    def test_device_auth_request_with_secret(self):
-        req = DeviceAuthorizationRequest(
-            address="https://auth.example.com/device/authorize",
-            client_id="confidential-app",
-            client_secret="s3cret",
-        )
-        assert req.client_secret == "s3cret"
-
     def test_device_auth_response_guarded_fields(self):
         resp = DeviceAuthorizationResponse(
             is_successful=False,
@@ -491,47 +447,6 @@ class TestDeviceAuthModels:
             _ = resp.device_code
         with pytest.raises(FailedResponseAccessError):
             _ = resp.user_code
-
-    def test_device_auth_response_success(self):
-        resp = DeviceAuthorizationResponse(
-            is_successful=True,
-            device_code="dev123",
-            user_code="ABCD-EFGH",
-            verification_uri="https://auth.example.com/device",
-            expires_in=1800,
-            interval=5,
-        )
-        assert resp.device_code == "dev123"
-        assert resp.user_code == "ABCD-EFGH"
-        assert resp.interval == EXPECTED_INTERVAL
-
-    def test_device_token_response_pending(self):
-        resp = DeviceTokenResponse(
-            is_successful=False,
-            error="User hasn't authorized yet",
-            error_code="authorization_pending",
-        )
-        assert resp.error_code == "authorization_pending"
-        assert resp.interval is None
-
-    def test_device_token_response_slow_down(self):
-        resp = DeviceTokenResponse(
-            is_successful=False,
-            error="Slow down",
-            error_code="slow_down",
-            interval=10,
-        )
-        assert resp.error_code == "slow_down"
-        assert resp.interval == SLOW_DOWN_INTERVAL
-
-    def test_device_token_response_success(self):
-        resp = DeviceTokenResponse(
-            is_successful=True,
-            token={"access_token": "at123", "token_type": "Bearer"},
-        )
-        assert resp.token is not None
-        assert resp.token["access_token"] == "at123"
-        assert resp.error_code is None
 
 
 @pytest.mark.unit

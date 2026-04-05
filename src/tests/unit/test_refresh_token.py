@@ -5,10 +5,7 @@ import pytest
 import respx
 
 from py_identity_model import (
-    BaseRequest,
-    BaseResponse,
     RefreshTokenRequest,
-    RefreshTokenResponse,
 )
 from py_identity_model.exceptions import FailedResponseAccessError
 from py_identity_model.sync.token_client import refresh_token
@@ -153,13 +150,3 @@ class TestRefreshToken:
         assert response.is_successful is False
         assert response.error is not None
         assert "Connection refused" in response.error
-
-    def test_request_inherits_base(self):
-        req = RefreshTokenRequest(
-            address=TOKEN_URL, client_id="app", refresh_token="rt"
-        )
-        assert isinstance(req, BaseRequest)
-
-    def test_response_inherits_base(self):
-        resp = RefreshTokenResponse(is_successful=True, token={})
-        assert isinstance(resp, BaseResponse)

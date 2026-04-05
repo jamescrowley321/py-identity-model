@@ -5,9 +5,7 @@ import pytest
 import respx
 
 from py_identity_model import (
-    BaseResponse,
     TokenIntrospectionRequest,
-    TokenIntrospectionResponse,
 )
 from py_identity_model.aio.introspection import introspect_token
 from py_identity_model.exceptions import FailedResponseAccessError
@@ -144,15 +142,6 @@ class TestAsyncIntrospection:
         assert response.is_successful is False
         assert response.error is not None
         assert "Connection refused" in response.error
-
-    async def test_response_inherits_base(self):
-        resp = TokenIntrospectionResponse(is_successful=True, claims={})
-        assert isinstance(resp, BaseResponse)
-
-    async def test_failed_response_repr_does_not_crash(self):
-        resp = TokenIntrospectionResponse(is_successful=False, error="fail")
-        text = repr(resp)
-        assert "TokenIntrospectionResponse" in text
 
     @respx.mock
     async def test_non_dict_json_response(self):

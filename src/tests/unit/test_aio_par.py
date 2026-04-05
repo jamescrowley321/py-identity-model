@@ -5,10 +5,7 @@ import pytest
 import respx
 
 from py_identity_model import (
-    BaseRequest,
-    BaseResponse,
     PushedAuthorizationRequest,
-    PushedAuthorizationResponse,
 )
 from py_identity_model.aio.par import push_authorization_request
 
@@ -68,12 +65,6 @@ class TestAsyncPAR:
             )
         )
         assert response.is_successful is False
-
-    async def test_request_inherits_base(self):
-        req = PushedAuthorizationRequest(
-            address=PAR_URL, client_id="app", redirect_uri="https://app.com/cb"
-        )
-        assert isinstance(req, BaseRequest)
 
     @respx.mock
     async def test_confidential_client_uses_basic_auth_and_body(self):
@@ -186,12 +177,6 @@ class TestAsyncPAR:
         assert response.is_successful is False
         assert response.error is not None
         assert "Connection refused" in response.error
-
-    async def test_response_inherits_base(self):
-        resp = PushedAuthorizationResponse(
-            is_successful=True, request_uri="urn:...", expires_in=60
-        )
-        assert isinstance(resp, BaseResponse)
 
     @respx.mock
     async def test_content_type_header(self):

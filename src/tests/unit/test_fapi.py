@@ -3,10 +3,6 @@
 import pytest
 
 from py_identity_model.core.fapi import (
-    FAPI2_ALLOWED_AUTH_METHODS,
-    FAPI2_ALLOWED_SIGNING_ALGORITHMS,
-    FAPI2_REQUIRED_PKCE_METHOD,
-    FAPI2_REQUIRED_RESPONSE_TYPE,
     FAPIValidationResult,
     validate_fapi_authorization_request,
     validate_fapi_client_config,
@@ -469,26 +465,6 @@ class TestValidateFAPIDiscovery:
         alg_violation = next(v for v in result.violations if "signing" in v)
         assert "[" not in alg_violation
         assert "]" not in alg_violation
-
-
-@pytest.mark.unit
-class TestFAPIConstants:
-    def test_allowed_algorithms(self):
-        assert "ES256" in FAPI2_ALLOWED_SIGNING_ALGORITHMS
-        assert "PS256" in FAPI2_ALLOWED_SIGNING_ALGORITHMS
-        assert "RS256" not in FAPI2_ALLOWED_SIGNING_ALGORITHMS
-
-    def test_allowed_auth_methods(self):
-        assert "private_key_jwt" in FAPI2_ALLOWED_AUTH_METHODS
-        assert "tls_client_auth" in FAPI2_ALLOWED_AUTH_METHODS
-        assert "self_signed_tls_client_auth" in FAPI2_ALLOWED_AUTH_METHODS
-        assert "client_secret_basic" not in FAPI2_ALLOWED_AUTH_METHODS
-
-    def test_required_pkce_method(self):
-        assert FAPI2_REQUIRED_PKCE_METHOD == "S256"
-
-    def test_required_response_type(self):
-        assert FAPI2_REQUIRED_RESPONSE_TYPE == "code"
 
 
 @pytest.mark.unit

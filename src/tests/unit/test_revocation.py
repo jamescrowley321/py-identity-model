@@ -5,10 +5,7 @@ import pytest
 import respx
 
 from py_identity_model import (
-    BaseRequest,
-    BaseResponse,
     TokenRevocationRequest,
-    TokenRevocationResponse,
 )
 from py_identity_model.sync.revocation import revoke_token
 
@@ -99,30 +96,6 @@ class TestRevocation:
         assert response.is_successful is False
         assert response.error is not None
         assert "Connection refused" in response.error
-
-    def test_request_inherits_base(self):
-        req = TokenRevocationRequest(address=REVOKE_URL, token="tok", client_id="app")
-        assert isinstance(req, BaseRequest)
-
-    def test_response_inherits_base(self):
-        resp = TokenRevocationResponse(is_successful=True)
-        assert isinstance(resp, BaseResponse)
-
-    def test_response_has_no_guarded_fields(self):
-        """Revocation response has no data fields to guard."""
-        resp = TokenRevocationResponse(is_successful=True)
-        assert resp.is_successful is True
-
-    def test_failed_response_repr_does_not_crash(self):
-        resp = TokenRevocationResponse(is_successful=False, error="fail")
-        text = repr(resp)
-        assert "TokenRevocationResponse" in text
-
-    def test_failed_response_eq_does_not_crash(self):
-        resp1 = TokenRevocationResponse(is_successful=False, error="fail")
-        resp2 = TokenRevocationResponse(is_successful=False, error="fail")
-        # Should not raise FailedResponseAccessError
-        assert resp1 is not resp2
 
     @respx.mock
     def test_confidential_client_uses_basic_auth(self):

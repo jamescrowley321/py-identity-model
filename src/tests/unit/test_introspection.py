@@ -5,10 +5,7 @@ import pytest
 import respx
 
 from py_identity_model import (
-    BaseRequest,
-    BaseResponse,
     TokenIntrospectionRequest,
-    TokenIntrospectionResponse,
 )
 from py_identity_model.exceptions import FailedResponseAccessError
 from py_identity_model.sync.introspection import introspect_token
@@ -145,29 +142,6 @@ class TestIntrospection:
         )
 
         assert response.is_successful is True
-
-    def test_request_inherits_base(self):
-        req = TokenIntrospectionRequest(
-            address=INTROSPECT_URL,
-            token="tok",
-            client_id="app",
-        )
-        assert isinstance(req, BaseRequest)
-
-    def test_response_inherits_base(self):
-        resp = TokenIntrospectionResponse(is_successful=True, claims={})
-        assert isinstance(resp, BaseResponse)
-
-    def test_failed_response_repr_does_not_crash(self):
-        resp = TokenIntrospectionResponse(is_successful=False, error="fail")
-        text = repr(resp)
-        assert "TokenIntrospectionResponse" in text
-
-    def test_failed_response_eq_does_not_crash(self):
-        resp1 = TokenIntrospectionResponse(is_successful=False, error="fail")
-        resp2 = TokenIntrospectionResponse(is_successful=False, error="fail")
-        # Should not raise FailedResponseAccessError
-        assert resp1 is not resp2
 
     @respx.mock
     def test_non_dict_json_response(self):

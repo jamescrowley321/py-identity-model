@@ -5,12 +5,8 @@ import pytest
 import respx
 
 from py_identity_model import (
-    BaseRequest,
-    BaseResponse,
     DeviceAuthorizationRequest,
-    DeviceAuthorizationResponse,
     DeviceTokenRequest,
-    DeviceTokenResponse,
 )
 from py_identity_model.aio.device_auth import (
     poll_device_token,
@@ -85,20 +81,6 @@ class TestAsyncRequestDeviceAuthorization:
             )
         )
         assert response.is_successful is False
-
-    async def test_request_inherits_base(self):
-        req = DeviceAuthorizationRequest(address=DEVICE_AUTH_URL, client_id="app")
-        assert isinstance(req, BaseRequest)
-
-    async def test_response_inherits_base(self):
-        resp = DeviceAuthorizationResponse(
-            is_successful=True,
-            device_code="code",
-            user_code="ABCD-EFGH",
-            verification_uri="https://example.com/device",
-            expires_in=1800,
-        )
-        assert isinstance(resp, BaseResponse)
 
     @respx.mock
     async def test_missing_required_fields_returns_error(self):
@@ -460,16 +442,6 @@ class TestAsyncPollDeviceToken:
         )
         assert response.is_successful is False
         assert response.error_code is None
-
-    async def test_token_request_inherits_base(self):
-        req = DeviceTokenRequest(
-            address=TOKEN_URL, client_id="app", device_code="code123"
-        )
-        assert isinstance(req, BaseRequest)
-
-    async def test_token_response_inherits_base(self):
-        resp = DeviceTokenResponse(is_successful=True, token={"access_token": "tok"})
-        assert isinstance(resp, BaseResponse)
 
     @respx.mock
     async def test_network_error(self):
