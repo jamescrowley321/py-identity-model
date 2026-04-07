@@ -1,6 +1,6 @@
-# Duende IdentityServer vs node-oidc-provider: Test Fixture Gap Analysis
+# Integration Test Fixture Gap Analysis
 
-This document compares the two OIDC test fixtures used by py-identity-model and recommends a path forward.
+This document compares the OIDC test fixtures used by py-identity-model to identify coverage gaps and guide expansion of real-provider testing.
 
 ## Background
 
@@ -102,34 +102,47 @@ Duende IdentityServer transitioned from the open-source IdentityServer4 to a com
 **IdentityServer can run:** 6 of 14 test files (core discovery, JWKS, token client, token validation).
 **node-oidc-provider can run:** 13 of 14 test files (all except FAPI 2.0 which is planned).
 
-## Recommendation: Deprecate IdentityServer Fixture
+## Coverage Gaps to Address
 
-**Action:** Deprecate and remove the IdentityServer fixture. Retain node-oidc-provider as the primary local test fixture alongside Ory Hydra and Descope as external provider targets.
+### IdentityServer fixture gaps
 
-**Rationale:**
+The current IdentityServer fixture only exercises core discovery, JWKS, client credentials, and token validation. These features could be enabled in the fixture to close the gap:
 
-1. **Redundant coverage** — Every test that runs against IdentityServer also runs against node-oidc-provider. There is no unique coverage from IdentityServer.
-
-2. **Feature gap is permanent** — IdentityServer will never cover DPoP, PAR, JAR, Device Authorization, or Token Exchange in this fixture without significant .NET development effort. node-oidc-provider supports all of these with configuration alone.
-
-3. **CI efficiency** — Removing the 4-service IdentityServer stack (cert-generator → identityserver → fastapi-app → test-runner) saves ~60 seconds of setup time and eliminates TLS certificate complexity.
-
-4. **Licensing simplicity** — MIT vs commercial license removes compliance overhead.
-
-5. **Maintenance burden** — The IdentityServer fixture requires .NET SDK updates, Duende package updates, and certificate management. node-oidc-provider requires only Node.js and two npm packages.
-
-**Migration path:**
-
-1. Remove `examples/identity-server/` directory
-2. Remove cert-generator and identityserver services from `examples/docker-compose.test.yml`
-3. Update `examples/docker-compose.test.yml` to use node-oidc-provider as the identity provider for example app tests
-4. Update `docs/identity-server-example.md` with a deprecation notice or remove it
-5. Update `docs/integration-tests.md` to reflect the new provider matrix
-
-**Providers after deprecation:**
-
-| Provider | Type | Purpose |
+| Feature | Effort | Notes |
 |---|---|---|
-| node-oidc-provider | Local (Docker) | Primary: full RFC coverage, CI integration tests |
-| Ory Hydra | External (cloud) | Secondary: real-world provider validation |
-| Descope | External (cloud) | Secondary: production provider used by identity-stack |
+| Token Introspection | Low | Enable `AllowIntrospection` on existing clients, add API scope |
+| Token Revocation | Low | Enable revocation endpoint in server config |
+| PKCE enforcement | Low | Add a public client with `RequirePkce = true` |
+| Refresh tokens | Low | Already partially working, needs `offline_access` scope |
+| UserInfo | Low | Already partially working, needs claims mapping |
+
+These features require more significant work or may not be supported in the current Duende version:
+
+| Feature | Effort | Notes |
+|---|---|---|
+| DPoP (RFC 9449) | High | Requires Duende Business Edition or custom middleware |
+| PAR (RFC 9126) | Medium | Supported in Duende 6.3+, needs config |
+| JAR (RFC 9101) | Medium | Needs request object signing config |
+| Device Authorization | Medium | Needs custom UI/consent handler |
+| Token Exchange | Medium | Requires custom grant validator |
+
+### Cross-provider coverage targets
+
+The goal is to validate py-identity-model against multiple real providers to catch provider-specific quirks (non-standard claims, discovery URL formats, key rotation behavior).
+
+| Provider | Type | Current Coverage | Target |
+|---|---|---|---|
+| node-oidc-provider | Local (Docker) | 13/14 features | Add FAPI 2.0 (T125) |
+| IdentityServer | Local (Docker) | 6/14 features | Enable introspection, revocation, PKCE |
+| Ory Hydra | External | 8/14 features | Maintain current coverage |
+| Descope | External | 6/14 features | Add refresh, introspection if supported |
+| AWS Cognito | External | Not started | Core flows + provider-specific claims (`cognito:groups`) |
+| Microsoft Entra ID | External | Not started | Core flows + multi-tenant discovery, `tid`/`oid` claims |
+| Auth0 | External | Not started | Core flows + `permissions`/`org_id` claims, custom domains |
+
+### Next steps
+
+1. **Quick wins** — Enable introspection, revocation, and PKCE in the IdentityServer fixture (low effort, closes 3 gaps)
+2. **Cloud provider cassettes** — Build cassette-based integration tests (pytest-recording/vcrpy) for Cognito, Entra ID, and Auth0 with live/replay mode switching
+3. **Nightly CI** — Add a scheduled workflow that runs live tests against cloud providers and creates issues on drift detection
+4. **FAPI 2.0** — Complete T125 (node-oidc-provider FAPI integration tests)
