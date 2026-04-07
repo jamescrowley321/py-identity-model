@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.17.3 (2026-04-07)
+
+### Bug Fixes
+
+- **parsers**: Handle missing kid in JWT header per OIDC Core Section 10.1
+  ([`fbd6d1e`](https://github.com/jamescrowley321/py-identity-model/commit/fbd6d1e77e5faf96c8212675dd60ce7775ef184f))
+
+
 ## v2.17.2 (2026-04-05)
 
 ### Bug Fixes
