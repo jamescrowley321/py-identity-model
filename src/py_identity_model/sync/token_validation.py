@@ -111,8 +111,7 @@ def _refresh_jwks(jwks_uri: str) -> JwksResponse:
 
 def clear_jwks_cache() -> None:
     """Clear the JWKS cache. Useful for testing."""
-    with _jwks_cache_lock:
-        _jwks_cache.clear()
+    _jwks_cache.clear()
 
 
 # ============================================================================

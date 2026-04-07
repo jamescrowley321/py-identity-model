@@ -34,7 +34,6 @@ from py_identity_model.exceptions import (
 )
 
 
-# Shared discovery response without jwks_uri for testing missing-jwks_uri guards
 # Expected call counts for JWKS fetch assertions
 _JWKS_FETCH_AFTER_EXPIRY = 2
 _JWKS_FETCH_WITH_RETRY = 2
