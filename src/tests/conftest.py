@@ -6,8 +6,7 @@ from py_identity_model.aio.http_client import (
 )
 from py_identity_model.aio.token_validation import (
     _get_disco_response,
-    _get_jwks_response,
-    _get_public_key_by_kid,
+    clear_jwks_cache,
 )
 
 
@@ -85,16 +84,15 @@ def _clear_async_caches():
     stale caches from a previous loop cause RuntimeError. Clearing
     them and resetting the loop binding before each test prevents this.
     """
-    for cache_fn in (
-        _get_disco_response,
-        _get_jwks_response,
-        _get_public_key_by_kid,
-    ):
-        cache_fn.cache_clear()
-        # Reset event loop binding added in async-lru 2.2.0
-        loop_attr = "_LRUCacheWrapper__first_loop"
-        if hasattr(cache_fn, loop_attr):
-            setattr(cache_fn, loop_attr, None)
+    # Clear alru_cache-based discovery cache
+    _get_disco_response.cache_clear()
+    # Reset event loop binding added in async-lru 2.2.0
+    loop_attr = "_LRUCacheWrapper__first_loop"
+    if hasattr(_get_disco_response, loop_attr):
+        setattr(_get_disco_response, loop_attr, None)
+
+    # Clear dict-based JWKS TTL cache
+    clear_jwks_cache()
 
     # Reset the singleton async HTTP client so it gets recreated
     # on the new event loop.  The client is already closed by the
