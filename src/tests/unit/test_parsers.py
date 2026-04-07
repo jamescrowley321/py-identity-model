@@ -2,6 +2,7 @@
 
 import base64
 import json
+import logging
 
 import pytest
 
@@ -62,17 +63,52 @@ class TestFindKeyByKid:
         assert "No matching kid found" in error_msg
         assert "nonexistent" in error_msg
 
-    def test_find_key_by_kid_none_kid(self):
-        """Test finding a key when kid is None."""
+    def test_find_key_by_kid_none_kid_single_key_fallback(self):
+        """Per OIDC Core Section 10.1: use the single JWKS key when JWT has no kid."""
+        keys = [
+            JsonWebKey(kty="RSA", kid="server-key-1", alg="RS256", n="abc", e="def"),
+        ]
+
+        key_dict, alg = find_key_by_kid(None, keys)
+
+        assert key_dict["kid"] == "server-key-1"
+        assert alg == "RS256"
+
+    def test_find_key_by_kid_none_kid_single_key_no_kid_on_key(self):
+        """Fallback works even when the single JWKS key itself has no kid."""
         keys = [
             JsonWebKey(kty="RSA", kid=None, alg="RS256", n="abc", e="def"),
         ]
 
         key_dict, alg = find_key_by_kid(None, keys)
 
-        # kid is optional and may not be in the dict if None
         assert key_dict.get("kid") is None
         assert alg == "RS256"
+
+    def test_find_key_by_kid_none_kid_multiple_keys_error(self):
+        """When JWT has no kid and JWKS has multiple keys, raise an error."""
+        keys = [
+            JsonWebKey(kty="RSA", kid="key1", alg="RS256", n="abc", e="def"),
+            JsonWebKey(kty="RSA", kid="key2", alg="RS384", n="ghi", e="jkl"),
+        ]
+
+        with pytest.raises(TokenValidationException) as exc_info:
+            find_key_by_kid(None, keys)
+
+        error_msg = str(exc_info.value)
+        assert "no kid header" in error_msg.lower()
+        assert "multiple keys" in error_msg.lower()
+
+    def test_find_key_by_kid_none_kid_single_key_logs_warning(self, caplog):
+        """Verify a warning is logged when falling back to single key."""
+        keys = [
+            JsonWebKey(kty="RSA", kid="key1", alg="RS256", n="abc", e="def"),
+        ]
+
+        with caplog.at_level(logging.WARNING):
+            find_key_by_kid(None, keys)
+
+        assert any("no kid header" in r.message.lower() for r in caplog.records)
 
 
 def _create_jwt_with_kid(kid: str, alg: str = "RS256") -> str:
@@ -92,6 +128,24 @@ def _create_jwt_with_kid(kid: str, alg: str = "RS256") -> str:
         .decode()
     )
     # Create a fake but valid base64 signature
+    fake_sig = base64.urlsafe_b64encode(b"fake_signature_bytes").rstrip(b"=").decode()
+    return f"{header_b64}.{payload_b64}.{fake_sig}"
+
+
+def _create_jwt_without_kid(alg: str = "RS256") -> str:
+    """Helper to create a minimal JWT without a kid in the header."""
+    header = {"alg": alg, "typ": "JWT"}
+    payload = {"sub": "test"}
+    header_b64 = (
+        base64.urlsafe_b64encode(json.dumps(header, separators=(",", ":")).encode())
+        .rstrip(b"=")
+        .decode()
+    )
+    payload_b64 = (
+        base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode())
+        .rstrip(b"=")
+        .decode()
+    )
     fake_sig = base64.urlsafe_b64encode(b"fake_signature_bytes").rstrip(b"=").decode()
     return f"{header_b64}.{payload_b64}.{fake_sig}"
 
@@ -167,6 +221,44 @@ class TestGetPublicKeyFromJwk:
             get_public_key_from_jwk(jwt, keys)
 
         assert "No matching kid found" in str(exc_info.value)
+
+    def test_get_public_key_no_kid_single_key_fallback(self):
+        """Per OIDC Core Section 10.1: use the single JWKS key when JWT has no kid."""
+        jwt = _create_jwt_without_kid()
+        keys = [
+            JsonWebKey(kty="RSA", kid="server-key", alg="RS256", n="abc", e="def"),
+        ]
+
+        key = get_public_key_from_jwk(jwt, keys)
+
+        assert key.kid == "server-key"
+        assert key.alg == "RS256"
+
+    def test_get_public_key_no_kid_multiple_keys_error(self):
+        """When JWT has no kid and JWKS has multiple keys, raise an error."""
+        jwt = _create_jwt_without_kid()
+        keys = [
+            JsonWebKey(kty="RSA", kid="key1", alg="RS256", n="abc", e="def"),
+            JsonWebKey(kty="RSA", kid="key2", alg="RS384", n="ghi", e="jkl"),
+        ]
+
+        with pytest.raises(TokenValidationException) as exc_info:
+            get_public_key_from_jwk(jwt, keys)
+
+        error_msg = str(exc_info.value)
+        assert "no kid header" in error_msg.lower()
+        assert "multiple keys" in error_msg.lower()
+
+    def test_get_public_key_no_kid_sets_alg_from_header(self):
+        """When falling back to single key without alg, set it from JWT header."""
+        jwt = _create_jwt_without_kid(alg="RS384")
+        keys = [
+            JsonWebKey(kty="RSA", kid="key1", n="abc", e="def"),  # No alg
+        ]
+
+        key = get_public_key_from_jwk(jwt, keys)
+
+        assert key.alg == "RS384"
 
 
 class TestJwksFromDict:

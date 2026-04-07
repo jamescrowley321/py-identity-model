@@ -78,6 +78,10 @@ def find_key_by_kid(kid: str | None, keys: list[JsonWebKey]) -> tuple[dict, str]
 
     This is the core key lookup logic shared by sync and async implementations.
 
+    Per OIDC Core Section 10.1, when the JWT has no ``kid`` header and the JWKS
+    contains exactly one key, the RP MUST use that key.  When JWKS has multiple
+    keys and no ``kid``, the key cannot be resolved.
+
     Args:
         kid: The key ID from the JWT header
         keys: List of JsonWebKey objects from JWKS
@@ -90,6 +94,22 @@ def find_key_by_kid(kid: str | None, keys: list[JsonWebKey]) -> tuple[dict, str]
     """
     if not keys:
         raise TokenValidationException("No keys available in JWKS response")
+
+    if kid is None:
+        if len(keys) == 1:
+            logger.warning("JWT has no kid header; using the single key from JWKS")
+            public_key = keys[0]
+            alg = public_key.alg if public_key.alg else "RS256"
+            return public_key.as_dict(), alg
+        raise TokenValidationException(
+            "JWT has no kid header and JWKS contains multiple keys; "
+            "cannot determine which key to use",
+            token_part="header",
+            details={
+                "available_kids": [k.kid for k in keys if k.kid],
+                "key_count": len(keys),
+            },
+        )
 
     filtered_keys = [k for k in keys if k.kid == kid]
     if not filtered_keys:
@@ -109,6 +129,9 @@ def get_public_key_from_jwk(jwt: str, keys: list[JsonWebKey]) -> JsonWebKey:
     """
     Find the public key from JWKS that matches the JWT's kid.
 
+    Per OIDC Core Section 10.1, when the JWT has no ``kid`` header and the JWKS
+    contains exactly one key, that key is used.
+
     Args:
         jwt: The JWT token
         keys: List of JsonWebKey objects from JWKS
@@ -122,6 +145,23 @@ def get_public_key_from_jwk(jwt: str, keys: list[JsonWebKey]) -> JsonWebKey:
     headers = get_unverified_header(jwt)
     kid = headers.get("kid")
     logger.debug(f"Looking for key with kid: {kid}")
+
+    if kid is None:
+        if len(keys) == 1:
+            logger.warning("JWT has no kid header; using the single key from JWKS")
+            key = keys[0]
+            if not key.alg:
+                key.alg = headers["alg"]
+            return key
+        raise TokenValidationException(
+            "JWT has no kid header and JWKS contains multiple keys; "
+            "cannot determine which key to use",
+            token_part="header",
+            details={
+                "available_kids": [k.kid for k in keys if k.kid],
+                "key_count": len(keys),
+            },
+        )
 
     filtered_keys = list(filter(lambda x: x.kid == kid, keys))
     if not filtered_keys:
