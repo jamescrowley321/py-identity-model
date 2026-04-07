@@ -22,6 +22,7 @@ from ..core.models import (
 )
 from ..core.parsers import extract_kid_from_jwt, find_key_by_kid
 from ..core.token_validation_logic import (
+    build_resolved_config,
     decode_with_config,
     log_validation_start,
     log_validation_success,
@@ -181,17 +182,7 @@ def validate_token(
             key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [])
 
         # Build validation config with discovered key
-        resolved_config = TokenValidationConfig(
-            perform_disco=token_validation_config.perform_disco,
-            key=key_dict,
-            audience=token_validation_config.audience,
-            algorithms=[alg],
-            issuer=token_validation_config.issuer,
-            subject=token_validation_config.subject,
-            options=token_validation_config.options,
-            claims_validator=token_validation_config.claims_validator,
-            leeway=token_validation_config.leeway,
-        )
+        resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
 
         try:
             decoded_token = decode_with_config(
@@ -210,16 +201,8 @@ def validate_token(
             validate_jwks_response(jwks_response)
             key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [])
 
-            resolved_config = TokenValidationConfig(
-                perform_disco=token_validation_config.perform_disco,
-                key=key_dict,
-                audience=token_validation_config.audience,
-                algorithms=[alg],
-                issuer=token_validation_config.issuer,
-                subject=token_validation_config.subject,
-                options=token_validation_config.options,
-                claims_validator=token_validation_config.claims_validator,
-                leeway=token_validation_config.leeway,
+            resolved_config = build_resolved_config(
+                token_validation_config, key_dict, alg
             )
             decoded_token = decode_with_config(
                 jwt, resolved_config, disco_doc_response.issuer

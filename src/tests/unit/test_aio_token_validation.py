@@ -6,14 +6,10 @@ error handling, TTL-based JWKS caching, signature retry on key rotation,
 and enhanced features (leeway, multi-issuer, subject).
 """
 
-import base64
 import time
 from unittest.mock import patch
 
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 import httpx
-import jwt as pyjwt
 import pytest
 import respx
 
@@ -33,63 +29,20 @@ from py_identity_model.exceptions import (
     TokenValidationException,
 )
 
-
-# Expected call counts for JWKS fetch assertions
-_JWKS_FETCH_AFTER_EXPIRY = 2
-_JWKS_FETCH_WITH_RETRY = 2
-
-# Shared discovery response without jwks_uri for testing missing-jwks_uri guards
-_DISCO_RESPONSE_NO_JWKS = {
-    "issuer": "https://example.com",
-    "authorization_endpoint": "https://example.com/authorize",
-    "token_endpoint": "https://example.com/token",
-    "response_types_supported": ["code"],
-    "subject_types_supported": ["public"],
-    "id_token_signing_alg_values_supported": ["RS256"],
-}
-
-_DISCO_RESPONSE_WITH_JWKS = {
-    **_DISCO_RESPONSE_NO_JWKS,
-    "jwks_uri": "https://example.com/jwks",
-}
-
-
-def _generate_rsa_keypair():
-    """Generate an RSA key pair and return (jwk_dict, pem_bytes)."""
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    public_key = private_key.public_key()
-    pub_numbers = public_key.public_numbers()
-
-    def _int_to_base64url(n: int, length: int) -> str:
-        return base64.urlsafe_b64encode(n.to_bytes(length, "big")).rstrip(b"=").decode()
-
-    key_dict = {
-        "kty": "RSA",
-        "kid": "test-key-1",
-        "n": _int_to_base64url(pub_numbers.n, 256),
-        "e": _int_to_base64url(pub_numbers.e, 3),
-        "alg": "RS256",
-        "use": "sig",
-    }
-
-    pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
-
-    return key_dict, pem
-
-
-def _sign_jwt(pem: bytes, claims: dict, headers: dict | None = None) -> str:
-    """Sign a JWT with the given private key."""
-    return pyjwt.encode(claims, pem, algorithm="RS256", headers=headers)
+from .token_validation_helpers import (
+    DISCO_RESPONSE_NO_JWKS,
+    DISCO_RESPONSE_WITH_JWKS,
+    JWKS_FETCH_AFTER_EXPIRY,
+    JWKS_FETCH_WITH_RETRY,
+    generate_rsa_keypair,
+    sign_jwt,
+)
 
 
 @pytest.fixture
 def rsa_keypair():
     """Generate a fresh RSA key pair for testing."""
-    return _generate_rsa_keypair()
+    return generate_rsa_keypair()
 
 
 @pytest.fixture(autouse=True)
@@ -128,7 +81,7 @@ class TestAsyncTokenValidation:
     async def test_missing_jwks_uri_cached_path_raises(self):
         """Test that missing jwks_uri in discovery doc raises TokenValidationException."""
         respx.get("https://example.com/.well-known/openid-configuration").mock(
-            return_value=httpx.Response(200, json=_DISCO_RESPONSE_NO_JWKS)
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_NO_JWKS)
         )
 
         validation_config = TokenValidationConfig(
@@ -151,7 +104,7 @@ class TestAsyncTokenValidation:
     async def test_missing_jwks_uri_di_path_raises(self):
         """Test that missing jwks_uri raises TokenValidationException (DI path)."""
         respx.get("https://example.com/.well-known/openid-configuration").mock(
-            return_value=httpx.Response(200, json=_DISCO_RESPONSE_NO_JWKS)
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_NO_JWKS)
         )
 
         validation_config = TokenValidationConfig(
@@ -175,7 +128,7 @@ class TestAsyncTokenValidation:
     @respx.mock
     async def test_empty_string_jwks_uri_cached_path_raises(self):
         """Test that empty-string jwks_uri raises TokenValidationException."""
-        disco_with_empty_jwks = {**_DISCO_RESPONSE_NO_JWKS, "jwks_uri": ""}
+        disco_with_empty_jwks = {**DISCO_RESPONSE_NO_JWKS, "jwks_uri": ""}
         respx.get("https://example.com/.well-known/openid-configuration").mock(
             return_value=httpx.Response(200, json=disco_with_empty_jwks)
         )
@@ -204,14 +157,14 @@ class TestAsyncJwksCacheTTL:
     async def test_jwks_cache_returns_cached_within_ttl(self, rsa_keypair):
         """JWKS is fetched once and reused within TTL."""
         key_dict, pem = rsa_keypair
-        token = _sign_jwt(
+        token = sign_jwt(
             pem,
             {"sub": "user1", "iss": "https://example.com"},
             headers={"kid": "test-key-1"},
         )
 
         respx.get("https://example.com/.well-known/openid-configuration").mock(
-            return_value=httpx.Response(200, json=_DISCO_RESPONSE_WITH_JWKS)
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
         )
         jwks_route = respx.get("https://example.com/jwks").mock(
             return_value=httpx.Response(200, json={"keys": [key_dict]})
@@ -246,14 +199,14 @@ class TestAsyncJwksCacheTTL:
     async def test_jwks_cache_refetches_after_ttl_expiry(self, rsa_keypair):
         """JWKS is re-fetched when TTL expires."""
         key_dict, pem = rsa_keypair
-        token = _sign_jwt(
+        token = sign_jwt(
             pem,
             {"sub": "user1", "iss": "https://example.com"},
             headers={"kid": "test-key-1"},
         )
 
         respx.get("https://example.com/.well-known/openid-configuration").mock(
-            return_value=httpx.Response(200, json=_DISCO_RESPONSE_WITH_JWKS)
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
         )
         jwks_route = respx.get("https://example.com/jwks").mock(
             return_value=httpx.Response(200, json={"keys": [key_dict]})
@@ -285,7 +238,7 @@ class TestAsyncJwksCacheTTL:
                 disco_doc_address="https://example.com/.well-known/openid-configuration",
             )
 
-        assert jwks_route.call_count == _JWKS_FETCH_AFTER_EXPIRY
+        assert jwks_route.call_count == JWKS_FETCH_AFTER_EXPIRY
 
 
 class TestAsyncSignatureRetry:
@@ -295,20 +248,20 @@ class TestAsyncSignatureRetry:
     @respx.mock
     async def test_signature_retry_on_key_rotation(self):
         """When signature fails with cached key, refresh JWKS and retry with new key."""
-        old_key_dict, _old_pem = _generate_rsa_keypair()
+        old_key_dict, _old_pem = generate_rsa_keypair()
         old_key_dict["kid"] = "rotated-key"
 
-        new_key_dict, new_pem = _generate_rsa_keypair()
+        new_key_dict, new_pem = generate_rsa_keypair()
         new_key_dict["kid"] = "rotated-key"
 
-        token = _sign_jwt(
+        token = sign_jwt(
             new_pem,
             {"sub": "user1", "iss": "https://example.com"},
             headers={"kid": "rotated-key"},
         )
 
         respx.get("https://example.com/.well-known/openid-configuration").mock(
-            return_value=httpx.Response(200, json=_DISCO_RESPONSE_WITH_JWKS)
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
         )
         jwks_route = respx.get("https://example.com/jwks").mock(
             side_effect=[
@@ -330,26 +283,26 @@ class TestAsyncSignatureRetry:
         )
 
         assert decoded["sub"] == "user1"
-        assert jwks_route.call_count == _JWKS_FETCH_WITH_RETRY
+        assert jwks_route.call_count == JWKS_FETCH_WITH_RETRY
 
     @pytest.mark.asyncio
     @respx.mock
     async def test_signature_failure_still_raises_after_retry(self):
         """When signature fails with both old and new keys, exception is raised."""
-        wrong_key1, _ = _generate_rsa_keypair()
+        wrong_key1, _ = generate_rsa_keypair()
         wrong_key1["kid"] = "wrong-key"
-        wrong_key2, _ = _generate_rsa_keypair()
+        wrong_key2, _ = generate_rsa_keypair()
         wrong_key2["kid"] = "wrong-key"
 
-        _, signing_pem = _generate_rsa_keypair()
-        token = _sign_jwt(
+        _, signing_pem = generate_rsa_keypair()
+        token = sign_jwt(
             signing_pem,
             {"sub": "user1", "iss": "https://example.com"},
             headers={"kid": "wrong-key"},
         )
 
         respx.get("https://example.com/.well-known/openid-configuration").mock(
-            return_value=httpx.Response(200, json=_DISCO_RESPONSE_WITH_JWKS)
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
         )
         respx.get("https://example.com/jwks").mock(
             side_effect=[
@@ -375,18 +328,18 @@ class TestAsyncSignatureRetry:
     @respx.mock
     async def test_di_path_does_not_retry_on_signature_failure(self):
         """DI (injected client) path does not retry — raises immediately."""
-        wrong_key, _ = _generate_rsa_keypair()
+        wrong_key, _ = generate_rsa_keypair()
         wrong_key["kid"] = "wrong-key"
 
-        _, signing_pem = _generate_rsa_keypair()
-        token = _sign_jwt(
+        _, signing_pem = generate_rsa_keypair()
+        token = sign_jwt(
             signing_pem,
             {"sub": "user1", "iss": "https://example.com"},
             headers={"kid": "wrong-key"},
         )
 
         respx.get("https://example.com/.well-known/openid-configuration").mock(
-            return_value=httpx.Response(200, json=_DISCO_RESPONSE_WITH_JWKS)
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
         )
         jwks_route = respx.get("https://example.com/jwks").mock(
             return_value=httpx.Response(200, json={"keys": [wrong_key]})
@@ -422,7 +375,7 @@ class TestAsyncLeeway:
     @pytest.mark.asyncio
     async def test_expired_token_rejected_without_leeway(self, rsa_keypair):
         key_dict, pem = rsa_keypair
-        token = _sign_jwt(
+        token = sign_jwt(
             pem,
             {
                 "sub": "user1",
@@ -443,7 +396,7 @@ class TestAsyncLeeway:
     @pytest.mark.asyncio
     async def test_expired_token_accepted_with_leeway(self, rsa_keypair):
         key_dict, pem = rsa_keypair
-        token = _sign_jwt(
+        token = sign_jwt(
             pem,
             {
                 "sub": "user1",
@@ -465,7 +418,7 @@ class TestAsyncLeeway:
     @pytest.mark.asyncio
     async def test_leeway_zero_does_not_allow_expired(self, rsa_keypair):
         key_dict, pem = rsa_keypair
-        token = _sign_jwt(
+        token = sign_jwt(
             pem,
             {"sub": "user1", "exp": int(time.time()) - 5},
         )
@@ -488,7 +441,7 @@ class TestAsyncMultiIssuer:
     @pytest.mark.asyncio
     async def test_single_issuer_still_works(self, rsa_keypair):
         key_dict, pem = rsa_keypair
-        token = _sign_jwt(pem, {"sub": "user1", "iss": "https://idp1.com"})
+        token = sign_jwt(pem, {"sub": "user1", "iss": "https://idp1.com"})
 
         config = TokenValidationConfig(
             perform_disco=False,
@@ -503,7 +456,7 @@ class TestAsyncMultiIssuer:
     @pytest.mark.asyncio
     async def test_list_issuer_accepts_matching(self, rsa_keypair):
         key_dict, pem = rsa_keypair
-        token = _sign_jwt(pem, {"sub": "user1", "iss": "https://idp2.com"})
+        token = sign_jwt(pem, {"sub": "user1", "iss": "https://idp2.com"})
 
         config = TokenValidationConfig(
             perform_disco=False,
@@ -518,7 +471,7 @@ class TestAsyncMultiIssuer:
     @pytest.mark.asyncio
     async def test_list_issuer_rejects_non_matching(self, rsa_keypair):
         key_dict, pem = rsa_keypair
-        token = _sign_jwt(pem, {"sub": "user1", "iss": "https://evil.com"})
+        token = sign_jwt(pem, {"sub": "user1", "iss": "https://evil.com"})
 
         config = TokenValidationConfig(
             perform_disco=False,
@@ -538,7 +491,7 @@ class TestAsyncSubjectValidation:
     @pytest.mark.asyncio
     async def test_subject_matches(self, rsa_keypair):
         key_dict, pem = rsa_keypair
-        token = _sign_jwt(pem, {"sub": "user123", "iss": "https://test.com"})
+        token = sign_jwt(pem, {"sub": "user123", "iss": "https://test.com"})
 
         config = TokenValidationConfig(
             perform_disco=False,
@@ -553,7 +506,7 @@ class TestAsyncSubjectValidation:
     @pytest.mark.asyncio
     async def test_subject_mismatch_raises(self, rsa_keypair):
         key_dict, pem = rsa_keypair
-        token = _sign_jwt(pem, {"sub": "user123", "iss": "https://test.com"})
+        token = sign_jwt(pem, {"sub": "user123", "iss": "https://test.com"})
 
         config = TokenValidationConfig(
             perform_disco=False,
@@ -570,7 +523,7 @@ class TestAsyncSubjectValidation:
         """S1: Error message must NOT contain the actual sub claim value."""
         key_dict, pem = rsa_keypair
         secret_sub = "sensitive-user-id-12345"
-        token = _sign_jwt(pem, {"sub": secret_sub, "iss": "https://test.com"})
+        token = sign_jwt(pem, {"sub": secret_sub, "iss": "https://test.com"})
 
         config = TokenValidationConfig(
             perform_disco=False,
@@ -586,7 +539,7 @@ class TestAsyncSubjectValidation:
     @pytest.mark.asyncio
     async def test_missing_sub_claim_raises(self, rsa_keypair):
         key_dict, pem = rsa_keypair
-        token = _sign_jwt(pem, {"iss": "https://test.com"})
+        token = sign_jwt(pem, {"iss": "https://test.com"})
 
         config = TokenValidationConfig(
             perform_disco=False,
@@ -601,7 +554,7 @@ class TestAsyncSubjectValidation:
     @pytest.mark.asyncio
     async def test_subject_none_skips_validation(self, rsa_keypair):
         key_dict, pem = rsa_keypair
-        token = _sign_jwt(pem, {"sub": "anyone", "iss": "https://test.com"})
+        token = sign_jwt(pem, {"sub": "anyone", "iss": "https://test.com"})
 
         config = TokenValidationConfig(
             perform_disco=False,
