@@ -933,9 +933,14 @@ class UserInfoRequest(BaseRequest):
     Attributes:
         address: The UserInfo endpoint URL.
         token: A valid access token with ``openid`` scope.
+        expected_sub: Expected ``sub`` claim from the ID token for
+            verification per OIDC Core 1.0 Section 5.3.4.  When provided,
+            the ``sub`` in the UserInfo response is compared against this
+            value and a mismatch produces an error response.
     """
 
     token: str
+    expected_sub: str | None = None
 
 
 @dataclass(repr=False, eq=False)

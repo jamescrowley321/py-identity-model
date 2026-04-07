@@ -57,9 +57,57 @@ def process_userinfo_response(response: httpx.Response) -> UserInfoResponse:
         return handle_userinfo_error(e)
 
 
+def validate_userinfo_sub(
+    response: UserInfoResponse,
+    expected_sub: str | None,
+) -> UserInfoResponse:
+    """Validate that the UserInfo ``sub`` matches the ID token ``sub``.
+
+    Per OIDC Core 1.0 Section 5.3.4, the ``sub`` claim in the UserInfo
+    response MUST exactly match the ``sub`` in the ID token.
+
+    Args:
+        response: A parsed UserInfo response.
+        expected_sub: The ``sub`` from the caller's ID token.  When
+            ``None``, validation is skipped (opt-in).
+
+    Returns:
+        The original response when validation passes or is skipped,
+        otherwise an error ``UserInfoResponse``.
+    """
+    # Skip validation when not requested, on failure, or for JWT responses
+    if expected_sub is None or not response.is_successful or response.raw is not None:
+        return response
+
+    claims = object.__getattribute__(response, "claims")
+    if claims is None:
+        return UserInfoResponse(
+            is_successful=False,
+            error="UserInfo response contains no claims to validate sub against",
+        )
+
+    actual_sub = claims.get("sub")
+    if actual_sub is None:
+        return UserInfoResponse(
+            is_successful=False,
+            error="UserInfo response is missing required 'sub' claim",
+        )
+
+    if actual_sub != expected_sub:
+        return UserInfoResponse(
+            is_successful=False,
+            error=(
+                f"UserInfo sub mismatch: expected '{expected_sub}', got '{actual_sub}'"
+            ),
+        )
+
+    return response
+
+
 __all__ = [
     "log_userinfo_request",
     "log_userinfo_status",
     "prepare_userinfo_headers",
     "process_userinfo_response",
+    "validate_userinfo_sub",
 ]

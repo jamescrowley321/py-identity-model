@@ -13,6 +13,7 @@ from ..core.userinfo_logic import (
     log_userinfo_request,
     prepare_userinfo_headers,
     process_userinfo_response,
+    validate_userinfo_sub,
 )
 from .http_client import get_http_client, retry_with_backoff
 from .managed_client import HTTPClient
@@ -55,7 +56,8 @@ def get_userinfo(
     try:
         client = http_client.client if http_client else get_http_client()
         response = _request_userinfo(client, request.address, headers)
-        return process_userinfo_response(response)
+        result = process_userinfo_response(response)
+        return validate_userinfo_sub(result, request.expected_sub)
     except Exception as e:
         return handle_userinfo_error(e)
     finally:
