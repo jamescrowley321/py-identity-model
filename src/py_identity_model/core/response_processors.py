@@ -278,7 +278,8 @@ def parse_jwks_response(response: httpx.Response) -> JwksResponse:
     if response.is_success:
         response_json = response.json()
         keys = [jwks_from_dict(key) for key in response_json["keys"]]
-        return JwksResponse(is_successful=True, keys=keys)
+        cache_control = response.headers.get("cache-control")
+        return JwksResponse(is_successful=True, keys=keys, cache_control=cache_control)
 
     error_msg = (
         f"JSON web keys request failed with status code: "
