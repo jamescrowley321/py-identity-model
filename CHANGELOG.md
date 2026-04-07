@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.17.4 (2026-04-07)
+
+### Bug Fixes
+
+- **userinfo**: Add sub claim mismatch validation per OIDC Core 5.3.4
+  ([`e97555c`](https://github.com/jamescrowley321/py-identity-model/commit/e97555c00d8a0679d0558a4fd96b6b2dd962e2f0))
+
+
 ## v2.17.3 (2026-04-07)
 
 ### Bug Fixes
