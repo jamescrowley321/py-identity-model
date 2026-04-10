@@ -11,8 +11,9 @@ variable "github_repository" {
 
 variable "sonar_token" {
   type        = string
+  default     = ""
   sensitive   = true
-  description = "SonarCloud project token. Provision via https://sonarcloud.io/account/security and supply as TF_VAR_sonar_token."
+  description = "SonarCloud project token. Provision via https://sonarcloud.io/account/security and supply as TF_VAR_sonar_token. Leave empty to skip mirroring SONAR_TOKEN."
 }
 
 variable "enable_branch_protection" {
