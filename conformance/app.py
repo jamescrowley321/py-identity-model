@@ -69,6 +69,7 @@ class AuthSession:
     client_id: str = ""
     client_secret: str = ""
     redirect_uri: str = ""
+    skip_userinfo: bool = False
     # Results populated after callback
     result: dict = field(default_factory=dict)
 
@@ -102,13 +103,60 @@ def health() -> dict:
     return {"status": "ok", "service": "conformance-rp"}
 
 
-@app.get("/authorize")
+@app.get("/discover", response_model=None)
+def discover(
+    issuer: str = Query(..., description="Issuer URL for this test"),
+    test_id: str = Query("", description="Test module ID for result tracking"),
+) -> JSONResponse:
+    """Fetch discovery document (and JWKS) without starting an auth flow.
+
+    Used for Config RP discovery-only tests where the suite just needs to
+    observe the RP fetching the openid-configuration endpoint.
+    """
+    http_client = _get_http_client()
+    disco_endpoint = parse_discovery_url(issuer)
+    policy = DiscoveryPolicy(require_https=False, validate_issuer=True)
+    disco = get_discovery_document(
+        DiscoveryDocumentRequest(address=disco_endpoint.url, policy=policy),
+        http_client=http_client,
+    )
+
+    if not disco.is_successful:
+        if test_id:
+            error_session = AuthSession(issuer=issuer, state="", nonce="")
+            error_session.result = {
+                "test_id": test_id,
+                "status": "error",
+                "error": f"discovery_failed: {disco.error}",
+            }
+            test_results[test_id] = error_session
+        return JSONResponse(
+            status_code=502,
+            content={"error": "discovery_failed", "detail": disco.error},
+        )
+
+    if test_id:
+        session = AuthSession(issuer=issuer, state="", nonce="")
+        session.result = {
+            "test_id": test_id,
+            "status": "success",
+            "issuer": disco.issuer,
+        }
+        test_results[test_id] = session
+
+    return JSONResponse(content={"status": "ok", "issuer": disco.issuer})
+
+
+@app.get("/authorize", response_model=None)
 def authorize(
     issuer: str = Query(..., description="Issuer URL for this test"),
     client_id: str = Query(..., description="Client ID registered with the suite"),
     client_secret: str = Query("", description="Client secret"),
     test_id: str = Query("", description="Test module ID for result tracking"),
     use_pkce: str = Query("false", description="Whether to use PKCE"),
+    skip_userinfo: str = Query(
+        "false", description="Skip UserInfo fetch after token validation"
+    ),
     scope: str = Query(
         "openid profile email address phone", description="Requested scopes"
     ),
@@ -206,6 +254,7 @@ def authorize(
         client_id=client_id,
         client_secret=client_secret,
         redirect_uri=redirect_uri,
+        skip_userinfo=skip_userinfo.lower() == "true",
     )
     sessions[state] = session
     if test_id:
@@ -384,7 +433,7 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
 
     # Fetch UserInfo (if endpoint is available and we have an access token)
     userinfo_claims: dict = {}
-    if access_token and disco.userinfo_endpoint:
+    if access_token and disco.userinfo_endpoint and not session.skip_userinfo:
         try:
             userinfo_response = get_userinfo(
                 UserInfoRequest(

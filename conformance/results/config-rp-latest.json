@@ -1,0 +1,58 @@
+{
+  "plan": "config-rp",
+  "plan_id": "aopFGhgJXtbOT",
+  "suite_url": "https://localhost.emobix.co.uk:8443",
+  "results": [
+    {
+      "test": "oidcc-client-test-discovery-openid-config",
+      "status": "PASSED",
+      "test_id": "WYDY0MALD506SWj",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=WYDY0MALD506SWj",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-discovery-jwks-uri-keys",
+      "status": "PASSED",
+      "test_id": "D2lh3wpqKZiTqLh",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=D2lh3wpqKZiTqLh",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-discovery-issuer-mismatch",
+      "status": "PASSED",
+      "test_id": "N98F3JcfxgExs29",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=N98F3JcfxgExs29",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-idtoken-sig-none",
+      "status": "SKIPPED",
+      "test_id": "kp8G0vg8QmPoKFu",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=kp8G0vg8QmPoKFu",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-signing-key-rotation-just-before-signing",
+      "status": "PASSED",
+      "test_id": "rvYuDsaDSap7nRc",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=rvYuDsaDSap7nRc",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-signing-key-rotation",
+      "status": "PASSED",
+      "test_id": "yUv01CxpuBvUc3Q",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=yUv01CxpuBvUc3Q",
+      "detail": ""
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "passed": 5,
+    "warning": 0,
+    "failed": 0,
+    "review": 0,
+    "skipped": 1
+  },
+  "all_passed": true
+}

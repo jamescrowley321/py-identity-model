@@ -151,6 +151,65 @@ class ConformanceSuiteClient:
 # ---------------------------------------------------------------------------
 
 
+# Test type determines how the runner drives the RP for each test module.
+# - "discovery_only": Just fetch discovery document (no auth flow)
+# - "auth_no_userinfo": Full auth flow but skip UserInfo fetch
+# - "auth_full": Full auth flow including UserInfo
+# - "auth_double": Two sequential full auth flows (key rotation between flows)
+DISCOVERY_ONLY_TESTS = frozenset(
+    {
+        "oidcc-client-test-discovery-openid-config",
+    }
+)
+AUTH_NO_USERINFO_TESTS = frozenset(
+    {
+        "oidcc-client-test-discovery-jwks-uri-keys",
+    }
+)
+DOUBLE_FLOW_TESTS = frozenset(
+    {
+        "oidcc-client-test-signing-key-rotation",
+    }
+)
+
+
+def _get_test_type(test_name: str) -> str:
+    """Determine the flow type for a given test module."""
+    if test_name in DISCOVERY_ONLY_TESTS:
+        return "discovery_only"
+    if test_name in AUTH_NO_USERINFO_TESTS:
+        return "auth_no_userinfo"
+    if test_name in DOUBLE_FLOW_TESTS:
+        return "auth_double"
+    return "auth_full"
+
+
+def drive_rp_discover(
+    rp_base_url: str,
+    issuer: str,
+    test_id: str,
+) -> None:
+    """Hit the RP's /discover endpoint to fetch discovery without starting an auth flow.
+
+    Used for Config RP discovery-only tests where the suite only needs to
+    observe the RP fetching the openid-configuration document.
+    """
+    params = {
+        "issuer": issuer,
+        "test_id": test_id,
+    }
+
+    with httpx.Client(verify=False, timeout=30.0) as client:
+        try:
+            response = client.get(f"{rp_base_url}/discover", params=params)
+            logger.info(
+                "RP discover completed: status=%d",
+                response.status_code,
+            )
+        except httpx.HTTPError as exc:
+            logger.warning("RP discover HTTP error (may be expected): %s", exc)
+
+
 def drive_rp_authorize(
     rp_base_url: str,
     issuer: str,
@@ -158,6 +217,7 @@ def drive_rp_authorize(
     client_secret: str,
     test_id: str,
     use_pkce: bool = False,
+    skip_userinfo: bool = False,
 ) -> None:
     """Hit the RP's /authorize endpoint to start an auth flow.
 
@@ -171,6 +231,7 @@ def drive_rp_authorize(
         "client_secret": client_secret,
         "test_id": test_id,
         "use_pkce": str(use_pkce).lower(),
+        "skip_userinfo": str(skip_userinfo).lower(),
     }
 
     # Follow all redirects through the full auth flow
@@ -244,14 +305,47 @@ def run_test_module(
     if not issuer.endswith("/"):
         issuer += "/"
 
-    # Drive the RP through the authorization flow
-    drive_rp_authorize(
-        rp_base_url=rp_base_url,
-        issuer=issuer,
-        client_id=client_id,
-        client_secret=client_secret,
-        test_id=module_id,
-    )
+    # Drive the RP based on the test type
+    test_type = _get_test_type(test_name)
+    logger.info("Test type: %s", test_type)
+
+    if test_type == "discovery_only":
+        # Discovery-only tests: just fetch discovery, no auth flow
+        drive_rp_discover(
+            rp_base_url=rp_base_url,
+            issuer=issuer,
+            test_id=module_id,
+        )
+    elif test_type == "auth_double":
+        # Double-flow tests (key rotation): drive two sequential auth flows
+        logger.info("Driving first auth flow...")
+        drive_rp_authorize(
+            rp_base_url=rp_base_url,
+            issuer=issuer,
+            client_id=client_id,
+            client_secret=client_secret,
+            test_id=module_id,
+        )
+        # Wait briefly for the suite to rotate keys
+        time.sleep(1)
+        logger.info("Driving second auth flow...")
+        drive_rp_authorize(
+            rp_base_url=rp_base_url,
+            issuer=issuer,
+            client_id=client_id,
+            client_secret=client_secret,
+            test_id=module_id,
+        )
+    else:
+        # Standard auth flow (with optional userinfo skip)
+        drive_rp_authorize(
+            rp_base_url=rp_base_url,
+            issuer=issuer,
+            client_id=client_id,
+            client_secret=client_secret,
+            test_id=module_id,
+            skip_userinfo=(test_type == "auth_no_userinfo"),
+        )
 
     # Poll until the test finishes
     logger.info("Polling test status...")
