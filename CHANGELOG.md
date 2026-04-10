@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.18.0 (2026-04-10)
+
+### Features
+
+- **token-validation**: Add JWKS cache TTL with forced refresh on signature failure
+  ([#310](https://github.com/jamescrowley321/py-identity-model/pull/310),
+  [`bae53a5`](https://github.com/jamescrowley321/py-identity-model/commit/bae53a5d7e48672af51f3c487b378ff1f0ed9eee))
+
+
 ## v2.17.4 (2026-04-07)
 
 ### Bug Fixes
