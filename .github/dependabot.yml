@@ -1,15 +1,44 @@
 version: 2
+# Dependabot runs daily and bundles all non-security updates into a single
+# grouped PR per ecosystem via the `groups:` config below. A dedicated
+# dependabot-auto-merge.yml workflow enables auto-merge (`gh pr merge --auto
+# --squash`) on these PRs so they merge themselves once all required CI
+# stages pass. Security alerts create their own PRs outside any group.
 updates:
-  # Dependency updates are handled by the nightly update-dependencies workflow.
-  # Dependabot config is retained so security alerts still work (they are
-  # independent of the open-pull-requests-limit setting).
   - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "daily"
-      time: "09:00"
+      time: "03:00"
       timezone: "UTC"
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 1
     commit-message:
-      prefix: "deps"
+      prefix: "chore(deps)"
       include: "scope"
+    labels:
+      - "dependencies"
+      - "python"
+    groups:
+      python-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "03:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: "ci(deps)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "ci"
+    groups:
+      github-actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
