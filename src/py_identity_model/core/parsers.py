@@ -204,13 +204,22 @@ def get_public_key_from_jwk(jwt: str, keys: list[JsonWebKey]) -> JsonWebKey:
         if not signing_keys:
             signing_keys = keys  # Fall back to all keys if none marked for signing
 
+        # Further filter by key type matching the JWT algorithm
+        jwt_alg = headers.get("alg")
+        if len(signing_keys) > 1 and jwt_alg:
+            expected_kty = _ALG_TO_KTY.get(jwt_alg)
+            if expected_kty:
+                kty_filtered = [k for k in signing_keys if k.kty == expected_kty]
+                if kty_filtered:
+                    signing_keys = kty_filtered
+
         if len(signing_keys) == 1:
             logger.warning(
                 "JWT has no kid header; using the single signing key from JWKS"
             )
             key = signing_keys[0]
             if not key.alg:
-                key.alg = headers["alg"]
+                key.alg = headers.get("alg")
             return key
         raise TokenValidationException(
             "JWT has no kid header and JWKS contains multiple signing keys; "
