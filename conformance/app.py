@@ -14,6 +14,7 @@ from urllib.parse import urlencode
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from starlette.concurrency import run_in_threadpool
 
 from py_identity_model import (
     AuthorizationCodeTokenRequest,
@@ -23,6 +24,7 @@ from py_identity_model import (
     TokenValidationConfig,
     UserInfoRequest,
     build_authorization_url,
+    clear_jwks_cache,
     generate_pkce_pair,
     get_discovery_document,
     get_userinfo,
@@ -35,7 +37,6 @@ from py_identity_model.exceptions import (
     PyIdentityModelException,
     TokenValidationException,
 )
-from py_identity_model.sync.token_validation import clear_jwks_cache
 
 
 logging.basicConfig(level=logging.INFO)
@@ -360,12 +361,15 @@ def callback_get(request: Request) -> HTMLResponse | JSONResponse:
 
 @app.post("/callback", response_model=None)
 async def callback_post(request: Request) -> HTMLResponse | JSONResponse:
-    """Handle authorization callback (form_post mode)."""
+    """Handle authorization callback (form_post mode).
+
+    Async to support ``await request.form()``, with the blocking
+    ``_handle_callback`` offloaded to a threadpool.
+    """
     form_data = await request.form()
-    # Reconstruct a URL-like string for the parser
     params = urlencode(dict(form_data))
     callback_url = f"{RP_BASE_URL}/callback?{params}"
-    return _handle_callback(callback_url)
+    return await run_in_threadpool(_handle_callback, callback_url)
 
 
 @app.get("/results/{test_id}")
