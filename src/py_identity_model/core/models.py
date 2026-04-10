@@ -544,6 +544,7 @@ class JwksResponse(BaseResponse):
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"keys"})
 
     keys: list[JsonWebKey] | None = None
+    cache_control: str | None = None
 
 
 # ============================================================================

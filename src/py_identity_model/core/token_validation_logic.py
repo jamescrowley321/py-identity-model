@@ -200,6 +200,37 @@ async def validate_async_claims(
             ) from e
 
 
+def build_resolved_config(
+    original_config: TokenValidationConfig,
+    key_dict: dict,
+    alg: str,
+) -> TokenValidationConfig:
+    """Build a resolved TokenValidationConfig with a discovered key and algorithm.
+
+    This avoids repeating the full constructor call whenever the validation
+    pipeline resolves a signing key from JWKS.
+
+    Args:
+        original_config: The caller-supplied validation config.
+        key_dict: The JWK dict selected from the JWKS response.
+        alg: The signing algorithm declared by the key.
+
+    Returns:
+        A new TokenValidationConfig with the resolved key and algorithm.
+    """
+    return TokenValidationConfig(
+        perform_disco=original_config.perform_disco,
+        key=key_dict,
+        audience=original_config.audience,
+        algorithms=[alg],
+        issuer=original_config.issuer,
+        subject=original_config.subject,
+        options=original_config.options,
+        claims_validator=original_config.claims_validator,
+        leeway=original_config.leeway,
+    )
+
+
 def log_validation_start(
     jwt: str, token_validation_config: TokenValidationConfig
 ) -> None:
@@ -231,6 +262,7 @@ def log_validation_success(decoded_token: dict) -> None:
 
 
 __all__ = [
+    "build_resolved_config",
     "decode_with_config",
     "log_validation_start",
     "log_validation_success",

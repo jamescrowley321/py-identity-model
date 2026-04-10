@@ -1,11 +1,22 @@
 """
-Token validation (synchronous implementation).
+Synchronous token validation with TTL-based JWKS caching.
 
-This module provides synchronous token validation using discovery and JWKS.
+This module provides synchronous token validation using discovery and JWKS,
+with automatic cache expiry and forced JWKS refresh on key rotation.
 """
 
+# ============================================================================
+# Discovery cache (standard lru_cache — discovery docs change infrequently)
+# ============================================================================
 from functools import lru_cache
+import threading
+import time
 
+from ..core.jwks_cache import (
+    JwksCacheEntry,
+    is_cache_expired,
+    resolve_ttl,
+)
 from ..core.models import (
     DiscoveryDocumentRequest,
     DiscoveryDocumentResponse,
@@ -15,6 +26,7 @@ from ..core.models import (
 )
 from ..core.parsers import extract_kid_from_jwt, find_key_by_kid
 from ..core.token_validation_logic import (
+    build_resolved_config,
     decode_with_config,
     log_validation_start,
     log_validation_success,
@@ -25,60 +37,126 @@ from ..core.token_validation_logic import (
     validate_jwks_uri,
 )
 from ..core.validators import validate_token_config
-from ..exceptions import ConfigurationException
+from ..exceptions import ConfigurationException, SignatureVerificationException
+from ..logging_config import logger
 from .discovery import get_discovery_document
 from .jwks import get_jwks
 from .managed_client import HTTPClient
 
 
-# ============================================================================
-# Caching functions (sync-specific with lru_cache)
-# ============================================================================
-
-
-@lru_cache
-def _get_disco_response(disco_doc_address: str) -> DiscoveryDocumentResponse:
-    """
-    Cached discovery document fetching.
-
-    Note: httpx creates new connections for each request. For better performance
-    in applications making many discovery requests, consider using httpx.Client
-    with connection pooling. However, with this LRU cache, discovery documents
-    are only fetched once per address, making the connection overhead minimal.
-    """
-    return get_discovery_document(
-        DiscoveryDocumentRequest(address=disco_doc_address),
-    )
-
-
-@lru_cache
-def _get_jwks_response(jwks_uri: str) -> JwksResponse:
-    """Cached JWKS fetching."""
-    return get_jwks(JwksRequest(address=jwks_uri))
-
-
 @lru_cache(maxsize=128)
-def _get_public_key_by_kid(kid: str | None, jwks_uri: str) -> tuple[dict, str]:
-    """Cached public key extraction from JWKS by key ID.
+def _get_disco_response(
+    disco_doc_address: str | None,
+) -> DiscoveryDocumentResponse:
+    """Cached discovery document fetching."""
+    if disco_doc_address is None:
+        raise ConfigurationException(
+            "disco_doc_address is required when perform_disco is True"
+        )
+    return get_discovery_document(DiscoveryDocumentRequest(address=disco_doc_address))
 
-    Args:
-        kid: The key ID from the JWT header
-        jwks_uri: The JWKS URI to fetch keys from
 
-    Returns:
-        tuple: (public_key_dict, algorithm)
+# ============================================================================
+# TTL-aware JWKS cache (replaces @lru_cache for JWKS)
+# ============================================================================
 
-    Note:
-        This cache uses the kid (key ID) instead of the full JWT for efficient
-        caching. Multiple JWTs signed with the same key will share a cache entry.
+_jwks_cache: dict[str, JwksCacheEntry] = {}
+_jwks_cache_lock = threading.Lock()
+
+
+def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
+    """Return cached JWKS response if fresh, otherwise fetch and cache."""
+    with _jwks_cache_lock:
+        entry = _jwks_cache.get(jwks_uri)
+        if entry is not None and not is_cache_expired(entry):
+            return entry.response
+
+    # Fetch outside the lock to avoid blocking other threads
+    response = get_jwks(JwksRequest(address=jwks_uri))
+    ttl = resolve_ttl(response.cache_control)
+
+    with _jwks_cache_lock:
+        _jwks_cache[jwks_uri] = JwksCacheEntry(
+            response=response, cached_at=time.time(), ttl=ttl
+        )
+    return response
+
+
+def _refresh_jwks(jwks_uri: str) -> JwksResponse:
+    """Force re-fetch JWKS and update cache (key rotation)."""
+    logger.info("Forcing JWKS refresh for %s (possible key rotation)", jwks_uri)
+    response = get_jwks(JwksRequest(address=jwks_uri))
+    ttl = resolve_ttl(response.cache_control)
+    with _jwks_cache_lock:
+        _jwks_cache[jwks_uri] = JwksCacheEntry(
+            response=response, cached_at=time.time(), ttl=ttl
+        )
+    return response
+
+
+def clear_jwks_cache() -> None:
+    """Clear the JWKS cache. Useful for testing."""
+    _jwks_cache.clear()
+
+
+# ============================================================================
+# Token validation
+# ============================================================================
+
+
+def _discover_and_resolve_key(
+    jwt: str,
+    disco_doc_address: str | None,
+    http_client: HTTPClient | None,
+) -> tuple[dict, str, DiscoveryDocumentResponse, bool]:
+    """Fetch discovery + JWKS and resolve the signing key.
+
+    Returns (key_dict, alg, disco_response, is_cached_path).
     """
-    jwks_response = _get_jwks_response(jwks_uri)
-    return find_key_by_kid(kid, jwks_response.keys or [])
+    if http_client is not None:
+        if disco_doc_address is None:
+            raise ConfigurationException(
+                "disco_doc_address is required when perform_disco is True"
+            )
+        disco_doc_response = get_discovery_document(
+            DiscoveryDocumentRequest(address=disco_doc_address),
+            http_client=http_client,
+        )
+        validate_disco_response(disco_doc_response)
+        jwks_uri = validate_jwks_uri(disco_doc_response)
+        jwks_response = get_jwks(JwksRequest(address=jwks_uri), http_client=http_client)
+        validate_jwks_response(jwks_response)
+        kid = extract_kid_from_jwt(jwt)
+        key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [])
+        return key_dict, alg, disco_doc_response, False
+
+    # Cached path with TTL
+    disco_doc_response = _get_disco_response(disco_doc_address)
+    validate_disco_response(disco_doc_response)
+    jwks_uri = validate_jwks_uri(disco_doc_response)
+    jwks_response = _get_cached_jwks(jwks_uri)
+    validate_jwks_response(jwks_response)
+    kid = extract_kid_from_jwt(jwt)
+    key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [])
+    return key_dict, alg, disco_doc_response, True
 
 
-# ============================================================================
-# Token Validation
-# ============================================================================
+def _retry_with_refreshed_jwks(
+    jwt: str,
+    token_validation_config: TokenValidationConfig,
+    disco_doc_response: DiscoveryDocumentResponse,
+) -> dict:
+    """Re-fetch JWKS and retry decode once (key rotation recovery)."""
+    logger.warning(
+        "Signature verification failed with cached JWKS; retrying with refreshed keys"
+    )
+    jwks_uri = validate_jwks_uri(disco_doc_response)
+    jwks_response = _refresh_jwks(jwks_uri)
+    validate_jwks_response(jwks_response)
+    kid = extract_kid_from_jwt(jwt)
+    key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [])
+    resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
+    return decode_with_config(jwt, resolved_config, disco_doc_response.issuer)
 
 
 def validate_token(
@@ -109,55 +187,21 @@ def validate_token(
     validate_token_config(token_validation_config)
 
     if token_validation_config.perform_disco:
-        if http_client is not None:
-            # Bypass cache — use injected client directly
-            if disco_doc_address is None:
-                raise ConfigurationException(
-                    "disco_doc_address is required when perform_disco is True"
-                )
-            disco_doc_response = get_discovery_document(
-                DiscoveryDocumentRequest(address=disco_doc_address),
-                http_client=http_client,
-            )
-            validate_disco_response(disco_doc_response)
-            jwks_uri = validate_jwks_uri(disco_doc_response)
-
-            jwks_response = get_jwks(
-                JwksRequest(address=jwks_uri),
-                http_client=http_client,
-            )
-            validate_jwks_response(jwks_response)
-
-            kid = extract_kid_from_jwt(jwt)
-            key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [])
-        else:
-            # Cached path (existing behavior)
-            disco_doc_response = _get_disco_response(disco_doc_address)
-            validate_disco_response(disco_doc_response)
-            jwks_uri = validate_jwks_uri(disco_doc_response)
-
-            jwks_response = _get_jwks_response(jwks_uri)
-            validate_jwks_response(jwks_response)
-
-            kid = extract_kid_from_jwt(jwt)
-            key_dict, alg = _get_public_key_by_kid(kid, jwks_uri)
-
-        # Use local variables instead of mutating the config object
-        decoded_token = decode_with_config(
-            jwt,
-            TokenValidationConfig(
-                perform_disco=token_validation_config.perform_disco,
-                key=key_dict,
-                audience=token_validation_config.audience,
-                algorithms=[alg],
-                issuer=token_validation_config.issuer,
-                subject=token_validation_config.subject,
-                options=token_validation_config.options,
-                claims_validator=token_validation_config.claims_validator,
-                leeway=token_validation_config.leeway,
-            ),
-            disco_doc_response.issuer,
+        key_dict, alg, disco_doc_response, is_cached = _discover_and_resolve_key(
+            jwt, disco_doc_address, http_client
         )
+        resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
+
+        try:
+            decoded_token = decode_with_config(
+                jwt, resolved_config, disco_doc_response.issuer
+            )
+        except SignatureVerificationException:
+            if not is_cached:
+                raise
+            decoded_token = _retry_with_refreshed_jwks(
+                jwt, token_validation_config, disco_doc_response
+            )
     else:
         validate_config_for_manual_validation(token_validation_config)
         decoded_token = decode_with_config(jwt, token_validation_config)
@@ -167,4 +211,4 @@ def validate_token(
     return decoded_token
 
 
-__all__ = ["TokenValidationConfig", "validate_token"]
+__all__ = ["TokenValidationConfig", "clear_jwks_cache", "validate_token"]

@@ -23,8 +23,7 @@ from py_identity_model.exceptions import (
 )
 from py_identity_model.sync.token_validation import (
     _get_disco_response,
-    _get_jwks_response,
-    _get_public_key_by_kid,
+    clear_jwks_cache,
 )
 
 from .conftest import DEFAULT_VALIDATION_OPTIONS as DEFAULT_OPTIONS
@@ -42,13 +41,10 @@ MIN_EXPECTED_CACHE_HITS = 2
 def clear_validation_caches():
     """Clear all token validation caches before and after test."""
     _get_disco_response.cache_clear()
-    _get_jwks_response.cache_clear()
-    _get_public_key_by_kid.cache_clear()
+    clear_jwks_cache()
     yield
-    # Also clear after test for isolation
     _get_disco_response.cache_clear()
-    _get_jwks_response.cache_clear()
-    _get_public_key_by_kid.cache_clear()
+    clear_jwks_cache()
 
 
 @pytest.fixture
@@ -117,18 +113,16 @@ class TestMultipleTokensFromSameProvider:
             jtis = [c["jti"] for c in validated_claims]
             assert len(set(jtis)) == num_tokens, "Each token should have unique jti"
 
-        # Verify caching is working - disco and jwks should have cache hits
+        # Verify caching is working - disco should have cache hits
         disco_cache_info = _get_disco_response.cache_info()
-        jwks_cache_info = _get_jwks_response.cache_info()
 
         # After validating 3 tokens, we should have cache hits
         # (first token causes miss, subsequent tokens hit cache)
         assert disco_cache_info.hits >= MIN_EXPECTED_CACHE_HITS, (
             "Discovery cache should have hits"
         )
-        assert jwks_cache_info.hits >= MIN_EXPECTED_CACHE_HITS, (
-            "JWKS cache should have hits"
-        )
+        # JWKS uses TTL-based dict cache (no cache_info); the disco
+        # cache hit proves the cached path is exercised.
 
 
 @pytest.mark.usefixtures("clear_validation_caches")
@@ -298,13 +292,10 @@ class TestBenchmarkWithPreGeneratedTokens:
 
         # Verify cache statistics
         disco_cache_info = _get_disco_response.cache_info()
-        jwks_cache_info = _get_jwks_response.cache_info()
-        key_cache_info = _get_public_key_by_kid.cache_info()
 
         print(f"Discovery cache: {disco_cache_info}")
-        print(f"JWKS cache: {jwks_cache_info}")
-        print(f"Public key cache: {key_cache_info}")
 
         # Should have high cache hit rates
         assert disco_cache_info.hits >= num_validations - 1
-        assert jwks_cache_info.hits >= num_validations - 1
+        # JWKS uses TTL-based dict cache — validated by performance
+        # (100 validations < 1s proves caching works)

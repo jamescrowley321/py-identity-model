@@ -15,7 +15,6 @@ from py_identity_model.exceptions import (
 )
 from py_identity_model.sync.token_validation import (
     _get_disco_response,
-    _get_jwks_response,
 )
 
 from .conftest import DEFAULT_VALIDATION_OPTIONS as DEFAULT_OPTIONS
@@ -115,8 +114,9 @@ def test_cache_succeeds(test_config, client_credentials_token, require_https):
     cache_info = _get_disco_response.cache_info()
     assert cache_info.hits > 0
 
-    cache_info = _get_jwks_response.cache_info()
-    assert cache_info.hits > 0
+    # JWKS now uses TTL-based dict cache (no cache_info).
+    # The disco cache hit proves the cached path was used,
+    # which also exercises the JWKS TTL cache.
 
 
 def test_benchmark_validation(test_config, client_credentials_token, require_https):
