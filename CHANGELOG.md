@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v2.18.1 (2026-04-10)
+
+### Bug Fixes
+
+- **infra**: Make sonar_token optional so apply works without it
+  ([#318](https://github.com/jamescrowley321/py-identity-model/pull/318),
+  [`c72df52`](https://github.com/jamescrowley321/py-identity-model/commit/c72df52823d5befbbfeb28dd3c129e2b1da5cccd))
+
+### Continuous Integration
+
+- **deps)(deps**: Bump the github-actions group with 8 updates
+  ([#317](https://github.com/jamescrowley321/py-identity-model/pull/317),
+  [`07cccb9`](https://github.com/jamescrowley321/py-identity-model/commit/07cccb95cdd63459fd68c7da4dd6175df01a0cec))
+
+
 ## v2.18.0 (2026-04-10)
 
 ### Features
