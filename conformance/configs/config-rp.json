@@ -1,0 +1,8 @@
+{
+  "plan_name": "oidcc-client-config-certification-test-plan",
+  "variant": {
+    "server_metadata": "discovery",
+    "client_registration": "static_client"
+  },
+  "alias": "py-identity-model-config-rp"
+}
