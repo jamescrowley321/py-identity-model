@@ -1,21 +1,20 @@
 services:
   mongodb:
-    image: mongo:7
+    image: mongo:6.0.13
     volumes:
       - mongodb-data:/data/db
 
-  httpd:
-    image: ghcr.io/openid-certification/httpd:latest
+  nginx:
+    build:
+      context: ./nginx
     ports:
       - "8443:8443"
-    volumes:
-      - ./httpd-config/server.conf:/usr/local/apache2/conf/server.conf:ro
     depends_on:
       server:
         condition: service_healthy
 
   server:
-    image: ghcr.io/openid-certification/conformance-suite:latest
+    image: authelia/openid-connect-conformance-suite:latest
     environment:
       - JAVA_EXTRA_ARGS=-Dspring.data.mongodb.uri=mongodb://mongodb:27017/test_suite -Dfintechlabs.devmode=true -Dfintechlabs.startredir=not -Dfintechlabs.base_url=https://localhost.emobix.co.uk:8443
       - CONFORMANCE_SERVER_BASE_URL=https://localhost.emobix.co.uk:8443

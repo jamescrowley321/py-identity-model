@@ -4,7 +4,7 @@ Test infrastructure for running the [OpenID Foundation conformance suite](https:
 
 ## Architecture
 
-- **Conformance suite** — OIDF Java server + MongoDB + Apache httpd (TLS termination)
+- **Conformance suite** — OIDF Java server + MongoDB + nginx (TLS termination)
 - **RP harness** — Thin FastAPI app using py-identity-model's sync API
 - **Test runner** — Python script that orchestrates test plans via the suite's REST API
 
