@@ -85,8 +85,8 @@ class TestFindKeyByKid:
         assert key_dict.get("kid") is None
         assert alg == "RS256"
 
-    def test_find_key_by_kid_none_kid_multiple_keys_error(self):
-        """When JWT has no kid and JWKS has multiple keys, raise an error."""
+    def test_find_key_by_kid_none_kid_multiple_signing_keys_error(self):
+        """When JWT has no kid and JWKS has multiple signing keys, raise an error."""
         keys = [
             JsonWebKey(kty="RSA", kid="key1", alg="RS256", n="abc", e="def"),
             JsonWebKey(kty="RSA", kid="key2", alg="RS384", n="ghi", e="jkl"),
@@ -97,7 +97,31 @@ class TestFindKeyByKid:
 
         error_msg = str(exc_info.value)
         assert "no kid header" in error_msg.lower()
-        assert "multiple keys" in error_msg.lower()
+        assert "multiple signing keys" in error_msg.lower()
+
+    def test_find_key_by_kid_none_kid_filters_signing_keys(self):
+        """When JWT has no kid, filter to use=sig keys and use single match."""
+        keys = [
+            JsonWebKey(
+                kty="RSA", kid="sig-key", alg="RS256", use="sig", n="abc", e="def"
+            ),
+            JsonWebKey(
+                kty="RSA", kid="enc-key1", alg="RSA-OAEP", use="enc", n="ghi", e="jkl"
+            ),
+            JsonWebKey(
+                kty="RSA",
+                kid="enc-key2",
+                alg="RSA-OAEP-256",
+                use="enc",
+                n="mno",
+                e="pqr",
+            ),
+        ]
+
+        key_dict, alg = find_key_by_kid(None, keys)
+
+        assert key_dict["kid"] == "sig-key"
+        assert alg == "RS256"
 
     def test_find_key_by_kid_none_kid_single_key_logs_warning(self, caplog):
         """Verify a warning is logged when falling back to single key."""
@@ -234,8 +258,8 @@ class TestGetPublicKeyFromJwk:
         assert key.kid == "server-key"
         assert key.alg == "RS256"
 
-    def test_get_public_key_no_kid_multiple_keys_error(self):
-        """When JWT has no kid and JWKS has multiple keys, raise an error."""
+    def test_get_public_key_no_kid_multiple_signing_keys_error(self):
+        """When JWT has no kid and JWKS has multiple signing keys, raise an error."""
         jwt = _create_jwt_without_kid()
         keys = [
             JsonWebKey(kty="RSA", kid="key1", alg="RS256", n="abc", e="def"),
@@ -247,7 +271,7 @@ class TestGetPublicKeyFromJwk:
 
         error_msg = str(exc_info.value)
         assert "no kid header" in error_msg.lower()
-        assert "multiple keys" in error_msg.lower()
+        assert "multiple signing keys" in error_msg.lower()
 
     def test_get_public_key_no_kid_sets_alg_from_header(self):
         """When falling back to single key without alg, set it from JWT header."""

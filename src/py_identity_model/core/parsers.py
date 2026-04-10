@@ -11,6 +11,23 @@ from ..logging_config import logger
 from .models import JsonWebKey, JsonWebKeyParameterNames
 
 
+_ALG_TO_KTY: dict[str, str] = {
+    "RS256": "RSA",
+    "RS384": "RSA",
+    "RS512": "RSA",
+    "PS256": "RSA",
+    "PS384": "RSA",
+    "PS512": "RSA",
+    "ES256": "EC",
+    "ES384": "EC",
+    "ES512": "EC",
+    "ES256K": "EC",
+    "EdDSA": "OKP",
+    "Ed25519": "OKP",
+    "Ed448": "OKP",
+}
+
+
 def extract_kid_from_jwt(jwt: str) -> str | None:
     """
     Extract the 'kid' (key ID) from a JWT header without verification.
@@ -23,6 +40,20 @@ def extract_kid_from_jwt(jwt: str) -> str | None:
     """
     headers = get_unverified_header(jwt)
     return headers.get("kid")
+
+
+def extract_jwt_header_fields(jwt: str) -> tuple[str | None, str | None]:
+    """
+    Extract 'kid' and 'alg' from a JWT header without verification.
+
+    Args:
+        jwt: The JWT token string
+
+    Returns:
+        tuple: (kid, alg) — either may be None if not present
+    """
+    headers = get_unverified_header(jwt)
+    return headers.get("kid"), headers.get("alg")
 
 
 # ============================================================================
@@ -72,7 +103,11 @@ def jwks_from_dict(keys_dict: dict) -> JsonWebKey:
     )
 
 
-def find_key_by_kid(kid: str | None, keys: list[JsonWebKey]) -> tuple[dict, str]:
+def find_key_by_kid(
+    kid: str | None,
+    keys: list[JsonWebKey],
+    jwt_alg: str | None = None,
+) -> tuple[dict, str]:
     """
     Find a public key from JWKS by key ID and return it with algorithm.
 
@@ -80,11 +115,13 @@ def find_key_by_kid(kid: str | None, keys: list[JsonWebKey]) -> tuple[dict, str]
 
     Per OIDC Core Section 10.1, when the JWT has no ``kid`` header and the JWKS
     contains exactly one key, the RP MUST use that key.  When JWKS has multiple
-    keys and no ``kid``, the key cannot be resolved.
+    keys and no ``kid``, filter by ``use`` and ``kty`` to find a unique match.
 
     Args:
         kid: The key ID from the JWT header
         keys: List of JsonWebKey objects from JWKS
+        jwt_alg: The algorithm from the JWT header, used for key type filtering
+            when ``kid`` is absent
 
     Returns:
         tuple: (public_key_dict, algorithm)
@@ -96,18 +133,33 @@ def find_key_by_kid(kid: str | None, keys: list[JsonWebKey]) -> tuple[dict, str]
         raise TokenValidationException("No keys available in JWKS response")
 
     if kid is None:
-        if len(keys) == 1:
-            logger.warning("JWT has no kid header; using the single key from JWKS")
-            public_key = keys[0]
-            alg = public_key.alg if public_key.alg else "RS256"
+        # Per RFC 7517 §4.2, filter to signing keys (use="sig" or use omitted)
+        signing_keys = [k for k in keys if k.use in (None, "sig")]
+        if not signing_keys:
+            signing_keys = keys  # Fall back to all keys if none marked for signing
+
+        # Further filter by key type matching the JWT algorithm
+        if len(signing_keys) > 1 and jwt_alg:
+            expected_kty = _ALG_TO_KTY.get(jwt_alg)
+            if expected_kty:
+                kty_filtered = [k for k in signing_keys if k.kty == expected_kty]
+                if kty_filtered:
+                    signing_keys = kty_filtered
+
+        if len(signing_keys) == 1:
+            logger.warning(
+                "JWT has no kid header; using the single signing key from JWKS"
+            )
+            public_key = signing_keys[0]
+            alg = public_key.alg if public_key.alg else (jwt_alg or "RS256")
             return public_key.as_dict(), alg
         raise TokenValidationException(
-            "JWT has no kid header and JWKS contains multiple keys; "
+            "JWT has no kid header and JWKS contains multiple signing keys; "
             "cannot determine which key to use",
             token_part="header",
             details={
-                "available_kids": [k.kid for k in keys if k.kid],
-                "key_count": len(keys),
+                "available_kids": [k.kid for k in signing_keys if k.kid],
+                "key_count": len(signing_keys),
             },
         )
 
@@ -147,19 +199,26 @@ def get_public_key_from_jwk(jwt: str, keys: list[JsonWebKey]) -> JsonWebKey:
     logger.debug(f"Looking for key with kid: {kid}")
 
     if kid is None:
-        if len(keys) == 1:
-            logger.warning("JWT has no kid header; using the single key from JWKS")
-            key = keys[0]
+        # Per RFC 7517 §4.2, filter to signing keys (use="sig" or use omitted)
+        signing_keys = [k for k in keys if k.use in (None, "sig")]
+        if not signing_keys:
+            signing_keys = keys  # Fall back to all keys if none marked for signing
+
+        if len(signing_keys) == 1:
+            logger.warning(
+                "JWT has no kid header; using the single signing key from JWKS"
+            )
+            key = signing_keys[0]
             if not key.alg:
                 key.alg = headers["alg"]
             return key
         raise TokenValidationException(
-            "JWT has no kid header and JWKS contains multiple keys; "
+            "JWT has no kid header and JWKS contains multiple signing keys; "
             "cannot determine which key to use",
             token_part="header",
             details={
-                "available_kids": [k.kid for k in keys if k.kid],
-                "key_count": len(keys),
+                "available_kids": [k.kid for k in signing_keys if k.kid],
+                "key_count": len(signing_keys),
             },
         )
 
@@ -184,6 +243,7 @@ def get_public_key_from_jwk(jwt: str, keys: list[JsonWebKey]) -> JsonWebKey:
 
 
 __all__ = [
+    "extract_jwt_header_fields",
     "extract_kid_from_jwt",
     "find_key_by_kid",
     "get_public_key_from_jwk",

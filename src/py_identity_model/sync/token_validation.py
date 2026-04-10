@@ -24,7 +24,10 @@ from ..core.models import (
     JwksResponse,
     TokenValidationConfig,
 )
-from ..core.parsers import extract_kid_from_jwt, find_key_by_kid
+from ..core.parsers import (
+    extract_jwt_header_fields,
+    find_key_by_kid,
+)
 from ..core.token_validation_logic import (
     build_resolved_config,
     decode_with_config,
@@ -126,8 +129,8 @@ def _discover_and_resolve_key(
         jwks_uri = validate_jwks_uri(disco_doc_response)
         jwks_response = get_jwks(JwksRequest(address=jwks_uri), http_client=http_client)
         validate_jwks_response(jwks_response)
-        kid = extract_kid_from_jwt(jwt)
-        key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [])
+        kid, jwt_alg = extract_jwt_header_fields(jwt)
+        key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [], jwt_alg=jwt_alg)
         return key_dict, alg, disco_doc_response, False
 
     # Cached path with TTL
@@ -136,8 +139,8 @@ def _discover_and_resolve_key(
     jwks_uri = validate_jwks_uri(disco_doc_response)
     jwks_response = _get_cached_jwks(jwks_uri)
     validate_jwks_response(jwks_response)
-    kid = extract_kid_from_jwt(jwt)
-    key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [])
+    kid, jwt_alg = extract_jwt_header_fields(jwt)
+    key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [], jwt_alg=jwt_alg)
     return key_dict, alg, disco_doc_response, True
 
 
@@ -155,8 +158,8 @@ def _retry_with_refreshed_jwks(
     else:
         jwks_response = _refresh_jwks(jwks_uri)
     validate_jwks_response(jwks_response)
-    kid = extract_kid_from_jwt(jwt)
-    key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [])
+    kid, jwt_alg = extract_jwt_header_fields(jwt)
+    key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [], jwt_alg=jwt_alg)
     resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
     return decode_with_config(jwt, resolved_config, disco_doc_response.issuer)
 
