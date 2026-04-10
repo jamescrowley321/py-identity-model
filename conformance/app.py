@@ -352,13 +352,13 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
     )
 
 
-@app.get("/callback")
+@app.get("/callback", response_model=None)
 def callback_get(request: Request) -> HTMLResponse | JSONResponse:
     """Handle authorization callback (query string mode)."""
     return _handle_callback(str(request.url))
 
 
-@app.post("/callback")
+@app.post("/callback", response_model=None)
 async def callback_post(request: Request) -> HTMLResponse | JSONResponse:
     """Handle authorization callback (form_post mode)."""
     form_data = await request.form()

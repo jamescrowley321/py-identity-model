@@ -9,6 +9,10 @@ services:
       context: ./nginx
     ports:
       - "8443:8443"
+    networks:
+      default:
+        aliases:
+          - localhost.emobix.co.uk
     depends_on:
       server:
         condition: service_healthy
@@ -16,12 +20,14 @@ services:
   server:
     image: authelia/openid-connect-conformance-suite:latest
     environment:
-      - JAVA_EXTRA_ARGS=-Dspring.data.mongodb.uri=mongodb://mongodb:27017/test_suite -Dfintechlabs.devmode=true -Dfintechlabs.startredir=not -Dfintechlabs.base_url=https://localhost.emobix.co.uk:8443
+      - JAVA_EXTRA_ARGS=-Dspring.data.mongodb.uri=mongodb://mongodb:27017/test_suite -Dfintechlabs.devmode=true -Dfintechlabs.startredir=false -Dfintechlabs.base_url=https://localhost.emobix.co.uk:8443
       - CONFORMANCE_SERVER_BASE_URL=https://localhost.emobix.co.uk:8443
+      - SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GITLAB_CLIENT_ID=dummy
+      - SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GITLAB_CLIENT_SECRET=dummy
     depends_on:
       - mongodb
     healthcheck:
-      test: ["CMD", "curl", "-f", "-k", "http://localhost:8080/"]
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://localhost:8080/"]
       interval: 5s
       timeout: 5s
       retries: 30
