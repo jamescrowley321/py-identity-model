@@ -12,7 +12,7 @@ import os
 import secrets
 from urllib.parse import urlencode
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -112,7 +112,7 @@ def authorize(
     scope: str = Query(
         "openid profile email address phone", description="Requested scopes"
     ),
-) -> RedirectResponse:
+) -> RedirectResponse | JSONResponse:
     """Build an authorization URL and redirect to the OP.
 
     The conformance test runner calls this to start an authorization flow.
@@ -149,9 +149,12 @@ def authorize(
 
     # Build the authorization URL
     if disco.authorization_endpoint is None:
-        raise HTTPException(
+        return JSONResponse(
             status_code=502,
-            detail="Discovery document missing authorization_endpoint",
+            content={
+                "error": "missing_endpoint",
+                "detail": "Discovery document missing authorization_endpoint",
+            },
         )
     auth_url = build_authorization_url(
         authorization_endpoint=disco.authorization_endpoint,
@@ -248,14 +251,20 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
 
     # Exchange authorization code for tokens
     if disco.token_endpoint is None:
-        raise HTTPException(
+        session.result["status"] = "error"
+        session.result["error"] = "missing_token_endpoint"
+        _store_test_result(session)
+        return HTMLResponse(
+            content="<h1>Discovery Error</h1><p>Discovery document missing token_endpoint</p>",
             status_code=502,
-            detail="Discovery document missing token_endpoint",
         )
     if cb_response.code is None:
-        raise HTTPException(
+        session.result["status"] = "error"
+        session.result["error"] = "missing_code"
+        _store_test_result(session)
+        return HTMLResponse(
+            content="<h1>Callback Error</h1><p>Authorization callback missing code parameter</p>",
             status_code=400,
-            detail="Authorization callback missing code parameter",
         )
     token_response = request_authorization_code_token(
         AuthorizationCodeTokenRequest(
@@ -272,18 +281,19 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
     if not token_response.is_successful:
         session.result["status"] = "error"
         session.result["error"] = f"token_exchange: {token_response.error}"
-        session.result["error_description"] = token_response.error_description
         _store_test_result(session)
         return HTMLResponse(
-            content=f"<h1>Token Exchange Failed</h1>"
-            f"<p>{token_response.error}: {token_response.error_description}</p>",
+            content=f"<h1>Token Exchange Failed</h1><p>{token_response.error}</p>",
             status_code=400,
         )
 
     if token_response.token is None:
-        raise HTTPException(
+        session.result["status"] = "error"
+        session.result["error"] = "missing_token_data"
+        _store_test_result(session)
+        return HTMLResponse(
+            content="<h1>Token Error</h1><p>Token response missing token data</p>",
             status_code=502,
-            detail="Token response missing token data",
         )
     token_data = token_response.token
     id_token_jwt = token_data.get("id_token")
