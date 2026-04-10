@@ -29,6 +29,7 @@ from py_identity_model import (
     get_discovery_document,
     get_userinfo,
     parse_authorize_callback_response,
+    parse_discovery_url,
     request_authorization_code_token,
     validate_authorize_callback_state,
     validate_token,
@@ -119,9 +120,10 @@ def authorize(
     http_client = _get_http_client()
 
     # Fetch discovery document for this issuer
+    disco_endpoint = parse_discovery_url(issuer)
     policy = DiscoveryPolicy(require_https=False, validate_issuer=False)
     disco = get_discovery_document(
-        DiscoveryDocumentRequest(address=issuer, policy=policy),
+        DiscoveryDocumentRequest(address=disco_endpoint.url, policy=policy),
         http_client=http_client,
     )
 
@@ -224,9 +226,10 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
         )
 
     # Fetch discovery document again (not cached in harness, each test may use different OP)
+    disco_endpoint = parse_discovery_url(session.issuer)
     policy = DiscoveryPolicy(require_https=False, validate_issuer=False)
     disco = get_discovery_document(
-        DiscoveryDocumentRequest(address=session.issuer, policy=policy),
+        DiscoveryDocumentRequest(address=disco_endpoint.url, policy=policy),
         http_client=http_client,
     )
 
@@ -286,7 +289,7 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
                     options={"verify_exp": True, "require": ["sub", "iat"]},
                     require_https=False,
                 ),
-                disco_doc_address=session.issuer,
+                disco_doc_address=disco_endpoint.url,
                 http_client=http_client,
             )
         except TokenValidationException as exc:
