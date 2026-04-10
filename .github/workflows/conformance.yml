@@ -73,17 +73,26 @@ jobs:
             --output conformance/results/basic-rp-latest.json \
             --verbose
 
+      - name: Run Config RP conformance tests
+        run: |
+          python conformance/run_tests.py \
+            --plan config-rp \
+            --output conformance/results/config-rp-latest.json \
+            --verbose
+
       - name: Export HTML results and logs
         if: always()
         run: |
           mkdir -p conformance/results/logs
 
-          # Export HTML results from the conformance suite API
-          if [ -f conformance/results/basic-rp-latest.json ]; then
+          # Export HTML results for each plan that produced results
+          for RESULTS_FILE in conformance/results/*-latest.json; do
+            [ -f "$RESULTS_FILE" ] || continue
+            PLAN_NAME=$(basename "$RESULTS_FILE" -latest.json)
             PLAN_ID=$(python3 -c "
           import json, sys
           try:
-              results = json.load(open('conformance/results/basic-rp-latest.json'))
+              results = json.load(open('$RESULTS_FILE'))
               plan_id = results.get('plan_id', '')
               if plan_id:
                   print(plan_id, end='')
@@ -93,10 +102,10 @@ jobs:
               sys.exit(1)
           " 2>/dev/null) && \
             curl -sfk "https://localhost.emobix.co.uk:8443/api/plan/exporthtml/${PLAN_ID}" \
-              -o conformance/results/conformance-report.zip && \
-            echo "HTML results exported for plan ${PLAN_ID}" || \
-            echo "Warning: could not export HTML results (suite may be down)"
-          fi
+              -o "conformance/results/${PLAN_NAME}-report.zip" && \
+            echo "HTML results exported for ${PLAN_NAME} plan ${PLAN_ID}" || \
+            echo "Warning: could not export HTML results for ${PLAN_NAME} (suite may be down)"
+          done
 
           # Download suite logs for debugging
           docker compose -f conformance/docker-compose.yml logs server > conformance/results/logs/server.log 2>&1 || true
@@ -108,8 +117,8 @@ jobs:
         with:
           name: conformance-results
           path: |
-            conformance/results/basic-rp-latest.json
-            conformance/results/conformance-report.zip
+            conformance/results/*-latest.json
+            conformance/results/*-report.zip
             conformance/results/logs/
           retention-days: 30
 
