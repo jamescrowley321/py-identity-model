@@ -62,7 +62,9 @@ class ConformanceSuiteClient:
         self.base_url = base_url.rstrip("/")
         self.client = httpx.Client(verify=False, timeout=30.0)
 
-    def create_plan(self, plan_name: str, variant: dict, alias: str) -> dict:
+    def create_plan(
+        self, plan_name: str, variant: dict, alias: str, rp_base_url: str = RP_BASE_URL
+    ) -> dict:
         """Create a test plan.
 
         Returns the plan response including plan ID and list of test modules.
@@ -78,6 +80,7 @@ class ConformanceSuiteClient:
             "client": {
                 "client_id": "conformance-rp",
                 "client_secret": "conformance-rp-secret",
+                "redirect_uri": f"{rp_base_url}/callback",
             },
             "client2": {
                 "client_id": "conformance-rp-2",
@@ -85,10 +88,10 @@ class ConformanceSuiteClient:
             },
         }
 
-        # Variant goes as query params
-        params = {"planName": plan_name}
-        for key, value in variant.items():
-            params[f"variant-{key}"] = value
+        # Variant is a single JSON-encoded query parameter (per official conformance.py)
+        params: dict[str, str] = {"planName": plan_name}
+        if variant:
+            params["variant"] = json.dumps(variant)
 
         response = self.client.post(
             f"{self.base_url}/api/plan",
@@ -319,7 +322,9 @@ def run_plan(
 
     # Create the test plan
     logger.info("Creating test plan...")
-    plan_response = suite.create_plan(plan_name, variant, alias)
+    plan_response = suite.create_plan(
+        plan_name, variant, alias, rp_base_url=rp_base_url
+    )
     plan_id = plan_response.get("id", "")
     modules = plan_response.get("modules", [])
 
