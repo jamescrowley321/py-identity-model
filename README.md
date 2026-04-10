@@ -108,9 +108,45 @@ Each protocol feature has a standalone example in [`examples/`](examples/):
 | [device_auth_example.py](examples/device_auth_example.py) | Device Authorization Grant (RFC 8628) |
 | [token_exchange_example.py](examples/token_exchange_example.py) | Token Exchange (RFC 8693) |
 
-**Framework integrations:**
-- [FastAPI](examples/fastapi/) — Middleware, dependency injection, token refresh
-- [Descope](examples/descope/) — Descope-specific extension of the FastAPI base
+## Framework Integration
+
+`py-identity-model` is framework-agnostic — call `validate_token` (or `py_identity_model.aio.validate_token`) from any Python framework's auth layer. For FastAPI, [`examples/fastapi/`](examples/fastapi/) ships a complete, production-shaped integration you can copy into your own project:
+
+- **`TokenValidationMiddleware`** — Bearer token extraction, JWKS-cached validation, configurable excluded paths, pluggable custom-claim validators
+- **Dependency injection** — `CurrentUser`, `Claims`, `Token` annotated types for typed access to the authenticated principal from route handlers
+- **Authorization guards** — `require_claim(type, value)` and `require_scope(scope)` factories that plug into `Depends(...)` to enforce RBAC/ABAC at the route level
+- **Token refresh helper** — Proactive refresh of expiring access tokens for service-to-service flows
+
+```python
+from fastapi import Depends, FastAPI
+
+from .middleware import TokenValidationMiddleware
+from .dependencies import CurrentUser, require_scope
+
+app = FastAPI()
+
+app.add_middleware(
+    TokenValidationMiddleware,
+    discovery_url="https://issuer.example.com/.well-known/openid-configuration",
+    audience="my-api",
+    excluded_paths=["/health", "/docs", "/openapi.json"],
+)
+
+
+@app.get("/me")
+async def me(user: CurrentUser) -> dict:
+    return {"sub": user.identity.name}
+
+
+@app.get("/admin", dependencies=[Depends(require_scope("api.admin"))])
+async def admin() -> dict:
+    return {"status": "ok"}
+```
+
+| Integration | Path | Highlights |
+|-------------|------|------------|
+| FastAPI | [`examples/fastapi/`](examples/fastapi/) | Middleware, DI, authorization guards, token refresh |
+| Descope (FastAPI) | [`examples/descope/`](examples/descope/) | Extends the FastAPI base with Descope-specific issuer/tenant handling |
 
 ## Configuration
 
