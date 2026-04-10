@@ -146,6 +146,7 @@ dmypy.json
 
 # Ralph orchestrator runtime state
 .ralph/
+PROMPT.md
 
 # Terraform
 infra/**/.terraform/
