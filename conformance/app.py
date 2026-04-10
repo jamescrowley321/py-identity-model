@@ -34,6 +34,7 @@ from py_identity_model import (
     validate_token,
 )
 from py_identity_model.exceptions import (
+    ConfigurationException,
     PyIdentityModelException,
     TokenValidationException,
 )
@@ -114,7 +115,23 @@ def discover(
     observe the RP fetching the openid-configuration endpoint.
     """
     http_client = _get_http_client()
-    disco_endpoint = parse_discovery_url(issuer)
+    try:
+        disco_endpoint = parse_discovery_url(issuer)
+    except ConfigurationException as exc:
+        error_msg = f"invalid_issuer: {exc}"
+        logger.error("Discovery URL parse error: %s", exc)
+        if test_id:
+            error_session = AuthSession(issuer=issuer, state="", nonce="")
+            error_session.result = {
+                "test_id": test_id,
+                "status": "error",
+                "error": error_msg,
+            }
+            test_results[test_id] = error_session
+        return JSONResponse(
+            status_code=400,
+            content={"error": "invalid_issuer", "detail": str(exc)},
+        )
     policy = DiscoveryPolicy(require_https=False, validate_issuer=True)
     disco = get_discovery_document(
         DiscoveryDocumentRequest(address=disco_endpoint.url, policy=policy),
@@ -191,7 +208,22 @@ def authorize(
         )
 
     # OIDC Discovery 1.0 §4.3: issuer in document MUST match the URL used to retrieve it
-    if disco.issuer and disco.issuer != issuer:
+    if not disco.issuer:
+        error_msg = "Discovery document missing required 'issuer' field"
+        logger.error(error_msg)
+        if test_id:
+            error_session = AuthSession(issuer=issuer, state="", nonce="")
+            error_session.result = {
+                "test_id": test_id,
+                "status": "error",
+                "error": f"missing_issuer: {error_msg}",
+            }
+            test_results[test_id] = error_session
+        return JSONResponse(
+            status_code=502,
+            content={"error": "missing_issuer", "detail": error_msg},
+        )
+    if disco.issuer != issuer:
         error_msg = (
             f"Issuer mismatch: discovery document issuer '{disco.issuer}' "
             f"does not match expected '{issuer}'"
@@ -328,7 +360,17 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
         )
 
     # OIDC Discovery 1.0 §4.3: issuer in document MUST match the URL used to retrieve it
-    if disco.issuer and disco.issuer != session.issuer:
+    if not disco.issuer:
+        error_msg = "Discovery document missing required 'issuer' field"
+        logger.error(error_msg)
+        session.result["status"] = "error"
+        session.result["error"] = f"missing_issuer: {error_msg}"
+        _store_test_result(session)
+        return HTMLResponse(
+            content=f"<h1>Missing Issuer</h1><p>{error_msg}</p>",
+            status_code=502,
+        )
+    if disco.issuer != session.issuer:
         error_msg = (
             f"Issuer mismatch: discovery document issuer '{disco.issuer}' "
             f"does not match expected '{session.issuer}'"

@@ -92,7 +92,7 @@ jobs:
             PLAN_ID=$(python3 -c "
           import json, sys
           try:
-              results = json.load(open('$RESULTS_FILE'))
+              results = json.load(open(sys.argv[1]))
               plan_id = results.get('plan_id', '')
               if plan_id:
                   print(plan_id, end='')
@@ -100,7 +100,7 @@ jobs:
                   sys.exit(1)
           except Exception:
               sys.exit(1)
-          " 2>/dev/null) && \
+          " "$RESULTS_FILE" 2>/dev/null) && \
             curl -sfk "https://localhost.emobix.co.uk:8443/api/plan/exporthtml/${PLAN_ID}" \
               -o "conformance/results/${PLAN_NAME}-report.zip" && \
             echo "HTML results exported for ${PLAN_NAME} plan ${PLAN_ID}" || \

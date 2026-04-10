@@ -181,6 +181,9 @@ def _get_test_type(test_name: str) -> str:
         return "auth_no_userinfo"
     if test_name in DOUBLE_FLOW_TESTS:
         return "auth_double"
+    logger.info(
+        "Test '%s' not in any special category, using auth_full flow", test_name
+    )
     return "auth_full"
 
 
