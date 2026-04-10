@@ -108,7 +108,9 @@ def authorize(
     client_secret: str = Query("", description="Client secret"),
     test_id: str = Query("", description="Test module ID for result tracking"),
     use_pkce: str = Query("false", description="Whether to use PKCE"),
-    scope: str = Query("openid", description="Requested scopes"),
+    scope: str = Query(
+        "openid profile email address phone", description="Requested scopes"
+    ),
 ) -> RedirectResponse:
     """Build an authorization URL and redirect to the OP.
 
@@ -281,7 +283,7 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
                     perform_disco=True,
                     audience=session.client_id,
                     issuer=disco.issuer,
-                    options={"verify_exp": True},
+                    options={"verify_exp": True, "require": ["sub", "iat"]},
                     require_https=False,
                 ),
                 disco_doc_address=session.issuer,
