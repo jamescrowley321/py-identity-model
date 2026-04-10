@@ -1,0 +1,113 @@
+{
+  "plan": "basic-rp",
+  "suite_url": "https://localhost.emobix.co.uk:8443",
+  "results": [
+    {
+      "test": "oidcc-client-test",
+      "status": "PASSED",
+      "test_id": "vKqcNL1JyytrtcJ",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=vKqcNL1JyytrtcJ",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-invalid-iss",
+      "status": "PASSED",
+      "test_id": "cGhjv0M9zpYPdgZ",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=cGhjv0M9zpYPdgZ",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-missing-sub",
+      "status": "PASSED",
+      "test_id": "p7dvvFnvD7nEGKy",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=p7dvvFnvD7nEGKy",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-invalid-aud",
+      "status": "PASSED",
+      "test_id": "mUmTSZGgr4xBe22",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=mUmTSZGgr4xBe22",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-missing-iat",
+      "status": "PASSED",
+      "test_id": "q4VUV2r8n9axB1t",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=q4VUV2r8n9axB1t",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-kid-absent-single-jwks",
+      "status": "PASSED",
+      "test_id": "EMLub4QzNPzhEeM",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=EMLub4QzNPzhEeM",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-kid-absent-multiple-jwks",
+      "status": "PASSED",
+      "test_id": "atm2Iy4OMv4Y3FL",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=atm2Iy4OMv4Y3FL",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-idtoken-sig-rs256",
+      "status": "PASSED",
+      "test_id": "8ZFqvhSAKGIP3NF",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=8ZFqvhSAKGIP3NF",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-idtoken-sig-none",
+      "status": "SKIPPED",
+      "test_id": "SHcVh8CE1JhwXt9",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=SHcVh8CE1JhwXt9",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-invalid-sig-rs256",
+      "status": "PASSED",
+      "test_id": "b7iSpdgiWjqIiaM",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=b7iSpdgiWjqIiaM",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-userinfo-invalid-sub",
+      "status": "PASSED",
+      "test_id": "O90M9sxRBj4X4Nm",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=O90M9sxRBj4X4Nm",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-nonce-invalid",
+      "status": "PASSED",
+      "test_id": "ExUG5z8fNhL4l8B",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=ExUG5z8fNhL4l8B",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-scope-userinfo-claims",
+      "status": "PASSED",
+      "test_id": "ets1GjFsGo4gSeT",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=ets1GjFsGo4gSeT",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-client-secret-basic",
+      "status": "PASSED",
+      "test_id": "ne6sJFhgURLZpd8",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=ne6sJFhgURLZpd8",
+      "detail": ""
+    }
+  ],
+  "summary": {
+    "total": 14,
+    "passed": 13,
+    "warning": 0,
+    "failed": 0,
+    "review": 0,
+    "skipped": 1
+  },
+  "all_passed": true
+}

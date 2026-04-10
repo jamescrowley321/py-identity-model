@@ -29,8 +29,9 @@ jobs:
         run: |
           echo "Waiting for conformance suite at https://localhost.emobix.co.uk:8443..."
           for i in $(seq 1 60); do
-            if curl -sk -o /dev/null -w '%{http_code}' https://localhost.emobix.co.uk:8443/ | grep -q '200\|302'; then
-              echo "Conformance suite is ready"
+            HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' https://localhost.emobix.co.uk:8443/ || true)
+            if [ "$HTTP_CODE" -ge 200 ] 2>/dev/null && [ "$HTTP_CODE" -lt 400 ] 2>/dev/null; then
+              echo "Conformance suite is ready (HTTP $HTTP_CODE)"
               break
             fi
             if [ "$i" -eq 60 ]; then
@@ -72,25 +73,32 @@ jobs:
             --output conformance/results/basic-rp-latest.json \
             --verbose
 
-      - name: Export HTML results
+      - name: Export HTML results and logs
         if: always()
         run: |
-          # Extract plan ID from results file
+          mkdir -p conformance/results/logs
+
+          # Export HTML results from the conformance suite API
           if [ -f conformance/results/basic-rp-latest.json ]; then
             PLAN_ID=$(python3 -c "
-          import json
-          results = json.load(open('conformance/results/basic-rp-latest.json'))
-          # Get plan ID from the first test's test_id (format: plan-id/module-id)
-          test_ids = [r['test_id'] for r in results.get('results', []) if r.get('test_id')]
-          if test_ids:
-              # test_id from suite API is just the module ID; plan ID was used to create them
-              # We need to query the suite API for the plan
-              pass
-          " 2>/dev/null || true)
+          import json, sys
+          try:
+              results = json.load(open('conformance/results/basic-rp-latest.json'))
+              plan_id = results.get('plan_id', '')
+              if plan_id:
+                  print(plan_id, end='')
+              else:
+                  sys.exit(1)
+          except Exception:
+              sys.exit(1)
+          " 2>/dev/null) && \
+            curl -sk "https://localhost.emobix.co.uk:8443/api/plan/exporthtml/${PLAN_ID}" \
+              -o conformance/results/conformance-report.zip && \
+            echo "HTML results exported for plan ${PLAN_ID}" || \
+            echo "Warning: could not export HTML results (suite may be down)"
           fi
 
           # Download suite logs for debugging
-          mkdir -p conformance/results/logs
           docker compose -f conformance/docker-compose.yml logs server > conformance/results/logs/server.log 2>&1 || true
           docker compose -f conformance/docker-compose.yml logs rp > conformance/results/logs/rp.log 2>&1 || true
 
@@ -101,6 +109,7 @@ jobs:
           name: conformance-results
           path: |
             conformance/results/basic-rp-latest.json
+            conformance/results/conformance-report.zip
             conformance/results/logs/
           retention-days: 30
 

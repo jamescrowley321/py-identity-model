@@ -306,8 +306,11 @@ def run_plan(
     config_path: str,
     suite_base_url: str = SUITE_BASE_URL,
     rp_base_url: str = RP_BASE_URL,
-) -> list[TestResult]:
-    """Run all tests in a conformance test plan."""
+) -> tuple[str, list[TestResult]]:
+    """Run all tests in a conformance test plan.
+
+    Returns a tuple of (plan_id, results).
+    """
     # Load plan config
     config = json.loads(Path(config_path).read_text())
     plan_name = config["plan_name"]
@@ -367,7 +370,7 @@ def run_plan(
         )
         results.append(result)
 
-    return results
+    return plan_id, results
 
 
 def print_summary(results: list[TestResult]) -> bool:
@@ -455,7 +458,7 @@ def main() -> None:
         logger.error("Config not found: %s", config_path)
         sys.exit(1)
 
-    results = run_plan(
+    plan_id, results = run_plan(
         config_path=str(config_path),
         suite_base_url=args.suite_url,
         rp_base_url=args.rp_url,
@@ -468,6 +471,7 @@ def main() -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         results_json = {
             "plan": args.plan,
+            "plan_id": plan_id,
             "suite_url": args.suite_url,
             "results": [
                 {
