@@ -8,6 +8,7 @@ import pytest
 
 from py_identity_model.core.models import JsonWebKey
 from py_identity_model.core.parsers import (
+    extract_jwt_header_fields,
     extract_kid_from_jwt,
     find_key_by_kid,
     get_public_key_from_jwk,
@@ -134,6 +135,50 @@ class TestFindKeyByKid:
 
         assert any("no kid header" in r.message.lower() for r in caplog.records)
 
+    def test_find_key_by_kid_none_kid_kty_filtering(self):
+        """When JWT has no kid, filter by kty matching JWT alg to find unique key."""
+        keys = [
+            JsonWebKey(
+                kty="RSA", kid="rsa-key", alg="RS256", use="sig", n="abc", e="def"
+            ),
+            JsonWebKey(
+                kty="EC",
+                kid="ec-key",
+                alg="ES256",
+                use="sig",
+                crv="P-256",
+                x="x",
+                y="y",
+            ),
+        ]
+
+        key_dict, alg = find_key_by_kid(None, keys, jwt_alg="ES256")
+
+        assert key_dict["kid"] == "ec-key"
+        assert alg == "ES256"
+
+    def test_find_key_by_kid_none_kid_fallback_to_all_keys(self):
+        """When all keys have use=enc, fall back to all keys."""
+        keys = [
+            JsonWebKey(
+                kty="RSA", kid="enc-key", alg="RSA-OAEP", use="enc", n="abc", e="def"
+            ),
+        ]
+
+        key_dict, _alg = find_key_by_kid(None, keys)
+
+        assert key_dict["kid"] == "enc-key"
+
+    def test_find_key_by_kid_none_kid_uses_jwt_alg_as_default(self):
+        """When single signing key has no alg, use jwt_alg as default."""
+        keys = [
+            JsonWebKey(kty="RSA", kid="key1", n="abc", e="def"),
+        ]
+
+        _key_dict, alg = find_key_by_kid(None, keys, jwt_alg="RS384")
+
+        assert alg == "RS384"
+
 
 def _create_jwt_with_kid(kid: str, alg: str = "RS256") -> str:
     """Helper to create a minimal JWT with a specific kid in the header."""
@@ -185,25 +230,27 @@ class TestExtractKidFromJwt:
 
     def test_extract_kid_missing(self):
         """Test extracting kid when not present returns None."""
-        header = {"alg": "RS256", "typ": "JWT"}
-        payload = {"sub": "test"}
-        header_b64 = (
-            base64.urlsafe_b64encode(json.dumps(header, separators=(",", ":")).encode())
-            .rstrip(b"=")
-            .decode()
-        )
-        payload_b64 = (
-            base64.urlsafe_b64encode(
-                json.dumps(payload, separators=(",", ":")).encode()
-            )
-            .rstrip(b"=")
-            .decode()
-        )
-        fake_sig = base64.urlsafe_b64encode(b"fake_sig").rstrip(b"=").decode()
-        jwt = f"{header_b64}.{payload_b64}.{fake_sig}"
-
+        jwt = _create_jwt_without_kid()
         kid = extract_kid_from_jwt(jwt)
         assert kid is None
+
+
+class TestExtractJwtHeaderFields:
+    """Tests for the extract_jwt_header_fields function."""
+
+    def test_extract_both_kid_and_alg(self):
+        """Test extracting kid and alg from JWT header."""
+        jwt = _create_jwt_with_kid("test-key", "ES256")
+        kid, alg = extract_jwt_header_fields(jwt)
+        assert kid == "test-key"
+        assert alg == "ES256"
+
+    def test_extract_alg_when_kid_absent(self):
+        """Test extracting alg when kid is not present."""
+        jwt = _create_jwt_without_kid(alg="RS384")
+        kid, alg = extract_jwt_header_fields(jwt)
+        assert kid is None
+        assert alg == "RS384"
 
 
 class TestGetPublicKeyFromJwk:
@@ -283,6 +330,42 @@ class TestGetPublicKeyFromJwk:
         key = get_public_key_from_jwk(jwt, keys)
 
         assert key.alg == "RS384"
+
+    def test_get_public_key_no_kid_kty_filtering(self):
+        """When JWT has no kid, filter by kty matching JWT alg to find unique key."""
+        jwt = _create_jwt_without_kid(alg="ES256")
+        keys = [
+            JsonWebKey(
+                kty="RSA", kid="rsa-key", alg="RS256", use="sig", n="abc", e="def"
+            ),
+            JsonWebKey(
+                kty="EC",
+                kid="ec-key",
+                alg="ES256",
+                use="sig",
+                crv="P-256",
+                x="x",
+                y="y",
+            ),
+        ]
+
+        key = get_public_key_from_jwk(jwt, keys)
+
+        assert key.kid == "ec-key"
+        assert key.alg == "ES256"
+
+    def test_get_public_key_no_kid_fallback_to_all_keys(self):
+        """When all keys have use=enc, fall back to all keys."""
+        jwt = _create_jwt_without_kid()
+        keys = [
+            JsonWebKey(
+                kty="RSA", kid="enc-key", alg="RSA-OAEP", use="enc", n="abc", e="def"
+            ),
+        ]
+
+        key = get_public_key_from_jwk(jwt, keys)
+
+        assert key.kid == "enc-key"
 
 
 class TestJwksFromDict:
