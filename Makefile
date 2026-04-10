@@ -69,6 +69,18 @@ docs-serve:
 docs-build:
 	uv run --group docs mkdocs build --strict
 
+.PHONY: conformance-build
+conformance-build: ## Build conformance suite containers
+	docker compose -f conformance/docker-compose.yml build
+
+.PHONY: conformance-up
+conformance-up: ## Start conformance suite and RP harness
+	docker compose -f conformance/docker-compose.yml up -d --build --wait
+
+.PHONY: conformance-down
+conformance-down: ## Tear down conformance suite
+	docker compose -f conformance/docker-compose.yml down -v
+
 .PHONY: ci-setup
 ci-setup:
 	python -m pip install --upgrade pip

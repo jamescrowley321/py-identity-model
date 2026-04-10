@@ -105,6 +105,7 @@ upload_to_vcs_release = true
 project_excludes = [
     "examples/fastapi/",
     "examples/descope/",
+    "conformance/",
 ]
 
 [tool.ruff]
@@ -156,6 +157,16 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "src/tests/**/*.py" = ["S101"]   # 1858 assert violations — all test assertions, 0 in production code
 "examples/**/*.py" = ["S101"]    # 73 assert violations in example integration tests
+"conformance/**/*.py" = [
+    "S101",    # assert used for type narrowing (guarded response fields)
+    "S501",    # verify=False required — conformance suite uses self-signed certs
+    "PLR0911", # callback handler has many early-return error paths
+    "PLR0912", # callback handler has many branches (one per validation step)
+    "PLR0913", # functions accept many params from conformance suite API
+    "PLR0915", # callback handler is long but linear (one OIDC flow)
+    "PLW0603", # global for singleton HTTP client
+    "ARG001",  # unused args kept for API compatibility
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["py_identity_model"]
