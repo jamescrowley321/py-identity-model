@@ -12,7 +12,7 @@ import os
 import secrets
 from urllib.parse import urlencode
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -24,7 +24,6 @@ from py_identity_model import (
     TokenValidationConfig,
     UserInfoRequest,
     build_authorization_url,
-    clear_jwks_cache,
     generate_pkce_pair,
     get_discovery_document,
     get_userinfo,
@@ -97,6 +96,7 @@ def _get_http_client() -> HTTPClient:
 
 
 @app.get("/")
+@app.get("/health")
 def health() -> dict:
     """Health check."""
     return {"status": "ok", "service": "conformance-rp"}
@@ -148,7 +148,11 @@ def authorize(
         code_challenge_method = "S256"
 
     # Build the authorization URL
-    assert disco.authorization_endpoint is not None
+    if disco.authorization_endpoint is None:
+        raise HTTPException(
+            status_code=502,
+            detail="Discovery document missing authorization_endpoint",
+        )
     auth_url = build_authorization_url(
         authorization_endpoint=disco.authorization_endpoint,
         client_id=client_id,
@@ -243,8 +247,16 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
         )
 
     # Exchange authorization code for tokens
-    assert disco.token_endpoint is not None
-    assert cb_response.code is not None
+    if disco.token_endpoint is None:
+        raise HTTPException(
+            status_code=502,
+            detail="Discovery document missing token_endpoint",
+        )
+    if cb_response.code is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Authorization callback missing code parameter",
+        )
     token_response = request_authorization_code_token(
         AuthorizationCodeTokenRequest(
             address=disco.token_endpoint,
@@ -268,7 +280,11 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
             status_code=400,
         )
 
-    assert token_response.token is not None
+    if token_response.token is None:
+        raise HTTPException(
+            status_code=502,
+            detail="Token response missing token data",
+        )
     token_data = token_response.token
     id_token_jwt = token_data.get("id_token")
     access_token = token_data.get("access_token")
@@ -276,9 +292,6 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
     # Validate the ID token
     claims: dict = {}
     if id_token_jwt:
-        # Clear JWKS cache to handle key rotation tests
-        clear_jwks_cache()
-
         try:
             claims = validate_token(
                 jwt=id_token_jwt,

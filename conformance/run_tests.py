@@ -434,6 +434,12 @@ def main() -> None:
         help=f"RP harness base URL (default: {RP_BASE_URL})",
     )
     parser.add_argument(
+        "--output",
+        "-o",
+        default=None,
+        help="Path to write JSON results file",
+    )
+    parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -456,6 +462,40 @@ def main() -> None:
     )
 
     all_ok = print_summary(results)
+
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        results_json = {
+            "plan": args.plan,
+            "suite_url": args.suite_url,
+            "results": [
+                {
+                    "test": r.test_name,
+                    "status": r.status,
+                    "test_id": r.test_id,
+                    "log_url": r.log_url,
+                    "detail": r.detail,
+                }
+                for r in results
+            ],
+            "summary": {
+                "total": len(results),
+                "passed": sum(1 for r in results if r.status == "PASSED"),
+                "warning": sum(1 for r in results if r.status == "WARNING"),
+                "failed": sum(
+                    1
+                    for r in results
+                    if r.status in ("FAILED", "INTERRUPTED", "TIMEOUT")
+                ),
+                "review": sum(1 for r in results if r.status == "REVIEW"),
+                "skipped": sum(1 for r in results if r.status == "SKIPPED"),
+            },
+            "all_passed": all_ok,
+        }
+        output_path.write_text(json.dumps(results_json, indent=2) + "\n")
+        logger.info("Results written to %s", output_path)
+
     sys.exit(0 if all_ok else 1)
 
 

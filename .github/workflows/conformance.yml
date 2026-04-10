@@ -1,0 +1,110 @@
+name: Conformance
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Start conformance suite
+        working-directory: conformance
+        run: docker compose up -d --build --wait
+        timeout-minutes: 10
+
+      - name: Wait for conformance suite
+        run: |
+          echo "Waiting for conformance suite at https://localhost.emobix.co.uk:8443..."
+          for i in $(seq 1 60); do
+            if curl -sk -o /dev/null -w '%{http_code}' https://localhost.emobix.co.uk:8443/ | grep -q '200\|302'; then
+              echo "Conformance suite is ready"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "Timed out waiting for conformance suite"
+              docker compose -f conformance/docker-compose.yml logs server
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Wait for RP harness
+        run: |
+          echo "Waiting for RP harness at http://localhost:8888/health..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8888/health > /dev/null 2>&1; then
+              echo "RP harness is ready"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "Timed out waiting for RP harness"
+              docker compose -f conformance/docker-compose.yml logs rp
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install test runner dependencies
+        run: pip install httpx
+
+      - name: Run Basic RP conformance tests
+        run: |
+          python conformance/run_tests.py \
+            --plan basic-rp \
+            --output conformance/results/basic-rp-latest.json \
+            --verbose
+
+      - name: Export HTML results
+        if: always()
+        run: |
+          # Extract plan ID from results file
+          if [ -f conformance/results/basic-rp-latest.json ]; then
+            PLAN_ID=$(python3 -c "
+          import json
+          results = json.load(open('conformance/results/basic-rp-latest.json'))
+          # Get plan ID from the first test's test_id (format: plan-id/module-id)
+          test_ids = [r['test_id'] for r in results.get('results', []) if r.get('test_id')]
+          if test_ids:
+              # test_id from suite API is just the module ID; plan ID was used to create them
+              # We need to query the suite API for the plan
+              pass
+          " 2>/dev/null || true)
+          fi
+
+          # Download suite logs for debugging
+          mkdir -p conformance/results/logs
+          docker compose -f conformance/docker-compose.yml logs server > conformance/results/logs/server.log 2>&1 || true
+          docker compose -f conformance/docker-compose.yml logs rp > conformance/results/logs/rp.log 2>&1 || true
+
+      - name: Upload conformance results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-results
+          path: |
+            conformance/results/basic-rp-latest.json
+            conformance/results/logs/
+          retention-days: 30
+
+      - name: Teardown
+        if: always()
+        working-directory: conformance
+        run: docker compose down -v
