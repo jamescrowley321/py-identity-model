@@ -91,8 +91,13 @@ resource "github_actions_secret" "sonar_token" {
 # full CI matrix passes on dependabot PRs and auto-merge can actually fire.
 # --------------------------------------------------------------------------
 
+# nonsensitive() is required because the merged map contains values derived
+# from descope_access_key.m2m.cleartext (marked sensitive by the Descope
+# provider). Terraform refuses sensitive values in for_each even though
+# only the keys (secret names) appear in the plan — the values are still
+# write-only in the GitHub provider schema and never shown in output.
 resource "github_dependabot_secret" "ci" {
-  for_each        = local.dependabot_mirrored_secrets
+  for_each        = nonsensitive(local.dependabot_mirrored_secrets)
   repository      = var.github_repository
   secret_name     = each.key
   plaintext_value = each.value
