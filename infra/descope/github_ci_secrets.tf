@@ -60,10 +60,11 @@ locals {
 
   # Full set of secrets that must exist in BOTH the actions and dependabot
   # scopes for every CI stage to pass on a dependabot-authored PR.
+  # SONAR_TOKEN is only included when the variable is non-empty.
   dependabot_mirrored_secrets = merge(
     local.ory_test_secrets,
     local.descope_ci_secrets,
-    { SONAR_TOKEN = var.sonar_token },
+    var.sonar_token != "" ? { SONAR_TOKEN = var.sonar_token } : {},
   )
 }
 
@@ -79,6 +80,7 @@ resource "github_actions_secret" "ory_test" {
 }
 
 resource "github_actions_secret" "sonar_token" {
+  count           = var.sonar_token != "" ? 1 : 0
   repository      = var.github_repository
   secret_name     = "SONAR_TOKEN"
   plaintext_value = var.sonar_token
