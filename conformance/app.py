@@ -185,7 +185,23 @@ def authorize(
     http_client = _get_http_client()
 
     # Fetch discovery document for this issuer
-    disco_endpoint = parse_discovery_url(issuer)
+    try:
+        disco_endpoint = parse_discovery_url(issuer)
+    except ConfigurationException as exc:
+        error_msg = f"invalid_issuer: {exc}"
+        logger.error("Discovery URL parse error: %s", exc)
+        if test_id:
+            error_session = AuthSession(issuer=issuer, state="", nonce="")
+            error_session.result = {
+                "test_id": test_id,
+                "status": "error",
+                "error": error_msg,
+            }
+            test_results[test_id] = error_session
+        return JSONResponse(
+            status_code=400,
+            content={"error": "invalid_issuer", "detail": str(exc)},
+        )
     policy = DiscoveryPolicy(require_https=False, validate_issuer=True)
     disco = get_discovery_document(
         DiscoveryDocumentRequest(address=disco_endpoint.url, policy=policy),
@@ -296,6 +312,68 @@ def authorize(
     return RedirectResponse(url=auth_url, status_code=302)
 
 
+def _fetch_and_validate_discovery(
+    issuer: str, http_client: HTTPClient, session: AuthSession
+) -> HTMLResponse | tuple:
+    """Fetch discovery document and validate issuer for a callback flow.
+
+    Returns an HTMLResponse on error, or a (disco, disco_endpoint) tuple on success.
+    """
+    try:
+        disco_endpoint = parse_discovery_url(issuer)
+    except ConfigurationException as exc:
+        error_msg = f"invalid_issuer: {exc}"
+        logger.error("Discovery URL parse error in callback: %s", exc)
+        session.result["status"] = "error"
+        session.result["error"] = error_msg
+        _store_test_result(session)
+        return HTMLResponse(
+            content=f"<h1>Invalid Issuer</h1><p>{exc}</p>",
+            status_code=400,
+        )
+    policy = DiscoveryPolicy(require_https=False, validate_issuer=True)
+    disco = get_discovery_document(
+        DiscoveryDocumentRequest(address=disco_endpoint.url, policy=policy),
+        http_client=http_client,
+    )
+
+    if not disco.is_successful:
+        session.result["status"] = "error"
+        session.result["error"] = f"discovery_failed: {disco.error}"
+        _store_test_result(session)
+        return HTMLResponse(
+            content=f"<h1>Discovery Failed</h1><p>{disco.error}</p>",
+            status_code=502,
+        )
+
+    # OIDC Discovery 1.0 §4.3: issuer in document MUST match the URL used to retrieve it
+    if not disco.issuer:
+        error_msg = "Discovery document missing required 'issuer' field"
+        logger.error(error_msg)
+        session.result["status"] = "error"
+        session.result["error"] = f"missing_issuer: {error_msg}"
+        _store_test_result(session)
+        return HTMLResponse(
+            content=f"<h1>Missing Issuer</h1><p>{error_msg}</p>",
+            status_code=502,
+        )
+    if disco.issuer != issuer:
+        error_msg = (
+            f"Issuer mismatch: discovery document issuer '{disco.issuer}' "
+            f"does not match expected '{issuer}'"
+        )
+        logger.error(error_msg)
+        session.result["status"] = "error"
+        session.result["error"] = f"issuer_mismatch: {error_msg}"
+        _store_test_result(session)
+        return HTMLResponse(
+            content=f"<h1>Issuer Mismatch</h1><p>{error_msg}</p>",
+            status_code=502,
+        )
+
+    return disco, disco_endpoint
+
+
 def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
     """Common callback handler for GET and POST response modes."""
     http_client = _get_http_client()
@@ -342,47 +420,11 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
             status_code=400,
         )
 
-    # Fetch discovery document again (not cached in harness, each test may use different OP)
-    disco_endpoint = parse_discovery_url(session.issuer)
-    policy = DiscoveryPolicy(require_https=False, validate_issuer=True)
-    disco = get_discovery_document(
-        DiscoveryDocumentRequest(address=disco_endpoint.url, policy=policy),
-        http_client=http_client,
-    )
-
-    if not disco.is_successful:
-        session.result["status"] = "error"
-        session.result["error"] = f"discovery_failed: {disco.error}"
-        _store_test_result(session)
-        return HTMLResponse(
-            content=f"<h1>Discovery Failed</h1><p>{disco.error}</p>",
-            status_code=502,
-        )
-
-    # OIDC Discovery 1.0 §4.3: issuer in document MUST match the URL used to retrieve it
-    if not disco.issuer:
-        error_msg = "Discovery document missing required 'issuer' field"
-        logger.error(error_msg)
-        session.result["status"] = "error"
-        session.result["error"] = f"missing_issuer: {error_msg}"
-        _store_test_result(session)
-        return HTMLResponse(
-            content=f"<h1>Missing Issuer</h1><p>{error_msg}</p>",
-            status_code=502,
-        )
-    if disco.issuer != session.issuer:
-        error_msg = (
-            f"Issuer mismatch: discovery document issuer '{disco.issuer}' "
-            f"does not match expected '{session.issuer}'"
-        )
-        logger.error(error_msg)
-        session.result["status"] = "error"
-        session.result["error"] = f"issuer_mismatch: {error_msg}"
-        _store_test_result(session)
-        return HTMLResponse(
-            content=f"<h1>Issuer Mismatch</h1><p>{error_msg}</p>",
-            status_code=502,
-        )
+    # Fetch discovery document (not cached in harness, each test may use different OP)
+    disco_result = _fetch_and_validate_discovery(session.issuer, http_client, session)
+    if isinstance(disco_result, HTMLResponse):
+        return disco_result
+    disco, disco_endpoint = disco_result
 
     # Exchange authorization code for tokens
     if disco.token_endpoint is None:
