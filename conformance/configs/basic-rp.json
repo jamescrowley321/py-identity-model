@@ -4,5 +4,9 @@
     "client_registration": "static_client",
     "request_type": "plain_http_request"
   },
-  "alias": "py-identity-model-basic-rp"
+  "alias": "py-identity-model-basic-rp",
+  "client": {
+    "client_id": "conformance-rp",
+    "client_secret": "conformance-rp-secret"
+  }
 }

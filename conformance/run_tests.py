@@ -349,8 +349,9 @@ def run_plan(
     logger.info("Tests to run: %s", ", ".join(test_names))
 
     # Client credentials from plan config
-    client_id = "conformance-rp"
-    client_secret = "conformance-rp-secret"
+    client_config = config.get("client", {})
+    client_id = client_config.get("client_id", "conformance-rp")
+    client_secret = client_config.get("client_secret", "conformance-rp-secret")
 
     # Run each test
     results: list[TestResult] = []

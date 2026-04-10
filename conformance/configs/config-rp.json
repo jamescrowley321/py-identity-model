@@ -6,5 +6,9 @@
     "request_type": "plain_http_request",
     "response_mode": "default"
   },
-  "alias": "py-identity-model-config-rp"
+  "alias": "py-identity-model-config-rp",
+  "client": {
+    "client_id": "conformance-rp",
+    "client_secret": "conformance-rp-secret"
+  }
 }
