@@ -145,13 +145,15 @@ def _retry_with_refreshed_jwks(
     jwt: str,
     token_validation_config: TokenValidationConfig,
     disco_doc_response: DiscoveryDocumentResponse,
+    http_client: HTTPClient | None = None,
 ) -> dict:
     """Re-fetch JWKS and retry decode once (key rotation recovery)."""
-    logger.warning(
-        "Signature verification failed with cached JWKS; retrying with refreshed keys"
-    )
+    logger.warning("Signature verification failed; retrying with refreshed keys")
     jwks_uri = validate_jwks_uri(disco_doc_response)
-    jwks_response = _refresh_jwks(jwks_uri)
+    if http_client is not None:
+        jwks_response = get_jwks(JwksRequest(address=jwks_uri), http_client=http_client)
+    else:
+        jwks_response = _refresh_jwks(jwks_uri)
     validate_jwks_response(jwks_response)
     kid = extract_kid_from_jwt(jwt)
     key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [])
@@ -187,7 +189,7 @@ def validate_token(
     validate_token_config(token_validation_config)
 
     if token_validation_config.perform_disco:
-        key_dict, alg, disco_doc_response, is_cached = _discover_and_resolve_key(
+        key_dict, alg, disco_doc_response, _is_cached = _discover_and_resolve_key(
             jwt, disco_doc_address, http_client
         )
         resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
@@ -197,10 +199,8 @@ def validate_token(
                 jwt, resolved_config, disco_doc_response.issuer
             )
         except SignatureVerificationException:
-            if not is_cached:
-                raise
             decoded_token = _retry_with_refreshed_jwks(
-                jwt, token_validation_config, disco_doc_response
+                jwt, token_validation_config, disco_doc_response, http_client
             )
     else:
         validate_config_for_manual_validation(token_validation_config)

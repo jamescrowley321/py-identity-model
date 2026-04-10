@@ -342,8 +342,8 @@ class TestSyncSignatureRetry:
             )
 
     @respx.mock
-    def test_di_path_does_not_retry_on_signature_failure(self):
-        """DI (injected client) path does not retry — raises immediately."""
+    def test_di_path_retries_on_signature_failure(self):
+        """DI (injected client) path retries JWKS fetch for key rotation support."""
         wrong_key, _ = generate_rsa_keypair()
         wrong_key["kid"] = "wrong-key"
 
@@ -375,5 +375,5 @@ class TestSyncSignatureRetry:
                 http_client=client,
             )
 
-        # Only one JWKS fetch — no retry
-        assert jwks_route.call_count == 1
+        # Two JWKS fetches — initial + retry for key rotation
+        assert jwks_route.call_count == JWKS_FETCH_WITH_RETRY
