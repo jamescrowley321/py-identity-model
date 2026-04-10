@@ -110,12 +110,13 @@ class ConformanceSuiteClient:
         response.raise_for_status()
         return response.json()
 
-    def start_test(self, module_id: str) -> None:
-        """Start a test module."""
+    def start_test(self, module_id: str) -> dict:
+        """Start a test module and return the response with exposed issuer info."""
         response = self.client.post(
             f"{self.base_url}/api/runner/{module_id}",
         )
         response.raise_for_status()
+        return response.json()
 
     def get_test_info(self, module_id: str) -> dict:
         """Get current status of a test module."""
@@ -218,30 +219,30 @@ def run_test_module(
     module_id: str = module_info.get("id", module_info.get("name", "")) or ""
     logger.info("Test module created: %s", module_id)
 
-    # Start the test
-    try:
-        suite.start_test(module_id)
-    except httpx.HTTPStatusError as exc:
-        logger.error("Failed to start test %s: %s", test_name, exc)
+    # Wait for the test module to finish setup (CREATED -> WAITING)
+    # The conformance suite sets up the OP in a background thread after creation.
+    # Do NOT call start_test — the test transitions to RUNNING when the RP connects.
+    for _ in range(10):
+        info = suite.get_test_info(module_id)
+        if info.get("status") != "CREATED":
+            break
+        time.sleep(0.5)
+
+    logger.info("Test ready, driving RP authorize flow...")
+
+    # Extract the issuer from the module creation response URL
+    issuer = module_info.get("url", "")
+    if not issuer:
+        logger.error("Could not determine issuer for test %s", test_name)
         return TestResult(
             test_name=test_name,
             test_id=module_id,
             status="FAILED",
-            detail=f"Failed to start test: {exc}",
+            detail="Could not determine issuer URL from suite API",
         )
-
-    logger.info("Test started, driving RP authorize flow...")
-
-    # Get test info to find the issuer
-    try:
-        info = suite.get_test_info(module_id)
-        # The conformance suite exposes dynamic issuer in the test config
-        issuer = info.get("config", {}).get("server", {}).get("discoveryUrl", "")
-        if not issuer:
-            # Fallback: construct from test module ID
-            issuer = f"{suite.base_url}/test/a/py-identity-model/{module_id}"
-    except httpx.HTTPStatusError:
-        issuer = f"{suite.base_url}/test/a/py-identity-model/{module_id}"
+    # Ensure issuer has trailing slash (conformance suite expects it)
+    if not issuer.endswith("/"):
+        issuer += "/"
 
     # Drive the RP through the authorization flow
     drive_rp_authorize(
