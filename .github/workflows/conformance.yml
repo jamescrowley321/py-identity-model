@@ -92,7 +92,7 @@ jobs:
           except Exception:
               sys.exit(1)
           " 2>/dev/null) && \
-            curl -sk "https://localhost.emobix.co.uk:8443/api/plan/exporthtml/${PLAN_ID}" \
+            curl -sfk "https://localhost.emobix.co.uk:8443/api/plan/exporthtml/${PLAN_ID}" \
               -o conformance/results/conformance-report.zip && \
             echo "HTML results exported for plan ${PLAN_ID}" || \
             echo "Warning: could not export HTML results (suite may be down)"
