@@ -143,6 +143,10 @@ dmypy.json
 .claude/mcp.json
 .claude/worktrees/
 .claude/task-state.md
+.claude/task-state*.md
+.claude/review-*.md
+.claude/review-*.patch
+.claude/pre-review-sha.txt
 
 # Ralph orchestrator runtime state
 .ralph/
