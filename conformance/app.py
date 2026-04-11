@@ -570,9 +570,15 @@ async def callback_post(request: Request) -> HTMLResponse | JSONResponse:
 
     Async to support ``await request.form()``, with the blocking
     ``_handle_callback`` offloaded to a threadpool.
+
+    Starlette's ``FormData`` is a multi-dict — a single form key can
+    carry multiple values. ``dict(form_data)`` silently drops all but
+    the first value for such keys, which would corrupt any response
+    that legitimately submits a repeated field. Use ``multi_items()``
+    so every (key, value) pair survives the urlencode round-trip.
     """
     form_data = await request.form()
-    params = urlencode(dict(form_data))
+    params = urlencode(list(form_data.multi_items()))
     callback_url = f"{RP_BASE_URL}/callback?{params}"
     return await run_in_threadpool(_handle_callback, callback_url)
 

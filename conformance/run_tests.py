@@ -15,6 +15,7 @@ import logging
 from pathlib import Path
 import sys
 import time
+from urllib.parse import urljoin
 
 import httpx
 
@@ -292,12 +293,20 @@ def drive_rp_authorize(
                 form_data = _parse_form_post(response.text)
                 if form_data:
                     action_url, fields = form_data
+                    # The form's action attribute may be a relative URL
+                    # (e.g. "/test/a/alias/callback"). httpx rejects
+                    # relative URLs with httpx.InvalidURL, which does NOT
+                    # inherit from httpx.HTTPError and would escape the
+                    # exception handler below. Resolve the action URL
+                    # against the current response URL first so the POST
+                    # target is always absolute.
+                    resolved_action = urljoin(str(response.url), action_url)
                     logger.info(
                         "Form post detected, submitting to %s with %d fields",
-                        action_url,
+                        resolved_action,
                         len(fields),
                     )
-                    post_response = client.post(action_url, data=fields)
+                    post_response = client.post(resolved_action, data=fields)
                     if post_response.is_error:
                         logger.warning(
                             "Form post callback failed: status=%d, url=%s",
@@ -310,7 +319,11 @@ def drive_rp_authorize(
                             post_response.status_code,
                             post_response.url,
                         )
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
+            # httpx.InvalidURL is caught defensively here even though the
+            # urljoin above should prevent it — if a future edit to the
+            # form_post handler regresses the resolution, we'd rather log
+            # and continue than crash the runner process uncaught.
             logger.warning("RP flow HTTP error (may be expected): %s", exc)
 
 
