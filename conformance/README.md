@@ -111,3 +111,34 @@ and it is not in the current certification scope (see [#242](https://github.com/
 | `GET /callback` | GET | Handle authorization callback |
 | `POST /callback` | POST | Handle form_post callback |
 | `GET /results/{test_id}` | GET | Retrieve test flow results |
+
+## Hosted certification token rotation
+
+For cert-grade runs against `https://www.certification.openid.net/` (the hosted
+OIDF suite) the runner needs a Bearer token. The token is created by an
+interactive browser session against the hosted suite — there is no headless
+API to create one because the creation endpoint itself requires an
+OIDC-authenticated browser session.
+
+`scripts/rotate_conformance_token.py` automates the non-interactive parts of
+that flow: persistent browser profile, token creation via the suite's UI,
+and pushing the resulting secret to HCP Vault Secrets.
+
+```bash
+# First run — interactive Google/GitLab sign-in in the browser window
+uv run conformance/scripts/rotate_conformance_token.py
+
+# Subsequent runs — persistent profile keeps you signed in
+uv run conformance/scripts/rotate_conformance_token.py --headless
+
+# Dry run — create the token but print (masked) instead of pushing to Vault
+uv run conformance/scripts/rotate_conformance_token.py --dry-run
+```
+
+**Prerequisites:**
+- `uv` (PEP 723 inline dependency support)
+- Playwright Chromium binary: `uv run --with playwright playwright install chromium`
+- HCP CLI installed and authenticated: `hcp auth login` + `hcp profile init`
+- HCP Vault Secrets app configured (default name: `py-identity-model`)
+
+See the script's module docstring for full design notes and flag reference.
