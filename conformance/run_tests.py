@@ -228,9 +228,10 @@ class _FormPostParser(HTMLParser):
         if tag == "form":
             self.action = attr_dict.get("action", "") or ""
             self.method = (attr_dict.get("method", "") or "").upper()
-        elif tag == "input" and attr_dict.get("type", "").lower() == "hidden":
-            name = attr_dict.get("name", "")
-            value = attr_dict.get("value", "") or ""
+            self.fields = {}
+        elif tag == "input" and (attr_dict.get("type") or "").lower() == "hidden":
+            name = attr_dict.get("name") or ""
+            value = attr_dict.get("value") or ""
             if name:
                 self.fields[name] = value
 
@@ -297,11 +298,18 @@ def drive_rp_authorize(
                         len(fields),
                     )
                     post_response = client.post(action_url, data=fields)
-                    logger.info(
-                        "Form post submitted: status=%d, url=%s",
-                        post_response.status_code,
-                        post_response.url,
-                    )
+                    if post_response.is_error:
+                        logger.warning(
+                            "Form post callback failed: status=%d, url=%s",
+                            post_response.status_code,
+                            post_response.url,
+                        )
+                    else:
+                        logger.info(
+                            "Form post submitted: status=%d, url=%s",
+                            post_response.status_code,
+                            post_response.url,
+                        )
         except httpx.HTTPError as exc:
             logger.warning("RP flow HTTP error (may be expected): %s", exc)
 
