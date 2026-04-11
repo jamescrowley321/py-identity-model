@@ -46,7 +46,7 @@ validation, key rotation, scope handling, and userinfo.
 
 The Config RP certification plan contains exactly **6 tests**. This is the complete profile
 for our variant configuration, as defined by the conformance suite source
-([`OIDCCClientConfigTestPlan.java`](https://gitlab.com/openid/conformance-suite/-/blob/master/src/main/java/net/openid/conformance/plan/OIDCCClientConfigTestPlan.java))
+([`OIDCCClientConfigTestPlan.java`](https://gitlab.com/openid/conformance-suite/-/blob/master/src/main/java/net/openid/conformance/openid/client/OIDCCClientConfigTestPlan.java))
 and the [OpenID Connect Conformance Profiles v3.0](https://openid.net/wordpress-content/uploads/2018/06/OpenID-Connect-Conformance-Profiles.pdf).
 
 #### Variant configuration
