@@ -11,6 +11,7 @@ import argparse
 from dataclasses import dataclass
 import json
 import logging
+import os
 from pathlib import Path
 import sys
 import time
@@ -28,7 +29,12 @@ logger = logging.getLogger("conformance-runner")
 # Configuration
 # ---------------------------------------------------------------------------
 
-SUITE_BASE_URL = "https://localhost.emobix.co.uk:8443"
+# Environment variables mirror the OIDF reference runner (scripts/run-test-plan.py):
+#   CONFORMANCE_SERVER — suite base URL (default: local devmode instance)
+#   CONFORMANCE_TOKEN  — Bearer token for hosted suite (omit for local)
+DEFAULT_SUITE_URL = "https://localhost.emobix.co.uk:8443"
+SUITE_BASE_URL = os.environ.get("CONFORMANCE_SERVER", DEFAULT_SUITE_URL)
+CONFORMANCE_TOKEN = os.environ.get("CONFORMANCE_TOKEN", "")
 RP_BASE_URL = "http://localhost:8888"
 POLL_INTERVAL = 2  # seconds
 MAX_POLL_ATTEMPTS = 60  # 2 minutes max per test
@@ -56,11 +62,21 @@ class TestResult:
 
 
 class ConformanceSuiteClient:
-    """REST API client for the OIDF conformance suite."""
+    """REST API client for the OIDF conformance suite.
 
-    def __init__(self, base_url: str) -> None:
+    When *token* is provided, all requests include a Bearer Authorization
+    header and SSL verification is enabled (hosted suite has valid certs).
+    Without a token, SSL verification is disabled (local devmode self-signed).
+    """
+
+    def __init__(self, base_url: str, token: str = "") -> None:
         self.base_url = base_url.rstrip("/")
-        self.client = httpx.Client(verify=False, timeout=30.0)
+        self.token = token
+        verify = token != ""  # hosted = valid certs; local = self-signed
+        headers: dict[str, str] = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        self.client = httpx.Client(verify=verify, timeout=30.0, headers=headers)
 
     def create_plan(
         self, plan_name: str, variant: dict, alias: str, rp_base_url: str = RP_BASE_URL
@@ -403,6 +419,7 @@ def run_plan(
     config_path: str,
     suite_base_url: str = SUITE_BASE_URL,
     rp_base_url: str = RP_BASE_URL,
+    token: str = "",
 ) -> tuple[str, list[TestResult]]:
     """Run all tests in a conformance test plan.
 
@@ -418,8 +435,10 @@ def run_plan(
     logger.info("Variant: %s", variant)
     logger.info("Suite: %s", suite_base_url)
     logger.info("RP: %s", rp_base_url)
+    if token:
+        logger.info("Auth: Bearer token provided (hosted mode)")
 
-    suite = ConformanceSuiteClient(suite_base_url)
+    suite = ConformanceSuiteClient(suite_base_url, token=token)
 
     # Create the test plan
     logger.info("Creating test plan...")
@@ -526,12 +545,20 @@ def main() -> None:
     parser.add_argument(
         "--suite-url",
         default=SUITE_BASE_URL,
-        help=f"Conformance suite base URL (default: {SUITE_BASE_URL})",
+        help=(
+            "Conformance suite base URL "
+            f"(default: $CONFORMANCE_SERVER or {DEFAULT_SUITE_URL})"
+        ),
     )
     parser.add_argument(
         "--rp-url",
         default=RP_BASE_URL,
         help=f"RP harness base URL (default: {RP_BASE_URL})",
+    )
+    parser.add_argument(
+        "--token",
+        default=CONFORMANCE_TOKEN,
+        help="Bearer token for hosted suite (default: $CONFORMANCE_TOKEN)",
     )
     parser.add_argument(
         "--output",
@@ -559,6 +586,7 @@ def main() -> None:
         config_path=str(config_path),
         suite_base_url=args.suite_url,
         rp_base_url=args.rp_url,
+        token=args.token,
     )
 
     all_ok = print_summary(results)

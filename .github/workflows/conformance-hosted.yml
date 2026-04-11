@@ -1,0 +1,79 @@
+name: Conformance (Hosted)
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+
+jobs:
+  conformance-hosted:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Start RP harness
+        working-directory: conformance
+        run: docker compose up -d --build rp
+
+      - name: Wait for RP harness
+        run: |
+          echo "Waiting for RP harness at http://localhost:8888/health..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8888/health > /dev/null 2>&1; then
+              echo "RP harness is ready"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "Timed out waiting for RP harness"
+              docker compose -f conformance/docker-compose.yml logs rp
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install test runner dependencies
+        run: pip install httpx
+
+      - name: Run Basic RP conformance tests (hosted)
+        env:
+          CONFORMANCE_SERVER: https://www.certification.openid.net
+          CONFORMANCE_TOKEN: ${{ secrets.CONFORMANCE_TOKEN }}
+        run: |
+          python conformance/run_tests.py \
+            --plan basic-rp \
+            --output conformance/results/hosted/basic-rp-latest.json \
+            --verbose
+
+      - name: Run Config RP conformance tests (hosted)
+        env:
+          CONFORMANCE_SERVER: https://www.certification.openid.net
+          CONFORMANCE_TOKEN: ${{ secrets.CONFORMANCE_TOKEN }}
+        run: |
+          python conformance/run_tests.py \
+            --plan config-rp \
+            --output conformance/results/hosted/config-rp-latest.json \
+            --verbose
+
+      - name: Upload hosted conformance results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-hosted-results
+          path: |
+            conformance/results/hosted/*-latest.json
+          retention-days: 30
+
+      - name: Teardown
+        if: always()
+        working-directory: conformance
+        run: docker compose down -v
