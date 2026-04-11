@@ -81,17 +81,18 @@ conformance-up: ## Start conformance suite and RP harness
 conformance-down: ## Tear down conformance suite
 	docker compose -f conformance/docker-compose.yml down -v
 
+CONFORMANCE_SERVER ?= https://www.certification.openid.net
+
 .PHONY: conformance-cert-dryrun
 conformance-cert-dryrun: ## Run Basic + Config RP against hosted certification suite
 	@test -n "$$CONFORMANCE_TOKEN" || { echo "ERROR: CONFORMANCE_TOKEN is not set"; exit 1; }
-	@test -n "$$CONFORMANCE_SERVER" || export CONFORMANCE_SERVER="https://www.certification.openid.net"; \
-	echo "Running Basic RP against $$CONFORMANCE_SERVER ..."; \
-	python conformance/run_tests.py \
+	@echo "Running Basic RP against $(CONFORMANCE_SERVER) ..."
+	CONFORMANCE_SERVER=$(CONFORMANCE_SERVER) python conformance/run_tests.py \
 		--plan basic-rp \
 		--output conformance/results/hosted/basic-rp-latest.json \
-		--verbose && \
-	echo "Running Config RP against $$CONFORMANCE_SERVER ..." && \
-	python conformance/run_tests.py \
+		--verbose
+	@echo "Running Config RP against $(CONFORMANCE_SERVER) ..."
+	CONFORMANCE_SERVER=$(CONFORMANCE_SERVER) python conformance/run_tests.py \
 		--plan config-rp \
 		--output conformance/results/hosted/config-rp-latest.json \
 		--verbose

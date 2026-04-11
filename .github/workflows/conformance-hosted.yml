@@ -12,9 +12,16 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Validate token
+        run: |
+          if [ -z "${{ secrets.CONFORMANCE_TOKEN }}" ]; then
+            echo "ERROR: CONFORMANCE_TOKEN secret is not configured"
+            exit 1
+          fi
 
       - name: Start RP harness
         working-directory: conformance
@@ -37,7 +44,7 @@ jobs:
           done
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 

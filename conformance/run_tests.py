@@ -65,14 +65,16 @@ class ConformanceSuiteClient:
     """REST API client for the OIDF conformance suite.
 
     When *token* is provided, all requests include a Bearer Authorization
-    header and SSL verification is enabled (hosted suite has valid certs).
-    Without a token, SSL verification is disabled (local devmode self-signed).
+    header.  SSL verification is determined by the suite URL: local devmode
+    instances (``localhost.emobix.co.uk``) use self-signed certs and skip
+    verification; any other host is assumed to have valid certs.
     """
 
     def __init__(self, base_url: str, token: str = "") -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
-        verify = token != ""  # hosted = valid certs; local = self-signed
+        # Local devmode suite uses self-signed certs; everything else verifies.
+        verify = "localhost.emobix.co.uk" not in base_url
         headers: dict[str, str] = {}
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -114,6 +116,12 @@ class ConformanceSuiteClient:
             params=params,
             json=plan_config,
         )
+        if response.status_code in (401, 403):
+            logger.error(
+                "Authentication failed (HTTP %d). Check CONFORMANCE_TOKEN.",
+                response.status_code,
+            )
+            sys.exit(1)
         response.raise_for_status()
         return response.json()
 
