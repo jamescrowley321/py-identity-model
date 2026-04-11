@@ -520,7 +520,7 @@ def main() -> None:
     parser.add_argument(
         "--plan",
         required=True,
-        choices=["basic-rp", "config-rp"],
+        choices=["basic-rp", "config-rp", "form-post-basic-rp"],
         help="Test plan to run",
     )
     parser.add_argument(
