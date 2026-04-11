@@ -476,7 +476,11 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
     id_token_jwt = token_data.get("id_token")
     access_token = token_data.get("access_token")
 
-    # Validate the ID token
+    # Validate the ID token.
+    # NOTE: We intentionally do NOT clear the JWKS cache before validation.
+    # The library's built-in retry-on-signature-failure path (JWKS cache refresh
+    # on kid mismatch / sig failure) must be exercised here — it is required by
+    # the rp-key-rotation-op-sign-key conformance tests. See PR #310.
     claims: dict = {}
     if id_token_jwt:
         try:
