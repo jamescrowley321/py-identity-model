@@ -55,11 +55,15 @@ Preview what the script will do without pushing to Vault:
 
       uv run conformance/scripts/rotate_conformance_token.py --dry-run
 
-Show the full token value on stdout instead of masking it (use with care;
-anything that stores stdout persistently — shell history, CI logs — becomes
-a secret spill surface):
+Show the full token value on stderr instead of masking it (use with care;
+anything that captures stderr persistently — shell transcripts, CI logs —
+becomes a secret spill surface). The token is written to ``sys.stderr``,
+not stdout, so a naive ``| xargs ...`` pipeline will NOT capture it. This
+is intentional: stdout is reserved so the script can be silently chained
+into automation that treats stdout as a clean channel. To capture the
+token for scripting, redirect explicitly:
 
-      uv run conformance/scripts/rotate_conformance_token.py --show-token
+      uv run conformance/scripts/rotate_conformance_token.py --show-token --dry-run 2>&1 >/dev/null | grep 'Token created:'
 
 Environment variables
 ---------------------
@@ -304,6 +308,17 @@ def _create_api_token_via_ui(page: Page, description: str) -> str:
         description_input.first.fill(description)
 
     submit = page.get_by_role("button", name="Create")
+    if submit.count() == 0:
+        # If the dialog's submit button is missing, a bare .click() would
+        # silently wait for the default 30s timeout and raise a generic
+        # PlaywrightTimeoutError with no hint about which selector failed.
+        # Raise explicitly so the operator sees an actionable message.
+        raise RuntimeError(
+            "Could not find the 'Create' submit button inside the token "
+            "creation dialog. The UI layout may have changed. Re-run with "
+            "--headless=false and a debugger attached to inspect the dialog, "
+            "or switch to the REST API path described in the module docstring."
+        )
     submit.first.click()
 
     # The new token is shown exactly once after creation. Capture it before
@@ -398,9 +413,14 @@ def _ensure_hcp_cli_available() -> str:
             capture_output=True,
         )
     except subprocess.CalledProcessError as exc:
-        raise RuntimeError(
-            f"hcp CLI version check failed: {exc.stderr.decode()}"
-        ) from exc
+        # Use errors="replace" to survive binaries that emit non-UTF-8
+        # bytes in their error output (corrupt builds, unusual locales,
+        # binary garbage on unexpected failures). A bare .decode() would
+        # raise UnicodeDecodeError, which would escape both this handler
+        # and main()'s RuntimeError catch, crashing with a traceback
+        # instead of a clean error message.
+        stderr_text = exc.stderr.decode("utf-8", errors="replace")
+        raise RuntimeError(f"hcp CLI version check failed: {stderr_text}") from exc
     return hcp_path
 
 
