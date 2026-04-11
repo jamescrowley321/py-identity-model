@@ -477,10 +477,23 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
     access_token = token_data.get("access_token")
 
     # Validate the ID token.
-    # NOTE: We intentionally do NOT clear the JWKS cache before validation.
-    # The library's built-in retry-on-signature-failure path (JWKS cache refresh
-    # on kid mismatch / sig failure) must be exercised here — it is required by
-    # the rp-key-rotation-op-sign-key conformance tests. See PR #310.
+    #
+    # CRITICAL: do NOT pass http_client= to validate_token here.
+    #
+    # When http_client is provided, sync/token_validation._discover_and_resolve_key
+    # takes the non-cached branch (calling get_jwks directly) and the library's
+    # JWKS cache — and therefore its cache-miss-triggered retry path — is
+    # structurally bypassed. That makes the retry-on-signature-failure logic
+    # from PR #310 unreachable from the harness, and the rp-key-rotation-*
+    # conformance tests pass for the wrong reason (fresh JWKS on every call,
+    # never triggering the sig-fail → refresh → retry sequence the tests exist
+    # to exercise). See #327 for the full analysis.
+    #
+    # Letting validate_token use its default (thread-local) HTTPClient routes
+    # through _get_cached_jwks → first validation uses cached keys → sig failure
+    # triggers _retry_with_refreshed_jwks → retry succeeds with rotated keys.
+    # That is the behavior the rp-key-rotation conformance tests are designed
+    # to verify, and it only works if we let the library own the HTTP client.
     claims: dict = {}
     if id_token_jwt:
         try:
@@ -494,7 +507,6 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
                     require_https=False,
                 ),
                 disco_doc_address=disco_endpoint.url,
-                http_client=http_client,
             )
         except TokenValidationException as exc:
             session.result["status"] = "error"
