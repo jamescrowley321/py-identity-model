@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from html.parser import HTMLParser
 import json
 import logging
 from pathlib import Path
@@ -213,6 +214,39 @@ def drive_rp_discover(
             logger.warning("RP discover HTTP error (may be expected): %s", exc)
 
 
+class _FormPostParser(HTMLParser):
+    """Parse an HTML form_post response to extract the action URL and fields."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.action: str = ""
+        self.method: str = ""
+        self.fields: dict[str, str] = {}
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attr_dict = dict(attrs)
+        if tag == "form":
+            self.action = attr_dict.get("action", "") or ""
+            self.method = (attr_dict.get("method", "") or "").upper()
+        elif tag == "input" and attr_dict.get("type", "").lower() == "hidden":
+            name = attr_dict.get("name", "")
+            value = attr_dict.get("value", "") or ""
+            if name:
+                self.fields[name] = value
+
+
+def _parse_form_post(html: str) -> tuple[str, dict[str, str]] | None:
+    """Extract action URL and hidden fields from a form_post HTML response.
+
+    Returns (action_url, fields) or None if no POST form found.
+    """
+    parser = _FormPostParser()
+    parser.feed(html)
+    if parser.method == "POST" and parser.action:
+        return parser.action, parser.fields
+    return None
+
+
 def drive_rp_authorize(
     rp_base_url: str,
     issuer: str,
@@ -227,6 +261,10 @@ def drive_rp_authorize(
     The RP will redirect to the conformance suite's OP, which handles
     the entire flow and redirects back to /callback. We just need to
     follow the redirects.
+
+    In form_post mode, the OP returns an HTML page with a self-submitting
+    form instead of a redirect. We detect this and POST the form data
+    to the callback URL ourselves.
     """
     params = {
         "issuer": issuer,
@@ -246,6 +284,24 @@ def drive_rp_authorize(
                 response.status_code,
                 response.url,
             )
+
+            # Handle form_post: OP returns HTML with a self-submitting form
+            content_type = response.headers.get("content-type", "")
+            if response.status_code == httpx.codes.OK and "text/html" in content_type:
+                form_data = _parse_form_post(response.text)
+                if form_data:
+                    action_url, fields = form_data
+                    logger.info(
+                        "Form post detected, submitting to %s with %d fields",
+                        action_url,
+                        len(fields),
+                    )
+                    post_response = client.post(action_url, data=fields)
+                    logger.info(
+                        "Form post submitted: status=%d, url=%s",
+                        post_response.status_code,
+                        post_response.url,
+                    )
         except httpx.HTTPError as exc:
             logger.warning("RP flow HTTP error (may be expected): %s", exc)
 
