@@ -45,8 +45,26 @@ validation, key rotation, scope handling, and userinfo.
 ### Config RP
 
 The Config RP certification plan contains exactly **6 tests**. This is the complete profile
-as defined by the conformance suite source (`OIDCCClientConfigTestPlan.java`) and the
-[OpenID Connect Conformance Profiles v3.0](https://openid.net/certification/testing/) (Section 3.2).
+for our variant configuration, as defined by the conformance suite source
+([`OIDCCClientConfigTestPlan.java`](https://gitlab.com/openid/conformance-suite/-/blob/master/src/main/java/net/openid/conformance/plan/OIDCCClientConfigTestPlan.java))
+and the [OpenID Connect Conformance Profiles v3.0](https://openid.net/wordpress-content/uploads/2018/06/OpenID-Connect-Conformance-Profiles.pdf).
+
+#### Variant configuration
+
+Our `config-rp.json` runs the plan with these variant parameters (see [`configs/config-rp.json`](configs/config-rp.json)):
+
+| Variant parameter | Our value | Effect on test selection |
+|---|---|---|
+| `client_registration` | `static_client` | Excludes dynamic client registration tests |
+| `client_auth_type` | `client_secret_basic` | Standard HTTP Basic auth at the token endpoint |
+| `request_type` | `plain_http_request` | Plain authorization requests (not `request_object` / `request_uri`) |
+| `response_mode` | `default` | Default response mode for the Config RP profile |
+
+These are the cert-grade variant settings for a Config RP submission — they are the same
+values used by other certified RP libraries (see e.g. `erlef/oidcc_conformance`'s submitted
+certifications). Changing any of them would narrow or broaden the test set.
+
+#### Test matrix
 
 | Test | Description | Expected Result |
 |------|-------------|-----------------|
@@ -61,10 +79,28 @@ The SKIP on `oidcc-client-test-idtoken-sig-none` is expected — py-identity-mod
 rejects unsigned tokens, which is the secure default. The conformance suite auto-skips this
 test when the RP does not advertise support for `alg:none`.
 
-Three additional test classes exist in the suite's `openid/client/config/` directory but are
-excluded from the Config RP plan because they require dynamic client registration
-(WebFinger account/URL discovery and dynamic registration tests). These belong to the
-Dynamic RP profile only.
+#### Tests excluded by this variant
+
+Three additional test classes exist in the suite's `openid/client/config/` directory but
+are excluded from our plan because of the `static_client` variant choice and the Config RP
+profile's scope:
+
+- **`OIDCCClientTestDynamicRegistration`** — excluded because our variant is
+  `client_registration=static_client`. This test requires the RP to dynamically register
+  itself with the OP per RFC 7591. It is `@VariantNotApplicable` when `client_registration`
+  is `static_client`, so the conformance suite omits it from the plan automatically. This
+  test belongs to the **Dynamic RP** profile.
+- **`OIDCCClientTestDiscoveryWebfingerAcct`** — excluded because Config RP uses static
+  `.well-known/openid-configuration` discovery. WebFinger discovery (RFC 7033) is a
+  separate mechanism where the RP discovers the OP from a user-supplied `acct:` URI. It
+  is not part of Config RP's scope regardless of variant choice.
+- **`OIDCCClientTestDiscoveryWebfingerURL`** — excluded for the same reason as the `Acct`
+  variant: WebFinger URL-style discovery is out of scope for Config RP, which tests the
+  `.well-known/openid-configuration` discovery path only.
+
+If we wanted to certify WebFinger discovery behavior, it would require a separate
+profile and test plan — py-identity-model does not currently implement WebFinger discovery
+and it is not in the current certification scope (see [#242](https://github.com/jamescrowley321/py-identity-model/issues/242)).
 
 ## Endpoints
 
