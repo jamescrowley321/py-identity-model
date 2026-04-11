@@ -80,6 +80,13 @@ jobs:
             --output conformance/results/config-rp-latest.json \
             --verbose
 
+      - name: Run Form Post Basic RP conformance tests
+        run: |
+          python conformance/run_tests.py \
+            --plan form-post-basic-rp \
+            --output conformance/results/form-post-basic-rp-latest.json \
+            --verbose
+
       - name: Export HTML results and logs
         if: always()
         run: |
