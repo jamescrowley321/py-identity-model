@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 import json
 import logging
+import os
 from pathlib import Path
 import sys
 import time
@@ -34,6 +35,11 @@ SUITE_BASE_URL = "https://localhost.emobix.co.uk:8443"
 RP_BASE_URL = "http://localhost:8888"
 POLL_INTERVAL = 2  # seconds
 MAX_POLL_ATTEMPTS = 60  # 2 minutes max per test
+
+
+def _is_local_suite(url: str) -> bool:
+    """Return True if the URL points to a local (self-signed) conformance suite."""
+    return "localhost" in url or "127.0.0.1" in url
 
 
 # ---------------------------------------------------------------------------
@@ -60,9 +66,13 @@ class TestResult:
 class ConformanceSuiteClient:
     """REST API client for the OIDF conformance suite."""
 
-    def __init__(self, base_url: str) -> None:
+    def __init__(self, base_url: str, token: str | None = None) -> None:
         self.base_url = base_url.rstrip("/")
-        self.client = httpx.Client(verify=False, timeout=30.0)
+        verify = not _is_local_suite(base_url)
+        headers: dict[str, str] = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        self.client = httpx.Client(verify=verify, timeout=30.0, headers=headers)
 
     def create_plan(
         self, plan_name: str, variant: dict, alias: str, rp_base_url: str = RP_BASE_URL
@@ -193,6 +203,8 @@ def drive_rp_discover(
     rp_base_url: str,
     issuer: str,
     test_id: str,
+    *,
+    verify_ssl: bool = False,
 ) -> None:
     """Hit the RP's /discover endpoint to fetch discovery without starting an auth flow.
 
@@ -204,7 +216,7 @@ def drive_rp_discover(
         "test_id": test_id,
     }
 
-    with httpx.Client(verify=False, timeout=30.0) as client:
+    with httpx.Client(verify=verify_ssl, timeout=30.0) as client:
         try:
             response = client.get(f"{rp_base_url}/discover", params=params)
             logger.info(
@@ -257,6 +269,8 @@ def drive_rp_authorize(
     test_id: str,
     use_pkce: bool = False,
     skip_userinfo: bool = False,
+    *,
+    verify_ssl: bool = False,
 ) -> None:
     """Hit the RP's /authorize endpoint to start an auth flow.
 
@@ -278,7 +292,7 @@ def drive_rp_authorize(
     }
 
     # Follow all redirects through the full auth flow
-    with httpx.Client(verify=False, timeout=30.0, follow_redirects=True) as client:
+    with httpx.Client(verify=verify_ssl, timeout=30.0, follow_redirects=True) as client:
         try:
             response = client.get(f"{rp_base_url}/authorize", params=params)
             logger.info(
@@ -339,6 +353,8 @@ def run_test_module(
     rp_base_url: str,
     client_id: str,
     client_secret: str,
+    *,
+    verify_ssl: bool = False,
 ) -> TestResult:
     """Execute a single conformance test module."""
     logger.info("=" * 60)
@@ -395,6 +411,7 @@ def run_test_module(
             rp_base_url=rp_base_url,
             issuer=issuer,
             test_id=module_id,
+            verify_ssl=verify_ssl,
         )
     elif test_type == "auth_double":
         # Double-flow tests (key rotation): drive two sequential auth flows
@@ -405,6 +422,7 @@ def run_test_module(
             client_id=client_id,
             client_secret=client_secret,
             test_id=module_id,
+            verify_ssl=verify_ssl,
         )
         # Wait briefly for the suite to rotate keys
         time.sleep(1)
@@ -415,6 +433,7 @@ def run_test_module(
             client_id=client_id,
             client_secret=client_secret,
             test_id=module_id,
+            verify_ssl=verify_ssl,
         )
     else:
         # Standard auth flow (with optional userinfo skip)
@@ -425,6 +444,7 @@ def run_test_module(
             client_secret=client_secret,
             test_id=module_id,
             skip_userinfo=(test_type == "auth_no_userinfo"),
+            verify_ssl=verify_ssl,
         )
 
     # Poll until the test finishes
@@ -480,6 +500,7 @@ def run_plan(
     config_path: str,
     suite_base_url: str = SUITE_BASE_URL,
     rp_base_url: str = RP_BASE_URL,
+    token: str | None = None,
 ) -> tuple[str, list[TestResult]]:
     """Run all tests in a conformance test plan.
 
@@ -496,7 +517,7 @@ def run_plan(
     logger.info("Suite: %s", suite_base_url)
     logger.info("RP: %s", rp_base_url)
 
-    suite = ConformanceSuiteClient(suite_base_url)
+    suite = ConformanceSuiteClient(suite_base_url, token=token)
 
     # Create the test plan
     logger.info("Creating test plan...")
@@ -531,6 +552,11 @@ def run_plan(
     client_id = client_config.get("client_id", "conformance-rp")
     client_secret = client_config.get("client_secret", "conformance-rp-secret")
 
+    # For hosted suites (non-localhost), the RP redirect chain goes through
+    # the hosted OP with valid TLS certs, so verify=True is correct.
+    # For local suites, the self-signed cert requires verify=False.
+    verify_ssl = not _is_local_suite(suite_base_url)
+
     # Run each test
     results: list[TestResult] = []
     for test_name in test_names:
@@ -541,6 +567,7 @@ def run_plan(
             rp_base_url=rp_base_url,
             client_id=client_id,
             client_secret=client_secret,
+            verify_ssl=verify_ssl,
         )
         results.append(result)
 
@@ -627,6 +654,20 @@ def main() -> None:
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
+    # Environment variable overrides
+    # CONFORMANCE_SERVER overrides --suite-url for targeting the hosted suite
+    suite_url = os.environ.get("CONFORMANCE_SERVER", "").rstrip("/") or args.suite_url
+    # CONFORMANCE_TOKEN provides Bearer auth for the hosted suite API
+    token = os.environ.get("CONFORMANCE_TOKEN", "") or None
+
+    if not _is_local_suite(suite_url) and not token:
+        logger.error(
+            "CONFORMANCE_TOKEN is required when targeting a hosted suite (%s). "
+            "Set the CONFORMANCE_TOKEN environment variable.",
+            suite_url,
+        )
+        sys.exit(1)
+
     config_path = Path(__file__).parent / "configs" / f"{args.plan}.json"
     if not config_path.exists():
         logger.error("Config not found: %s", config_path)
@@ -634,8 +675,9 @@ def main() -> None:
 
     plan_id, results = run_plan(
         config_path=str(config_path),
-        suite_base_url=args.suite_url,
+        suite_base_url=suite_url,
         rp_base_url=args.rp_url,
+        token=token,
     )
 
     all_ok = print_summary(results)
@@ -646,7 +688,7 @@ def main() -> None:
         results_json = {
             "plan": args.plan,
             "plan_id": plan_id,
-            "suite_url": args.suite_url,
+            "suite_url": suite_url,
             "results": [
                 {
                     "test": r.test_name,

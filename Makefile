@@ -120,8 +120,8 @@ conformance-cert-dryrun: ## Run conformance tests against certification.openid.n
 		echo "  export CONFORMANCE_TOKEN=<your-token>"; \
 		exit 1; \
 	fi
-	python conformance/run_tests.py --plan basic-rp --output conformance/results/hosted/basic-rp-latest.json --verbose
-	python conformance/run_tests.py --plan config-rp --output conformance/results/hosted/config-rp-latest.json --verbose
+	CONFORMANCE_SERVER=https://www.certification.openid.net/ python conformance/run_tests.py --plan basic-rp --output conformance/results/hosted/basic-rp-latest.json --verbose
+	CONFORMANCE_SERVER=https://www.certification.openid.net/ python conformance/run_tests.py --plan config-rp --output conformance/results/hosted/config-rp-latest.json --verbose
 	@echo "Hosted conformance tests complete. Results in conformance/results/hosted/"
 
 .PHONY: ci-setup
