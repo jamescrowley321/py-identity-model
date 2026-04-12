@@ -12,10 +12,11 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 import json
 import logging
+import os
 from pathlib import Path
 import sys
 import time
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
@@ -34,6 +35,21 @@ SUITE_BASE_URL = "https://localhost.emobix.co.uk:8443"
 RP_BASE_URL = "http://localhost:8888"
 POLL_INTERVAL = 2  # seconds
 MAX_POLL_ATTEMPTS = 60  # 2 minutes max per test
+
+LOCAL_HOSTNAMES = frozenset(
+    {
+        "localhost",
+        "127.0.0.1",
+        "::1",
+        "localhost.emobix.co.uk",
+    }
+)
+
+
+def _is_local_suite(url: str) -> bool:
+    """Check if the suite URL points to a local conformance instance."""
+    hostname = urlparse(url).hostname or ""
+    return hostname in LOCAL_HOSTNAMES
 
 
 # ---------------------------------------------------------------------------
@@ -60,9 +76,16 @@ class TestResult:
 class ConformanceSuiteClient:
     """REST API client for the OIDF conformance suite."""
 
-    def __init__(self, base_url: str) -> None:
+    def __init__(self, base_url: str, token: str | None = None) -> None:
         self.base_url = base_url.rstrip("/")
-        self.client = httpx.Client(verify=False, timeout=30.0)
+        headers: dict[str, str] = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        self.client = httpx.Client(
+            verify=not _is_local_suite(base_url),
+            timeout=30.0,
+            headers=headers,
+        )
 
     def create_plan(
         self, plan_name: str, variant: dict, alias: str, rp_base_url: str = RP_BASE_URL
@@ -499,6 +522,7 @@ def run_plan(
     config_path: str,
     suite_base_url: str = SUITE_BASE_URL,
     rp_base_url: str = RP_BASE_URL,
+    token: str | None = None,
 ) -> tuple[str, list[TestResult]]:
     """Run all tests in a conformance test plan.
 
@@ -515,7 +539,7 @@ def run_plan(
     logger.info("Suite: %s", suite_base_url)
     logger.info("RP: %s", rp_base_url)
 
-    suite = ConformanceSuiteClient(suite_base_url)
+    suite = ConformanceSuiteClient(suite_base_url, token=token)
 
     # Create the test plan
     logger.info("Creating test plan...")
@@ -610,6 +634,10 @@ def print_summary(results: list[TestResult]) -> bool:
 
 
 def main() -> None:
+    # Environment variable overrides
+    env_server = os.environ.get("CONFORMANCE_SERVER", "")
+    env_token = os.environ.get("CONFORMANCE_TOKEN", "").strip()
+
     parser = argparse.ArgumentParser(
         description="Run OIDF conformance tests against py-identity-model"
     )
@@ -621,8 +649,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--suite-url",
-        default=SUITE_BASE_URL,
-        help=f"Conformance suite base URL (default: {SUITE_BASE_URL})",
+        default=env_server or SUITE_BASE_URL,
+        help=f"Conformance suite base URL (env: CONFORMANCE_SERVER, default: {SUITE_BASE_URL})",
     )
     parser.add_argument(
         "--rp-url",
@@ -646,6 +674,19 @@ def main() -> None:
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
+    # Token guard: require CONFORMANCE_TOKEN for non-local suites
+    if not _is_local_suite(args.suite_url) and not env_token:
+        logger.error(
+            "CONFORMANCE_TOKEN is required when targeting a hosted suite (%s).\n\n"
+            "To get a token:\n"
+            "  make conformance-token              # create + push to HCP Vault\n"
+            "  eval $(make conformance-token ACTION=env)  # pull from HCP into shell\n\n"
+            "Or set it manually:\n"
+            "  export CONFORMANCE_TOKEN=<your-token>",
+            args.suite_url,
+        )
+        sys.exit(1)
+
     config_path = Path(__file__).parent / "configs" / f"{args.plan}.json"
     if not config_path.exists():
         logger.error("Config not found: %s", config_path)
@@ -655,6 +696,7 @@ def main() -> None:
         config_path=str(config_path),
         suite_base_url=args.suite_url,
         rp_base_url=args.rp_url,
+        token=env_token or None,
     )
 
     all_ok = print_summary(results)

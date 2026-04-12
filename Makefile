@@ -1,34 +1,46 @@
+# py-identity-model Makefile
+# Run `make help` to see all available targets.
+
+CONFORMANCE_SERVER ?= https://www.certification.openid.net/
+ACTION ?= create
+
+# ── Build ────────────────────────────────────────────────────────────
+
 .PHONY: build-dist
-build-dist:
+build-dist: ## Build wheel and sdist
 	uv sync
 	uv build
 
 .PHONY: upload-dist
-upload-dist:
+upload-dist: ## Publish package to PyPI
 	uv publish
 
+# ── Lint ─────────────────────────────────────────────────────────────
+
 .PHONY: lint
-lint:
+lint: ## Run all pre-commit hooks (ruff, pyrefly, coverage)
 	uv run pre-commit run -a
 
+# ── Tests ────────────────────────────────────────────────────────────
+
 .PHONY: test
-test:
+test: ## Run all tests (unit + integration)
 	uv run pytest src/tests -v -n auto --cov=src/py_identity_model --cov-report=term-missing --cov-report=html --cov-fail-under=80 --ignore=src/tests/benchmarks -p no:benchmark
 
 .PHONY: test-unit
-test-unit:
+test-unit: ## Run unit tests only
 	uv run pytest src/tests -m unit -v -n auto --cov=src/py_identity_model --cov-report=term-missing --cov-report=html --cov-fail-under=80 --ignore=src/tests/benchmarks -p no:benchmark
 
 .PHONY: test-integration-local
-test-integration-local:
+test-integration-local: ## Run integration tests against local provider
 	uv run pytest src/tests -m integration --env-file=.env.local -v -n auto -p no:benchmark
 
 .PHONY: test-integration-ory
-test-integration-ory:
+test-integration-ory: ## Run integration tests against Ory
 	uv run pytest src/tests -m integration -v -n auto -p no:benchmark
 
 .PHONY: test-integration-descope
-test-integration-descope:
+test-integration-descope: ## Run integration tests against Descope
 	@echo "Running integration tests against Descope..."
 	uv run pytest src/tests -m integration $(if $(wildcard .env.descope),--env-file=.env.descope) -v -n auto -p no:benchmark
 
@@ -41,33 +53,47 @@ test-integration-node-oidc: ## Run integration tests against node-oidc-provider
 		(docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down && exit 1)
 	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
 
+.PHONY: test-benchmark
+test-benchmark: ## Run benchmarks
+	uv run pytest src/tests/benchmarks -v --benchmark-only --benchmark-sort=name
+
+.PHONY: test-examples
+test-examples: ## Run example integration tests (Docker)
+	@echo "Running example integration tests..."
+	cd examples && ./run-tests.sh
+
+.PHONY: test-all
+test-all: test test-examples ## Run all tests including examples
+
+# ── Docs ─────────────────────────────────────────────────────────────
+
+.PHONY: docs-serve
+docs-serve: ## Serve mkdocs documentation locally
+	uv run --group docs mkdocs serve
+
+.PHONY: docs-build
+docs-build: ## Build mkdocs documentation
+	uv run --group docs mkdocs build --strict
+
+# ── Utilities ────────────────────────────────────────────────────────
+
 .PHONY: provider-matrix
 provider-matrix: ## Show provider capability matrix from discovery documents
 	uv run python src/tests/integration/provider_matrix.py
 
 .PHONY: generate-token
-generate-token:
+generate-token: ## Generate a sample JWT token
 	uv run python examples/generate_token.py
 
-.PHONY: test-benchmark
-test-benchmark:
-	uv run pytest src/tests/benchmarks -v --benchmark-only --benchmark-sort=name
+.PHONY: ci-setup
+ci-setup: ## CI environment setup
+	python -m pip install --upgrade pip
+	pip install pipx
+	pipx install uv
+	uv venv
+	uv sync --all-packages
 
-.PHONY: test-examples
-test-examples:
-	@echo "Running example integration tests..."
-	cd examples && ./run-tests.sh
-
-.PHONY: test-all
-test-all: test test-examples
-
-.PHONY: docs-serve
-docs-serve:
-	uv run --group docs mkdocs serve
-
-.PHONY: docs-build
-docs-build:
-	uv run --group docs mkdocs build --strict
+# ── Conformance ──────────────────────────────────────────────────────
 
 .PHONY: conformance-build
 conformance-build: ## Build conformance suite containers
@@ -82,52 +108,39 @@ conformance-down: ## Tear down conformance suite
 	docker compose -f conformance/docker-compose.yml down -v
 
 .PHONY: conformance-test
-conformance-test: conformance-up ## Run all conformance profiles against local suite
-	python conformance/run_tests.py --plan basic-rp --output conformance/results/basic-rp-latest.json --verbose
-	python conformance/run_tests.py --plan config-rp --output conformance/results/config-rp-latest.json --verbose
+conformance-test: $(if $(HOSTED),,conformance-up) ## Run conformance tests (HOSTED=1 for hosted suite)
+ifdef HOSTED
+	uv run python conformance/run_tests.py --plan basic-rp --suite-url "$(CONFORMANCE_SERVER)" --output conformance/results/hosted/basic-rp-latest.json --verbose
+	uv run python conformance/run_tests.py --plan config-rp --suite-url "$(CONFORMANCE_SERVER)" --output conformance/results/hosted/config-rp-latest.json --verbose
+	@echo "Hosted conformance tests complete. Results in conformance/results/hosted/"
+else
+	uv run python conformance/run_tests.py --plan basic-rp --output conformance/results/basic-rp-latest.json --verbose
+	uv run python conformance/run_tests.py --plan config-rp --output conformance/results/config-rp-latest.json --verbose
 	@echo "Conformance tests complete. Results in conformance/results/"
+endif
 
 .PHONY: conformance-test-harness
 conformance-test-harness: ## Run conformance harness unit tests (parser + callback)
 	uv run --with fastapi --with httpx --with python-multipart pytest conformance/tests/ -v
 
 .PHONY: conformance-token
-conformance-token: ## Create OIDF API token via Playwright and push to HCP Vault Secrets
+conformance-token: ## Manage OIDF API token (ACTION=create|show|env)
+ifeq ($(ACTION),show)
+	uv run conformance/scripts/rotate_conformance_token.py --dry-run --show-token
+else ifeq ($(ACTION),env)
+	@echo "export CONFORMANCE_TOKEN=$$(hcp vault-secrets secrets open CONFORMANCE_TOKEN --app py-identity-model --format json | jq -r '.static_version.value')"
+	@echo "# Run the above command, or: eval \$$(make conformance-token ACTION=env)"
+else
 	@echo "Launching browser for certification.openid.net login..."
 	@echo "First run: sign in via Google/GitLab in the browser window."
 	@echo "Subsequent runs: session is cached in ~/.cache/py-identity-model/playwright-profile/"
 	uv run conformance/scripts/rotate_conformance_token.py
+endif
 
-.PHONY: conformance-token-show
-conformance-token-show: ## Create token and print to stderr (dry run, no Vault push)
-	uv run conformance/scripts/rotate_conformance_token.py --dry-run --show-token
+# ── Help ─────────────────────────────────────────────────────────────
 
-.PHONY: conformance-token-env
-conformance-token-env: ## Pull CONFORMANCE_TOKEN from HCP Vault and print export command
-	@echo "export CONFORMANCE_TOKEN=$$(hcp vault-secrets secrets open CONFORMANCE_TOKEN --app py-identity-model --format json | jq -r '.static_version.value')"
-	@echo "# Run the above command, or: eval \$$(make conformance-token-env)"
+.DEFAULT_GOAL := help
 
-.PHONY: conformance-cert-dryrun
-conformance-cert-dryrun: ## Run conformance tests against certification.openid.net (requires CONFORMANCE_TOKEN)
-	@if [ -z "$$CONFORMANCE_TOKEN" ]; then \
-		echo "Error: CONFORMANCE_TOKEN is not set."; \
-		echo ""; \
-		echo "To get a token:"; \
-		echo "  make conformance-token        # creates token + pushes to HCP Vault"; \
-		echo "  eval \$$(make conformance-token-env)  # pulls from HCP into shell"; \
-		echo ""; \
-		echo "Or set it manually:"; \
-		echo "  export CONFORMANCE_TOKEN=<your-token>"; \
-		exit 1; \
-	fi
-	python conformance/run_tests.py --plan basic-rp --output conformance/results/hosted/basic-rp-latest.json --verbose
-	python conformance/run_tests.py --plan config-rp --output conformance/results/hosted/config-rp-latest.json --verbose
-	@echo "Hosted conformance tests complete. Results in conformance/results/hosted/"
-
-.PHONY: ci-setup
-ci-setup:
-	python -m pip install --upgrade pip
-	pip install pipx
-	pipx install uv
-	uv venv
-	uv sync --all-packages
+.PHONY: help
+help: ## Show available targets
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-30s\033[0m %s\n", $$1, $$2}'
