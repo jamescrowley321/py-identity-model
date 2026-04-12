@@ -1,4 +1,17 @@
 services:
+  cert-init:
+    image: alpine:3.20
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache openssl &&
+        openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+          -keyout /certs/nginx-selfsigned.key \
+          -out /certs/nginx-selfsigned.crt \
+          -subj "/CN=localhost.emobix.co.uk"
+    volumes:
+      - certs:/certs
+
   mongodb:
     image: mongo:6.0.13
     volumes:
@@ -13,7 +26,11 @@ services:
       default:
         aliases:
           - localhost.emobix.co.uk
+    volumes:
+      - certs:/certs:ro
     depends_on:
+      cert-init:
+        condition: service_completed_successfully
       server:
         condition: service_healthy
 
@@ -43,9 +60,15 @@ services:
       - RP_HOST=0.0.0.0
       - RP_PORT=8888
       - CONFORMANCE_SUITE_BASE_URL=https://localhost.emobix.co.uk:8443
+      - SSL_CERT_FILE=/certs/nginx-selfsigned.crt
+    volumes:
+      - certs:/certs:ro
     depends_on:
+      cert-init:
+        condition: service_completed_successfully
       server:
         condition: service_healthy
 
 volumes:
   mongodb-data:
+  certs:

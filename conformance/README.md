@@ -22,6 +22,18 @@ python run_tests.py --plan basic-rp
 python run_tests.py --plan config-rp
 ```
 
+## SSL Certificate Sharing
+
+The local conformance suite uses a self-signed TLS certificate for `localhost.emobix.co.uk:8443`.
+A `cert-init` Docker service generates this certificate at compose-up time and shares it with
+both the nginx proxy and the RP harness via a named volume.
+
+The RP container sets `SSL_CERT_FILE=/certs/nginx-selfsigned.crt` so that py-identity-model's
+HTTP client trusts the self-signed cert when making discovery and JWKS fetches to the
+conformance suite.
+
+No certificate files are committed to the repository — they are generated dynamically on each run.
+
 ## DNS
 
 The conformance suite uses `localhost.emobix.co.uk` which resolves to `127.0.0.1`. No `/etc/hosts` changes needed.
