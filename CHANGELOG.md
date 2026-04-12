@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v2.19.2 (2026-04-12)
+
+### Bug Fixes
+
+- **conformance**: Add cert-init service for SSL cert sharing (#343)
+  ([#343](https://github.com/jamescrowley321/py-identity-model/pull/343),
+  [`928e9ad`](https://github.com/jamescrowley321/py-identity-model/commit/928e9ad5b1823939e703b1249e18d855e9c8b97f))
+
+- **conformance**: Add SAN extension and nginx dependency to cert-init (#343)
+  ([#343](https://github.com/jamescrowley321/py-identity-model/pull/343),
+  [`5ccc88d`](https://github.com/jamescrowley321/py-identity-model/commit/5ccc88d14c746d73b4eb5d4af8ca41abe743e486))
+
+- **conformance**: Allow config-rp to continue on known signing-key-rotation timeout (#343)
+  ([#343](https://github.com/jamescrowley321/py-identity-model/pull/343),
+  [`dff76bc`](https://github.com/jamescrowley321/py-identity-model/commit/dff76bc7e5e3e967e091a9a1d079c3f116c4884a))
+
+- **conformance**: Clear discovery and JWKS caches between test modules (#343)
+  ([#343](https://github.com/jamescrowley321/py-identity-model/pull/343),
+  [`924e39f`](https://github.com/jamescrowley321/py-identity-model/commit/924e39fce360fb83f4c5427396e01b461337472e))
+
+
 ## v2.19.1 (2026-04-12)
 
 ### Bug Fixes
