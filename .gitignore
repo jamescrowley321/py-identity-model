@@ -137,6 +137,10 @@ dmypy.json
 *.crt
 *.key
 *.pfx
+# Allow conformance nginx self-signed cert (no secrets — local Docker only,
+# CN=localhost.emobix.co.uk, shared with RP container for SSL_CERT_FILE)
+!conformance/nginx/localhost.emobix.co.uk.crt
+!conformance/nginx/localhost.emobix.co.uk.key
 .secrets.baseline
 
 # Claude Code runtime state
