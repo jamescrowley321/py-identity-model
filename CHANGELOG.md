@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v2.19.1 (2026-04-12)
+
+### Bug Fixes
+
+- **conformance**: Switch token rotation from UI selectors to REST API (#342)
+  ([#342](https://github.com/jamescrowley321/py-identity-model/pull/342),
+  [`39ce7d9`](https://github.com/jamescrowley321/py-identity-model/commit/39ce7d94454f0ce581c4580e4dde5a09bc83882c))
+
+### Chores
+
+- Sync uv.lock with 2.19.0
+  ([`52ff89b`](https://github.com/jamescrowley321/py-identity-model/commit/52ff89b449486f836e87b9c61d7468bc3856d1d5))
+
+
 ## v2.19.0 (2026-04-12)
 
 
