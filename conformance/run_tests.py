@@ -617,7 +617,7 @@ def print_summary(results: list[TestResult]) -> bool:
 def main() -> None:
     # Environment variable overrides
     env_server = os.environ.get("CONFORMANCE_SERVER", "")
-    env_token = os.environ.get("CONFORMANCE_TOKEN", "")
+    env_token = os.environ.get("CONFORMANCE_TOKEN", "").strip()
 
     parser = argparse.ArgumentParser(
         description="Run OIDF conformance tests against py-identity-model"

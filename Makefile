@@ -110,12 +110,12 @@ conformance-down: ## Tear down conformance suite
 .PHONY: conformance-test
 conformance-test: $(if $(HOSTED),,conformance-up) ## Run conformance tests (HOSTED=1 for hosted suite)
 ifdef HOSTED
-	python conformance/run_tests.py --plan basic-rp --suite-url $(CONFORMANCE_SERVER) --output conformance/results/hosted/basic-rp-latest.json --verbose
-	python conformance/run_tests.py --plan config-rp --suite-url $(CONFORMANCE_SERVER) --output conformance/results/hosted/config-rp-latest.json --verbose
+	uv run python conformance/run_tests.py --plan basic-rp --suite-url "$(CONFORMANCE_SERVER)" --output conformance/results/hosted/basic-rp-latest.json --verbose
+	uv run python conformance/run_tests.py --plan config-rp --suite-url "$(CONFORMANCE_SERVER)" --output conformance/results/hosted/config-rp-latest.json --verbose
 	@echo "Hosted conformance tests complete. Results in conformance/results/hosted/"
 else
-	python conformance/run_tests.py --plan basic-rp --output conformance/results/basic-rp-latest.json --verbose
-	python conformance/run_tests.py --plan config-rp --output conformance/results/config-rp-latest.json --verbose
+	uv run python conformance/run_tests.py --plan basic-rp --output conformance/results/basic-rp-latest.json --verbose
+	uv run python conformance/run_tests.py --plan config-rp --output conformance/results/config-rp-latest.json --verbose
 	@echo "Conformance tests complete. Results in conformance/results/"
 endif
 
