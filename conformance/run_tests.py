@@ -40,7 +40,11 @@ MAX_POLL_ATTEMPTS = 60  # 2 minutes max per test
 def _is_local_suite(url: str) -> bool:
     """Return True if the URL points to a local (self-signed) conformance suite."""
     hostname = urlparse(url).hostname or ""
-    return hostname in ("localhost", "127.0.0.1") or hostname.endswith(".localhost")
+    return hostname in (
+        "localhost",
+        "127.0.0.1",
+        "localhost.emobix.co.uk",
+    ) or hostname.endswith(".localhost")
 
 
 # ---------------------------------------------------------------------------
