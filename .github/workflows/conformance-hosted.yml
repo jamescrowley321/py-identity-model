@@ -1,0 +1,74 @@
+name: Conformance (Hosted)
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+
+jobs:
+  conformance-hosted:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          pip install httpx
+          pip install uvicorn fastapi python-multipart
+          pip install .
+
+      - name: Start RP harness
+        working-directory: conformance
+        run: |
+          uvicorn app:app --host 0.0.0.0 --port 8888 &
+          echo "Waiting for RP harness..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8888/health > /dev/null 2>&1; then
+              echo "RP harness is ready"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "Timed out waiting for RP harness"
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Run Basic RP conformance tests
+        env:
+          CONFORMANCE_SERVER: https://www.certification.openid.net/
+          CONFORMANCE_TOKEN: ${{ secrets.CONFORMANCE_TOKEN }}
+        run: |
+          python conformance/run_tests.py \
+            --plan basic-rp \
+            --output conformance/results/hosted/basic-rp-latest.json \
+            --verbose
+
+      - name: Run Config RP conformance tests
+        env:
+          CONFORMANCE_SERVER: https://www.certification.openid.net/
+          CONFORMANCE_TOKEN: ${{ secrets.CONFORMANCE_TOKEN }}
+        run: |
+          python conformance/run_tests.py \
+            --plan config-rp \
+            --output conformance/results/hosted/config-rp-latest.json \
+            --verbose
+
+      - name: Upload conformance results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-hosted-results
+          path: |
+            conformance/results/hosted/*-latest.json
+          retention-days: 30

@@ -564,9 +564,18 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
             if userinfo_response.is_successful:
                 userinfo_claims = userinfo_response.claims or {}
             else:
-                # UserInfo errors should be reported but may not be fatal
-                logger.warning("UserInfo error: %s", userinfo_response.error)
-                session.result["userinfo_error"] = userinfo_response.error
+                # OIDC Core 1.0 §5.3.4: sub mismatch is a fatal error.
+                # The RP MUST reject the UserInfo response if sub differs
+                # from the ID token sub.
+                error_msg = userinfo_response.error
+                logger.error("UserInfo validation failed: %s", error_msg)
+                session.result["status"] = "error"
+                session.result["error"] = f"userinfo_validation: {error_msg}"
+                _store_test_result(session)
+                return HTMLResponse(
+                    content=f"<h1>UserInfo Validation Failed</h1><p>{error_msg}</p>",
+                    status_code=400,
+                )
         except PyIdentityModelException as exc:
             logger.warning("UserInfo exception: %s", exc)
             session.result["userinfo_error"] = str(exc)
@@ -582,12 +591,19 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
         "Callback successful for issuer=%s, sub=%s", session.issuer, claims.get("sub")
     )
 
+    # Build response body with ID token and UserInfo claims so the conformance
+    # suite can verify the RP fetched and displayed them.
+    claim_lines = [
+        f"<p>Subject: {claims.get('sub', 'N/A')}</p>",
+        f"<p>Issuer: {claims.get('iss', 'N/A')}</p>",
+    ]
+    if userinfo_claims:
+        claim_lines.append("<h2>UserInfo Claims</h2>")
+        for key, value in userinfo_claims.items():
+            claim_lines.append(f"<p>{key}: {value}</p>")
+
     return HTMLResponse(
-        content=(
-            "<h1>Authentication Successful</h1>"
-            f"<p>Subject: {claims.get('sub', 'N/A')}</p>"
-            f"<p>Issuer: {claims.get('iss', 'N/A')}</p>"
-        ),
+        content="<h1>Authentication Successful</h1>" + "\n".join(claim_lines),
         status_code=200,
     )
 
