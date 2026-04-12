@@ -83,12 +83,14 @@ Design notes
   defeat the bot detection. First run is interactive; subsequent runs can
   be headless as long as the session cookie is still valid.
 
-- **UI-driven token creation**: The suite has a REST endpoint at POST
-  /api/token but its exact request/response format is not publicly
-  documented outside the `TokenApi.java` source. Rather than guess, this
-  script drives the suite's UI (which is a stable, documented interface).
-  If the UI layout changes, fix the selectors in `_create_api_token_via_ui`
-  and rerun.
+- **REST API token creation**: After login, the script calls ``POST
+  /api/token {"permanent": true}`` using the browser's authenticated
+  session cookies. This is more robust than scraping the token management
+  UI — the REST API is a stable contract defined in ``TokenApi.java`` and
+  doesn't break when the UI is restyled. The response JSON is parsed
+  defensively, trying common field names (``token``, ``value``,
+  ``access_token``) and falling back to heuristic extraction if the field
+  name changes.
 
 - **Push via the hcp CLI, not the REST API**: HCP Vault Secrets has an HTTP
   API, but the `hcp` CLI is the easier surface — it handles auth token
@@ -104,6 +106,8 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import json
+import logging
 import os
 from pathlib import Path
 import shutil
@@ -114,8 +118,10 @@ from playwright.sync_api import Page, sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 
+logger = logging.getLogger("conformance-token")
+
 SUITE_URL = "https://www.certification.openid.net/"
-TOKEN_MANAGEMENT_PATH = "token-management.html"
+HTTP_FORBIDDEN = 403
 DEFAULT_PROFILE_DIR = (
     Path.home() / ".cache" / "py-identity-model" / "playwright-profile"
 )
@@ -246,7 +252,7 @@ def create_token_in_browser(cfg: RotateConfig) -> str:
                 _wait_until_logged_in(page, LOGIN_WAIT_TIMEOUT_MS)
                 print("Login detected. Creating API token...", file=sys.stderr)
 
-            return _create_api_token_via_ui(page, cfg.token_description)
+            return _create_api_token(page, cfg.token_description)
         finally:
             context.close()
 
@@ -276,78 +282,97 @@ def _wait_until_logged_in(page: Page, timeout_ms: int) -> None:
     )
 
 
-def _create_api_token_via_ui(page: Page, description: str) -> str:
-    """Navigate to the token management page, create a token, return its value.
+def _create_api_token(page: Page, description: str) -> str:
+    """Create an API token via the suite's REST API using the browser session.
 
-    The conformance suite serves its static token management UI from
-    ``/token-management.html``. If the suite's UI layout changes, update the
-    selectors below. The REST fallback is documented in the module docstring.
+    Uses ``POST /api/token`` with the browser's authenticated session cookies
+    rather than scraping the token management UI. This is more robust than
+    UI selectors because the REST API is a stable contract defined in the
+    suite's ``TokenApi.java`` — it doesn't change when the UI is restyled.
+
+    The browser context's ``request`` API automatically includes the session
+    cookies established during the OIDC login, so the POST is authenticated
+    without any extra header work.
+
+    ``TokenApi.java`` accepts ``{"permanent": true}`` to create a long-lived
+    token. The response is a JSON object containing the token details.
     """
-    page.goto(SUITE_URL + TOKEN_MANAGEMENT_PATH, wait_until="networkidle")
+    api_url = SUITE_URL + "api/token"
+    logger.info("Creating API token via POST %s", api_url)
 
-    # Open the "create token" dialog. The exact button text is defensive —
-    # the suite's UI has used both "Create API Token" and "New Token" in
-    # past revisions. Try the more recent label first.
-    create_button = page.get_by_role("button", name="Create API Token")
-    if create_button.count() == 0:
-        create_button = page.get_by_role("button", name="New Token")
-    if create_button.count() == 0:
-        raise RuntimeError(
-            "Could not find a 'Create API Token' or 'New Token' button on the "
-            "token management page. The UI layout may have changed. Re-run with "
-            "--headless=false and a debugger attached, or switch to the REST "
-            "API path described in the module docstring."
-        )
-    create_button.first.click()
-
-    # Fill in the description field, then submit.
-    description_input = page.locator(
-        'input[name="description"], textarea[name="description"]'
+    response = page.request.post(
+        api_url,
+        data=json.dumps({"permanent": True}),
+        headers={"Content-Type": "application/json"},
     )
-    if description_input.count() > 0:
-        description_input.first.fill(description)
 
-    submit = page.get_by_role("button", name="Create")
-    if submit.count() == 0:
-        # If the dialog's submit button is missing, a bare .click() would
-        # silently wait for the default 30s timeout and raise a generic
-        # PlaywrightTimeoutError with no hint about which selector failed.
-        # Raise explicitly so the operator sees an actionable message.
+    if response.status == HTTP_FORBIDDEN:
         raise RuntimeError(
-            "Could not find the 'Create' submit button inside the token "
-            "creation dialog. The UI layout may have changed. Re-run with "
-            "--headless=false and a debugger attached to inspect the dialog, "
-            "or switch to the REST API path described in the module docstring."
+            "POST /api/token returned 403 Forbidden. The authenticated user "
+            "may be an admin or private-link user, which the suite restricts "
+            "from creating API tokens. Try a different Google/GitLab account."
         )
-    submit.first.click()
 
-    # The new token is shown exactly once after creation. Capture it before
-    # the dialog closes. The suite's template has exposed the token value on
-    # an element with attribute `data-token` in the past; if that attribute
-    # is missing, fall back to any visible monospace block inside the dialog.
-    try:
-        page.wait_for_selector("[data-token]", timeout=UI_INTERACTION_TIMEOUT_MS)
-        token_value = page.get_attribute("[data-token]", "data-token")
-    except PlaywrightTimeoutError:
-        token_value = _extract_token_fallback(page)
+    if not response.ok:
+        raise RuntimeError(
+            f"POST /api/token failed: HTTP {response.status}\n"
+            f"  body: {response.text()[:500]}"
+        )
+
+    body = response.json()
+    logger.info(
+        "Token API response keys: %s",
+        list(body.keys()) if isinstance(body, dict) else type(body).__name__,
+    )
+
+    # The response structure from TokenService is not publicly documented.
+    # Try common field names in priority order. Log the full key set on
+    # failure so the operator can identify the right field.
+    token_value = None
+    if isinstance(body, dict):
+        for field in ("token", "value", "access_token", "accessToken", "owner"):
+            if (
+                field in body
+                and isinstance(body[field], str)
+                and len(body[field]) > MIN_MASKABLE_TOKEN_LEN
+            ):
+                token_value = body[field]
+                break
+
+        # If no known field matched, check if the response itself IS the
+        # token string (some APIs return a bare string).
+        if token_value is None:
+            # Last resort: dump all string fields for debugging
+            string_fields = {
+                k: v
+                for k, v in body.items()
+                if isinstance(v, str) and len(v) > MIN_MASKABLE_TOKEN_LEN
+            }
+            if len(string_fields) == 1:
+                token_value = next(iter(string_fields.values()))
+                logger.info(
+                    "Extracted token from field '%s' (not a known field name)",
+                    next(iter(string_fields.keys())),
+                )
+            elif string_fields:
+                raise RuntimeError(
+                    f"POST /api/token succeeded but multiple candidate token "
+                    f"fields found: {list(string_fields.keys())}. Update the "
+                    f"field priority list in _create_api_token()."
+                )
+    elif isinstance(body, str) and len(body) > MIN_MASKABLE_TOKEN_LEN:
+        token_value = body
 
     if not token_value:
         raise RuntimeError(
-            "Token creation request succeeded but no token value was captured "
-            "from the UI. Re-run with --show-token and a debugger to inspect."
+            f"POST /api/token succeeded (HTTP {response.status}) but no token "
+            f"value could be extracted from the response.\n"
+            f"  response keys: {list(body.keys()) if isinstance(body, dict) else 'N/A'}\n"
+            f"  response type: {type(body).__name__}\n"
+            f"Update _create_api_token() to handle this response format."
         )
+
     return token_value.strip()
-
-
-def _extract_token_fallback(page: Page) -> str | None:
-    """Fallback token extraction: look for any monospace block in the active dialog."""
-    dialog = page.get_by_role("dialog")
-    if dialog.count() == 0:
-        return None
-    code_block = dialog.locator("code, pre, .token-value")
-    if code_block.count() == 0:
-        return None
-    return code_block.first.inner_text()
 
 
 # ---------------------------------------------------------------------------
