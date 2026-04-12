@@ -13,8 +13,6 @@ services:
       default:
         aliases:
           - localhost.emobix.co.uk
-    volumes:
-      - nginx-certs:/etc/ssl/certs
     depends_on:
       server:
         condition: service_healthy
@@ -45,17 +43,9 @@ services:
       - RP_HOST=0.0.0.0
       - RP_PORT=8888
       - CONFORMANCE_SUITE_BASE_URL=https://localhost.emobix.co.uk:8443
-      # The library's default HTTP client uses verify=True (system CA).
-      # For local conformance runs against the self-signed nginx cert,
-      # SSL_CERT_FILE must point to the nginx cert so validate_token's
-      # JWKS/discovery fetches succeed. See PR #335 for the full context.
-      - SSL_CERT_FILE=/etc/ssl/nginx-certs/nginx-selfsigned.crt
-    volumes:
-      - nginx-certs:/etc/ssl/nginx-certs:ro
     depends_on:
       server:
         condition: service_healthy
 
 volumes:
   mongodb-data:
-  nginx-certs:
