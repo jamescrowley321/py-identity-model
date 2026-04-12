@@ -81,6 +81,49 @@ conformance-up: ## Start conformance suite and RP harness
 conformance-down: ## Tear down conformance suite
 	docker compose -f conformance/docker-compose.yml down -v
 
+.PHONY: conformance-test
+conformance-test: conformance-up ## Run all conformance profiles against local suite
+	python conformance/run_tests.py --plan basic-rp --output conformance/results/basic-rp-latest.json --verbose
+	python conformance/run_tests.py --plan config-rp --output conformance/results/config-rp-latest.json --verbose
+	@echo "Conformance tests complete. Results in conformance/results/"
+
+.PHONY: conformance-test-harness
+conformance-test-harness: ## Run conformance harness unit tests (parser + callback)
+	uv run --with fastapi --with httpx --with python-multipart pytest conformance/tests/ -v
+
+.PHONY: conformance-token
+conformance-token: ## Create OIDF API token via Playwright and push to HCP Vault Secrets
+	@echo "Launching browser for certification.openid.net login..."
+	@echo "First run: sign in via Google/GitLab in the browser window."
+	@echo "Subsequent runs: session is cached in ~/.cache/py-identity-model/playwright-profile/"
+	uv run conformance/scripts/rotate_conformance_token.py
+
+.PHONY: conformance-token-show
+conformance-token-show: ## Create token and print to stderr (dry run, no Vault push)
+	uv run conformance/scripts/rotate_conformance_token.py --dry-run --show-token
+
+.PHONY: conformance-token-env
+conformance-token-env: ## Pull CONFORMANCE_TOKEN from HCP Vault and print export command
+	@echo "export CONFORMANCE_TOKEN=$$(hcp vault-secrets secrets open CONFORMANCE_TOKEN --app py-identity-model --format json | jq -r '.static_version.value')"
+	@echo "# Run the above command, or: eval \$$(make conformance-token-env)"
+
+.PHONY: conformance-cert-dryrun
+conformance-cert-dryrun: ## Run conformance tests against certification.openid.net (requires CONFORMANCE_TOKEN)
+	@if [ -z "$$CONFORMANCE_TOKEN" ]; then \
+		echo "Error: CONFORMANCE_TOKEN is not set."; \
+		echo ""; \
+		echo "To get a token:"; \
+		echo "  make conformance-token        # creates token + pushes to HCP Vault"; \
+		echo "  eval \$$(make conformance-token-env)  # pulls from HCP into shell"; \
+		echo ""; \
+		echo "Or set it manually:"; \
+		echo "  export CONFORMANCE_TOKEN=<your-token>"; \
+		exit 1; \
+	fi
+	python conformance/run_tests.py --plan basic-rp --output conformance/results/hosted/basic-rp-latest.json --verbose
+	python conformance/run_tests.py --plan config-rp --output conformance/results/hosted/config-rp-latest.json --verbose
+	@echo "Hosted conformance tests complete. Results in conformance/results/hosted/"
+
 .PHONY: ci-setup
 ci-setup:
 	python -m pip install --upgrade pip
