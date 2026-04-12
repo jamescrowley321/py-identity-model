@@ -332,6 +332,22 @@ def drive_rp_authorize(
 # ---------------------------------------------------------------------------
 
 
+def _clear_rp_cache(rp_base_url: str) -> None:
+    """Clear the RP's library caches before each test module.
+
+    The conformance suite reconfigures the OP between tests. Stale
+    discovery/JWKS caches cause signature verification failures and
+    30s-per-retry backoff timeouts.
+    """
+    try:
+        with httpx.Client(verify=False, timeout=5.0) as client:
+            response = client.post(f"{rp_base_url}/clear-cache")
+            response.raise_for_status()
+            logger.info("Cleared RP caches: %s", response.json())
+    except httpx.HTTPError as exc:
+        logger.warning("Failed to clear RP caches (continuing): %s", exc)
+
+
 def run_test_module(
     suite: ConformanceSuiteClient,
     test_name: str,
@@ -344,6 +360,9 @@ def run_test_module(
     logger.info("=" * 60)
     logger.info("Running test: %s", test_name)
     logger.info("=" * 60)
+
+    # Clear RP caches before each test to avoid stale JWKS/discovery
+    _clear_rp_cache(rp_base_url)
 
     # Create the test module instance
     try:
