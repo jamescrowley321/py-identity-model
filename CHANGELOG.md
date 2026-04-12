@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.19.3 (2026-04-12)
+
+### Bug Fixes
+
+- **conformance**: Make UserInfo sub mismatch fatal and display claims
+  ([`47a86ed`](https://github.com/jamescrowley321/py-identity-model/commit/47a86edda2d11e779ce74a18a5476b02aae6187a))
+
+
 ## v2.19.2 (2026-04-12)
 
 ### Bug Fixes
