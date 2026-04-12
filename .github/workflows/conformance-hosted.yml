@@ -24,7 +24,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install httpx
-          pip install uvicorn fastapi python-multipart py-identity-model
+          pip install uvicorn fastapi python-multipart
+          pip install .
 
       - name: Start RP harness
         working-directory: conformance

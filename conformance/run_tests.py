@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 import sys
 import time
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
@@ -39,7 +39,8 @@ MAX_POLL_ATTEMPTS = 60  # 2 minutes max per test
 
 def _is_local_suite(url: str) -> bool:
     """Return True if the URL points to a local (self-signed) conformance suite."""
-    return "localhost" in url or "127.0.0.1" in url
+    hostname = urlparse(url).hostname or ""
+    return hostname in ("localhost", "127.0.0.1") or hostname.endswith(".localhost")
 
 
 # ---------------------------------------------------------------------------
@@ -204,7 +205,7 @@ def drive_rp_discover(
     issuer: str,
     test_id: str,
     *,
-    verify_ssl: bool = False,
+    verify_ssl: bool = True,
 ) -> None:
     """Hit the RP's /discover endpoint to fetch discovery without starting an auth flow.
 
@@ -270,7 +271,7 @@ def drive_rp_authorize(
     use_pkce: bool = False,
     skip_userinfo: bool = False,
     *,
-    verify_ssl: bool = False,
+    verify_ssl: bool = True,
 ) -> None:
     """Hit the RP's /authorize endpoint to start an auth flow.
 
@@ -354,7 +355,7 @@ def run_test_module(
     client_id: str,
     client_secret: str,
     *,
-    verify_ssl: bool = False,
+    verify_ssl: bool = True,
 ) -> TestResult:
     """Execute a single conformance test module."""
     logger.info("=" * 60)
@@ -656,9 +657,11 @@ def main() -> None:
 
     # Environment variable overrides
     # CONFORMANCE_SERVER overrides --suite-url for targeting the hosted suite
-    suite_url = os.environ.get("CONFORMANCE_SERVER", "").rstrip("/") or args.suite_url
+    suite_url = (
+        os.environ.get("CONFORMANCE_SERVER", "").strip().rstrip("/") or args.suite_url
+    )
     # CONFORMANCE_TOKEN provides Bearer auth for the hosted suite API
-    token = os.environ.get("CONFORMANCE_TOKEN", "") or None
+    token = os.environ.get("CONFORMANCE_TOKEN", "").strip() or None
 
     if not _is_local_suite(suite_url) and not token:
         logger.error(
