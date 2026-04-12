@@ -24,6 +24,7 @@ from py_identity_model import (
     TokenValidationConfig,
     UserInfoRequest,
     build_authorization_url,
+    clear_jwks_cache,
     generate_pkce_pair,
     get_discovery_document,
     get_userinfo,
@@ -37,6 +38,9 @@ from py_identity_model.exceptions import (
     ConfigurationException,
     PyIdentityModelException,
     TokenValidationException,
+)
+from py_identity_model.sync.token_validation import (
+    _get_disco_response,
 )
 
 
@@ -102,6 +106,20 @@ def _get_http_client() -> HTTPClient:
 def health() -> dict:
     """Health check."""
     return {"status": "ok", "service": "conformance-rp"}
+
+
+@app.post("/clear-cache")
+def clear_cache() -> dict:
+    """Clear library discovery and JWKS caches between conformance tests.
+
+    The conformance suite reconfigures the OP's JWKS between test modules.
+    Without clearing caches, validate_token uses stale keys and hangs on
+    retry backoff (3 retries x 30s timeout = ~2 min timeout per test).
+    """
+    _get_disco_response.cache_clear()
+    clear_jwks_cache()
+    logger.info("Cleared discovery and JWKS caches")
+    return {"status": "ok", "cleared": ["discovery", "jwks"]}
 
 
 @app.get("/discover", response_model=None)
