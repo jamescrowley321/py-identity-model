@@ -1,0 +1,58 @@
+{
+  "plan": "config-rp",
+  "plan_id": "Xok1nYU4PM8p3",
+  "suite_url": "https://www.certification.openid.net",
+  "results": [
+    {
+      "test": "oidcc-client-test-discovery-openid-config",
+      "status": "TIMEOUT",
+      "test_id": "eemRlIOYuhJvrF7",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=eemRlIOYuhJvrF7",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-discovery-jwks-uri-keys",
+      "status": "TIMEOUT",
+      "test_id": "FkAIAsqi7ATDi9I",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=FkAIAsqi7ATDi9I",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-discovery-issuer-mismatch",
+      "status": "TIMEOUT",
+      "test_id": "CWlHUn9QopMUqNz",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=CWlHUn9QopMUqNz",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-idtoken-sig-none",
+      "status": "TIMEOUT",
+      "test_id": "pMXNamVzf5mnGjW",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=pMXNamVzf5mnGjW",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-signing-key-rotation-just-before-signing",
+      "status": "TIMEOUT",
+      "test_id": "ajiYYxDTAGYlDIv",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=ajiYYxDTAGYlDIv",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-signing-key-rotation",
+      "status": "TIMEOUT",
+      "test_id": "1vphRRUHS6ke8zJ",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=1vphRRUHS6ke8zJ",
+      "detail": ""
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "passed": 0,
+    "warning": 0,
+    "failed": 6,
+    "review": 0,
+    "skipped": 0
+  },
+  "all_passed": false
+}
