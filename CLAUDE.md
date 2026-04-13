@@ -31,13 +31,11 @@ py-identity-model is a production-grade OIDC/OAuth2.0 helper library for Python 
    make lint                    # Run BEFORE every commit
    ```
 
-3. **Always run ALL test suites before pushing** — unit tests alone are not sufficient. Run the full local validation sequence:
+3. **Always run `make pre-push` before pushing** — unit tests alone are not sufficient. This is enforced by a pre-push git hook, but you must also run it explicitly when working in agents or automated workflows:
    ```bash
-   make lint                           # Pre-commit hooks
-   make test-unit                      # Unit tests (fast, no deps)
-   make test-integration-node-oidc     # Integration tests against local fixture (Docker)
+   make pre-push    # Runs: lint + node-oidc integration + conformance harness + examples
    ```
-   The node-oidc integration tests catch client config mismatches, protocol bugs, and grant type issues that unit tests cannot. If you only have credentials for Ory or Descope, also run `make test-integration-ory` or `make test-integration-descope` respectively.
+   This target runs the full local validation sequence: `make lint`, `make test-integration-node-oidc` (Docker), `make conformance-test-harness`, and `make test-examples` (Docker). Do NOT push without passing all of these. If you only have credentials for Ory or Descope, also run `make test-integration-ory` or `make test-integration-descope` respectively.
 
 4. **Use conventional commits** — commit messages must follow the Angular convention (see Git Workflow section below). Commits to `main` trigger semantic-release version bumps.
 

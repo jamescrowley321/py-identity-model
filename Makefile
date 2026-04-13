@@ -65,6 +65,11 @@ test-examples: ## Run example integration tests (Docker)
 .PHONY: test-all
 test-all: test test-examples ## Run all tests including examples
 
+# ── Pre-push ────────────────────────────────────────────────────────
+
+.PHONY: pre-push
+pre-push: lint test-integration-node-oidc conformance-test-harness test-examples ## Full local validation before push
+
 # ── Docs ─────────────────────────────────────────────────────────────
 
 .PHONY: docs-serve
