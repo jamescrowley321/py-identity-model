@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v2.19.6 (2026-04-13)
+
+### Bug Fixes
+
+- **security**: Auto-trust discovery URL authority for endpoint validation
+  ([`2f173ec`](https://github.com/jamescrowley321/py-identity-model/commit/2f173ecfe03fd2cf2d769cf7470e7543f92523db))
+
+- **security**: HTTP hardening — disable redirects, enforce HTTPS, validate JWKS Content-Type,
+  derive endpoint authority from issuer
+  ([`93f7ce5`](https://github.com/jamescrowley321/py-identity-model/commit/93f7ce5421605d99f46f8e82ec75397339fab32f))
+
+- **security**: Thread discovery_policy through validate_token for endpoint authority control
+  ([`95124ca`](https://github.com/jamescrowley321/py-identity-model/commit/95124ca3383874f24cc72e1942257e73e3e2d4c0))
+
+
 ## v2.19.5 (2026-04-13)
 
 ### Bug Fixes
