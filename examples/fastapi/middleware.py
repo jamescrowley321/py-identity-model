@@ -22,6 +22,7 @@ from py_identity_model import (
     to_principal,
 )
 from py_identity_model.aio import validate_token
+from py_identity_model.core.discovery_policy import DiscoveryPolicy
 
 
 # Expected number of parts in "Bearer <token>" authorization header
@@ -43,13 +44,14 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
         custom_claims_validator: Optional custom function to validate additional claims
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         app,
         discovery_url: str,
         audience: str | None = None,
         excluded_paths: list[str] | None = None,
         custom_claims_validator: Callable | None = None,
+        discovery_policy: DiscoveryPolicy | None = None,
     ):
         super().__init__(app)
         self.discovery_url = discovery_url
@@ -60,6 +62,7 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
             "/health",
         ]
         self.custom_claims_validator = custom_claims_validator
+        self.discovery_policy = discovery_policy
 
     async def dispatch(self, request: Request, call_next) -> Response:
         """Process the request and validate the token if required."""
@@ -103,6 +106,7 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
                 jwt=token,
                 token_validation_config=validation_config,
                 disco_doc_address=self.discovery_url,
+                discovery_policy=self.discovery_policy,
             )
 
             # Convert claims to ClaimsPrincipal and attach to request state
