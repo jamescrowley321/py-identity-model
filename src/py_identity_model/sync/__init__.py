@@ -93,7 +93,12 @@ from .token_exchange import (
     TokenExchangeResponse,
     exchange_token,
 )
-from .token_validation import TokenValidationConfig, clear_jwks_cache, validate_token
+from .token_validation import (
+    TokenValidationConfig,
+    clear_discovery_cache,
+    clear_jwks_cache,
+    validate_token,
+)
 from .userinfo import UserInfoRequest, UserInfoResponse, get_userinfo
 
 
@@ -161,6 +166,7 @@ __all__ = [
     "build_authorization_url",
     "build_dpop_headers",
     "build_jar_authorization_url",
+    "clear_discovery_cache",
     "clear_jwks_cache",
     "compute_ath",
     "create_dpop_proof",

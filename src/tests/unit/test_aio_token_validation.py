@@ -15,11 +15,10 @@ import respx
 
 from py_identity_model.aio.managed_client import AsyncHTTPClient
 from py_identity_model.aio.token_validation import (
-    _get_disco_response,
+    clear_discovery_cache,
     clear_jwks_cache,
     validate_token,
 )
-from py_identity_model.core.jwt_helpers import _decode_jwt_cached
 from py_identity_model.core.models import TokenValidationConfig
 from py_identity_model.exceptions import (
     ConfigurationException,
@@ -48,13 +47,11 @@ def rsa_keypair():
 @pytest.fixture(autouse=True)
 def _clear_caches():
     """Clear all caches between tests."""
-    _get_disco_response.cache_clear()
+    clear_discovery_cache()
     clear_jwks_cache()
-    _decode_jwt_cached.cache_clear()
     yield
-    _get_disco_response.cache_clear()
+    clear_discovery_cache()
     clear_jwks_cache()
-    _decode_jwt_cached.cache_clear()
 
 
 class TestAsyncTokenValidation:
@@ -184,8 +181,6 @@ class TestAsyncJwksCacheTTL:
         )
         assert jwks_route.call_count == 1
 
-        _decode_jwt_cached.cache_clear()
-
         # Second call — should use cached JWKS
         await validate_token(
             jwt=token,
@@ -225,8 +220,6 @@ class TestAsyncJwksCacheTTL:
             disco_doc_address="https://example.com/.well-known/openid-configuration",
         )
         assert jwks_route.call_count == 1
-
-        _decode_jwt_cached.cache_clear()
 
         # Simulate TTL expiry
         with patch("py_identity_model.core.jwks_cache.time") as mock_time:

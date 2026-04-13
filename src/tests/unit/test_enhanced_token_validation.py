@@ -8,10 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 import jwt as pyjwt
 import pytest
 
-from py_identity_model.core.jwt_helpers import (
-    _decode_jwt_cached,
-    decode_and_validate_jwt,
-)
+from py_identity_model.core.jwt_helpers import decode_and_validate_jwt
 from py_identity_model.exceptions import (
     ConfigurationException,
     InvalidIssuerException,
@@ -57,14 +54,6 @@ def rsa_keypair():
 def _sign_jwt(pem: bytes, claims: dict, headers: dict | None = None) -> str:
     """Sign a JWT with the given private key."""
     return pyjwt.encode(claims, pem, algorithm="RS256", headers=headers)
-
-
-@pytest.fixture(autouse=True)
-def _clear_jwt_cache():
-    """Clear JWT decode cache between tests."""
-    _decode_jwt_cached.cache_clear()
-    yield
-    _decode_jwt_cached.cache_clear()
 
 
 @pytest.mark.unit

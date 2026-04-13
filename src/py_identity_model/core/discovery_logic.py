@@ -68,8 +68,11 @@ def process_successful_response(
         f"Token endpoint: {response_json.get('token_endpoint')}",
     )
 
+    # Capture Cache-Control for TTL-based caching
+    cache_control = response.headers.get("cache-control")
+
     # Build response using shared logic
-    return build_discovery_response(response_json)
+    return build_discovery_response(response_json, cache_control=cache_control)
 
 
 def process_discovery_response(

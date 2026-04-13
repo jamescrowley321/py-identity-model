@@ -1,5 +1,5 @@
 """
-Asynchronous token validation with TTL-based JWKS caching.
+Asynchronous token validation with TTL-based JWKS and discovery caching.
 
 This module provides asynchronous token validation using discovery and JWKS,
 with automatic cache expiry and forced JWKS refresh on key rotation.
@@ -8,11 +8,11 @@ with automatic cache expiry and forced JWKS refresh on key rotation.
 import asyncio
 import time
 
-from async_lru import alru_cache
-
 from ..core.jwks_cache import (
+    DiscoCacheEntry,
     JwksCacheEntry,
     is_cache_expired,
+    resolve_disco_ttl,
     resolve_ttl,
 )
 from ..core.models import (
@@ -46,18 +46,43 @@ from .managed_client import AsyncHTTPClient
 
 
 # ============================================================================
-# Discovery cache (standard alru_cache — discovery docs change infrequently)
+# Discovery TTL cache
 # ============================================================================
 
+_disco_cache: dict[str, DiscoCacheEntry] = {}
+_disco_cache_lock = asyncio.Lock()
 
-@alru_cache(maxsize=128)
+
 async def _get_disco_response(
-    disco_doc_address: str,
+    disco_doc_address: str | None,
 ) -> DiscoveryDocumentResponse:
-    """Cached async discovery document fetching."""
-    return await get_discovery_document(
+    """Cached async discovery document fetching with TTL."""
+    if disco_doc_address is None:
+        raise ConfigurationException(
+            "disco_doc_address is required when perform_disco is True"
+        )
+
+    async with _disco_cache_lock:
+        entry = _disco_cache.get(disco_doc_address)
+        if entry is not None and not is_cache_expired(entry):
+            return entry.response
+
+    # Fetch outside the lock
+    response = await get_discovery_document(
         DiscoveryDocumentRequest(address=disco_doc_address),
     )
+    ttl = resolve_disco_ttl(response.cache_control)
+
+    async with _disco_cache_lock:
+        _disco_cache[disco_doc_address] = DiscoCacheEntry(
+            response=response, cached_at=time.time(), ttl=ttl
+        )
+    return response
+
+
+def clear_discovery_cache() -> None:
+    """Clear the discovery cache."""
+    _disco_cache.clear()
 
 
 # ============================================================================
@@ -219,4 +244,9 @@ async def validate_token(
     return decoded_token
 
 
-__all__ = ["TokenValidationConfig", "clear_jwks_cache", "validate_token"]
+__all__ = [
+    "TokenValidationConfig",
+    "clear_discovery_cache",
+    "clear_jwks_cache",
+    "validate_token",
+]

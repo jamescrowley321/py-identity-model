@@ -5,7 +5,7 @@ from py_identity_model.aio.http_client import (
     close_async_http_client,
 )
 from py_identity_model.aio.token_validation import (
-    _get_disco_response,
+    clear_discovery_cache,
     clear_jwks_cache,
 )
 
@@ -77,19 +77,13 @@ async def _close_async_http_client():
 
 @pytest.fixture(autouse=True)
 def _clear_async_caches():
-    """Clear async LRU caches between tests.
+    """Clear async caches between tests.
 
-    async-lru >= 2.2.0 enforces single event loop per cache instance.
     Since pytest-asyncio creates a new event loop per test function,
-    stale caches from a previous loop cause RuntimeError. Clearing
-    them and resetting the loop binding before each test prevents this.
+    stale caches from a previous loop must be cleared.
     """
-    # Clear alru_cache-based discovery cache
-    _get_disco_response.cache_clear()
-    # Reset event loop binding added in async-lru 2.2.0
-    loop_attr = "_LRUCacheWrapper__first_loop"
-    if hasattr(_get_disco_response, loop_attr):
-        setattr(_get_disco_response, loop_attr, None)
+    # Clear TTL-based discovery cache
+    clear_discovery_cache()
 
     # Clear dict-based JWKS TTL cache
     clear_jwks_cache()

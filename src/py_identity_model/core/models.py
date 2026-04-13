@@ -519,6 +519,9 @@ class DiscoveryDocumentResponse(BaseResponse):
     op_policy_uri: str | None = None
     op_tos_uri: str | None = None
 
+    # HTTP cache metadata (not a guarded field — always accessible)
+    cache_control: str | None = None
+
 
 # ============================================================================
 # JWKS Models - RFC 7517

@@ -4,9 +4,6 @@ JWT helper functions for py-identity-model.
 This module contains JWT-related operations used by both sync and async implementations.
 """
 
-from functools import lru_cache
-import json
-
 from jwt import PyJWK, decode
 from jwt.exceptions import (
     ExpiredSignatureError,
@@ -27,65 +24,50 @@ from ..exceptions import (
 from ..logging_config import logger
 
 
-@lru_cache(maxsize=128)
-def _get_pyjwk(key_json: str, algorithm: str | None) -> PyJWK:
+def _get_pyjwk(key_data: dict, algorithm: str | None) -> PyJWK:
     """
-    Cached PyJWK construction.
-
-    PyJWK construction is expensive as it involves parsing and loading cryptographic keys.
-    This cache significantly improves performance when validating multiple tokens with the
-    same key.
+    Construct a PyJWK from key data.
 
     Args:
-        key_json: JSON string representation of the key
+        key_data: Dictionary representation of the key
         algorithm: Algorithm to use
 
     Returns:
         PyJWK instance
     """
-    return PyJWK(json.loads(key_json), algorithm)
+    return PyJWK(key_data, algorithm)
 
 
-@lru_cache(maxsize=256)
-def _decode_jwt_cached(  # noqa: PLR0913  # @lru_cache requires individual hashable params
+def _decode_jwt(  # noqa: PLR0913  # JWT validation requires these params
     jwt: str,
-    key_json: str,
-    algorithms_tuple: tuple[str, ...],
+    key_data: dict,
+    algorithms: list[str],
     audience: str | None,
-    issuer: str | tuple[str, ...] | None,
-    options_json: str | None,
+    issuer: str | list[str] | None,
+    options: dict | None,
     leeway: float | None = None,
 ) -> dict:
     """
-    Internal cached JWT decoding.
-
-    Caches decoded tokens to avoid redundant signature verification when
-    the same JWT is validated multiple times.
+    Internal JWT decoding.
 
     Args:
         jwt: The JWT token
-        key_json: Serialized key
-        algorithms_tuple: Algorithms as tuple (hashable)
+        key_data: Key dictionary
+        algorithms: Allowed algorithms
         audience: Expected audience
-        issuer: Expected issuer (string or tuple for multi-issuer)
-        options_json: Serialized options
+        issuer: Expected issuer (string or list for multi-issuer)
+        options: Decode options
         leeway: Clock skew tolerance in seconds
 
     Returns:
         Decoded claims
     """
-    pyjwk = _get_pyjwk(key_json, algorithms_tuple[0] if algorithms_tuple else None)
-    options = json.loads(options_json) if options_json else None
-
-    # PyJWT accepts issuer as str or sequence
-    issuer_param: str | list[str] | None = (
-        list(issuer) if isinstance(issuer, tuple) else issuer
-    )
+    pyjwk = _get_pyjwk(key_data, algorithms[0] if algorithms else None)
 
     kwargs: dict = {
         "audience": audience,
-        "algorithms": list(algorithms_tuple),
-        "issuer": issuer_param,
+        "algorithms": algorithms,
+        "issuer": issuer,
         "options": options,
         "leeway": leeway if leeway is not None else 0,
     }
@@ -137,30 +119,15 @@ def decode_and_validate_jwt(  # noqa: PLR0913  # RFC 7519 §7.2 validation requi
                 "issuer must not be an empty list; omit or set to None to skip issuer validation"
             )
 
-        # Convert to hashable types for caching
-        key_json = json.dumps(key, sort_keys=True)
-        algorithms_tuple = tuple(algorithms)
-        options_json = json.dumps(options, sort_keys=True) if options else None
-
-        # Convert issuer list to tuple for hashability
-        issuer_hashable: str | tuple[str, ...] | None = (
-            tuple(issuer) if isinstance(issuer, list) else issuer
-        )
-
-        decoded = _decode_jwt_cached(
+        decoded = _decode_jwt(
             jwt,
-            key_json,
-            algorithms_tuple,
+            key,
+            algorithms,
             audience,
-            issuer_hashable,
-            options_json,
+            issuer,
+            options,
             leeway=leeway,
         )
-
-        # Return a shallow copy to prevent cache aliasing —
-        # lru_cache returns the same dict reference on cache hits,
-        # so callers mutating the returned dict would corrupt the cache.
-        decoded = decoded.copy()
 
         # Validate subject claim (PyJWT doesn't do this natively)
         if subject is not None and decoded.get("sub") != subject:
