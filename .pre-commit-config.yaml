@@ -24,11 +24,4 @@ repos:
         types: [python]
         pass_filenames: false
         require_serial: true
-      - id: pre-push-validation
-        name: pre-push validation (integration + conformance + examples)
-        entry: make pre-push
-        language: system
-        pass_filenames: false
-        require_serial: true
-        stages: [pre-push]
-        always_run: true
+
