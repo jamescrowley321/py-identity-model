@@ -34,7 +34,7 @@ class TestDecodeAndValidateJWT:
         # Mock the internal _decode_jwt_cached function
         monkeypatch.setattr(
             py_identity_model.core.jwt_helpers,
-            "_decode_jwt_cached",
+            "_decode_jwt",
             mock_decode,
         )
 
@@ -56,7 +56,7 @@ class TestDecodeAndValidateJWT:
 
         monkeypatch.setattr(
             py_identity_model.core.jwt_helpers,
-            "_decode_jwt_cached",
+            "_decode_jwt",
             mock_decode,
         )
 
@@ -78,7 +78,7 @@ class TestDecodeAndValidateJWT:
 
         monkeypatch.setattr(
             py_identity_model.core.jwt_helpers,
-            "_decode_jwt_cached",
+            "_decode_jwt",
             mock_decode,
         )
 
@@ -100,7 +100,7 @@ class TestDecodeAndValidateJWT:
 
         monkeypatch.setattr(
             py_identity_model.core.jwt_helpers,
-            "_decode_jwt_cached",
+            "_decode_jwt",
             mock_decode,
         )
 

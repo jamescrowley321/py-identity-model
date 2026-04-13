@@ -162,12 +162,14 @@ def validate_and_parse_discovery_response(
 
 def build_discovery_response(
     response_json: dict,
+    cache_control: str | None = None,
 ) -> DiscoveryDocumentResponse:
     """
     Build DiscoveryDocumentResponse from validated JSON.
 
     Args:
         response_json: Validated discovery document JSON
+        cache_control: Cache-Control header value from the HTTP response
 
     Returns:
         DiscoveryDocumentResponse: Success response with discovery data
@@ -261,6 +263,7 @@ def build_discovery_response(
         service_documentation=response_json.get("service_documentation"),
         op_policy_uri=response_json.get("op_policy_uri"),
         op_tos_uri=response_json.get("op_tos_uri"),
+        cache_control=cache_control,
         is_successful=True,
     )
 

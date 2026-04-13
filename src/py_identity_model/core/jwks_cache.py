@@ -1,13 +1,18 @@
 """
-JWKS cache TTL configuration and cache entry logic.
+JWKS and discovery cache TTL configuration and cache entry logic.
 
-This module provides TTL-based caching for JWKS responses, supporting
-automatic cache expiry and forced refresh on key rotation (RFC 7517 §5).
+This module provides TTL-based caching for JWKS and discovery responses,
+supporting automatic cache expiry and forced refresh on key rotation (RFC 7517 §5).
 
-TTL resolution order:
+JWKS TTL resolution order:
 1. ``Cache-Control: max-age=N`` from the provider's JWKS HTTP response
 2. ``JWKS_CACHE_TTL`` environment variable (seconds)
 3. Default: 86400 (24 hours)
+
+Discovery TTL resolution order:
+1. ``Cache-Control: max-age=N`` from the provider's discovery HTTP response
+2. ``DISCO_CACHE_TTL`` environment variable (seconds)
+3. Default: 3600 (1 hour)
 
 The provider's cache header is preferred because providers set ``max-age``
 based on their key rotation schedule (e.g., Google uses ``max-age=19800``).
@@ -25,13 +30,15 @@ from ..logging_config import logger
 
 
 if TYPE_CHECKING:
-    from ..core.models import JwksResponse
+    from ..core.models import DiscoveryDocumentResponse, JwksResponse
 
 DEFAULT_JWKS_CACHE_TTL_SECONDS: float = 86400.0  # 24 hours
+DEFAULT_DISCO_CACHE_TTL_SECONDS: float = 3600.0  # 1 hour
 MIN_CACHE_TTL_SECONDS: float = 60.0
 MAX_CACHE_TTL_SECONDS: float = 86400.0
 
 _env_ttl: float | None = None
+_disco_env_ttl: float | None = None
 _MAX_AGE_RE = re.compile(r"max-age=(\d+)", re.IGNORECASE)
 
 
@@ -43,6 +50,16 @@ def _get_env_ttl() -> float:
             os.getenv("JWKS_CACHE_TTL", str(DEFAULT_JWKS_CACHE_TTL_SECONDS))
         )
     return _env_ttl
+
+
+def _get_disco_env_ttl() -> float:
+    """Read DISCO_CACHE_TTL from env once, cache the result."""
+    global _disco_env_ttl  # noqa: PLW0603
+    if _disco_env_ttl is None:
+        _disco_env_ttl = float(
+            os.getenv("DISCO_CACHE_TTL", str(DEFAULT_DISCO_CACHE_TTL_SECONDS))
+        )
+    return _disco_env_ttl
 
 
 def parse_max_age(cache_control: str | None) -> float | None:
@@ -60,7 +77,7 @@ def parse_max_age(cache_control: str | None) -> float | None:
 
 
 def resolve_ttl(cache_control: str | None) -> float:
-    """Determine the cache TTL from HTTP headers or config.
+    """Determine the JWKS cache TTL from HTTP headers or config.
 
     Priority: Cache-Control max-age > JWKS_CACHE_TTL env var > default.
     Result is clamped to [60s, 86400s].
@@ -75,6 +92,24 @@ def resolve_ttl(cache_control: str | None) -> float:
     return _get_env_ttl()
 
 
+def resolve_disco_ttl(cache_control: str | None) -> float:
+    """Determine the discovery cache TTL from HTTP headers or config.
+
+    Priority: Cache-Control max-age > DISCO_CACHE_TTL env var > default (1h).
+    Result is clamped to [60s, 86400s].
+    """
+    max_age = parse_max_age(cache_control)
+    if max_age is not None:
+        ttl = max(MIN_CACHE_TTL_SECONDS, min(max_age, MAX_CACHE_TTL_SECONDS))
+        logger.debug(
+            "Using provider Cache-Control max-age=%s for discovery (clamped to %.0fs)",
+            max_age,
+            ttl,
+        )
+        return ttl
+    return _get_disco_env_ttl()
+
+
 @dataclass
 class JwksCacheEntry:
     """A cached JWKS response with timestamp and TTL."""
@@ -84,7 +119,16 @@ class JwksCacheEntry:
     ttl: float = field(default_factory=_get_env_ttl)
 
 
-def is_cache_expired(entry: JwksCacheEntry) -> bool:
+@dataclass
+class DiscoCacheEntry:
+    """A cached discovery document response with timestamp and TTL."""
+
+    response: DiscoveryDocumentResponse
+    cached_at: float
+    ttl: float = field(default_factory=_get_disco_env_ttl)
+
+
+def is_cache_expired(entry: JwksCacheEntry | DiscoCacheEntry) -> bool:
     """Check if a cache entry has expired using its own TTL.
 
     Args:
@@ -96,14 +140,17 @@ def is_cache_expired(entry: JwksCacheEntry) -> bool:
     age = time.time() - entry.cached_at
     expired = age >= entry.ttl
     if expired:
-        logger.debug("JWKS cache entry expired (age=%.1fs, ttl=%.1fs)", age, entry.ttl)
+        logger.debug("Cache entry expired (age=%.1fs, ttl=%.1fs)", age, entry.ttl)
     return expired
 
 
 __all__ = [
+    "DEFAULT_DISCO_CACHE_TTL_SECONDS",
     "DEFAULT_JWKS_CACHE_TTL_SECONDS",
+    "DiscoCacheEntry",
     "JwksCacheEntry",
     "is_cache_expired",
     "parse_max_age",
+    "resolve_disco_ttl",
     "resolve_ttl",
 ]
