@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v2.19.8 (2026-04-13)
+
+### Bug Fixes
+
+- **conformance**: Fix 7 CodeQL alerts in harness — stack traces and sensitive logging
+  ([`9f09a55`](https://github.com/jamescrowley321/py-identity-model/commit/9f09a55e09f5cf1a31e34ee3821b4ddbd8480841))
+
+- **conformance**: Remove token logging and --show-token flag
+  ([`4728e4b`](https://github.com/jamescrowley321/py-identity-model/commit/4728e4b20d152f1fa77f8add8b41f81153ff8798))
+
+
 ## v2.19.7 (2026-04-13)
 
 ### Bug Fixes
