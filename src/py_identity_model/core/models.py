@@ -978,7 +978,10 @@ class TokenValidationConfig:
         issuer: Expected issuer claim.  A single string or a list of
             accepted issuers for multi-tenant validation.
         subject: Expected ``sub`` claim.  Validated after decoding.
-        options: Additional PyJWT decode options (e.g., {'verify_exp': False})
+        options: Additional PyJWT decode options (e.g., {'require': ['sub']}).
+            Security-critical options (verify_signature, verify_exp, verify_nbf,
+            verify_iat) cannot be disabled and will raise ConfigurationException
+            if set to False.
         claims_validator: Optional callable for custom claims validation.
                          Can be sync: Callable[[dict], None]
                          or async: Callable[[dict], Awaitable[None]] (in async context)
