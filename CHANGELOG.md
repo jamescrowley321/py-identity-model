@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v2.19.4 (2026-04-13)
+
+### Bug Fixes
+
+- **cache**: Overhaul caching — TTL-based discovery, remove JWT/PyJWK caches
+  ([`8d84620`](https://github.com/jamescrowley321/py-identity-model/commit/8d846204c3528f6ac7243fd57a08a0c69276bedd))
+
+- **conformance**: Update cache clearing to use clear_discovery_cache()
+  ([`7042913`](https://github.com/jamescrowley321/py-identity-model/commit/7042913020c43cb56ba072a7b58438ad48b49434))
+
+
 ## v2.19.3 (2026-04-12)
 
 ### Bug Fixes
