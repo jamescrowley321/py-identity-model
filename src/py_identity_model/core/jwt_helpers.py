@@ -24,6 +24,47 @@ from ..exceptions import (
 from ..logging_config import logger
 
 
+# Options that MUST NOT be disabled — these are core security checks.
+# Setting them to True is allowed (redundant but safe).
+_ENFORCED_VERIFICATION_OPTIONS: frozenset[str] = frozenset(
+    {
+        "verify_signature",
+        "verify_exp",
+        "verify_nbf",
+        "verify_iat",
+    }
+)
+
+
+def _sanitize_options(options: dict | None) -> dict | None:
+    """Validate caller-supplied PyJWT decode options.
+
+    Prevents callers from disabling core security checks via the options
+    pass-through.  ``verify_signature``, ``verify_exp``, ``verify_nbf``,
+    and ``verify_iat`` must never be set to ``False``.
+
+    Args:
+        options: Caller-supplied decode options, or None.
+
+    Returns:
+        The options dict (unmodified) if all values are safe, or None.
+
+    Raises:
+        ConfigurationException: If any enforced option is set to False.
+    """
+    if options is None:
+        return None
+
+    for key in _ENFORCED_VERIFICATION_OPTIONS:
+        if key in options and not options[key]:
+            raise ConfigurationException(
+                f"Security option '{key}' cannot be disabled. "
+                f"JWT {key.removeprefix('verify_')} verification is always enforced."
+            )
+
+    return options
+
+
 def _get_pyjwk(key_data: dict, algorithm: str | None) -> PyJWK:
     """
     Construct a PyJWK from key data.
@@ -119,13 +160,16 @@ def decode_and_validate_jwt(  # noqa: PLR0913  # RFC 7519 §7.2 validation requi
                 "issuer must not be an empty list; omit or set to None to skip issuer validation"
             )
 
+        # Sanitize options — block attempts to disable core security checks
+        sanitized_options = _sanitize_options(options)
+
         decoded = _decode_jwt(
             jwt,
             key,
             algorithms,
             audience,
             issuer,
-            options,
+            sanitized_options,
             leeway=leeway,
         )
 
