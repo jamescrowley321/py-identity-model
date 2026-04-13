@@ -36,13 +36,16 @@ class _AsyncClientState(TypedDict):
     """Module-level mutable state container (avoids `global` statements)."""
 
     client: httpx.AsyncClient | None
-    cleanup_lock: asyncio.Lock | None
 
 
 _state: _AsyncClientState = {
     "client": None,
-    "cleanup_lock": None,
 }
+
+# Dedicated cleanup lock — created eagerly to avoid initialization races.
+# asyncio.Lock() is safe to create outside an event loop; it binds to the
+# running loop on first acquire.
+_cleanup_lock = asyncio.Lock()
 
 
 def _log_retry(message: str, delay: float, attempt: int, retries: int) -> None:
@@ -186,12 +189,8 @@ async def close_async_http_client() -> None:
         This function uses asyncio.Lock for proper async cleanup without
         blocking the event loop.
     """
-    # Initialize the async cleanup lock if needed (lazy initialization)
-    if _state["cleanup_lock"] is None:
-        _state["cleanup_lock"] = asyncio.Lock()
-
     if _state["client"] is not None:
-        async with _state["cleanup_lock"]:
+        async with _cleanup_lock:
             if _state["client"] is not None:
                 await _state["client"].aclose()
                 _state["client"] = None
@@ -210,7 +209,6 @@ def _reset_async_http_client() -> None:
     """
     with _async_client_creation_lock:
         _state["client"] = None
-        _state["cleanup_lock"] = None
 
 
 __all__ = [

@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 from ..exceptions import DiscoveryException
 from ..logging_config import logger
 from .discovery_policy import DiscoveryPolicy
+from .http_utils import get_max_jwks_size
 from .models import (
     AuthorizationCodeTokenResponse,
     ClientCredentialsTokenResponse,
@@ -295,6 +296,27 @@ def parse_jwks_response(response: httpx.Response) -> JwksResponse:
         JwksResponse: Parsed JWKS response with keys
     """
     if response.is_success:
+        # Check response size before parsing
+        max_size = get_max_jwks_size()
+        content_length = response.headers.get("Content-Length")
+        if content_length and int(content_length) > max_size:
+            return JwksResponse(
+                is_successful=False,
+                error=(
+                    f"JWKS response too large: Content-Length {content_length} "
+                    f"exceeds limit of {max_size} bytes"
+                ),
+            )
+        body_size = len(response.content)
+        if body_size > max_size:
+            return JwksResponse(
+                is_successful=False,
+                error=(
+                    f"JWKS response too large: {body_size} bytes "
+                    f"exceeds limit of {max_size} bytes"
+                ),
+            )
+
         content_type_header = response.headers.get("Content-Type", "")
         media_type = content_type_header.split(";")[0].strip().lower()
         if not media_type:
