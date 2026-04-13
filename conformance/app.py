@@ -148,7 +148,7 @@ def discover(
             test_results[test_id] = error_session
         return JSONResponse(
             status_code=400,
-            content={"error": "invalid_issuer", "detail": str(exc)},
+            content={"error": "invalid_issuer", "detail": "Invalid issuer URL"},
         )
     policy = DiscoveryPolicy(require_https=False, validate_issuer=True)
     disco = get_discovery_document(
@@ -218,7 +218,7 @@ def authorize(
             test_results[test_id] = error_session
         return JSONResponse(
             status_code=400,
-            content={"error": "invalid_issuer", "detail": str(exc)},
+            content={"error": "invalid_issuer", "detail": "Invalid issuer URL"},
         )
     policy = DiscoveryPolicy(require_https=False, validate_issuer=True)
     disco = get_discovery_document(
@@ -346,7 +346,7 @@ def _fetch_and_validate_discovery(
         session.result["error"] = error_msg
         _store_test_result(session)
         return HTMLResponse(
-            content=f"<h1>Invalid Issuer</h1><p>{exc}</p>",
+            content="<h1>Invalid Issuer</h1><p>Discovery URL is invalid</p>",
             status_code=400,
         )
     policy = DiscoveryPolicy(require_https=False, validate_issuer=True)
@@ -402,7 +402,8 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
     except PyIdentityModelException as exc:
         logger.error("Callback parse error: %s", exc)
         return HTMLResponse(
-            content=f"<h1>Callback Error</h1><p>{exc}</p>", status_code=400
+            content="<h1>Callback Error</h1><p>Failed to parse callback</p>",
+            status_code=400,
         )
 
     # Look up session by state

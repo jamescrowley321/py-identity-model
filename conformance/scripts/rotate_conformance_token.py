@@ -463,11 +463,13 @@ def mask_token(token: str) -> str:
 def rotate_token(cfg: RotateConfig) -> None:
     print(f"Rotating CONFORMANCE_TOKEN via {SUITE_URL}", file=sys.stderr)
     print(f"  profile dir: {cfg.profile_dir}", file=sys.stderr)
-    print(f"  target: {cfg.app_name} / {cfg.secret_name}", file=sys.stderr)
+    print(f"  target: {cfg.app_name}", file=sys.stderr)
 
     token = create_token_in_browser(cfg)
-    display = token if cfg.show_token else mask_token(token)
-    print(f"Token created: {display}", file=sys.stderr)
+    print(f"Token created: {mask_token(token)}", file=sys.stderr)
+    if cfg.show_token:
+        # Intentional: user explicitly requested the raw token value
+        print(token, file=sys.stderr)
 
     if cfg.dry_run:
         print("--dry-run set; not pushing to HCP Vault Secrets.", file=sys.stderr)
@@ -481,7 +483,7 @@ def rotate_token(cfg: RotateConfig) -> None:
 
     push_to_hcp_vault_secrets(token, cfg.app_name, cfg.secret_name)
     print(
-        f"Pushed token to HCP Vault Secrets: {cfg.app_name} / {cfg.secret_name}",
+        f"Pushed token to HCP Vault Secrets: {cfg.app_name}",
         file=sys.stderr,
     )
 
