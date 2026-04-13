@@ -52,19 +52,24 @@ def validate_issuer(issuer: str, *, require_https: bool = True) -> None:
 
 
 def validate_https_url(url: str, parameter_name: str) -> None:
-    """Validate that a URL is a proper HTTPS URL"""
+    """Validate that a URL uses HTTPS.
+
+    This is the strict validator used when no :class:`DiscoveryPolicy` is
+    provided.  To allow HTTP on loopback addresses for local development,
+    use :func:`validate_https_url_with_policy` with an appropriate policy.
+    """
     if not url:
         return  # Optional parameters can be None/empty
 
     parsed = urlparse(url)
-    if parsed.scheme not in ["https", "http"]:  # Allow http for development
-        raise ConfigurationException(
-            f"{parameter_name} must be a valid HTTP/HTTPS URL",
-        )
-
     if not parsed.netloc:
         raise ConfigurationException(
             f"{parameter_name} must be an absolute URL with host",
+        )
+
+    if parsed.scheme != "https":
+        raise ConfigurationException(
+            f"{parameter_name} must use HTTPS scheme",
         )
 
 

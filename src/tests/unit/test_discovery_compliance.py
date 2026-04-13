@@ -78,14 +78,18 @@ class TestDiscoveryValidationFunctions:
             _validate_issuer("https://")
 
     def test_validate_https_url_valid_urls(self):
-        """Test that valid URLs pass validation"""
+        """Test that valid HTTPS URLs pass validation"""
         valid_urls = [
             "https://example.com/path",
-            "http://localhost:8080",  # Allow http for development
             "https://api.example.com:443/endpoint",
         ]
         for url in valid_urls:
             _validate_https_url(url, "test_param")  # Should not raise
+
+    def test_validate_https_url_rejects_http(self):
+        """Test that HTTP URLs are rejected (use DiscoveryPolicy for dev exceptions)"""
+        with pytest.raises(ConfigurationException, match="must use HTTPS"):
+            _validate_https_url("http://localhost:8080", "test_param")
 
     def test_validate_https_url_empty_allowed(self):
         """Test that empty URLs are allowed (optional parameters)"""
@@ -93,17 +97,25 @@ class TestDiscoveryValidationFunctions:
         _validate_https_url(None, "test_param")  # type: ignore # Should not raise
 
     def test_validate_https_url_invalid_urls(self):
-        """Test that invalid URLs fail validation"""
+        """Test that non-HTTPS URLs fail validation"""
         invalid_urls = [
             "ftp://example.com",
-            "not-a-url",
-            "relative/path",
+            "http://example.com",
             "ws://example.com",
         ]
         for url in invalid_urls:
             with pytest.raises(
                 ConfigurationException,
-                match="must be a valid HTTP/HTTPS URL",
+                match="must use HTTPS",
+            ):
+                _validate_https_url(url, "test_param")
+
+    def test_validate_https_url_no_host(self):
+        """Test that URLs without a host fail validation"""
+        for url in ["not-a-url", "relative/path"]:
+            with pytest.raises(
+                ConfigurationException,
+                match="must be an absolute URL with host",
             ):
                 _validate_https_url(url, "test_param")
 

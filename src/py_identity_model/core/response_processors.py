@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from ..exceptions import DiscoveryException
+from ..logging_config import logger
 from .discovery_policy import DiscoveryPolicy
 from .models import (
     AuthorizationCodeTokenResponse,
@@ -151,8 +152,8 @@ def validate_and_parse_discovery_response(
     for ep_name in _endpoint_names:
         ep_url = response_json.get(ep_name)
         validate_https_url_with_policy(ep_url, ep_name, policy)
-        # Validate endpoint authority when explicitly configured
-        if ep_url and effective_policy.authority:
+        # Validate endpoint authority (derives from issuer when policy.authority not set)
+        if ep_url and effective_policy.validate_endpoints:
             _validate_endpoint_authority(
                 ep_url, ep_name, response_json, effective_policy
             )
@@ -268,6 +269,9 @@ def build_discovery_response(
     )
 
 
+_VALID_JWKS_CONTENT_TYPES = frozenset({"application/json", "application/jwk-set+json"})
+
+
 def parse_jwks_response(response: httpx.Response) -> JwksResponse:
     """
     Parse JWKS HTTP response.
@@ -279,6 +283,19 @@ def parse_jwks_response(response: httpx.Response) -> JwksResponse:
         JwksResponse: Parsed JWKS response with keys
     """
     if response.is_success:
+        content_type_header = response.headers.get("Content-Type", "")
+        media_type = content_type_header.split(";")[0].strip().lower()
+        if not media_type:
+            logger.warning("JWKS response missing Content-Type header")
+        elif media_type not in _VALID_JWKS_CONTENT_TYPES:
+            return JwksResponse(
+                is_successful=False,
+                error=(
+                    f"Invalid JWKS Content-Type: expected application/json or "
+                    f"application/jwk-set+json, got: {content_type_header}"
+                ),
+            )
+
         response_json = response.json()
         keys = [jwks_from_dict(key) for key in response_json["keys"]]
         cache_control = response.headers.get("cache-control")

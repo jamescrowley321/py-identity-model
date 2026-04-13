@@ -66,7 +66,7 @@ class HTTPClient:
             self._client = httpx.Client(
                 verify=verify if verify is not None else get_ssl_verify(),
                 timeout=timeout if timeout is not None else get_timeout(),
-                follow_redirects=True,
+                follow_redirects=False,
             )
             self._owned = True
         self._closed = False
