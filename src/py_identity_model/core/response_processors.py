@@ -48,11 +48,14 @@ def _validate_endpoint_authority(
     parameter_name: str,
     response_json: dict,
     policy: DiscoveryPolicy,
+    discovery_url: str = "",
 ) -> None:
     """Validate that an endpoint URL's authority matches expected values.
 
     The expected authority is ``policy.authority`` when set, or derived from
-    the discovery document's ``issuer``. Additional allowed authorities come
+    the discovery document's ``issuer``. The authority of the discovery URL
+    itself is also allowed (handles Docker/proxy setups where the fetch
+    hostname differs from the issuer). Additional allowed authorities come
     from ``policy.additional_endpoint_base_addresses``.
 
     Raises:
@@ -67,6 +70,11 @@ def _validate_endpoint_authority(
     else:
         issuer = response_json.get("issuer", "")
         allowed = {_get_url_authority(issuer)} if issuer else set()
+
+    # The discovery URL's authority is implicitly trusted — we already
+    # fetched the document from it.
+    if discovery_url:
+        allowed.add(_get_url_authority(discovery_url))
 
     for addr in policy.additional_endpoint_base_addresses or []:
         allowed.add(_get_url_authority(addr))
@@ -149,13 +157,17 @@ def validate_and_parse_discovery_response(
         "registration_endpoint",
         "introspection_endpoint",
     ]
+    try:
+        discovery_url = str(response.url)
+    except RuntimeError:
+        discovery_url = ""
     for ep_name in _endpoint_names:
         ep_url = response_json.get(ep_name)
         validate_https_url_with_policy(ep_url, ep_name, policy)
         # Validate endpoint authority (derives from issuer when policy.authority not set)
         if ep_url and effective_policy.validate_endpoints:
             _validate_endpoint_authority(
-                ep_url, ep_name, response_json, effective_policy
+                ep_url, ep_name, response_json, effective_policy, discovery_url
             )
 
     return response_json
