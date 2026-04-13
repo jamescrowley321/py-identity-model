@@ -60,8 +60,6 @@ from dependencies import (
 )
 from middleware import TokenValidationMiddleware
 
-from py_identity_model.core.discovery_policy import DiscoveryPolicy
-
 
 # Annotated type alias for raw token dependency
 Token = Annotated[str, Depends(get_token)]
@@ -72,21 +70,6 @@ DISCOVERY_URL = os.getenv(
     "https://localhost:5001/.well-known/openid-configuration",
 )
 AUDIENCE = os.getenv("AUDIENCE", "py-identity-model")
-
-# Build discovery policy — allow additional endpoint authorities for Docker
-# networking where the identity server's internal hostname differs from the
-# external issuer URL (e.g. jwks_uri uses "https://identityserver/..." while
-# the issuer is "https://localhost:5001").
-_extra_authorities = os.getenv("ADDITIONAL_ENDPOINT_AUTHORITIES", "")
-_discovery_policy = (
-    DiscoveryPolicy(
-        additional_endpoint_base_addresses=[
-            a.strip() for a in _extra_authorities.split(",") if a.strip()
-        ],
-    )
-    if _extra_authorities
-    else None
-)
 
 # Create FastAPI app
 app = FastAPI(
@@ -101,7 +84,6 @@ app.add_middleware(
     discovery_url=DISCOVERY_URL,
     audience=AUDIENCE,
     excluded_paths=["/", "/health", "/docs", "/openapi.json"],
-    discovery_policy=_discovery_policy,
 )
 
 
