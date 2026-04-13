@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v2.19.7 (2026-04-13)
+
+### Bug Fixes
+
+- **security**: Add JWKS size limit and fix async cleanup lock race
+  ([`da859e3`](https://github.com/jamescrowley321/py-identity-model/commit/da859e3ff2e57fe876939ec909c278a97f11ac75))
+
+- **security**: Enforce key type / algorithm consistency to prevent algorithm confusion
+  ([`d02d523`](https://github.com/jamescrowley321/py-identity-model/commit/d02d52384fa40303017aeb5724c5201e05ef111b))
+
+
 ## v2.19.6 (2026-04-13)
 
 ### Bug Fixes
