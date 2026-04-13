@@ -19,6 +19,7 @@ import httpx
 
 from ..core.http_utils import (
     calculate_delay,
+    check_no_redirect,
     get_retry_config,
     get_timeout,
     should_retry_response,
@@ -108,6 +109,7 @@ def retry_with_backoff_async(
                         await asyncio.sleep(delay)
                         continue
 
+                    check_no_redirect(response)
                     return response
 
                 except httpx.RequestError as e:
@@ -167,7 +169,7 @@ def get_async_http_client() -> httpx.AsyncClient:
         _state["client"] = httpx.AsyncClient(
             verify=get_ssl_verify(),
             timeout=timeout,
-            follow_redirects=True,
+            follow_redirects=False,
         )
         return _state["client"]
 

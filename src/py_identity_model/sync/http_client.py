@@ -18,6 +18,7 @@ import httpx
 
 from ..core.http_utils import (
     calculate_delay,
+    check_no_redirect,
     get_retry_config,
     get_timeout,
     should_retry_response,
@@ -94,6 +95,7 @@ def retry_with_backoff(max_retries: int | None = None, base_delay: float | None 
                         time.sleep(delay)
                         continue
 
+                    check_no_redirect(response)
                     return response
 
                 except httpx.RequestError as e:
@@ -145,7 +147,7 @@ def get_http_client() -> httpx.Client:
         _thread_local.client = httpx.Client(
             verify=get_ssl_verify(),
             timeout=timeout,
-            follow_redirects=True,
+            follow_redirects=False,
         )
     return _thread_local.client
 
