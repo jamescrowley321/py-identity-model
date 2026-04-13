@@ -40,7 +40,7 @@ from py_identity_model.exceptions import (
     TokenValidationException,
 )
 from py_identity_model.sync.token_validation import (
-    _get_disco_response,
+    clear_discovery_cache,
 )
 
 
@@ -116,7 +116,7 @@ def clear_cache() -> dict:
     Without clearing caches, validate_token uses stale keys and hangs on
     retry backoff (3 retries x 30s timeout = ~2 min timeout per test).
     """
-    _get_disco_response.cache_clear()
+    clear_discovery_cache()
     clear_jwks_cache()
     logger.info("Cleared discovery and JWKS caches")
     return {"status": "ok", "cleared": ["discovery", "jwks"]}
