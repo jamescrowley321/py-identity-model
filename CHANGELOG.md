@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v2.19.5 (2026-04-13)
+
+### Bug Fixes
+
+- **jwt**: Block options pass-through from disabling signature verification
+  ([`0378f19`](https://github.com/jamescrowley321/py-identity-model/commit/0378f19be88759a50bb1d750b66605ed6e46de5b))
+
+### Continuous Integration
+
+- Remove pre-push hook from pre-commit config
+  ([`8e212b8`](https://github.com/jamescrowley321/py-identity-model/commit/8e212b83f677d479f956e654f54c05f333a9143e))
+
+### Documentation
+
+- Update CLAUDE.md to reflect pre-push hook removal
+  ([`65f82f2`](https://github.com/jamescrowley321/py-identity-model/commit/65f82f224b50ab2c02dd048ce0ffa6ca7d539e78))
+
+
 ## v2.19.4 (2026-04-13)
 
 ### Bug Fixes
