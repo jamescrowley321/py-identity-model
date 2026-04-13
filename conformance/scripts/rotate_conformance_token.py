@@ -55,16 +55,6 @@ Preview what the script will do without pushing to Vault:
 
       uv run conformance/scripts/rotate_conformance_token.py --dry-run
 
-Show the full token value on stderr instead of masking it (use with care;
-anything that captures stderr persistently — shell transcripts, CI logs —
-becomes a secret spill surface). The token is written to ``sys.stderr``,
-not stdout, so a naive ``| xargs ...`` pipeline will NOT capture it. This
-is intentional: stdout is reserved so the script can be silently chained
-into automation that treats stdout as a clean channel. To capture the
-token for scripting, redirect explicitly:
-
-      uv run conformance/scripts/rotate_conformance_token.py --show-token --dry-run 2>&1 >/dev/null | grep 'Token created:'
-
 Environment variables
 ---------------------
 HCP_VAULT_APP_NAME     HCP Vault Secrets app to push to
@@ -146,7 +136,6 @@ class RotateConfig:
     profile_dir: Path
     headless: bool
     dry_run: bool
-    show_token: bool
     app_name: str
     secret_name: str
     token_description: str
@@ -172,11 +161,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--dry-run",
         action="store_true",
         help="Create the token but print it instead of pushing to HCP Vault Secrets.",
-    )
-    parser.add_argument(
-        "--show-token",
-        action="store_true",
-        help="Print the full token value on stdout (default: masked).",
     )
     parser.add_argument(
         "--profile-dir",
@@ -210,7 +194,6 @@ def build_config(ns: argparse.Namespace) -> RotateConfig:
         profile_dir=profile_dir,
         headless=ns.headless,
         dry_run=ns.dry_run,
-        show_token=ns.show_token,
         app_name=ns.app_name,
         secret_name=ns.secret_name,
         token_description=ns.description,
@@ -454,31 +437,16 @@ def _ensure_hcp_cli_available() -> str:
 # ---------------------------------------------------------------------------
 
 
-def mask_token(token: str) -> str:
-    if len(token) <= MIN_MASKABLE_TOKEN_LEN:
-        return "***"
-    return f"{token[:6]}...{token[-4:]}"
-
-
 def rotate_token(cfg: RotateConfig) -> None:
     print(f"Rotating CONFORMANCE_TOKEN via {SUITE_URL}", file=sys.stderr)
     print(f"  profile dir: {cfg.profile_dir}", file=sys.stderr)
     print(f"  target: {cfg.app_name}", file=sys.stderr)
 
     token = create_token_in_browser(cfg)
-    print(f"Token created: {mask_token(token)}", file=sys.stderr)
-    if cfg.show_token:
-        # Intentional: user explicitly requested the raw token value
-        print(token, file=sys.stderr)
+    print("Token created successfully", file=sys.stderr)
 
     if cfg.dry_run:
         print("--dry-run set; not pushing to HCP Vault Secrets.", file=sys.stderr)
-        if not cfg.show_token:
-            print(
-                "Re-run with --show-token to print the value, or remove --dry-run "
-                "to push it to HCP Vault Secrets.",
-                file=sys.stderr,
-            )
         return
 
     push_to_hcp_vault_secrets(token, cfg.app_name, cfg.secret_name)
