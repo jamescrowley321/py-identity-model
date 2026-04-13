@@ -354,8 +354,8 @@ class TestGetPublicKeyFromJwk:
         assert key.kid == "ec-key"
         assert key.alg == "ES256"
 
-    def test_get_public_key_no_kid_fallback_to_all_keys(self):
-        """When all keys have use=enc, fall back to all keys."""
+    def test_get_public_key_no_kid_fallback_to_all_keys_rejects_alg_mismatch(self):
+        """When all keys have use=enc and alg doesn't match JWT, reject."""
         jwt = _create_jwt_without_kid()
         keys = [
             JsonWebKey(
@@ -363,9 +363,8 @@ class TestGetPublicKeyFromJwk:
             ),
         ]
 
-        key = get_public_key_from_jwk(jwt, keys)
-
-        assert key.kid == "enc-key"
+        with pytest.raises(TokenValidationException, match="does not match"):
+            get_public_key_from_jwk(jwt, keys)
 
 
 class TestJwksFromDict:

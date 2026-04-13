@@ -28,6 +28,40 @@ _ALG_TO_KTY: dict[str, str] = {
 }
 
 
+def _validate_key_alg_consistency(
+    key: JsonWebKey,
+    jwt_alg: str | None,
+) -> None:
+    """Validate that a JWK's key type is consistent with the JWT algorithm.
+
+    Prevents algorithm confusion attacks where an attacker substitutes
+    a key of one type (e.g. EC) to verify a token signed with a different
+    algorithm family (e.g. RS256).
+
+    Raises:
+        TokenValidationException: If the key type does not match the algorithm.
+    """
+    if not jwt_alg:
+        return
+
+    expected_kty = _ALG_TO_KTY.get(jwt_alg)
+    if expected_kty and key.kty != expected_kty:
+        raise TokenValidationException(
+            f"Key type '{key.kty}' is incompatible with algorithm '{jwt_alg}' "
+            f"(expected key type '{expected_kty}')",
+            token_part="header",
+            details={"kid": key.kid, "kty": key.kty, "alg": jwt_alg},
+        )
+
+    # If the key declares an alg, it must match the JWT header exactly
+    if key.alg and key.alg != jwt_alg:
+        raise TokenValidationException(
+            f"Key algorithm '{key.alg}' does not match JWT algorithm '{jwt_alg}'",
+            token_part="header",
+            details={"kid": key.kid, "key_alg": key.alg, "jwt_alg": jwt_alg},
+        )
+
+
 def extract_kid_from_jwt(jwt: str) -> str | None:
     """
     Extract the 'kid' (key ID) from a JWT header without verification.
@@ -151,6 +185,7 @@ def find_key_by_kid(
                 "JWT has no kid header; using the single signing key from JWKS"
             )
             public_key = signing_keys[0]
+            _validate_key_alg_consistency(public_key, jwt_alg)
             alg = public_key.alg if public_key.alg else (jwt_alg or "RS256")
             return public_key.as_dict(), alg
         raise TokenValidationException(
@@ -173,6 +208,7 @@ def find_key_by_kid(
         )
 
     public_key = filtered_keys[0]
+    _validate_key_alg_consistency(public_key, jwt_alg)
     alg = public_key.alg if public_key.alg else "RS256"
     return public_key.as_dict(), alg
 
@@ -218,8 +254,9 @@ def get_public_key_from_jwk(jwt: str, keys: list[JsonWebKey]) -> JsonWebKey:
                 "JWT has no kid header; using the single signing key from JWKS"
             )
             key = signing_keys[0]
+            _validate_key_alg_consistency(key, jwt_alg)
             if not key.alg:
-                key.alg = headers.get("alg")
+                key.alg = jwt_alg
             return key
         raise TokenValidationException(
             "JWT has no kid header and JWKS contains multiple signing keys; "
@@ -244,8 +281,10 @@ def get_public_key_from_jwk(jwt: str, keys: list[JsonWebKey]) -> JsonWebKey:
         )
 
     key = filtered_keys[0]
+    jwt_alg = headers.get("alg")
+    _validate_key_alg_consistency(key, jwt_alg)
     if not key.alg:
-        key.alg = headers["alg"]
+        key.alg = jwt_alg
 
     logger.debug(f"Found matching key with kid: {kid}, alg: {key.alg}")
     return key
