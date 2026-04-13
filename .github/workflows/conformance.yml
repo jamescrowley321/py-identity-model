@@ -121,7 +121,7 @@ jobs:
           docker compose -f conformance/docker-compose.yml logs rp > conformance/results/logs/rp.log 2>&1 || true
 
       - name: Upload conformance results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: conformance-results
