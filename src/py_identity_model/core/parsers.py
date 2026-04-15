@@ -264,7 +264,7 @@ def get_public_key_from_jwk(jwt: str, keys: list[JsonWebKey]) -> JsonWebKey:
             logger.warning(
                 "JWT has no kid header; using the single signing key from JWKS"
             )
-            key = copy.copy(signing_keys[0])
+            key = copy.deepcopy(signing_keys[0])
             _validate_key_alg_consistency(key, jwt_alg)
             if not key.alg:
                 key.alg = jwt_alg
@@ -291,7 +291,7 @@ def get_public_key_from_jwk(jwt: str, keys: list[JsonWebKey]) -> JsonWebKey:
             details={"kid": kid, "available_kids": available_kids},
         )
 
-    key = copy.copy(filtered_keys[0])
+    key = copy.deepcopy(filtered_keys[0])
     jwt_alg = headers.get("alg")
     _validate_key_alg_consistency(key, jwt_alg)
     if not key.alg:
