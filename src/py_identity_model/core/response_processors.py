@@ -285,6 +285,35 @@ def build_discovery_response(
 _VALID_JWKS_CONTENT_TYPES = frozenset({"application/json", "application/jwk-set+json"})
 
 
+def _extract_jwks_keys(
+    response_json: dict,
+) -> tuple[list[dict], str | None]:
+    """Extract and validate the 'keys' array from a parsed JWKS response.
+
+    Returns:
+        Tuple of (raw_keys_list, error_string). On success error_string is None.
+    """
+    try:
+        raw_keys = response_json["keys"]
+    except KeyError:
+        return [], "Invalid JWKS response: missing required 'keys' field"
+
+    if not isinstance(raw_keys, list):
+        return [], (
+            "Invalid JWKS response: 'keys' field must be a JSON array, "
+            f"got {type(raw_keys).__name__}"
+        )
+
+    max_keys = get_max_jwks_keys()
+    if len(raw_keys) > max_keys:
+        return [], (
+            f"JWKS response contains too many keys: {len(raw_keys)} "
+            f"exceeds limit of {max_keys}"
+        )
+
+    return raw_keys, None
+
+
 def parse_jwks_response(response: httpx.Response) -> JwksResponse:
     """
     Parse JWKS HTTP response.
@@ -329,23 +358,9 @@ def parse_jwks_response(response: httpx.Response) -> JwksResponse:
             )
 
         response_json = response.json()
-        try:
-            raw_keys = response_json["keys"]
-        except KeyError:
-            return JwksResponse(
-                is_successful=False,
-                error="Invalid JWKS response: missing required 'keys' field",
-            )
-
-        max_keys = get_max_jwks_keys()
-        if len(raw_keys) > max_keys:
-            return JwksResponse(
-                is_successful=False,
-                error=(
-                    f"JWKS response contains too many keys: {len(raw_keys)} "
-                    f"exceeds limit of {max_keys}"
-                ),
-            )
+        raw_keys, keys_error = _extract_jwks_keys(response_json)
+        if keys_error:
+            return JwksResponse(is_successful=False, error=keys_error)
 
         keys = [jwks_from_dict(key) for key in raw_keys]
         cache_control = response.headers.get("cache-control")
