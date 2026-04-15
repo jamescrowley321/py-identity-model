@@ -21,6 +21,7 @@ DEFAULT_HTTP_TIMEOUT = 30.0
 DEFAULT_RETRY_MAX_ATTEMPTS = 3
 DEFAULT_RETRY_BASE_DELAY = 1.0
 DEFAULT_MAX_JWKS_SIZE = 512 * 1024  # 512 KB
+DEFAULT_MAX_JWKS_KEYS = 100
 
 # HTTP status codes for retry logic
 HTTP_TOO_MANY_REQUESTS = 429
@@ -113,8 +114,18 @@ def get_max_jwks_size() -> int:
     return int(os.getenv("MAX_JWKS_SIZE", str(DEFAULT_MAX_JWKS_SIZE)))
 
 
+def get_max_jwks_keys() -> int:
+    """Get maximum number of keys allowed in a JWKS response.
+
+    Returns:
+        int: Maximum number of keys.
+    """
+    return int(os.getenv("MAX_JWKS_KEYS", str(DEFAULT_MAX_JWKS_KEYS)))
+
+
 __all__ = [
     "DEFAULT_HTTP_TIMEOUT",
+    "DEFAULT_MAX_JWKS_KEYS",
     "DEFAULT_MAX_JWKS_SIZE",
     "DEFAULT_RETRY_BASE_DELAY",
     "DEFAULT_RETRY_MAX_ATTEMPTS",
@@ -124,6 +135,7 @@ __all__ = [
     "HTTP_TOO_MANY_REQUESTS",
     "calculate_delay",
     "check_no_redirect",
+    "get_max_jwks_keys",
     "get_max_jwks_size",
     "get_retry_config",
     "get_timeout",
