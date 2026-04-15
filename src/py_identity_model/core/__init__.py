@@ -32,7 +32,10 @@ from .models import (
     JwksResponse,
     TokenValidationConfig,
 )
-from .parsers import get_public_key_from_jwk, jwks_from_dict
+from .parsers import (
+    get_public_key_from_jwk as get_public_key_from_jwk,
+)
+from .parsers import jwks_from_dict
 from .pkce import (
     generate_code_challenge,
     generate_code_verifier,
@@ -86,7 +89,6 @@ __all__ = [
     "generate_code_verifier",
     "generate_pkce_pair",
     # From parsers
-    "get_public_key_from_jwk",
     "jwks_from_dict",
     "parse_authorize_callback_response",
     "validate_authorize_callback_state",
