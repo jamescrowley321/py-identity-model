@@ -346,6 +346,7 @@ def parse_jwks_response(response: httpx.Response) -> JwksResponse:
         try:
             cl_too_large = content_length is not None and int(content_length) > max_size
         except (ValueError, TypeError):
+            logger.warning("Malformed Content-Length header: %s", content_length)
             cl_too_large = False
         if cl_too_large:
             size_desc = f"Content-Length {content_length}"
