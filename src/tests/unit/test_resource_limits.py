@@ -227,6 +227,66 @@ class TestJwksMissingKeysField:
         assert result.error is not None
         assert "keys" in result.error.lower()
 
+    def test_response_json_is_list_blocked(self):
+        """JWKS response that is a JSON array (not object) is rejected."""
+        response = httpx.Response(
+            200,
+            json=[{"kty": "RSA", "kid": "k1", "n": "n", "e": "AQAB"}],
+            headers={"Content-Type": "application/json"},
+        )
+        result = parse_jwks_response(response)
+        assert result.is_successful is False
+        assert result.error is not None
+        assert "expected a JSON object" in result.error
+
+    def test_non_dict_key_element_blocked(self):
+        """JWKS response with non-dict key elements is rejected."""
+        response = httpx.Response(
+            200,
+            json={"keys": ["not-a-dict", 42]},
+            headers={"Content-Type": "application/json"},
+        )
+        result = parse_jwks_response(response)
+        assert result.is_successful is False
+        assert result.error is not None
+        assert "not a JSON object" in result.error
+
+    def test_malformed_content_length_ignored(self):
+        """Malformed Content-Length header doesn't crash parsing."""
+        response = httpx.Response(
+            200,
+            json={"keys": []},
+            headers={
+                "Content-Type": "application/json",
+                "Content-Length": "invalid",
+            },
+        )
+        result = parse_jwks_response(response)
+        assert result.is_successful is True
+
+    def test_zero_max_keys_env_var_clamped(self, monkeypatch):
+        """MAX_JWKS_KEYS=0 is clamped to 1, not zero (which would reject everything)."""
+        monkeypatch.setenv("MAX_JWKS_KEYS", "0")
+        response = httpx.Response(
+            200,
+            json={"keys": [{"kty": "RSA", "kid": "k1", "n": "n", "e": "AQAB"}]},
+            headers={"Content-Type": "application/json"},
+        )
+        # With clamp to 1, a single key should be accepted
+        result = parse_jwks_response(response)
+        assert result.is_successful is True
+
+    def test_negative_max_keys_env_var_clamped(self, monkeypatch):
+        """MAX_JWKS_KEYS=-5 is clamped to 1."""
+        monkeypatch.setenv("MAX_JWKS_KEYS", "-5")
+        response = httpx.Response(
+            200,
+            json={"keys": [{"kty": "RSA", "kid": "k1", "n": "n", "e": "AQAB"}]},
+            headers={"Content-Type": "application/json"},
+        )
+        result = parse_jwks_response(response)
+        assert result.is_successful is True
+
 
 # ============================================================================
 # #357 — Async cleanup lock race

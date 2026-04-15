@@ -118,9 +118,9 @@ def get_max_jwks_keys() -> int:
     """Get maximum number of keys allowed in a JWKS response.
 
     Returns:
-        int: Maximum number of keys.
+        int: Maximum number of keys (always >= 1).
     """
-    return int(os.getenv("MAX_JWKS_KEYS", str(DEFAULT_MAX_JWKS_KEYS)))
+    return max(1, int(os.getenv("MAX_JWKS_KEYS", str(DEFAULT_MAX_JWKS_KEYS))))
 
 
 __all__ = [
