@@ -49,8 +49,8 @@ from .jwks import get_jwks
 from .managed_client import HTTPClient
 
 
-# Discovery TTL cache
-_disco_cache: dict[str, DiscoCacheEntry] = {}
+# Discovery TTL cache — keyed by (address, require_https) to prevent policy bypass
+_disco_cache: dict[tuple[str, bool], DiscoCacheEntry] = {}
 _disco_cache_lock = threading.Lock()
 
 
@@ -64,8 +64,9 @@ def _get_disco_response(
             "disco_doc_address is required when perform_disco is True"
         )
 
+    cache_key = (disco_doc_address, require_https)
     with _disco_cache_lock:
-        entry = _disco_cache.get(disco_doc_address)
+        entry = _disco_cache.get(cache_key)
         if entry is not None and not is_cache_expired(entry):
             return entry.response
 
@@ -77,7 +78,7 @@ def _get_disco_response(
     ttl = resolve_disco_ttl(response.cache_control)
 
     with _disco_cache_lock:
-        _disco_cache[disco_doc_address] = DiscoCacheEntry(
+        _disco_cache[cache_key] = DiscoCacheEntry(
             response=response, cached_at=time.time(), ttl=ttl
         )
     return response
