@@ -8,7 +8,6 @@ Covers:
 """
 
 import json
-import logging
 from typing import ClassVar
 from unittest.mock import MagicMock
 
@@ -282,16 +281,16 @@ class TestJwksContentTypeValidation:
         assert result.error is not None
         assert "text/plain" in result.error
 
-    def test_warns_on_missing_content_type(self, caplog):
+    def test_rejects_missing_content_type(self):
         response = httpx.Response(
             200,
             content=json.dumps(self._VALID_JWKS_JSON).encode(),
             # No Content-Type header
         )
-        with caplog.at_level(logging.WARNING, logger="py_identity_model"):
-            result = parse_jwks_response(response)
-        assert result.is_successful is True
-        assert "missing Content-Type" in caplog.text
+        result = parse_jwks_response(response)
+        assert result.is_successful is False
+        assert result.error is not None
+        assert "missing Content-Type" in result.error
 
     def test_rejects_application_xml(self):
         response = httpx.Response(

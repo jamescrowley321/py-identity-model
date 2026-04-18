@@ -366,8 +366,11 @@ def parse_jwks_response(response: httpx.Response) -> JwksResponse:
         content_type_header = response.headers.get("Content-Type", "")
         media_type = content_type_header.split(";")[0].strip().lower()
         if not media_type:
-            logger.warning("JWKS response missing Content-Type header")
-        elif media_type not in _VALID_JWKS_CONTENT_TYPES:
+            return JwksResponse(
+                is_successful=False,
+                error="JWKS response missing Content-Type header",
+            )
+        if media_type not in _VALID_JWKS_CONTENT_TYPES:
             return JwksResponse(
                 is_successful=False,
                 error=(
