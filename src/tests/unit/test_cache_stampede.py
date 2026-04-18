@@ -21,6 +21,9 @@ from py_identity_model.aio.token_validation import (
     _get_disco_response as async_get_disco_response,
 )
 from py_identity_model.aio.token_validation import (
+    _refresh_jwks as async_refresh_jwks,
+)
+from py_identity_model.aio.token_validation import (
     clear_discovery_cache as async_clear_discovery_cache,
 )
 from py_identity_model.aio.token_validation import (
@@ -31,6 +34,7 @@ from py_identity_model.sync import token_validation as sync_tv
 from py_identity_model.sync.token_validation import (
     _get_cached_jwks,
     _get_disco_response,
+    _refresh_jwks,
     clear_discovery_cache,
     clear_jwks_cache,
 )
@@ -188,8 +192,9 @@ class TestSyncStampedeAfterExpiry:
         _get_disco_response(DISCO_URL)
         assert disco_route.call_count == 1
 
-        sync_tv._disco_cache[DISCO_URL] = DiscoCacheEntry(
-            response=sync_tv._disco_cache[DISCO_URL].response,
+        cache_key = (DISCO_URL, True)
+        sync_tv._disco_cache[cache_key] = DiscoCacheEntry(
+            response=sync_tv._disco_cache[cache_key].response,
             cached_at=time.time() - 3601,
             ttl=3600.0,
         )
@@ -299,8 +304,9 @@ class TestAsyncStampedeAfterExpiry:
         assert disco_route.call_count == 1
 
         # Expire the entry
-        aio_tv._disco_cache[DISCO_URL] = DiscoCacheEntry(
-            response=aio_tv._disco_cache[DISCO_URL].response,
+        cache_key = (DISCO_URL, True)
+        aio_tv._disco_cache[cache_key] = DiscoCacheEntry(
+            response=aio_tv._disco_cache[cache_key].response,
             cached_at=time.time() - 3601,
             ttl=3600.0,
         )
@@ -311,3 +317,96 @@ class TestAsyncStampedeAfterExpiry:
 
         assert all(r is not None for r in results)
         assert disco_route.call_count == FETCH_AFTER_EXPIRY
+
+
+class TestSyncRefreshJwksFreshnessGuard:
+    """Verify _refresh_jwks skips fetch when another thread already refreshed."""
+
+    @respx.mock
+    def test_refresh_skips_fetch_when_already_fresh(self):
+        """If cache was refreshed while waiting on lock, return cached entry."""
+        key_dict, _ = generate_rsa_keypair()
+        jwks_route = respx.get(JWKS_URL).mock(
+            return_value=httpx.Response(200, json={"keys": [key_dict]})
+        )
+
+        # Prime the cache
+        _get_cached_jwks(JWKS_URL)
+        assert jwks_route.call_count == 1
+
+        # Manually set cached_at to a future time to simulate another thread
+        # having just refreshed the cache
+        entry = sync_tv._jwks_cache[JWKS_URL]
+        sync_tv._jwks_cache[JWKS_URL] = JwksCacheEntry(
+            response=entry.response,
+            cached_at=time.time() + 100,
+            ttl=entry.ttl,
+        )
+
+        # _refresh_jwks should see the fresh entry and skip the HTTP fetch
+        result = _refresh_jwks(JWKS_URL)
+        assert result is not None
+        # No new fetch — still just the 1 from priming
+        assert jwks_route.call_count == 1
+
+    @respx.mock
+    def test_refresh_fetches_when_cache_stale(self):
+        """Normal refresh path: fetch when cache is stale."""
+        key_dict, _ = generate_rsa_keypair()
+        jwks_route = respx.get(JWKS_URL).mock(
+            return_value=httpx.Response(200, json={"keys": [key_dict]})
+        )
+
+        # Prime the cache
+        _get_cached_jwks(JWKS_URL)
+        assert jwks_route.call_count == 1
+
+        # Call _refresh_jwks — cached_at is in the past relative to request_time
+        result = _refresh_jwks(JWKS_URL)
+        assert result is not None
+        assert jwks_route.call_count == FETCH_AFTER_EXPIRY
+
+
+class TestAsyncRefreshJwksFreshnessGuard:
+    """Verify async _refresh_jwks skips fetch when another coroutine already refreshed."""
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_refresh_skips_fetch_when_already_fresh_async(self):
+        """If cache was refreshed while waiting on lock, return cached entry."""
+        key_dict, _ = generate_rsa_keypair()
+        jwks_route = respx.get(JWKS_URL).mock(
+            return_value=httpx.Response(200, json={"keys": [key_dict]})
+        )
+
+        # Prime the cache
+        await async_get_cached_jwks(JWKS_URL)
+        assert jwks_route.call_count == 1
+
+        # Set cached_at to future time to simulate another coroutine refresh
+        entry = aio_tv._jwks_cache[JWKS_URL]
+        aio_tv._jwks_cache[JWKS_URL] = JwksCacheEntry(
+            response=entry.response,
+            cached_at=time.time() + 100,
+            ttl=entry.ttl,
+        )
+
+        result = await async_refresh_jwks(JWKS_URL)
+        assert result is not None
+        assert jwks_route.call_count == 1
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_refresh_fetches_when_cache_stale_async(self):
+        """Normal refresh path: fetch when cache is stale."""
+        key_dict, _ = generate_rsa_keypair()
+        jwks_route = respx.get(JWKS_URL).mock(
+            return_value=httpx.Response(200, json={"keys": [key_dict]})
+        )
+
+        await async_get_cached_jwks(JWKS_URL)
+        assert jwks_route.call_count == 1
+
+        result = await async_refresh_jwks(JWKS_URL)
+        assert result is not None
+        assert jwks_route.call_count == FETCH_AFTER_EXPIRY
