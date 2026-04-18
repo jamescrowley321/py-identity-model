@@ -11,6 +11,7 @@ with automatic cache expiry and forced JWKS refresh on key rotation.
 import threading
 import time
 
+from ..core.discovery_policy import DiscoveryPolicy
 from ..core.jwks_cache import (
     DiscoCacheEntry,
     JwksCacheEntry,
@@ -55,6 +56,7 @@ _disco_cache_lock = threading.Lock()
 
 def _get_disco_response(
     disco_doc_address: str | None,
+    require_https: bool = True,
 ) -> DiscoveryDocumentResponse:
     """Cached discovery document fetching with TTL."""
     if disco_doc_address is None:
@@ -68,8 +70,9 @@ def _get_disco_response(
             return entry.response
 
     # Fetch outside the lock
+    policy = DiscoveryPolicy(require_https=require_https)
     response = get_discovery_document(
-        DiscoveryDocumentRequest(address=disco_doc_address)
+        DiscoveryDocumentRequest(address=disco_doc_address, policy=policy)
     )
     ttl = resolve_disco_ttl(response.cache_control)
 
@@ -137,6 +140,7 @@ def _discover_and_resolve_key(
     jwt: str,
     disco_doc_address: str | None,
     http_client: HTTPClient | None,
+    require_https: bool = True,
 ) -> tuple[dict, str, DiscoveryDocumentResponse, bool]:
     """Fetch discovery + JWKS and resolve the signing key.
 
@@ -147,8 +151,9 @@ def _discover_and_resolve_key(
             raise ConfigurationException(
                 "disco_doc_address is required when perform_disco is True"
             )
+        policy = DiscoveryPolicy(require_https=require_https)
         disco_doc_response = get_discovery_document(
-            DiscoveryDocumentRequest(address=disco_doc_address),
+            DiscoveryDocumentRequest(address=disco_doc_address, policy=policy),
             http_client=http_client,
         )
         validate_disco_response(disco_doc_response)
@@ -160,7 +165,7 @@ def _discover_and_resolve_key(
         return key_dict, alg, disco_doc_response, False
 
     # Cached path with TTL
-    disco_doc_response = _get_disco_response(disco_doc_address)
+    disco_doc_response = _get_disco_response(disco_doc_address, require_https)
     validate_disco_response(disco_doc_response)
     jwks_uri = validate_jwks_uri(disco_doc_response)
     jwks_response = _get_cached_jwks(jwks_uri)
@@ -219,7 +224,7 @@ def validate_token(
 
     if token_validation_config.perform_disco:
         key_dict, alg, disco_doc_response, _is_cached = _discover_and_resolve_key(
-            jwt, disco_doc_address, http_client
+            jwt, disco_doc_address, http_client, token_validation_config.require_https
         )
         resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
 
