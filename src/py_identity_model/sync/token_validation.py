@@ -113,7 +113,14 @@ def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
 
 def _refresh_jwks(jwks_uri: str) -> JwksResponse:
     """Force re-fetch JWKS and update cache (key rotation)."""
+    request_time = time.time()
     with _jwks_cache_lock:
+        # If another thread already refreshed while we waited on the lock,
+        # return the fresh entry to avoid redundant sequential fetches
+        entry = _jwks_cache.get(jwks_uri)
+        if entry is not None and entry.cached_at >= request_time:
+            return entry.response
+
         logger.info("Forcing JWKS refresh for %s (possible key rotation)", jwks_uri)
         response = get_jwks(JwksRequest(address=jwks_uri))
         ttl = resolve_ttl(response.cache_control)
