@@ -6,7 +6,9 @@ import logging
 
 import pytest
 
+import py_identity_model.core as core_mod
 from py_identity_model.core.models import JsonWebKey
+import py_identity_model.core.parsers as parsers_mod
 from py_identity_model.core.parsers import (
     extract_jwt_header_fields,
     extract_kid_from_jwt,
@@ -365,6 +367,79 @@ class TestGetPublicKeyFromJwk:
 
         with pytest.raises(TokenValidationException, match="does not match"):
             get_public_key_from_jwk(jwt, keys)
+
+
+class TestGetPublicKeyFromJwkSecurityFixes:
+    """Security tests for get_public_key_from_jwk (T200 / #375).
+
+    Validates that the deprecation + copy-on-use fix blocks the cached key
+    mutation exploit where an attacker's JWT header could permanently alter
+    the alg field on a cached JsonWebKey.
+    """
+
+    def test_key_mutation_via_jwt_header_blocked(self):
+        """Exploit scenario: JWT with alg=HS256 must not mutate cached key's alg."""
+        original_key = JsonWebKey(kty="RSA", kid="key1", alg=None, n="abc", e="def")
+        jwt = _create_jwt_with_kid("key1", alg="RS256")
+
+        with pytest.warns(DeprecationWarning, match="deprecated"):
+            returned_key = get_public_key_from_jwk(jwt, [original_key])
+
+        # Returned key should have the alg set
+        assert returned_key.alg == "RS256"
+        # Original key must NOT be mutated
+        assert original_key.alg is None
+
+    def test_kid_path_no_mutation(self):
+        """Kid-matched path must also not mutate the original key."""
+        original_key = JsonWebKey(kty="RSA", kid="target", alg=None, n="abc", e="def")
+        jwt = _create_jwt_with_kid("target", alg="RS384")
+
+        with pytest.warns(DeprecationWarning, match="deprecated"):
+            returned_key = get_public_key_from_jwk(jwt, [original_key])
+
+        assert returned_key.alg == "RS384"
+        assert original_key.alg is None
+
+    def test_no_kid_path_no_mutation(self):
+        """No-kid single-key fallback path must not mutate the original key."""
+        original_key = JsonWebKey(kty="RSA", kid="only-key", alg=None, n="abc", e="def")
+        jwt = _create_jwt_without_kid(alg="RS256")
+
+        with pytest.warns(DeprecationWarning, match="deprecated"):
+            returned_key = get_public_key_from_jwk(jwt, [original_key])
+
+        assert returned_key.alg == "RS256"
+        assert original_key.alg is None
+
+    def test_deprecation_warning_emitted(self):
+        """Calling get_public_key_from_jwk must emit DeprecationWarning."""
+        jwt = _create_jwt_with_kid("key1", alg="RS256")
+        keys = [JsonWebKey(kty="RSA", kid="key1", alg="RS256", n="abc", e="def")]
+
+        with pytest.warns(DeprecationWarning, match="deprecated"):
+            get_public_key_from_jwk(jwt, keys)
+
+    def test_returned_key_has_correct_alg_when_key_already_has_alg(self):
+        """When key already has alg set, returned copy preserves it."""
+        original_key = JsonWebKey(kty="RSA", kid="key1", alg="RS256", n="abc", e="def")
+        jwt = _create_jwt_with_kid("key1", alg="RS256")
+
+        with pytest.warns(DeprecationWarning, match="deprecated"):
+            returned_key = get_public_key_from_jwk(jwt, [original_key])
+
+        assert returned_key.alg == "RS256"
+        # Original still untouched (was already RS256, but verify identity differs)
+        assert returned_key is not original_key
+
+    def test_not_in_core_all(self):
+        """get_public_key_from_jwk must not be in core.__all__ (removed from public API)."""
+        assert "get_public_key_from_jwk" not in core_mod.__all__
+        assert "get_public_key_from_jwk" not in parsers_mod.__all__
+
+    def test_still_importable_for_backwards_compat(self):
+        """Function is still importable even though removed from __all__."""
+        assert callable(get_public_key_from_jwk)
 
 
 class TestJwksFromDict:

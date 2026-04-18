@@ -4,6 +4,9 @@ Parsing functions for py-identity-model.
 This module contains parsing logic used by both sync and async implementations.
 """
 
+import copy
+import warnings
+
 from jwt import get_unverified_header
 
 from ..exceptions import TokenValidationException
@@ -230,6 +233,14 @@ def get_public_key_from_jwk(jwt: str, keys: list[JsonWebKey]) -> JsonWebKey:
     Raises:
         TokenValidationException: If no matching key is found
     """
+    warnings.warn(
+        "get_public_key_from_jwk is deprecated and will be removed in a future "
+        "version. Use find_key_by_kid() instead, which returns (key_dict, alg) "
+        "without mutating the original key.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     headers = get_unverified_header(jwt)
     kid = headers.get("kid")
     logger.debug(f"Looking for key with kid: {kid}")
@@ -253,7 +264,7 @@ def get_public_key_from_jwk(jwt: str, keys: list[JsonWebKey]) -> JsonWebKey:
             logger.warning(
                 "JWT has no kid header; using the single signing key from JWKS"
             )
-            key = signing_keys[0]
+            key = copy.deepcopy(signing_keys[0])
             _validate_key_alg_consistency(key, jwt_alg)
             if not key.alg:
                 key.alg = jwt_alg
@@ -280,7 +291,7 @@ def get_public_key_from_jwk(jwt: str, keys: list[JsonWebKey]) -> JsonWebKey:
             details={"kid": kid, "available_kids": available_kids},
         )
 
-    key = filtered_keys[0]
+    key = copy.deepcopy(filtered_keys[0])
     jwt_alg = headers.get("alg")
     _validate_key_alg_consistency(key, jwt_alg)
     if not key.alg:
@@ -294,6 +305,5 @@ __all__ = [
     "extract_jwt_header_fields",
     "extract_kid_from_jwt",
     "find_key_by_kid",
-    "get_public_key_from_jwk",
     "jwks_from_dict",
 ]
