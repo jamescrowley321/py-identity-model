@@ -2,6 +2,34 @@
 
 <!-- version list -->
 
+## v2.19.9 (2026-04-18)
+
+### Bug Fixes
+
+- Use deepcopy to prevent mutable list field leakage in deprecated function
+  ([`84c73f2`](https://github.com/jamescrowley321/py-identity-model/commit/84c73f2fda42b3c3fe4a6256a64cc2b3c12958d1))
+
+- **security**: Add JWKS max key count limit and KeyError guard
+  ([`ba97325`](https://github.com/jamescrowley321/py-identity-model/commit/ba97325b83695f11e5bcb8f9d5d6afb28acb663a))
+
+- **security**: Address review findings for JWKS key count limit
+  ([`a69c477`](https://github.com/jamescrowley321/py-identity-model/commit/a69c477518d942c12e005c85d44b2e7c6cc1a3aa))
+
+- **security**: Deprecate get_public_key_from_jwk to prevent cached key mutation
+  ([`d74be8e`](https://github.com/jamescrowley321/py-identity-model/commit/d74be8ebd36dfdd456d4faef83161b93a2e59a8e))
+
+- **security**: Log warning on malformed Content-Length header
+  ([`4691f06`](https://github.com/jamescrowley321/py-identity-model/commit/4691f068c5e237af466259474c13530617d5c25b))
+
+### Testing
+
+- **security**: Add key count limit and KeyError guard tests
+  ([`312a797`](https://github.com/jamescrowley321/py-identity-model/commit/312a797d3cc045bc3e0228e6ec1c3c6a8fb59087))
+
+- **security**: Add tests for cached key mutation prevention
+  ([`c7fd2c0`](https://github.com/jamescrowley321/py-identity-model/commit/c7fd2c013389f38240c8c900d0bfa0897fc98a06))
+
+
 ## v2.19.8 (2026-04-13)
 
 ### Bug Fixes
