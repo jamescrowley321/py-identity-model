@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 from ..exceptions import DiscoveryException
 from ..logging_config import logger
 from .discovery_policy import DiscoveryPolicy
-from .http_utils import get_max_jwks_size
+from .http_utils import get_max_jwks_keys, get_max_jwks_size
 from .models import (
     AuthorizationCodeTokenResponse,
     ClientCredentialsTokenResponse,
@@ -285,6 +285,49 @@ def build_discovery_response(
 _VALID_JWKS_CONTENT_TYPES = frozenset({"application/json", "application/jwk-set+json"})
 
 
+def _extract_jwks_keys(
+    response_json: object,
+) -> tuple[list[dict], str | None]:
+    """Extract and validate the 'keys' array from a parsed JWKS response.
+
+    Returns:
+        Tuple of (raw_keys_list, error_string). On success error_string is None.
+    """
+    if not isinstance(response_json, dict):
+        return [], (
+            "Invalid JWKS response: expected a JSON object, "
+            f"got {type(response_json).__name__}"
+        )
+
+    try:
+        raw_keys = response_json["keys"]
+    except KeyError:
+        return [], "Invalid JWKS response: missing required 'keys' field"
+
+    if not isinstance(raw_keys, list):
+        return [], (
+            "Invalid JWKS response: 'keys' field must be a JSON array, "
+            f"got {type(raw_keys).__name__}"
+        )
+
+    max_keys = get_max_jwks_keys()
+    if len(raw_keys) > max_keys:
+        return [], (
+            f"JWKS response contains too many keys: {len(raw_keys)} "
+            f"exceeds limit of {max_keys}"
+        )
+
+    # Validate each element is a dict before downstream processing
+    for i, key in enumerate(raw_keys):
+        if not isinstance(key, dict):
+            return [], (
+                f"Invalid JWKS response: key at index {i} is not a JSON object, "
+                f"got {type(key).__name__}"
+            )
+
+    return raw_keys, None
+
+
 def parse_jwks_response(response: httpx.Response) -> JwksResponse:
     """
     Parse JWKS HTTP response.
@@ -296,23 +339,26 @@ def parse_jwks_response(response: httpx.Response) -> JwksResponse:
         JwksResponse: Parsed JWKS response with keys
     """
     if response.is_success:
-        # Check response size before parsing
+        # Check response size before parsing — Content-Length first to
+        # avoid materialising the body for obviously-oversized responses.
         max_size = get_max_jwks_size()
         content_length = response.headers.get("Content-Length")
-        if content_length and int(content_length) > max_size:
+        try:
+            cl_too_large = content_length is not None and int(content_length) > max_size
+        except (ValueError, TypeError):
+            logger.warning("Malformed Content-Length header: %s", content_length)
+            cl_too_large = False
+        if cl_too_large:
+            size_desc = f"Content-Length {content_length}"
+        elif len(response.content) > max_size:
+            size_desc = f"{len(response.content)} bytes"
+        else:
+            size_desc = None
+        if size_desc:
             return JwksResponse(
                 is_successful=False,
                 error=(
-                    f"JWKS response too large: Content-Length {content_length} "
-                    f"exceeds limit of {max_size} bytes"
-                ),
-            )
-        body_size = len(response.content)
-        if body_size > max_size:
-            return JwksResponse(
-                is_successful=False,
-                error=(
-                    f"JWKS response too large: {body_size} bytes "
+                    f"JWKS response too large: {size_desc} "
                     f"exceeds limit of {max_size} bytes"
                 ),
             )
@@ -331,7 +377,11 @@ def parse_jwks_response(response: httpx.Response) -> JwksResponse:
             )
 
         response_json = response.json()
-        keys = [jwks_from_dict(key) for key in response_json["keys"]]
+        raw_keys, keys_error = _extract_jwks_keys(response_json)
+        if keys_error:
+            return JwksResponse(is_successful=False, error=keys_error)
+
+        keys = [jwks_from_dict(key) for key in raw_keys]
         cache_control = response.headers.get("cache-control")
         return JwksResponse(is_successful=True, keys=keys, cache_control=cache_control)
 
