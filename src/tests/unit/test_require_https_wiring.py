@@ -24,6 +24,7 @@ from py_identity_model.aio.token_validation import (
     validate_token as async_validate_token,
 )
 from py_identity_model.core.models import TokenValidationConfig
+from py_identity_model.core.token_validation_logic import build_resolved_config
 from py_identity_model.exceptions import TokenValidationException
 from py_identity_model.sync.managed_client import HTTPClient
 from py_identity_model.sync.token_validation import (
@@ -219,6 +220,68 @@ class TestSyncRequireHttpsWiring:
         )
         assert decoded["sub"] == "user1"
 
+    @respx.mock
+    def test_cache_poisoning_blocked_require_https_in_cache_key(self, rsa_keypair):
+        """Cache with require_https=False must not bypass require_https=True.
+
+        Exploit scenario: attacker triggers a require_https=False call first,
+        poisoning the cache. A subsequent require_https=True call to the same
+        address must NOT hit the poisoned cache — it must enforce HTTPS.
+
+        Uses a non-loopback address since DiscoveryPolicy allows HTTP on
+        loopback by default.
+        """
+        key_dict, pem = rsa_keypair
+
+        disco_response_http = {
+            "issuer": "http://external.example.com",
+            "authorization_endpoint": "http://external.example.com/authorize",
+            "token_endpoint": "http://external.example.com/token",
+            "jwks_uri": "http://external.example.com/jwks",
+            "response_types_supported": ["code"],
+            "subject_types_supported": ["public"],
+            "id_token_signing_alg_values_supported": ["RS256"],
+        }
+        token = sign_jwt(
+            pem,
+            {"sub": "user1", "iss": "http://external.example.com"},
+            headers={"kid": "test-key-1"},
+        )
+
+        respx.get("http://external.example.com/.well-known/openid-configuration").mock(
+            return_value=httpx.Response(200, json=disco_response_http)
+        )
+        respx.get("http://external.example.com/jwks").mock(
+            return_value=httpx.Response(200, json={"keys": [key_dict]})
+        )
+
+        # Step 1: Populate cache with require_https=False
+        config_permissive = TokenValidationConfig(
+            perform_disco=True,
+            audience=None,
+            issuer="http://external.example.com",
+            require_https=False,
+        )
+        decoded = sync_validate_token(
+            jwt=token,
+            token_validation_config=config_permissive,
+            disco_doc_address="http://external.example.com/.well-known/openid-configuration",
+        )
+        assert decoded["sub"] == "user1"
+
+        # Step 2: require_https=True must still reject the HTTP address
+        config_strict = TokenValidationConfig(
+            perform_disco=True,
+            audience="test-audience",
+            require_https=True,
+        )
+        with pytest.raises(TokenValidationException, match="HTTPS is required"):
+            sync_validate_token(
+                jwt="fake.jwt.token",
+                token_validation_config=config_strict,
+                disco_doc_address="http://external.example.com/.well-known/openid-configuration",
+            )
+
 
 class TestAsyncRequireHttpsWiring:
     """Test require_https propagation in async token validation."""
@@ -361,3 +424,88 @@ class TestAsyncRequireHttpsWiring:
             disco_doc_address="https://example.com/.well-known/openid-configuration",
         )
         assert decoded["sub"] == "user1"
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_cache_poisoning_blocked_require_https_in_cache_key(
+        self, rsa_keypair
+    ):
+        """Cache with require_https=False must not bypass require_https=True.
+
+        Uses a non-loopback address since DiscoveryPolicy allows HTTP on
+        loopback by default.
+        """
+        key_dict, pem = rsa_keypair
+
+        disco_response_http = {
+            "issuer": "http://external.example.com",
+            "authorization_endpoint": "http://external.example.com/authorize",
+            "token_endpoint": "http://external.example.com/token",
+            "jwks_uri": "http://external.example.com/jwks",
+            "response_types_supported": ["code"],
+            "subject_types_supported": ["public"],
+            "id_token_signing_alg_values_supported": ["RS256"],
+        }
+        token = sign_jwt(
+            pem,
+            {"sub": "user1", "iss": "http://external.example.com"},
+            headers={"kid": "test-key-1"},
+        )
+
+        respx.get("http://external.example.com/.well-known/openid-configuration").mock(
+            return_value=httpx.Response(200, json=disco_response_http)
+        )
+        respx.get("http://external.example.com/jwks").mock(
+            return_value=httpx.Response(200, json={"keys": [key_dict]})
+        )
+
+        # Step 1: Populate cache with require_https=False
+        config_permissive = TokenValidationConfig(
+            perform_disco=True,
+            audience=None,
+            issuer="http://external.example.com",
+            require_https=False,
+        )
+        decoded = await async_validate_token(
+            jwt=token,
+            token_validation_config=config_permissive,
+            disco_doc_address="http://external.example.com/.well-known/openid-configuration",
+        )
+        assert decoded["sub"] == "user1"
+
+        # Step 2: require_https=True must still reject the HTTP address
+        config_strict = TokenValidationConfig(
+            perform_disco=True,
+            audience="test-audience",
+            require_https=True,
+        )
+        with pytest.raises(TokenValidationException, match="HTTPS is required"):
+            await async_validate_token(
+                jwt="fake.jwt.token",
+                token_validation_config=config_strict,
+                disco_doc_address="http://external.example.com/.well-known/openid-configuration",
+            )
+
+
+class TestBuildResolvedConfigPreservesRequireHttps:
+    """Verify build_resolved_config propagates require_https."""
+
+    def test_require_https_false_preserved(self):
+        """build_resolved_config must copy require_https from original config."""
+        original = TokenValidationConfig(
+            perform_disco=True,
+            audience="aud",
+            require_https=False,
+        )
+        resolved = build_resolved_config(original, {"kty": "RSA"}, "RS256")
+        assert resolved.require_https is False
+
+    def test_require_https_true_preserved(self):
+        """build_resolved_config must copy require_https=True (default)."""
+        original = TokenValidationConfig(
+            perform_disco=True,
+            audience="aud",
+            require_https=True,
+        )
+        resolved = build_resolved_config(original, {"kty": "RSA"}, "RS256")
+        assert resolved.require_https is True

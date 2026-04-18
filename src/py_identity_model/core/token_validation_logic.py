@@ -227,6 +227,7 @@ def build_resolved_config(
         subject=original_config.subject,
         options=original_config.options,
         claims_validator=original_config.claims_validator,
+        require_https=original_config.require_https,
         leeway=original_config.leeway,
     )
 
