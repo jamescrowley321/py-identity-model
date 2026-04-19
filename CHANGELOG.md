@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v2.19.10 (2026-04-19)
+
+### Bug Fixes
+
+- **security**: Address review findings for require_https wiring
+  ([`dde0341`](https://github.com/jamescrowley321/py-identity-model/commit/dde03418a24a8ef46a7ace48932e266dc0db3dea))
+
+- **security**: Wire require_https through to DiscoveryPolicy
+  ([`372e20e`](https://github.com/jamescrowley321/py-identity-model/commit/372e20e4aeff3c5dc70556f5d940b5d8e7da0a48))
+
+### Testing
+
+- **security**: Add require_https wiring tests for token validation
+  ([`28f2b8a`](https://github.com/jamescrowley321/py-identity-model/commit/28f2b8ab6d873a91390ca73fc723badf5f2cb946))
+
+
 ## v2.19.9 (2026-04-18)
 
 ### Bug Fixes
