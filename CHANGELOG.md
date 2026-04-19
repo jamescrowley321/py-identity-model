@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v2.19.11 (2026-04-19)
+
+### Bug Fixes
+
+- **security**: Prevent cache stampede on TTL expiry
+  ([`58026c4`](https://github.com/jamescrowley321/py-identity-model/commit/58026c433a6d084c0bd5d4a24f3e32459ecc42bf))
+
+- **security**: Prevent redundant sequential fetches in _refresh_jwks
+  ([`0283782`](https://github.com/jamescrowley321/py-identity-model/commit/028378291f1cfd86ba3d7bd7564791a4d02a778a))
+
+- **security**: Reject JWKS responses with missing Content-Type
+  ([`19bc96a`](https://github.com/jamescrowley321/py-identity-model/commit/19bc96ae0d2fc459b37a498136ba29e5a74d425f))
+
+### Testing
+
+- **security**: Add _refresh_jwks freshness guard coverage
+  ([`7a570f1`](https://github.com/jamescrowley321/py-identity-model/commit/7a570f161acdfa54f2863e23ac6a788d06d4c61b))
+
+
 ## v2.19.10 (2026-04-19)
 
 ### Bug Fixes
