@@ -70,18 +70,16 @@ def _get_disco_response(
         if entry is not None and not is_cache_expired(entry):
             return entry.response
 
-    # Fetch outside the lock
-    policy = DiscoveryPolicy(require_https=require_https)
-    response = get_discovery_document(
-        DiscoveryDocumentRequest(address=disco_doc_address, policy=policy)
-    )
-    ttl = resolve_disco_ttl(response.cache_control)
-
-    with _disco_cache_lock:
+        # Fetch under lock to prevent cache stampede (single-flight refresh)
+        policy = DiscoveryPolicy(require_https=require_https)
+        response = get_discovery_document(
+            DiscoveryDocumentRequest(address=disco_doc_address, policy=policy)
+        )
+        ttl = resolve_disco_ttl(response.cache_control)
         _disco_cache[cache_key] = DiscoCacheEntry(
             response=response, cached_at=time.time(), ttl=ttl
         )
-    return response
+        return response
 
 
 def clear_discovery_cache() -> None:
@@ -104,27 +102,32 @@ def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
         if entry is not None and not is_cache_expired(entry):
             return entry.response
 
-    # Fetch outside the lock to avoid blocking other threads
-    response = get_jwks(JwksRequest(address=jwks_uri))
-    ttl = resolve_ttl(response.cache_control)
-
-    with _jwks_cache_lock:
+        # Fetch under lock to prevent cache stampede (single-flight refresh)
+        response = get_jwks(JwksRequest(address=jwks_uri))
+        ttl = resolve_ttl(response.cache_control)
         _jwks_cache[jwks_uri] = JwksCacheEntry(
             response=response, cached_at=time.time(), ttl=ttl
         )
-    return response
+        return response
 
 
 def _refresh_jwks(jwks_uri: str) -> JwksResponse:
     """Force re-fetch JWKS and update cache (key rotation)."""
-    logger.info("Forcing JWKS refresh for %s (possible key rotation)", jwks_uri)
-    response = get_jwks(JwksRequest(address=jwks_uri))
-    ttl = resolve_ttl(response.cache_control)
+    request_time = time.time()
     with _jwks_cache_lock:
+        # If another thread already refreshed while we waited on the lock,
+        # return the fresh entry to avoid redundant sequential fetches
+        entry = _jwks_cache.get(jwks_uri)
+        if entry is not None and entry.cached_at >= request_time:
+            return entry.response
+
+        logger.info("Forcing JWKS refresh for %s (possible key rotation)", jwks_uri)
+        response = get_jwks(JwksRequest(address=jwks_uri))
+        ttl = resolve_ttl(response.cache_control)
         _jwks_cache[jwks_uri] = JwksCacheEntry(
             response=response, cached_at=time.time(), ttl=ttl
         )
-    return response
+        return response
 
 
 def clear_jwks_cache() -> None:
