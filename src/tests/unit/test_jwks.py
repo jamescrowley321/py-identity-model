@@ -672,12 +672,13 @@ class TestGetJwks:
 
     @respx.mock
     def test_get_jwks_json_decode_error(self):
-        # Mock response that raises JSON decode error
+        # Mock response with valid Content-Type but invalid JSON body
         url = "https://example.com/jwks"
         respx.get(url).mock(
             return_value=httpx.Response(
                 200,
                 content=b"invalid json{",
+                headers={"Content-Type": "application/json"},
             )
         )
 
