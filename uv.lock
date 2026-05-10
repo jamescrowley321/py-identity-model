@@ -881,7 +881,7 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "async-lru", specifier = ">=2.0.4,<3" },
-    { name = "cryptography", specifier = ">=45.0.2,<47" },
+    { name = "cryptography", specifier = ">=45.0.2,<49" },
     { name = "httpx", specifier = ">=0.28.1,<1" },
     { name = "pyjwt", specifier = ">=2.9.0,<3" },
 ]
@@ -905,7 +905,7 @@ dev = [
 docs = [
     { name = "mkdocs", specifier = ">=1.6.0,<2" },
     { name = "mkdocs-material", specifier = ">=9.6.0,<10" },
-    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.29.0,<1" },
+    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.29.0,<2" },
 ]
 
 [[package]]
