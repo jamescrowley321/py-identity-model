@@ -6,6 +6,7 @@ error handling, TTL-based JWKS caching, signature retry on key rotation,
 and enhanced features (leeway, multi-issuer, subject).
 """
 
+import contextlib
 import time
 from unittest.mock import patch
 
@@ -268,6 +269,68 @@ class TestAsyncSignatureRetry:
             audience=None,
             issuer="https://example.com",
         )
+
+        decoded = await validate_token(
+            jwt=token,
+            token_validation_config=config,
+            disco_doc_address="https://example.com/.well-known/openid-configuration",
+        )
+
+        assert decoded["sub"] == "user1"
+        assert jwks_route.call_count == JWKS_FETCH_WITH_RETRY
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_cached_path_refreshes_jwks_when_kid_not_in_cache(self):
+        """Cached JWKS lookup with a kid not in cache forces a refresh.
+
+        OIDC OPs rotate signing keys; when a token arrives with a kid that is
+        not yet in the cached JWKS, the cache is stale. The library must
+        refresh JWKS without waiting for a signature failure on a key it
+        does not have.
+        """
+        old_key_dict, _ = generate_rsa_keypair()
+        old_key_dict["kid"] = "old-kid"
+
+        new_key_dict, new_pem = generate_rsa_keypair()
+        new_key_dict["kid"] = "new-kid"
+
+        token = sign_jwt(
+            new_pem,
+            {"sub": "user1", "iss": "https://example.com"},
+            headers={"kid": "new-kid"},
+        )
+
+        respx.get("https://example.com/.well-known/openid-configuration").mock(
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
+        )
+        jwks_route = respx.get("https://example.com/jwks").mock(
+            side_effect=[
+                httpx.Response(200, json={"keys": [old_key_dict]}),
+                httpx.Response(200, json={"keys": [new_key_dict]}),
+            ]
+        )
+
+        config = TokenValidationConfig(
+            perform_disco=True,
+            audience=None,
+            issuer="https://example.com",
+        )
+
+        # Prime the cache with the old kid.
+        old_pem_token = sign_jwt(
+            generate_rsa_keypair()[1],
+            {"sub": "warmup"},
+            headers={"kid": "old-kid"},
+        )
+        with contextlib.suppress(
+            SignatureVerificationException, TokenValidationException
+        ):
+            await validate_token(
+                jwt=old_pem_token,
+                token_validation_config=config,
+                disco_doc_address="https://example.com/.well-known/openid-configuration",
+            )
 
         decoded = await validate_token(
             jwt=token,

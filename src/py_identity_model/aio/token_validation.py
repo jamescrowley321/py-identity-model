@@ -178,6 +178,16 @@ async def _discover_and_resolve_key(
     jwks_response = await _get_cached_jwks(jwks_uri)
     validate_jwks_response(jwks_response)
     kid, jwt_alg = extract_jwt_header_fields(jwt)
+    # OP key rotation: if the JWT's kid is not in the cached JWKS, the cache
+    # is stale. Force a refresh before lookup so rotation is handled without
+    # waiting for a signature failure on a key we don't have.
+    if kid is not None and not any(k.kid == kid for k in (jwks_response.keys or [])):
+        logger.info(
+            "kid %s not present in cached JWKS; refreshing (possible key rotation)",
+            kid,
+        )
+        jwks_response = await _refresh_jwks(jwks_uri)
+        validate_jwks_response(jwks_response)
     key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [], jwt_alg=jwt_alg)
     return key_dict, alg, disco_doc_response, True
 
