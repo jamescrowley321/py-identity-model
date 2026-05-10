@@ -5,6 +5,7 @@ These tests verify sync-specific token validation logic including
 error handling, TTL-based JWKS caching, and signature retry on key rotation.
 """
 
+import contextlib
 import time
 from unittest.mock import patch
 
@@ -293,6 +294,72 @@ class TestSyncSignatureRetry:
 
         assert decoded["sub"] == "user1"
         assert jwks_route.call_count == JWKS_FETCH_WITH_RETRY  # initial fetch + refresh
+
+    @respx.mock
+    def test_cached_path_refreshes_jwks_when_kid_not_in_cache(self):
+        """Cached JWKS lookup with a kid not in cache forces a refresh.
+
+        OIDC OPs rotate signing keys; when a token arrives with a kid that is
+        not yet in the cached JWKS, the cache is stale. The library must
+        refresh JWKS without waiting for a signature failure on a key it
+        does not have.
+        """
+        old_key_dict, _ = generate_rsa_keypair()
+        old_key_dict["kid"] = "old-kid"
+
+        new_key_dict, new_pem = generate_rsa_keypair()
+        new_key_dict["kid"] = "new-kid"
+
+        token = sign_jwt(
+            new_pem,
+            {"sub": "user1", "iss": "https://example.com"},
+            headers={"kid": "new-kid"},
+        )
+
+        respx.get("https://example.com/.well-known/openid-configuration").mock(
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
+        )
+
+        # First fetch returns only the old kid; second fetch returns only the new kid.
+        # If the library waits for signature failure to refresh, the second fetch
+        # will not happen because the lookup raises before decode.
+        jwks_route = respx.get("https://example.com/jwks").mock(
+            side_effect=[
+                httpx.Response(200, json={"keys": [old_key_dict]}),
+                httpx.Response(200, json={"keys": [new_key_dict]}),
+            ]
+        )
+
+        config = TokenValidationConfig(
+            perform_disco=True,
+            audience=None,
+            issuer="https://example.com",
+        )
+
+        # Prime the cache by validating a token with the old kid.
+        old_pem_token = sign_jwt(
+            generate_rsa_keypair()[1],  # discard, we just need to populate cache
+            {"sub": "warmup"},
+            headers={"kid": "old-kid"},
+        )
+        # Trigger a cache populate without caring about the validation outcome.
+        with contextlib.suppress(
+            SignatureVerificationException, TokenValidationException
+        ):
+            validate_token(
+                jwt=old_pem_token,
+                token_validation_config=config,
+                disco_doc_address="https://example.com/.well-known/openid-configuration",
+            )
+
+        decoded = validate_token(
+            jwt=token,
+            token_validation_config=config,
+            disco_doc_address="https://example.com/.well-known/openid-configuration",
+        )
+
+        assert decoded["sub"] == "user1"
+        assert jwks_route.call_count == JWKS_FETCH_WITH_RETRY
 
     @respx.mock
     def test_signature_failure_still_raises_after_retry(self):
