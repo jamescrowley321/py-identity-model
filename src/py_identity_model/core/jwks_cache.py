@@ -40,6 +40,8 @@ MAX_CACHE_TTL_SECONDS: float = 86400.0
 _env_ttl: float | None = None
 _disco_env_ttl: float | None = None
 _MAX_AGE_RE = re.compile(r"max-age=(\d+)", re.IGNORECASE)
+_NO_STORE_RE = re.compile(r"\bno-store\b", re.IGNORECASE)
+_NO_CACHE_RE = re.compile(r"\bno-cache\b", re.IGNORECASE)
 
 
 def _get_env_ttl() -> float:
@@ -60,6 +62,20 @@ def _get_disco_env_ttl() -> float:
             os.getenv("DISCO_CACHE_TTL", str(DEFAULT_DISCO_CACHE_TTL_SECONDS))
         )
     return _disco_env_ttl
+
+
+def is_uncacheable(cache_control: str | None) -> bool:
+    """Return True when Cache-Control forbids caching the response.
+
+    Honors RFC 7234 §5.2.2.5 (``no-store``) and §5.2.2.4 (``no-cache``).
+    ``no-cache`` requires revalidation before use; the simplest correct
+    behavior is to skip caching so the next call re-fetches.
+    """
+    if not cache_control:
+        return False
+    return bool(
+        _NO_STORE_RE.search(cache_control) or _NO_CACHE_RE.search(cache_control)
+    )
 
 
 def parse_max_age(cache_control: str | None) -> float | None:
@@ -150,6 +166,7 @@ __all__ = [
     "DiscoCacheEntry",
     "JwksCacheEntry",
     "is_cache_expired",
+    "is_uncacheable",
     "parse_max_age",
     "resolve_disco_ttl",
     "resolve_ttl",
