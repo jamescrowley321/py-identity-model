@@ -185,6 +185,10 @@ def _discover_and_resolve_key(
         )
         jwks_response = _refresh_jwks(jwks_uri)
         validate_jwks_response(jwks_response)
+        if not any(k.kid == kid for k in (jwks_response.keys or [])):
+            logger.warning(
+                "kid %s still absent after JWKS refresh of %s", kid, jwks_uri
+            )
     key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [], jwt_alg=jwt_alg)
     return key_dict, alg, disco_doc_response, True
 

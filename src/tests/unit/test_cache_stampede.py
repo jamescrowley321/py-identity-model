@@ -7,6 +7,7 @@ fetch rather than N parallel fetches (thundering herd).
 
 import asyncio
 from collections.abc import Callable
+import logging
 import threading
 import time
 
@@ -35,6 +36,7 @@ from py_identity_model.aio.token_validation import (
 )
 from py_identity_model.core.jwks_cache import DiscoCacheEntry, JwksCacheEntry
 from py_identity_model.core.models import TokenValidationConfig
+from py_identity_model.exceptions import TokenValidationException
 from py_identity_model.sync import token_validation as sync_tv
 from py_identity_model.sync.token_validation import (
     _get_cached_jwks,
@@ -115,7 +117,7 @@ class TestSyncJwksCacheStampede:
     @respx.mock
     def test_jwks_cache_stampede_blocked(self):
         """Multiple threads hitting expired JWKS cache produce only 1 HTTP fetch."""
-        key_dict, _ = generate_rsa_keypair()
+        key_dict = generate_rsa_keypair()[0]
         jwks_route = respx.get(JWKS_URL).mock(
             return_value=httpx.Response(200, json={"keys": [key_dict]})
         )
@@ -150,7 +152,7 @@ class TestSyncStampedeAfterExpiry:
     @respx.mock
     def test_jwks_stampede_after_expiry_blocked(self):
         """After TTL expires, concurrent fetches produce only 1 new HTTP request."""
-        key_dict, _ = generate_rsa_keypair()
+        key_dict = generate_rsa_keypair()[0]
         jwks_route = respx.get(JWKS_URL).mock(
             return_value=httpx.Response(200, json={"keys": [key_dict]})
         )
@@ -254,7 +256,7 @@ class TestAsyncJwksCacheStampede:
     @respx.mock
     async def test_jwks_cache_stampede_blocked_async(self):
         """Multiple coroutines hitting expired JWKS cache produce only 1 HTTP fetch."""
-        key_dict, _ = generate_rsa_keypair()
+        key_dict = generate_rsa_keypair()[0]
         jwks_route = respx.get(JWKS_URL).mock(
             return_value=httpx.Response(200, json={"keys": [key_dict]})
         )
@@ -274,7 +276,7 @@ class TestAsyncStampedeAfterExpiry:
     @respx.mock
     async def test_jwks_stampede_after_expiry_blocked_async(self):
         """After TTL expires, concurrent async fetches produce only 1 new request."""
-        key_dict, _ = generate_rsa_keypair()
+        key_dict = generate_rsa_keypair()[0]
         jwks_route = respx.get(JWKS_URL).mock(
             return_value=httpx.Response(200, json={"keys": [key_dict]})
         )
@@ -332,7 +334,7 @@ class TestSyncRefreshJwksFreshnessGuard:
     @respx.mock
     def test_refresh_skips_fetch_when_already_fresh(self):
         """If cache was refreshed while waiting on lock, return cached entry."""
-        key_dict, _ = generate_rsa_keypair()
+        key_dict = generate_rsa_keypair()[0]
         jwks_route = respx.get(JWKS_URL).mock(
             return_value=httpx.Response(200, json={"keys": [key_dict]})
         )
@@ -359,7 +361,7 @@ class TestSyncRefreshJwksFreshnessGuard:
     @respx.mock
     def test_refresh_fetches_when_cache_stale(self):
         """Normal refresh path: fetch when cache is stale."""
-        key_dict, _ = generate_rsa_keypair()
+        key_dict = generate_rsa_keypair()[0]
         jwks_route = respx.get(JWKS_URL).mock(
             return_value=httpx.Response(200, json={"keys": [key_dict]})
         )
@@ -381,7 +383,7 @@ class TestAsyncRefreshJwksFreshnessGuard:
     @respx.mock
     async def test_refresh_skips_fetch_when_already_fresh_async(self):
         """If cache was refreshed while waiting on lock, return cached entry."""
-        key_dict, _ = generate_rsa_keypair()
+        key_dict = generate_rsa_keypair()[0]
         jwks_route = respx.get(JWKS_URL).mock(
             return_value=httpx.Response(200, json={"keys": [key_dict]})
         )
@@ -406,7 +408,7 @@ class TestAsyncRefreshJwksFreshnessGuard:
     @respx.mock
     async def test_refresh_fetches_when_cache_stale_async(self):
         """Normal refresh path: fetch when cache is stale."""
-        key_dict, _ = generate_rsa_keypair()
+        key_dict = generate_rsa_keypair()[0]
         jwks_route = respx.get(JWKS_URL).mock(
             return_value=httpx.Response(200, json={"keys": [key_dict]})
         )
@@ -468,7 +470,7 @@ class TestAsyncKidMissStampede:
     @respx.mock
     async def test_n_concurrent_unknown_kid_triggers_single_refresh(self):
         """N concurrent validate_token calls with the same unknown kid → 2 fetches total."""
-        old_key_dict, _old_pem = generate_rsa_keypair()
+        old_key_dict = generate_rsa_keypair()[0]
         old_key_dict["kid"] = "old-kid"
         new_key_dict, new_pem = generate_rsa_keypair()
         new_key_dict["kid"] = "new-kid"
@@ -528,7 +530,7 @@ class TestAsyncKidMissStampede:
         isn't present, which is acceptable — what we're guarding here is the
         outbound fetch count).
         """
-        old_key_dict, _ = generate_rsa_keypair()
+        old_key_dict = generate_rsa_keypair()[0]
         old_key_dict["kid"] = "old-kid"
 
         # New JWKS contains every kid the rotated batch might use.
@@ -585,7 +587,7 @@ class TestSyncKidMissStampede:
     @respx.mock
     def test_n_concurrent_unknown_kid_triggers_single_refresh_sync(self):
         """N threads concurrently validating tokens with the same unknown kid → 2 fetches."""
-        old_key_dict, _ = generate_rsa_keypair()
+        old_key_dict = generate_rsa_keypair()[0]
         old_key_dict["kid"] = "old-kid"
         new_key_dict, new_pem = generate_rsa_keypair()
         new_key_dict["kid"] = "new-kid"
@@ -642,4 +644,56 @@ class TestSyncKidMissStampede:
         assert jwks_route.call_count == KID_MISS_FETCH_BUDGET, (
             f"Stampede: {jwks_route.call_count} fetches for {N} concurrent kid-miss "
             f"validations (expected {KID_MISS_FETCH_BUDGET})"
+        )
+
+
+# ============================================================================
+# Diagnostic on still-missing kid after refresh (PR #390 hardening)
+# ============================================================================
+
+
+class TestSyncStillMissingDiagnostic:
+    """A successful refresh that doesn't help should leave a diagnostic log."""
+
+    @respx.mock
+    def test_warning_logged_when_kid_still_absent_after_refresh(self, caplog):
+        """If refresh succeeds but the kid is still not in JWKS, log a warning."""
+        old_key_dict = generate_rsa_keypair()[0]
+        old_key_dict["kid"] = "old-kid"
+        # Refreshed JWKS has a different kid — still doesn't help the request.
+        other_key_dict = generate_rsa_keypair()[0]
+        other_key_dict["kid"] = "some-other-kid"
+
+        respx.get(DISCO_URL).mock(
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
+        )
+        _, jwks_handler = _make_rotating_jwks_handler(
+            old_keys_response={"keys": [old_key_dict]},
+            new_keys_response={"keys": [other_key_dict]},
+        )
+        respx.get(JWKS_URL).mock(side_effect=jwks_handler)
+
+        _get_cached_jwks(JWKS_URL)
+
+        new_pem = generate_rsa_keypair()[1]
+        token = sign_jwt(
+            new_pem,
+            {"sub": "user1", "iss": "https://example.com"},
+            headers={"kid": "still-not-here"},
+        )
+        config = TokenValidationConfig(
+            perform_disco=True, audience=None, issuer="https://example.com"
+        )
+
+        with (
+            caplog.at_level(logging.WARNING),
+            pytest.raises(TokenValidationException),
+        ):
+            validate_token(
+                jwt=token,
+                token_validation_config=config,
+                disco_doc_address=DISCO_URL,
+            )
+        assert any("still absent" in rec.message.lower() for rec in caplog.records), (
+            f"Expected 'still absent' warning, got: {[r.message for r in caplog.records]}"
         )
