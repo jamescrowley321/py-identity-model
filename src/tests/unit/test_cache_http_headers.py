@@ -307,7 +307,6 @@ class TestAsyncNoCacheRefetched:
             )
         )
 
-        # Sequential awaits — async lock would serialize concurrent ones into one fetch.
         for _ in range(3):
             await async_get_disco_response(DISCO_URL)
 

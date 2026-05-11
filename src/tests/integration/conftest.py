@@ -35,6 +35,7 @@ from py_identity_model import (
     validate_authorize_callback_state,
 )
 from py_identity_model.core.discovery_policy import DiscoveryPolicy
+from py_identity_model.core.jwks_cache import is_uncacheable
 from py_identity_model.core.models import DiscoveryDocumentResponse
 from py_identity_model.core.parsers import (
     extract_kid_from_jwt,
@@ -212,6 +213,22 @@ def jwks_response(test_config):
     if not response.is_successful:
         pytest.fail(f"Failed to fetch JWKS: {response.error}")
     return response
+
+
+@pytest.fixture(scope="session")
+def provider_caches_responses(discovery_document, jwks_response):
+    """Whether the provider's Cache-Control allows the library to cache.
+
+    Per RFC 7234 §5.2.2.4-5, ``no-store`` and ``no-cache`` directives
+    instruct the client to skip caching. Some providers (e.g., Descope on
+    JWKS) set these directives, which means the library will (correctly)
+    re-fetch on every validation. Benchmarks that rely on caching should
+    skip when this fixture is False.
+    """
+    return not (
+        is_uncacheable(discovery_document.cache_control)
+        or is_uncacheable(jwks_response.cache_control)
+    )
 
 
 @pytest.fixture(scope="session")

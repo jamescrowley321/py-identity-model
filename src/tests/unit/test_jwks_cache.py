@@ -106,6 +106,10 @@ class TestIsUncacheable:
     def test_no_cache_with_max_age(self):
         assert is_uncacheable("no-cache, max-age=600") is True
 
+    def test_descope_combined_directives(self):
+        """Real-world: Descope sends both no-store and no-cache on JWKS."""
+        assert is_uncacheable("no-store, no-cache") is True
+
     def test_case_insensitive(self):
         assert is_uncacheable("No-Store") is True
         assert is_uncacheable("NO-CACHE") is True
