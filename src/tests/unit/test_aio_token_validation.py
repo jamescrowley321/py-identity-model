@@ -6,7 +6,6 @@ error handling, TTL-based JWKS caching, signature retry on key rotation,
 and enhanced features (leeway, multi-issuer, subject).
 """
 
-import contextlib
 import time
 from unittest.mock import patch
 
@@ -16,6 +15,7 @@ import respx
 
 from py_identity_model.aio.managed_client import AsyncHTTPClient
 from py_identity_model.aio.token_validation import (
+    _get_cached_jwks,
     clear_discovery_cache,
     clear_jwks_cache,
     validate_token,
@@ -242,7 +242,7 @@ class TestAsyncSignatureRetry:
     @respx.mock
     async def test_signature_retry_on_key_rotation(self):
         """When signature fails with cached key, refresh JWKS and retry with new key."""
-        old_key_dict, _old_pem = generate_rsa_keypair()
+        old_key_dict = generate_rsa_keypair()[0]
         old_key_dict["kid"] = "rotated-key"
 
         new_key_dict, new_pem = generate_rsa_keypair()
@@ -289,7 +289,7 @@ class TestAsyncSignatureRetry:
         refresh JWKS without waiting for a signature failure on a key it
         does not have.
         """
-        old_key_dict, _ = generate_rsa_keypair()
+        old_key_dict = generate_rsa_keypair()[0]
         old_key_dict["kid"] = "old-kid"
 
         new_key_dict, new_pem = generate_rsa_keypair()
@@ -317,20 +317,9 @@ class TestAsyncSignatureRetry:
             issuer="https://example.com",
         )
 
-        # Prime the cache with the old kid.
-        old_pem_token = sign_jwt(
-            generate_rsa_keypair()[1],
-            {"sub": "warmup"},
-            headers={"kid": "old-kid"},
-        )
-        with contextlib.suppress(
-            SignatureVerificationException, TokenValidationException
-        ):
-            await validate_token(
-                jwt=old_pem_token,
-                token_validation_config=config,
-                disco_doc_address="https://example.com/.well-known/openid-configuration",
-            )
+        # Prime the JWKS cache directly with the old kid (no validate_token, so
+        # the legacy retry path can't accidentally satisfy the assertion below).
+        await _get_cached_jwks("https://example.com/jwks")
 
         decoded = await validate_token(
             jwt=token,
@@ -339,15 +328,66 @@ class TestAsyncSignatureRetry:
         )
 
         assert decoded["sub"] == "user1"
+        # Now the second fetch can ONLY have come from the new kid-miss refresh
+        # path inside _discover_and_resolve_key (legacy retry never gets a chance
+        # because validate_token only ran once, and the kid was missing pre-decode).
         assert jwks_route.call_count == JWKS_FETCH_WITH_RETRY
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_no_refresh_when_kid_present_in_cache(self):
+        """Negative regression: when kid IS in cached JWKS, no refresh is issued.
+
+        Pins the predicate sense in the kid-miss check. A future change that
+        flipped `not any(...)` to `any(...)` would silently regress to
+        refreshing JWKS on every request.
+        """
+        key_dict, pem = generate_rsa_keypair()
+        key_dict["kid"] = "present-kid"
+
+        respx.get("https://example.com/.well-known/openid-configuration").mock(
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
+        )
+        jwks_route = respx.get("https://example.com/jwks").mock(
+            return_value=httpx.Response(200, json={"keys": [key_dict]})
+        )
+
+        token = sign_jwt(
+            pem,
+            {"sub": "user1", "iss": "https://example.com"},
+            headers={"kid": "present-kid"},
+        )
+        config = TokenValidationConfig(
+            perform_disco=True, audience=None, issuer="https://example.com"
+        )
+
+        # First call primes the cache (1 fetch).
+        await validate_token(
+            jwt=token,
+            token_validation_config=config,
+            disco_doc_address="https://example.com/.well-known/openid-configuration",
+        )
+        assert jwks_route.call_count == 1
+
+        for _ in range(10):
+            await validate_token(
+                jwt=token,
+                token_validation_config=config,
+                disco_doc_address="https://example.com/.well-known/openid-configuration",
+            )
+
+        assert jwks_route.call_count == 1, (
+            f"Predicate regression: {jwks_route.call_count} fetches for 11 "
+            f"validations with cached kid (expected 1)"
+        )
 
     @pytest.mark.asyncio
     @respx.mock
     async def test_signature_failure_still_raises_after_retry(self):
         """When signature fails with both old and new keys, exception is raised."""
-        wrong_key1, _ = generate_rsa_keypair()
+        wrong_key1 = generate_rsa_keypair()[0]
         wrong_key1["kid"] = "wrong-key"
-        wrong_key2, _ = generate_rsa_keypair()
+        wrong_key2 = generate_rsa_keypair()[0]
         wrong_key2["kid"] = "wrong-key"
 
         _, signing_pem = generate_rsa_keypair()
@@ -384,7 +424,7 @@ class TestAsyncSignatureRetry:
     @respx.mock
     async def test_di_path_retries_on_signature_failure(self):
         """DI (injected client) path retries JWKS fetch for key rotation support."""
-        wrong_key, _ = generate_rsa_keypair()
+        wrong_key = generate_rsa_keypair()[0]
         wrong_key["kid"] = "wrong-key"
 
         _, signing_pem = generate_rsa_keypair()
