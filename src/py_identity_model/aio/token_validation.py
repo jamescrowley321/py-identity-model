@@ -53,31 +53,54 @@ from .managed_client import AsyncHTTPClient
 
 # Discovery TTL cache — keyed by (address, require_https) to prevent policy bypass
 _disco_cache: dict[tuple[str, bool], DiscoCacheEntry] = {}
-_disco_cache_lock = asyncio.Lock()
+# Brief CPU-only write lock; does NOT span the upstream HTTP fetch. See
+# the sync module for the full rationale and the cache-aside pattern.
+_disco_cache_write_lock = asyncio.Lock()
+# Per-URI fetch locks (striped). Allows two coroutines waiting on
+# discovery for *different* addresses to run in parallel rather than
+# serializing on a single global lock held across an awaited HTTP call.
+_DISCO_LOCK_STRIPES = 32
+_disco_fetch_locks: list[asyncio.Lock] = [
+    asyncio.Lock() for _ in range(_DISCO_LOCK_STRIPES)
+]
+
+
+def _get_disco_fetch_lock(cache_key: tuple[str, bool]) -> asyncio.Lock:
+    return _disco_fetch_locks[hash(cache_key) % _DISCO_LOCK_STRIPES]
 
 
 async def _get_disco_response(
     disco_doc_address: str | None,
     require_https: bool = True,
 ) -> DiscoveryDocumentResponse:
-    """Cached async discovery document fetching with TTL."""
+    """Cached async discovery document fetching with TTL.
+
+    Cache-aside with per-URI single-flight: a fresh cached entry returns
+    without acquiring any lock; only the upstream fetch on a cache miss
+    is serialized, and only against other requests for the same address.
+    """
     if disco_doc_address is None:
         raise ConfigurationException(
             "disco_doc_address is required when perform_disco is True"
         )
 
     cache_key = (disco_doc_address, require_https)
-    async with _disco_cache_lock:
+    entry = _disco_cache.get(cache_key)
+    if entry is not None and not is_cache_expired(entry):
+        return entry.response
+
+    fetch_lock = _get_disco_fetch_lock(cache_key)
+    async with fetch_lock:
         entry = _disco_cache.get(cache_key)
         if entry is not None and not is_cache_expired(entry):
             return entry.response
 
-        # Fetch under lock to prevent cache stampede (single-flight refresh)
         policy = DiscoveryPolicy(require_https=require_https)
         response = await get_discovery_document(
             DiscoveryDocumentRequest(address=disco_doc_address, policy=policy),
         )
-        apply_disco_cache_outcome(_disco_cache, cache_key, response, time.time())
+        async with _disco_cache_write_lock:
+            apply_disco_cache_outcome(_disco_cache, cache_key, response, time.time())
         return response
 
 
@@ -91,38 +114,60 @@ def clear_discovery_cache() -> None:
 # ============================================================================
 
 _jwks_cache: dict[str, JwksCacheEntry] = {}
-_jwks_cache_lock = asyncio.Lock()
+_jwks_cache_write_lock = asyncio.Lock()
+_JWKS_LOCK_STRIPES = 32
+_jwks_fetch_locks: list[asyncio.Lock] = [
+    asyncio.Lock() for _ in range(_JWKS_LOCK_STRIPES)
+]
 
-# See sync._kid_miss_last_attempt for rationale. Guarded by _jwks_cache_lock.
+# See sync._kid_miss_last_attempt for rationale. Guarded by _jwks_cache_write_lock.
 _kid_miss_last_attempt: dict[str, float] = {}
 
 
+def _get_jwks_fetch_lock(jwks_uri: str) -> asyncio.Lock:
+    return _jwks_fetch_locks[hash(jwks_uri) % _JWKS_LOCK_STRIPES]
+
+
 async def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
-    """Return cached JWKS response if fresh, otherwise fetch and cache."""
-    async with _jwks_cache_lock:
+    """Return cached JWKS response if fresh, otherwise fetch and cache.
+
+    Cache-aside with per-URI single-flight (see ``_get_disco_response``).
+    """
+    entry = _jwks_cache.get(jwks_uri)
+    if entry is not None and not is_cache_expired(entry):
+        return entry.response
+
+    fetch_lock = _get_jwks_fetch_lock(jwks_uri)
+    async with fetch_lock:
         entry = _jwks_cache.get(jwks_uri)
         if entry is not None and not is_cache_expired(entry):
             return entry.response
 
-        # Fetch under lock to prevent cache stampede (single-flight refresh)
         response = await get_jwks(JwksRequest(address=jwks_uri))
-        apply_jwks_cache_outcome(_jwks_cache, jwks_uri, response, time.time())
+        async with _jwks_cache_write_lock:
+            apply_jwks_cache_outcome(_jwks_cache, jwks_uri, response, time.time())
         return response
 
 
 async def _refresh_jwks(jwks_uri: str) -> JwksResponse:
-    """Force re-fetch JWKS and update cache (key rotation)."""
+    """Force re-fetch JWKS and update cache (key rotation).
+
+    Uses the per-URI fetch lock to coalesce concurrent refreshes for the
+    same URI while leaving unrelated URIs unblocked. The ``request_time``
+    guard catches the case where another coroutine for *this* URI completed
+    a refresh while we were blocked.
+    """
     request_time = time.time()
-    async with _jwks_cache_lock:
-        # If another coroutine already refreshed while we waited on the lock,
-        # return the fresh entry to avoid redundant sequential fetches
+    fetch_lock = _get_jwks_fetch_lock(jwks_uri)
+    async with fetch_lock:
         entry = _jwks_cache.get(jwks_uri)
         if entry is not None and entry.cached_at >= request_time:
             return entry.response
 
         logger.info("Forcing JWKS refresh for %s (possible key rotation)", jwks_uri)
         response = await get_jwks(JwksRequest(address=jwks_uri))
-        apply_jwks_cache_outcome(_jwks_cache, jwks_uri, response, time.time())
+        async with _jwks_cache_write_lock:
+            apply_jwks_cache_outcome(_jwks_cache, jwks_uri, response, time.time())
         return response
 
 
@@ -191,7 +236,7 @@ async def _discover_and_resolve_key(
                 "kid %s not present in cached JWKS; refreshing (possible key rotation)",
                 kid,
             )
-            async with _jwks_cache_lock:
+            async with _jwks_cache_write_lock:
                 _kid_miss_last_attempt[jwks_uri] = time.time()
             jwks_response = await _refresh_jwks(jwks_uri)
             validate_jwks_response(jwks_response)
