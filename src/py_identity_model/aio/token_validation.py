@@ -15,6 +15,7 @@ from ..core.jwks_cache import (
     apply_disco_cache_outcome,
     apply_jwks_cache_outcome,
     is_cache_expired,
+    should_attempt_kid_miss_refresh,
 )
 from ..core.models import (
     DiscoveryDocumentRequest,
@@ -92,6 +93,9 @@ def clear_discovery_cache() -> None:
 _jwks_cache: dict[str, JwksCacheEntry] = {}
 _jwks_cache_lock = asyncio.Lock()
 
+# See sync._kid_miss_last_attempt for rationale. Guarded by _jwks_cache_lock.
+_kid_miss_last_attempt: dict[str, float] = {}
+
 
 async def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
     """Return cached JWKS response if fresh, otherwise fetch and cache."""
@@ -125,6 +129,7 @@ async def _refresh_jwks(jwks_uri: str) -> JwksResponse:
 def clear_jwks_cache() -> None:
     """Clear the JWKS cache. Useful for testing."""
     _jwks_cache.clear()
+    _kid_miss_last_attempt.clear()
 
 
 # ============================================================================
@@ -171,17 +176,35 @@ async def _discover_and_resolve_key(
     kid, jwt_alg = extract_jwt_header_fields(jwt)
     # OP key rotation: if the JWT's kid is not in the cached JWKS, the cache
     # is stale. Force a refresh before lookup so rotation is handled without
-    # waiting for a signature failure on a key we don't have.
-    if kid is not None and not any(k.kid == kid for k in (jwks_response.keys or [])):
-        logger.info(
-            "kid %s not present in cached JWKS; refreshing (possible key rotation)",
-            kid,
-        )
-        jwks_response = await _refresh_jwks(jwks_uri)
-        validate_jwks_response(jwks_response)
-        if not any(k.kid == kid for k in (jwks_response.keys or [])):
-            logger.warning(
-                "kid %s still absent after JWKS refresh of %s", kid, jwks_uri
+    # waiting for a signature failure on a key we don't have. The cooldown
+    # gate prevents an unauthenticated attacker from amplifying inbound JWT
+    # traffic into upstream JWKS fetches by spamming random kids.
+    cached_keys = jwks_response.keys or []
+    if kid is not None and not any(k.kid == kid for k in cached_keys):
+        if should_attempt_kid_miss_refresh(
+            _kid_miss_last_attempt,
+            jwks_uri,
+            has_cached_keys=bool(cached_keys),
+            now=time.time(),
+        ):
+            logger.info(
+                "kid %s not present in cached JWKS; refreshing (possible key rotation)",
+                kid,
+            )
+            async with _jwks_cache_lock:
+                _kid_miss_last_attempt[jwks_uri] = time.time()
+            jwks_response = await _refresh_jwks(jwks_uri)
+            validate_jwks_response(jwks_response)
+            if not any(k.kid == kid for k in (jwks_response.keys or [])):
+                logger.warning(
+                    "kid %s still absent after JWKS refresh of %s", kid, jwks_uri
+                )
+        else:
+            logger.debug(
+                "kid %s not in cached JWKS for %s but refresh cooldown active; "
+                "falling through to no-matching-kid error",
+                kid,
+                jwks_uri,
             )
     key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [], jwt_alg=jwt_alg)
     return key_dict, alg, disco_doc_response, True
