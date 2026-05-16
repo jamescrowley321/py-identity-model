@@ -12,10 +12,9 @@ from ..core.discovery_policy import DiscoveryPolicy
 from ..core.jwks_cache import (
     DiscoCacheEntry,
     JwksCacheEntry,
+    apply_disco_cache_outcome,
+    apply_jwks_cache_outcome,
     is_cache_expired,
-    is_uncacheable,
-    resolve_disco_ttl,
-    resolve_ttl,
 )
 from ..core.models import (
     DiscoveryDocumentRequest,
@@ -77,11 +76,7 @@ async def _get_disco_response(
         response = await get_discovery_document(
             DiscoveryDocumentRequest(address=disco_doc_address, policy=policy),
         )
-        if response.is_successful and not is_uncacheable(response.cache_control):
-            ttl = resolve_disco_ttl(response.cache_control)
-            _disco_cache[cache_key] = DiscoCacheEntry(
-                response=response, cached_at=time.time(), ttl=ttl
-            )
+        apply_disco_cache_outcome(_disco_cache, cache_key, response, time.time())
         return response
 
 
@@ -107,11 +102,7 @@ async def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
 
         # Fetch under lock to prevent cache stampede (single-flight refresh)
         response = await get_jwks(JwksRequest(address=jwks_uri))
-        if response.is_successful and not is_uncacheable(response.cache_control):
-            ttl = resolve_ttl(response.cache_control)
-            _jwks_cache[jwks_uri] = JwksCacheEntry(
-                response=response, cached_at=time.time(), ttl=ttl
-            )
+        apply_jwks_cache_outcome(_jwks_cache, jwks_uri, response, time.time())
         return response
 
 
@@ -127,11 +118,7 @@ async def _refresh_jwks(jwks_uri: str) -> JwksResponse:
 
         logger.info("Forcing JWKS refresh for %s (possible key rotation)", jwks_uri)
         response = await get_jwks(JwksRequest(address=jwks_uri))
-        if response.is_successful and not is_uncacheable(response.cache_control):
-            ttl = resolve_ttl(response.cache_control)
-            _jwks_cache[jwks_uri] = JwksCacheEntry(
-                response=response, cached_at=time.time(), ttl=ttl
-            )
+        apply_jwks_cache_outcome(_jwks_cache, jwks_uri, response, time.time())
         return response
 
 

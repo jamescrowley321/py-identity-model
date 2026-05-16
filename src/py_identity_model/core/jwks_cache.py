@@ -160,11 +160,70 @@ def is_cache_expired(entry: JwksCacheEntry | DiscoCacheEntry) -> bool:
     return expired
 
 
+def apply_jwks_cache_outcome(
+    cache: dict[str, JwksCacheEntry],
+    jwks_uri: str,
+    response: JwksResponse,
+    now: float,
+) -> None:
+    """Apply the cache-write/invalidate/retain decision for a JWKS response.
+
+    Decision matrix:
+    - Unsuccessful (network error, 4xx, parse failure): retain any existing
+      entry. The last known-good keys remain available while transient errors
+      pass. Mirrors the "retain cache on error" pattern from jose4j.
+    - ``Cache-Control: no-store`` or ``no-cache``: invalidate the existing
+      entry. Any stale entry would otherwise survive its TTL alongside a
+      provider that explicitly forbade caching, defeating key rotation.
+    - Empty ``keys``: retain the existing entry. An empty JWKS is treated as
+      a transient upstream blip, never a valid replacement for working keys.
+    - Successful, cacheable, non-empty: store with the resolved TTL.
+    """
+    if not response.is_successful:
+        return
+    if is_uncacheable(response.cache_control):
+        cache.pop(jwks_uri, None)
+        return
+    if not response.keys:
+        return
+    cache[jwks_uri] = JwksCacheEntry(
+        response=response,
+        cached_at=now,
+        ttl=resolve_ttl(response.cache_control),
+    )
+
+
+def apply_disco_cache_outcome(
+    cache: dict[tuple[str, bool], DiscoCacheEntry],
+    cache_key: tuple[str, bool],
+    response: DiscoveryDocumentResponse,
+    now: float,
+) -> None:
+    """Apply the cache-write/invalidate/retain decision for a discovery response.
+
+    Mirrors :func:`apply_jwks_cache_outcome` but without the empty-payload
+    check, since discovery responses do not have a single "payload" field
+    whose emptiness signals a broken response.
+    """
+    if not response.is_successful:
+        return
+    if is_uncacheable(response.cache_control):
+        cache.pop(cache_key, None)
+        return
+    cache[cache_key] = DiscoCacheEntry(
+        response=response,
+        cached_at=now,
+        ttl=resolve_disco_ttl(response.cache_control),
+    )
+
+
 __all__ = [
     "DEFAULT_DISCO_CACHE_TTL_SECONDS",
     "DEFAULT_JWKS_CACHE_TTL_SECONDS",
     "DiscoCacheEntry",
     "JwksCacheEntry",
+    "apply_disco_cache_outcome",
+    "apply_jwks_cache_outcome",
     "is_cache_expired",
     "is_uncacheable",
     "parse_max_age",
