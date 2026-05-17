@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.19.13 (2026-05-17)
+
+### Bug Fixes
+
+- **tests**: Unblock CI — Ory 429 in fixture + per-URI lock test flake
+  ([`c476753`](https://github.com/jamescrowley321/py-identity-model/commit/c476753b71acb1d0e2ccdbda694155d7b2929491))
+
+
 ## v2.19.12 (2026-05-17)
 
 ### Bug Fixes
