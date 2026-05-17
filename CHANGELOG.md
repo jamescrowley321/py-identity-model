@@ -2,6 +2,46 @@
 
 <!-- version list -->
 
+## v2.19.12 (2026-05-17)
+
+### Bug Fixes
+
+- **jwks-cache**: Cap DoS amplification, clamp env config, bound cache size
+  ([`d9dfde2`](https://github.com/jamescrowley321/py-identity-model/commit/d9dfde24852fc88885e04bf7cc461e93f33b8ae9))
+
+- **jwks-cache**: Close second-review findings on cooldown lifecycle
+  ([`616f5d7`](https://github.com/jamescrowley321/py-identity-model/commit/616f5d7c5b6146494d33814bf4bc8201d6c25e78))
+
+- **jwks-cache**: Invalidate stale entry on uncacheable refresh and reject empty keys
+  ([`86b5d12`](https://github.com/jamescrowley321/py-identity-model/commit/86b5d1233c5e747e6ef5034a4ddeac92e0a62b85))
+
+- **jwks-cache**: Respect HTTP cache headers for no-store, no-cache, and failed responses
+  ([`e54d503`](https://github.com/jamescrowley321/py-identity-model/commit/e54d503c227cdee7fe6f0bbed0bc264a5622e88f))
+
+- **jwks-cache**: Use per-URI lock striping so distinct issuers fetch in parallel
+  ([`c6cf4d5`](https://github.com/jamescrowley321/py-identity-model/commit/c6cf4d502ebe836399ac2cccecdd86a61f1497be))
+
+- **token-validation**: Harden kid-miss refresh path with diagnostic, fixed test priming, and
+  negative regression
+  ([`df9c881`](https://github.com/jamescrowley321/py-identity-model/commit/df9c88111ce29f19d586cd9bb137729ef8383b3b))
+
+- **token-validation**: Refresh JWKS on cached kid miss
+  ([`4f02bfc`](https://github.com/jamescrowley321/py-identity-model/commit/4f02bfcb2a3ffa5ec5815b3da72b031cf66b14fc))
+
+### Build System
+
+- **conformance**: Wait for app-level readiness in conformance-up
+  ([`b901cea`](https://github.com/jamescrowley321/py-identity-model/commit/b901cea9e1f9d7f0e75c678158cdb7cbbb67406e))
+
+### Testing
+
+- **integration**: Skip caching benchmarks when provider sends no-store/no-cache
+  ([`bf22ae6`](https://github.com/jamescrowley321/py-identity-model/commit/bf22ae650c74fdf0caef96b30bc106a1bbea132a))
+
+- **token-validation**: Pin kid-miss stampede protection
+  ([`3dd72d7`](https://github.com/jamescrowley321/py-identity-model/commit/3dd72d7186e43b4e4098dcb97d5169cc5498d55c))
+
+
 ## v2.19.11 (2026-04-19)
 
 ### Bug Fixes
