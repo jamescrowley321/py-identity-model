@@ -32,12 +32,16 @@ import respx
 from py_identity_model.core.jwks_cache import (
     DEFAULT_DISCO_CACHE_TTL_SECONDS,
     DEFAULT_JWKS_CACHE_TTL_SECONDS,
+    DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS,
     DEFAULT_MAX_CACHE_ENTRIES,
     MAX_CACHE_TTL_SECONDS,
+    MAX_KID_MISS_COOLDOWN_SECONDS,
     MIN_CACHE_TTL_SECONDS,
+    MIN_KID_MISS_COOLDOWN_SECONDS,
     JwksCacheEntry,
     _reset_env_for_testing,
     apply_jwks_cache_outcome,
+    get_kid_miss_cooldown,
     get_max_cache_entries,
     resolve_disco_ttl,
     resolve_ttl,
@@ -117,6 +121,68 @@ class TestEnvTtlClamping:
         monkeypatch.delenv("JWKS_CACHE_TTL", raising=False)
         _reset_env_for_testing()
         assert resolve_ttl(None) == DEFAULT_JWKS_CACHE_TTL_SECONDS
+
+
+# ============================================================================
+# KID_MISS_REFRESH_COOLDOWN env parsing must apply the same fail-safe pattern
+# as JWKS_CACHE_TTL — without it, ``=abc`` crashes every kid-miss caller,
+# ``=nan`` makes the cooldown permanent (``now-last >= nan`` is False forever),
+# and ``=999999`` silently sets a multi-day cooldown that exceeds the
+# documented rotation-latency expectation.
+# ============================================================================
+
+
+COOLDOWN_CLAMP_CASES = [
+    pytest.param(
+        "0", MIN_KID_MISS_COOLDOWN_SECONDS, id="zero-explicit-opt-out-honored"
+    ),
+    pytest.param("-5", MIN_KID_MISS_COOLDOWN_SECONDS, id="negative-clamped-to-min"),
+    pytest.param("1", 1.0, id="middle-passthrough"),
+    pytest.param("3600", MAX_KID_MISS_COOLDOWN_SECONDS, id="at-max-preserved"),
+    pytest.param("999999", MAX_KID_MISS_COOLDOWN_SECONDS, id="above-max-clamped-down"),
+]
+
+
+class TestKidMissCooldownEnvParsing:
+    @pytest.mark.parametrize(("env_value", "expected"), COOLDOWN_CLAMP_CASES)
+    def test_cooldown_env_clamped(self, env_value, expected, monkeypatch):
+        monkeypatch.setenv("KID_MISS_REFRESH_COOLDOWN", env_value)
+        _reset_env_for_testing()
+        assert get_kid_miss_cooldown() == expected
+
+    def test_garbage_falls_back_to_default(self, monkeypatch):
+        """``=abc`` must not crash with ValueError at first kid-miss caller."""
+        monkeypatch.setenv("KID_MISS_REFRESH_COOLDOWN", "abc")
+        _reset_env_for_testing()
+        assert get_kid_miss_cooldown() == DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS
+
+    def test_units_suffix_falls_back_to_default(self, monkeypatch):
+        """``=5s`` is plausible operator config and must fail safe."""
+        monkeypatch.setenv("KID_MISS_REFRESH_COOLDOWN", "5s")
+        _reset_env_for_testing()
+        assert get_kid_miss_cooldown() == DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS
+
+    def test_nan_falls_back_to_default(self, monkeypatch):
+        """``=nan`` must not produce a permanent cooldown — the comparison
+        ``now - last >= nan`` is False forever, silently disabling refresh."""
+        monkeypatch.setenv("KID_MISS_REFRESH_COOLDOWN", "nan")
+        _reset_env_for_testing()
+        assert get_kid_miss_cooldown() == DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS
+
+    def test_infinity_falls_back_to_default(self, monkeypatch):
+        monkeypatch.setenv("KID_MISS_REFRESH_COOLDOWN", "inf")
+        _reset_env_for_testing()
+        assert get_kid_miss_cooldown() == DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS
+
+    def test_empty_falls_back_to_default(self, monkeypatch):
+        monkeypatch.setenv("KID_MISS_REFRESH_COOLDOWN", "")
+        _reset_env_for_testing()
+        assert get_kid_miss_cooldown() == DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS
+
+    def test_unset_uses_default(self, monkeypatch):
+        monkeypatch.delenv("KID_MISS_REFRESH_COOLDOWN", raising=False)
+        _reset_env_for_testing()
+        assert get_kid_miss_cooldown() == DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS
 
 
 # ============================================================================

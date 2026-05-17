@@ -560,6 +560,82 @@ class TestAsyncEmptyKeysNotCached:
 
 
 # ============================================================================
+# Empty-keys + uncacheable header joint case. The dataclass-level invariant
+# is "empty keys never replaces working keys" — checking the empty-keys
+# branch *before* the uncacheable branch ensures a malformed
+# ``200 {"keys": []}`` paired with ``Cache-Control: no-cache`` does not pop
+# the working entry on a transient empty-body blip combined with a header
+# bug. Without this ordering, the cache is silently emptied by a single
+# bad-response coincidence.
+# ============================================================================
+
+
+class TestEmptyKeysWithUncacheableHeaderRetains:
+    @respx.mock
+    @pytest.mark.parametrize(
+        "uncacheable_header", ["no-store", "no-cache", "no-store, max-age=300"]
+    )
+    def test_sync_empty_keys_with_uncacheable_header_retains(
+        self, uncacheable_header: str
+    ):
+        old_key = _key_with_kid("retained-kid")
+        call_log: list[int] = []
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            call_log.append(1)
+            if len(call_log) == 1:
+                return httpx.Response(
+                    200,
+                    json={"keys": [old_key]},
+                    headers={"Cache-Control": "max-age=3600"},
+                )
+            return httpx.Response(
+                200,
+                json={"keys": []},
+                headers={"Cache-Control": uncacheable_header},
+            )
+
+        respx.get(JWKS_URL).mock(side_effect=handler)
+
+        _get_cached_jwks(JWKS_URL)
+        sync_tv._refresh_jwks(JWKS_URL)
+        assert JWKS_URL in sync_tv._jwks_cache
+        assert _kids(sync_tv._jwks_cache[JWKS_URL].response) == {"retained-kid"}
+
+    @pytest.mark.asyncio
+    @respx.mock
+    @pytest.mark.parametrize(
+        "uncacheable_header", ["no-store", "no-cache", "no-store, max-age=300"]
+    )
+    async def test_async_empty_keys_with_uncacheable_header_retains(
+        self, uncacheable_header: str
+    ):
+        old_key = _key_with_kid("retained-kid")
+        call_log: list[int] = []
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            call_log.append(1)
+            if len(call_log) == 1:
+                return httpx.Response(
+                    200,
+                    json={"keys": [old_key]},
+                    headers={"Cache-Control": "max-age=3600"},
+                )
+            return httpx.Response(
+                200,
+                json={"keys": []},
+                headers={"Cache-Control": uncacheable_header},
+            )
+
+        respx.get(JWKS_URL).mock(side_effect=handler)
+
+        await async_get_cached_jwks(JWKS_URL)
+        await aio_tv._refresh_jwks(JWKS_URL)
+        assert JWKS_URL in aio_tv._jwks_cache
+        assert _kids(aio_tv._jwks_cache[JWKS_URL].response) == {"retained-kid"}
+
+
+# ============================================================================
 # Network errors must never replace a populated cache entry (retain-on-error,
 # mirroring jose4j's setRetainCacheOnErrorDuration semantics). Combined with
 # the existing "failed responses not cached" tests above, this proves the

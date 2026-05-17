@@ -39,12 +39,21 @@ from py_identity_model.aio.token_validation import (
 )
 from py_identity_model.core.jwks_cache import (
     DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS,
+    JwksCacheEntry,
     _reset_env_for_testing,
+    apply_jwks_cache_outcome,
     get_kid_miss_cooldown,
     should_attempt_kid_miss_refresh,
 )
-from py_identity_model.core.models import TokenValidationConfig
-from py_identity_model.exceptions import TokenValidationException
+from py_identity_model.core.models import (
+    JsonWebKey,
+    JwksResponse,
+    TokenValidationConfig,
+)
+from py_identity_model.exceptions import (
+    SignatureVerificationException,
+    TokenValidationException,
+)
 from py_identity_model.sync.token_validation import (
     _kid_miss_last_attempt as sync_kid_miss_last_attempt,
 )
@@ -434,6 +443,132 @@ class TestCooldownEnvOverride:
         assert get_kid_miss_cooldown() == DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS
 
 
+# ============================================================================
+# Cooldown sidecar must shrink alongside the cache. Without coordinated
+# eviction, the kid_miss_last_attempt dict grows unboundedly in deployments
+# with caller-influenced jwks_uri values (multi-tenant gateways) even though
+# the JWKS cache itself is bounded — sibling unbounded-growth bug.
+# ============================================================================
+
+
+class TestCooldownEvictedWithCache:
+    def test_apply_outcome_evicts_cooldown_alongside_cache(self, monkeypatch):
+        """When _enforce_size_limit evicts a URI from the JWKS cache, the
+        same URI's cooldown entry must go with it. Otherwise the cooldown
+        dict outgrows the cache."""
+        monkeypatch.setenv("JWKS_CACHE_MAX_ENTRIES", "3")
+        _reset_env_for_testing()
+
+        cache: dict[str, JwksCacheEntry] = {}
+        cooldown: dict[str, float] = {}
+
+        # Prime three URIs into cache; sim a cooldown stamp for each.
+        urls = [f"https://op-{i}.example/jwks" for i in range(3)]
+        for url in urls:
+            key_dict, _ = generate_rsa_keypair()
+            key_dict["kid"] = f"kid-{url}"
+            jwk = JsonWebKey(
+                kty=key_dict["kty"],
+                kid=key_dict["kid"],
+                alg=key_dict["alg"],
+                use=key_dict["use"],
+                n=key_dict["n"],
+                e=key_dict["e"],
+            )
+            response = JwksResponse(
+                is_successful=True,
+                keys=[jwk],
+                cache_control="max-age=3600",
+            )
+            apply_jwks_cache_outcome(
+                cache, url, response, time.time(), cooldown=cooldown
+            )
+            cooldown[url] = time.time()
+
+        assert set(cache.keys()) == set(urls)
+        assert set(cooldown.keys()) == set(urls)
+
+        # Overflow with a fourth URI — evicts the oldest from cache AND cooldown.
+        overflow_url = "https://overflow.example/jwks"
+        overflow_kd, _ = generate_rsa_keypair()
+        overflow_kd["kid"] = "overflow"
+        overflow_jwk = JsonWebKey(
+            kty=overflow_kd["kty"],
+            kid=overflow_kd["kid"],
+            alg=overflow_kd["alg"],
+            use=overflow_kd["use"],
+            n=overflow_kd["n"],
+            e=overflow_kd["e"],
+        )
+        apply_jwks_cache_outcome(
+            cache,
+            overflow_url,
+            JwksResponse(
+                is_successful=True,
+                keys=[overflow_jwk],
+                cache_control="max-age=3600",
+            ),
+            time.time(),
+            cooldown=cooldown,
+        )
+
+        oldest = urls[0]
+        assert oldest not in cache
+        assert oldest not in cooldown
+        # Surviving entries preserved on both sides.
+        assert set(cache.keys()) == {urls[1], urls[2], overflow_url}
+
+    def test_uncacheable_response_clears_cooldown_alongside_cache(self):
+        """``Cache-Control: no-cache`` pops the cache entry; the matching
+        cooldown stamp must also clear so a future fetch isn't suppressed."""
+        url = "https://op.example/jwks"
+        cache: dict[str, JwksCacheEntry] = {}
+        cooldown: dict[str, float] = {}
+
+        # Prime
+        key_dict, _ = generate_rsa_keypair()
+        key_dict["kid"] = "primed"
+        jwk = JsonWebKey(
+            kty=key_dict["kty"],
+            kid=key_dict["kid"],
+            alg=key_dict["alg"],
+            use=key_dict["use"],
+            n=key_dict["n"],
+            e=key_dict["e"],
+        )
+        apply_jwks_cache_outcome(
+            cache,
+            url,
+            JwksResponse(is_successful=True, keys=[jwk], cache_control="max-age=3600"),
+            time.time(),
+            cooldown=cooldown,
+        )
+        cooldown[url] = time.time()
+        assert url in cache
+        assert url in cooldown
+
+        # Now an uncacheable response with non-empty keys: pop both.
+        new_kd, _ = generate_rsa_keypair()
+        new_kd["kid"] = "rotated"
+        new_jwk = JsonWebKey(
+            kty=new_kd["kty"],
+            kid=new_kd["kid"],
+            alg=new_kd["alg"],
+            use=new_kd["use"],
+            n=new_kd["n"],
+            e=new_kd["e"],
+        )
+        apply_jwks_cache_outcome(
+            cache,
+            url,
+            JwksResponse(is_successful=True, keys=[new_jwk], cache_control="no-cache"),
+            time.time(),
+            cooldown=cooldown,
+        )
+        assert url not in cache
+        assert url not in cooldown
+
+
 # Async cooldown state covered for symmetry — most of the integration
 # coverage is via the sync end-to-end test above.
 class TestAsyncCooldownStateMirrorsSync:
@@ -462,3 +597,320 @@ class TestAsyncCooldownStateMirrorsSync:
             )
 
         assert JWKS_URL in async_kid_miss_last_attempt
+
+
+# ============================================================================
+# Transient network errors during refresh must NOT wedge the cooldown.
+# Otherwise a single dropped packet stretches a rotation outage from
+# milliseconds to one cooldown window for every kid-miss caller.
+# ============================================================================
+
+
+class TestCooldownNotWedgedByTransientError:
+    @respx.mock
+    def test_sync_refresh_exception_does_not_stamp_cooldown(self):
+        """The cooldown timestamp must be set on the success path, not on
+        attempted-but-failed refreshes. A single network blip otherwise
+        wedges rotation discovery for the entire cooldown window."""
+        old_key_dict, _ = generate_rsa_keypair()
+        old_key_dict["kid"] = "old-kid"
+
+        respx.get(DISCO_URL).mock(
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
+        )
+
+        # Prime cache with old-kid via a successful first fetch, then have
+        # the JWKS endpoint raise a connect error on subsequent calls.
+        call_log: list[int] = []
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            call_log.append(1)
+            if len(call_log) == 1:
+                return httpx.Response(200, json={"keys": [old_key_dict]})
+            raise httpx.ConnectError("simulated upstream connect failure")
+
+        respx.get(JWKS_URL).mock(side_effect=handler)
+
+        config = TokenValidationConfig(
+            perform_disco=True, audience=None, issuer="https://example.com"
+        )
+
+        # Trigger a kid-miss; refresh fails mid-flight. get_jwks wraps the
+        # httpx error into a failed JwksResponse, and validate_jwks_response
+        # raises TokenValidationException from the unsuccessful response.
+        with pytest.raises(TokenValidationException):
+            validate_token(
+                jwt=_sign_unknown_kid_token("new-kid"),
+                token_validation_config=config,
+                disco_doc_address=DISCO_URL,
+            )
+
+        # Cooldown must NOT be stamped — the refresh didn't actually
+        # complete, so charging the budget would suppress recovery once
+        # upstream returns.
+        assert JWKS_URL not in sync_kid_miss_last_attempt
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_async_refresh_exception_does_not_stamp_cooldown(self):
+        old_key_dict, _ = generate_rsa_keypair()
+        old_key_dict["kid"] = "old-kid"
+
+        respx.get(DISCO_URL).mock(
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
+        )
+
+        call_log: list[int] = []
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            call_log.append(1)
+            if len(call_log) == 1:
+                return httpx.Response(200, json={"keys": [old_key_dict]})
+            raise httpx.ConnectError("simulated upstream connect failure")
+
+        respx.get(JWKS_URL).mock(side_effect=handler)
+
+        config = TokenValidationConfig(
+            perform_disco=True, audience=None, issuer="https://example.com"
+        )
+
+        with pytest.raises(TokenValidationException):
+            await async_validate_token(
+                jwt=_sign_unknown_kid_token("new-kid"),
+                token_validation_config=config,
+                disco_doc_address=DISCO_URL,
+            )
+
+        assert JWKS_URL not in async_kid_miss_last_attempt
+
+
+# ============================================================================
+# A successful rotation must drop the cooldown stamp so a back-to-back
+# second rotation within the cooldown window isn't suppressed. Without this,
+# rapid double-rotations (incident-response key rolls) wedge for one window.
+# ============================================================================
+
+
+class TestCooldownClearedOnSuccessfulRotation:
+    @respx.mock
+    def test_sync_successful_kid_miss_refresh_clears_cooldown(self):
+        """When a kid-miss refresh produces the requested kid, the cooldown
+        stamp must be popped — proving a real rotation was absorbed and the
+        next rotation isn't artificially suppressed."""
+        old_key_dict, _ = generate_rsa_keypair()
+        old_key_dict["kid"] = "old-kid"
+        new_key_dict, new_pem = generate_rsa_keypair()
+        new_key_dict["kid"] = "new-kid"
+
+        respx.get(DISCO_URL).mock(
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
+        )
+        respx.get(JWKS_URL).mock(
+            side_effect=[
+                # Prime
+                httpx.Response(200, json={"keys": [old_key_dict]}),
+                # Refresh after kid-miss returns rotated keys
+                httpx.Response(200, json={"keys": [new_key_dict]}),
+            ]
+        )
+
+        config = TokenValidationConfig(
+            perform_disco=True, audience=None, issuer="https://example.com"
+        )
+
+        rotation_token = sign_jwt(
+            new_pem,
+            {"sub": "user1", "iss": "https://example.com"},
+            headers={"kid": "new-kid"},
+        )
+
+        decoded = validate_token(
+            jwt=rotation_token,
+            token_validation_config=config,
+            disco_doc_address=DISCO_URL,
+        )
+        assert decoded["sub"] == "user1"
+        # Critical: cooldown must NOT be set, since the refresh produced
+        # the missing kid. Otherwise a back-to-back second rotation within
+        # the window would be suppressed.
+        assert JWKS_URL not in sync_kid_miss_last_attempt
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_async_successful_kid_miss_refresh_clears_cooldown(self):
+        old_key_dict, _ = generate_rsa_keypair()
+        old_key_dict["kid"] = "old-kid"
+        new_key_dict, new_pem = generate_rsa_keypair()
+        new_key_dict["kid"] = "new-kid"
+
+        respx.get(DISCO_URL).mock(
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
+        )
+        respx.get(JWKS_URL).mock(
+            side_effect=[
+                httpx.Response(200, json={"keys": [old_key_dict]}),
+                httpx.Response(200, json={"keys": [new_key_dict]}),
+            ]
+        )
+
+        config = TokenValidationConfig(
+            perform_disco=True, audience=None, issuer="https://example.com"
+        )
+
+        rotation_token = sign_jwt(
+            new_pem,
+            {"sub": "user1", "iss": "https://example.com"},
+            headers={"kid": "new-kid"},
+        )
+
+        decoded = await async_validate_token(
+            jwt=rotation_token,
+            token_validation_config=config,
+            disco_doc_address=DISCO_URL,
+        )
+        assert decoded["sub"] == "user1"
+        assert JWKS_URL not in async_kid_miss_last_attempt
+
+
+# ============================================================================
+# The signature-failure retry path must share the kid-miss cooldown budget.
+# An attacker forging tokens signed with a wrong key against a *cached* kid
+# would otherwise drive 1:1 upstream JWKS fetches per request — the same DoS
+# amplifier the kid-miss cooldown was built to close.
+# ============================================================================
+
+
+SIG_RETRY_ATTACKER_COUNT = 25
+
+
+class TestSignatureFailureRetryGatedByCooldown:
+    @respx.mock
+    def test_sync_signature_failure_retry_capped_by_cooldown(self):
+        """Tokens with a cached kid but a bad signature trigger the
+        signature-failure retry path. Cooldown must bound upstream fetches."""
+        defender_key_dict, _defender_pem = generate_rsa_keypair()
+        defender_key_dict["kid"] = "defender-kid"
+
+        respx.get(DISCO_URL).mock(
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
+        )
+        jwks_route = respx.get(JWKS_URL).mock(
+            return_value=httpx.Response(200, json={"keys": [defender_key_dict]})
+        )
+
+        config = TokenValidationConfig(
+            perform_disco=True, audience=None, issuer="https://example.com"
+        )
+
+        # Forge tokens that advertise the cached kid but are signed with
+        # attacker-controlled keys. Validator finds the cached key (kid
+        # matches), attempts decode, signature fails, retry path fires.
+        attacker_tokens = [
+            _sign_unknown_kid_token("defender-kid")
+            for _ in range(SIG_RETRY_ATTACKER_COUNT)
+        ]
+
+        rejections = 0
+        for token in attacker_tokens:
+            try:
+                validate_token(
+                    jwt=token,
+                    token_validation_config=config,
+                    disco_doc_address=DISCO_URL,
+                )
+            except SignatureVerificationException:
+                rejections += 1
+
+        assert rejections == SIG_RETRY_ATTACKER_COUNT
+        # 1 prime + 1 refresh (first retry); subsequent retries suppressed
+        # by cooldown. Without C-1, this would be SIG_RETRY_ATTACKER_COUNT + 1.
+        assert jwks_route.call_count == 2  # noqa: PLR2004
+        # Cooldown was stamped by the signature-failure retry path.
+        assert JWKS_URL in sync_kid_miss_last_attempt
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_async_signature_failure_retry_capped_by_cooldown(self):
+        defender_key_dict, _defender_pem = generate_rsa_keypair()
+        defender_key_dict["kid"] = "defender-kid"
+
+        respx.get(DISCO_URL).mock(
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
+        )
+        jwks_route = respx.get(JWKS_URL).mock(
+            return_value=httpx.Response(200, json={"keys": [defender_key_dict]})
+        )
+
+        config = TokenValidationConfig(
+            perform_disco=True, audience=None, issuer="https://example.com"
+        )
+
+        attacker_tokens = [
+            _sign_unknown_kid_token("defender-kid")
+            for _ in range(SIG_RETRY_ATTACKER_COUNT)
+        ]
+
+        async def _try(token: str) -> bool:
+            try:
+                await async_validate_token(
+                    jwt=token,
+                    token_validation_config=config,
+                    disco_doc_address=DISCO_URL,
+                )
+                return False
+            except SignatureVerificationException:
+                return True
+
+        # Run sequentially — concurrent runs would all coalesce on the
+        # per-URI fetch_lock and the test wouldn't exercise the
+        # cooldown-gated suppression path.
+        results = [await _try(t) for t in attacker_tokens]
+        assert all(results)
+        assert jwks_route.call_count == 2  # noqa: PLR2004
+        assert JWKS_URL in async_kid_miss_last_attempt
+
+    @respx.mock
+    def test_sync_legit_rotation_via_signature_retry_clears_cooldown(self):
+        """Signature-failure retry + decode succeeds with refreshed keys
+        → real rotation absorbed → cooldown must clear (M-2 analogue for
+        the signature-failure path)."""
+        # Defender's old key cached; rotation produces new key with the
+        # same kid (kid reuse across rotation is legal per RFC 7517 §4.5
+        # but rare in practice — the more common case is new kid). For
+        # this test the simpler same-kid rotation is sufficient.
+        cached_kd, _old_pem = generate_rsa_keypair()
+        cached_kd["kid"] = "defender-kid"
+        rotated_kd, rotated_pem = generate_rsa_keypair()
+        rotated_kd["kid"] = "defender-kid"  # same kid, new key material
+
+        respx.get(DISCO_URL).mock(
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
+        )
+        respx.get(JWKS_URL).mock(
+            side_effect=[
+                httpx.Response(200, json={"keys": [cached_kd]}),  # prime
+                httpx.Response(200, json={"keys": [rotated_kd]}),  # rotated
+            ]
+        )
+
+        config = TokenValidationConfig(
+            perform_disco=True, audience=None, issuer="https://example.com"
+        )
+
+        # Token signed with the rotated key, advertises the same kid.
+        # Validator picks cached key, signature fails, retry refreshes,
+        # finds rotated key with same kid, decode succeeds.
+        token = sign_jwt(
+            rotated_pem,
+            {"sub": "user1", "iss": "https://example.com"},
+            headers={"kid": "defender-kid"},
+        )
+
+        decoded = validate_token(
+            jwt=token,
+            token_validation_config=config,
+            disco_doc_address=DISCO_URL,
+        )
+        assert decoded["sub"] == "user1"
+        # Real rotation absorbed; cooldown must be clear.
+        assert JWKS_URL not in sync_kid_miss_last_attempt

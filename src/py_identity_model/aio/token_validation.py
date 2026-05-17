@@ -145,7 +145,13 @@ async def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
 
         response = await get_jwks(JwksRequest(address=jwks_uri))
         async with _jwks_cache_write_lock:
-            apply_jwks_cache_outcome(_jwks_cache, jwks_uri, response, time.time())
+            apply_jwks_cache_outcome(
+                _jwks_cache,
+                jwks_uri,
+                response,
+                time.time(),
+                cooldown=_kid_miss_last_attempt,
+            )
         return response
 
 
@@ -167,7 +173,13 @@ async def _refresh_jwks(jwks_uri: str) -> JwksResponse:
         logger.info("Forcing JWKS refresh for %s (possible key rotation)", jwks_uri)
         response = await get_jwks(JwksRequest(address=jwks_uri))
         async with _jwks_cache_write_lock:
-            apply_jwks_cache_outcome(_jwks_cache, jwks_uri, response, time.time())
+            apply_jwks_cache_outcome(
+                _jwks_cache,
+                jwks_uri,
+                response,
+                time.time(),
+                cooldown=_kid_miss_last_attempt,
+            )
         return response
 
 
@@ -236,11 +248,20 @@ async def _discover_and_resolve_key(
                 "kid %s not present in cached JWKS; refreshing (possible key rotation)",
                 kid,
             )
-            async with _jwks_cache_write_lock:
-                _kid_miss_last_attempt[jwks_uri] = time.time()
+            # See sync._discover_and_resolve_key for the rationale.
             jwks_response = await _refresh_jwks(jwks_uri)
+            if jwks_response.is_successful:
+                refreshed_keys = jwks_response.keys or []
+                kid_found = any(k.kid == kid for k in refreshed_keys)
+                async with _jwks_cache_write_lock:
+                    if kid_found:
+                        _kid_miss_last_attempt.pop(jwks_uri, None)
+                    else:
+                        _kid_miss_last_attempt[jwks_uri] = time.time()
+            else:
+                kid_found = False
             validate_jwks_response(jwks_response)
-            if not any(k.kid == kid for k in (jwks_response.keys or [])):
+            if not kid_found:
                 logger.warning(
                     "kid %s still absent after JWKS refresh of %s", kid, jwks_uri
                 )
@@ -261,20 +282,55 @@ async def _retry_with_refreshed_jwks(
     disco_doc_response: DiscoveryDocumentResponse,
     http_client: AsyncHTTPClient | None = None,
 ) -> dict:
-    """Re-fetch JWKS and retry decode once (key rotation recovery)."""
+    """Re-fetch JWKS and retry decode once (key rotation recovery).
+
+    See sync._retry_with_refreshed_jwks for the rationale. Shares
+    ``_kid_miss_last_attempt`` with the kid-miss path so an attacker
+    forging signatures against cached kids can't bypass the cooldown.
+    """
     logger.warning("Signature verification failed; retrying with refreshed keys")
     jwks_uri = validate_jwks_uri(disco_doc_response)
     if http_client is not None:
         jwks_response = await get_jwks(
             JwksRequest(address=jwks_uri), http_client=http_client
         )
-    else:
-        jwks_response = await _refresh_jwks(jwks_uri)
+        validate_jwks_response(jwks_response)
+        kid, jwt_alg = extract_jwt_header_fields(jwt)
+        key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [], jwt_alg=jwt_alg)
+        resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
+        return decode_with_config(jwt, resolved_config, disco_doc_response.issuer)
+
+    if not should_attempt_kid_miss_refresh(
+        _kid_miss_last_attempt,
+        jwks_uri,
+        has_cached_keys=True,
+        now=time.time(),
+    ):
+        logger.debug(
+            "Signature-failure retry suppressed for %s: refresh cooldown active",
+            jwks_uri,
+        )
+        raise SignatureVerificationException(
+            "Signature verification failed; refresh cooldown active"
+        )
+
+    jwks_response = await _refresh_jwks(jwks_uri)
+    # See sync._retry_with_refreshed_jwks — transient failures must not
+    # stamp the cooldown.
     validate_jwks_response(jwks_response)
-    kid, jwt_alg = extract_jwt_header_fields(jwt)
-    key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [], jwt_alg=jwt_alg)
-    resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
-    return decode_with_config(jwt, resolved_config, disco_doc_response.issuer)
+
+    try:
+        kid, jwt_alg = extract_jwt_header_fields(jwt)
+        key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [], jwt_alg=jwt_alg)
+        resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
+        decoded = decode_with_config(jwt, resolved_config, disco_doc_response.issuer)
+    except Exception:
+        async with _jwks_cache_write_lock:
+            _kid_miss_last_attempt[jwks_uri] = time.time()
+        raise
+    async with _jwks_cache_write_lock:
+        _kid_miss_last_attempt.pop(jwks_uri, None)
+    return decoded
 
 
 async def validate_token(

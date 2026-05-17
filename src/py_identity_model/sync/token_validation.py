@@ -155,7 +155,13 @@ def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
 
         response = get_jwks(JwksRequest(address=jwks_uri))
         with _jwks_cache_write_lock:
-            apply_jwks_cache_outcome(_jwks_cache, jwks_uri, response, time.time())
+            apply_jwks_cache_outcome(
+                _jwks_cache,
+                jwks_uri,
+                response,
+                time.time(),
+                cooldown=_kid_miss_last_attempt,
+            )
         return response
 
 
@@ -177,7 +183,13 @@ def _refresh_jwks(jwks_uri: str) -> JwksResponse:
         logger.info("Forcing JWKS refresh for %s (possible key rotation)", jwks_uri)
         response = get_jwks(JwksRequest(address=jwks_uri))
         with _jwks_cache_write_lock:
-            apply_jwks_cache_outcome(_jwks_cache, jwks_uri, response, time.time())
+            apply_jwks_cache_outcome(
+                _jwks_cache,
+                jwks_uri,
+                response,
+                time.time(),
+                cooldown=_kid_miss_last_attempt,
+            )
         return response
 
 
@@ -245,11 +257,33 @@ def _discover_and_resolve_key(
                 "kid %s not present in cached JWKS; refreshing (possible key rotation)",
                 kid,
             )
-            with _jwks_cache_write_lock:
-                _kid_miss_last_attempt[jwks_uri] = time.time()
+            # Stamping is deferred until after the refresh: transient
+            # upstream failures (network errors are wrapped into
+            # is_successful=False by get_jwks) must not wedge the cooldown,
+            # so a single dropped packet does not stretch a rotation outage
+            # by the cooldown window.
             jwks_response = _refresh_jwks(jwks_uri)
+            if jwks_response.is_successful:
+                refreshed_keys = jwks_response.keys or []
+                kid_found = any(k.kid == kid for k in refreshed_keys)
+                with _jwks_cache_write_lock:
+                    if kid_found:
+                        # Refresh produced the missing kid — legitimate
+                        # rotation absorbed. Drop the stamp so a back-to-back
+                        # second rotation within the cooldown window can
+                        # still refresh.
+                        _kid_miss_last_attempt.pop(jwks_uri, None)
+                    else:
+                        # Refresh completed and produced a response but the
+                        # kid is still absent — DoS amplifier case (the
+                        # attacker drove an upstream fetch we couldn't
+                        # turn into a successful validation). Stamp the
+                        # cooldown to suppress repeats in the window.
+                        _kid_miss_last_attempt[jwks_uri] = time.time()
+            else:
+                kid_found = False
             validate_jwks_response(jwks_response)
-            if not any(k.kid == kid for k in (jwks_response.keys or [])):
+            if not kid_found:
                 logger.warning(
                     "kid %s still absent after JWKS refresh of %s", kid, jwks_uri
                 )
@@ -270,18 +304,66 @@ def _retry_with_refreshed_jwks(
     disco_doc_response: DiscoveryDocumentResponse,
     http_client: HTTPClient | None = None,
 ) -> dict:
-    """Re-fetch JWKS and retry decode once (key rotation recovery)."""
+    """Re-fetch JWKS and retry decode once (key rotation recovery).
+
+    Shares ``_kid_miss_last_attempt`` with the kid-miss path: an attacker
+    forging JWTs signed with the wrong key for a *cached* kid can drive
+    one upstream JWKS fetch per request without this gate, since the kid
+    is present in the cache and the signature failure is the only trigger
+    for the refresh. The signature-failure variant is morally identical
+    to the kid-miss variant — both are attacker-triggerable force-refresh
+    paths — so they share the same cooldown budget.
+
+    Cooldown is consulted only on the cached path; the injected
+    ``http_client`` path documents its own bypass.
+    """
     logger.warning("Signature verification failed; retrying with refreshed keys")
     jwks_uri = validate_jwks_uri(disco_doc_response)
     if http_client is not None:
         jwks_response = get_jwks(JwksRequest(address=jwks_uri), http_client=http_client)
-    else:
-        jwks_response = _refresh_jwks(jwks_uri)
+        validate_jwks_response(jwks_response)
+        kid, jwt_alg = extract_jwt_header_fields(jwt)
+        key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [], jwt_alg=jwt_alg)
+        resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
+        return decode_with_config(jwt, resolved_config, disco_doc_response.issuer)
+
+    if not should_attempt_kid_miss_refresh(
+        _kid_miss_last_attempt,
+        jwks_uri,
+        has_cached_keys=True,
+        now=time.time(),
+    ):
+        logger.debug(
+            "Signature-failure retry suppressed for %s: refresh cooldown active",
+            jwks_uri,
+        )
+        raise SignatureVerificationException(
+            "Signature verification failed; refresh cooldown active"
+        )
+
+    jwks_response = _refresh_jwks(jwks_uri)
+    # Transient upstream failures (wrapped as is_successful=False) must not
+    # stamp the cooldown — let validate_jwks_response raise naturally so
+    # the next attempt can retry once upstream recovers.
     validate_jwks_response(jwks_response)
-    kid, jwt_alg = extract_jwt_header_fields(jwt)
-    key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [], jwt_alg=jwt_alg)
-    resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
-    return decode_with_config(jwt, resolved_config, disco_doc_response.issuer)
+
+    try:
+        kid, jwt_alg = extract_jwt_header_fields(jwt)
+        key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [], jwt_alg=jwt_alg)
+        resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
+        decoded = decode_with_config(jwt, resolved_config, disco_doc_response.issuer)
+    except Exception:
+        # Refresh delivered a usable response but the chain (find_key,
+        # decode) still failed — DoS amplifier case. Stamp to suppress
+        # retry storms.
+        with _jwks_cache_write_lock:
+            _kid_miss_last_attempt[jwks_uri] = time.time()
+        raise
+    # Refreshed keys verified the JWT — real rotation absorbed. Clear the
+    # stamp so a subsequent legitimate rotation isn't suppressed.
+    with _jwks_cache_write_lock:
+        _kid_miss_last_attempt.pop(jwks_uri, None)
+    return decoded
 
 
 def validate_token(

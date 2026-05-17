@@ -21,6 +21,7 @@ based on their key rotation schedule (e.g., Google uses ``max-age=19800``).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 import os
 import re
 import time
@@ -36,6 +37,13 @@ DEFAULT_JWKS_CACHE_TTL_SECONDS: float = 86400.0  # 24 hours
 DEFAULT_DISCO_CACHE_TTL_SECONDS: float = 3600.0  # 1 hour
 MIN_CACHE_TTL_SECONDS: float = 60.0
 MAX_CACHE_TTL_SECONDS: float = 86400.0
+
+# Cooldown bounds. 0 is permitted as an explicit opt-out for environments that
+# accept the DoS amplification risk in exchange for instant rotation. 3600s
+# (1h) is a soft ceiling — beyond that, rotation latency exceeds the documented
+# expectation that a real key rotation propagates "within one cooldown window."
+MIN_KID_MISS_COOLDOWN_SECONDS: float = 0.0
+MAX_KID_MISS_COOLDOWN_SECONDS: float = 3600.0
 
 # Minimum gap between forced JWKS refreshes for the *same* jwks_uri when the
 # incoming JWT's kid is not in the cached set. Bounds the DoS amplification
@@ -70,15 +78,22 @@ _NO_STORE_RE = re.compile(r"\bno-store\b", re.IGNORECASE)
 _NO_CACHE_RE = re.compile(r"\bno-cache\b", re.IGNORECASE)
 
 
-def _safe_env_ttl(env_var: str, default: float) -> float:
-    """Read a TTL env var with clamp + fail-safe parsing.
+def _safe_env_float(
+    env_var: str,
+    default: float,
+    min_value: float,
+    max_value: float,
+) -> float:
+    """Read a float env var with NaN/Inf rejection, clamp, and fail-safe parsing.
 
-    Garbage values (``""``, ``"60s"``, non-numeric) log a warning and fall
-    back to the default rather than crashing the process at first cache
-    access. Values outside ``[MIN_CACHE_TTL_SECONDS, MAX_CACHE_TTL_SECONDS]``
-    are clamped — without this, ``JWKS_CACHE_TTL=0`` silently disables the
-    cache (every entry instantly expired) and ``JWKS_CACHE_TTL=2592000``
-    silently disables the documented 24h ceiling on key-rotation latency.
+    Garbage values (``""``, ``"60s"``, non-numeric, NaN, Inf) log a warning
+    and fall back to the default rather than crashing the process at first
+    cache access. Values outside ``[min_value, max_value]`` are clamped.
+
+    Without this, ``JWKS_CACHE_TTL=0`` would silently disable the cache,
+    ``KID_MISS_REFRESH_COOLDOWN="abc"`` would crash at first kid-miss, and
+    ``KID_MISS_REFRESH_COOLDOWN=nan`` would make the cooldown permanent
+    (``now - last >= nan`` is False forever).
     """
     raw = os.getenv(env_var)
     if raw is None or raw == "":
@@ -87,23 +102,41 @@ def _safe_env_ttl(env_var: str, default: float) -> float:
         value = float(raw)
     except ValueError:
         logger.warning(
-            "Invalid %s=%r; falling back to default %.0fs",
+            "Invalid %s=%r; falling back to default %s",
             env_var,
             raw,
             default,
         )
         return default
-    clamped = max(MIN_CACHE_TTL_SECONDS, min(value, MAX_CACHE_TTL_SECONDS))
-    if clamped != value:
+    if not math.isfinite(value):
         logger.warning(
-            "Clamped %s=%s to [%.0fs, %.0fs] → %.0fs",
+            "Non-finite %s=%s; falling back to default %s",
             env_var,
             value,
-            MIN_CACHE_TTL_SECONDS,
-            MAX_CACHE_TTL_SECONDS,
+            default,
+        )
+        return default
+    clamped = max(min_value, min(value, max_value))
+    if clamped != value:
+        logger.warning(
+            "Clamped %s=%s to [%s, %s] → %s",
+            env_var,
+            value,
+            min_value,
+            max_value,
             clamped,
         )
     return clamped
+
+
+def _safe_env_ttl(env_var: str, default: float) -> float:
+    """Read a TTL env var with clamp + fail-safe parsing.
+
+    Thin wrapper around :func:`_safe_env_float` with the TTL bounds.
+    """
+    return _safe_env_float(
+        env_var, default, MIN_CACHE_TTL_SECONDS, MAX_CACHE_TTL_SECONDS
+    )
 
 
 def _get_env_ttl() -> float:
@@ -157,28 +190,43 @@ def get_max_cache_entries() -> int:
     return _max_cache_entries
 
 
-def _enforce_size_limit(cache: dict) -> None:
-    """Evict oldest entries (by insertion order) until the cache fits."""
+def _enforce_size_limit(cache: dict) -> list:
+    """Evict oldest entries (by insertion order) until the cache fits.
+
+    Returns the list of evicted keys (in eviction order, oldest first) so
+    callers can clean up sidecar state keyed by the same identifiers — e.g.,
+    ``_kid_miss_last_attempt`` in the token_validation modules, which would
+    otherwise grow unbounded even though the JWKS cache itself is bounded.
+    """
     max_size = get_max_cache_entries()
+    evicted: list = []
     while len(cache) > max_size:
         oldest_key = next(iter(cache))
         cache.pop(oldest_key)
+        evicted.append(oldest_key)
         logger.debug(
             "Cache size %d exceeds max %d; evicted oldest entry",
             len(cache) + 1,
             max_size,
         )
+    return evicted
 
 
 def get_kid_miss_cooldown() -> float:
-    """Read KID_MISS_REFRESH_COOLDOWN from env once, cache the result."""
+    """Read KID_MISS_REFRESH_COOLDOWN from env once, cache the result.
+
+    Routed through :func:`_safe_env_float` so garbage values do not crash
+    the first kid-miss caller, and so NaN does not silently make the
+    cooldown permanent. ``KID_MISS_REFRESH_COOLDOWN=0`` is honored as an
+    explicit opt-out (no cooldown — accepts the DoS amplification risk).
+    """
     global _kid_miss_cooldown  # noqa: PLW0603
     if _kid_miss_cooldown is None:
-        _kid_miss_cooldown = float(
-            os.getenv(
-                "KID_MISS_REFRESH_COOLDOWN",
-                str(DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS),
-            )
+        _kid_miss_cooldown = _safe_env_float(
+            "KID_MISS_REFRESH_COOLDOWN",
+            DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS,
+            MIN_KID_MISS_COOLDOWN_SECONDS,
+            MAX_KID_MISS_COOLDOWN_SECONDS,
         )
     return _kid_miss_cooldown
 
@@ -328,26 +376,36 @@ def apply_jwks_cache_outcome(
     jwks_uri: str,
     response: JwksResponse,
     now: float,
+    cooldown: dict[str, float] | None = None,
 ) -> None:
     """Apply the cache-write/invalidate/retain decision for a JWKS response.
 
-    Decision matrix:
+    Decision matrix (order matters):
     - Unsuccessful (network error, 4xx, parse failure): retain any existing
       entry. The last known-good keys remain available while transient errors
       pass. Mirrors the "retain cache on error" pattern from jose4j.
+    - Empty ``keys``: retain the existing entry. An empty JWKS is treated as
+      a transient upstream blip, never a valid replacement for working keys.
+      Checked *before* the uncacheable branch so a malformed ``200 {"keys":
+      []}`` paired with ``Cache-Control: no-cache`` does not delete a working
+      entry on a transient empty-body blip.
     - ``Cache-Control: no-store`` or ``no-cache``: invalidate the existing
       entry. Any stale entry would otherwise survive its TTL alongside a
       provider that explicitly forbade caching, defeating key rotation.
-    - Empty ``keys``: retain the existing entry. An empty JWKS is treated as
-      a transient upstream blip, never a valid replacement for working keys.
     - Successful, cacheable, non-empty: store with the resolved TTL.
+
+    The optional ``cooldown`` dict is a sidecar of per-URI timestamps that
+    must be evicted alongside their cache entry — otherwise it grows
+    unboundedly even when the cache itself is bounded.
     """
     if not response.is_successful:
         return
+    if not response.keys:
+        return
     if is_uncacheable(response.cache_control):
         cache.pop(jwks_uri, None)
-        return
-    if not response.keys:
+        if cooldown is not None:
+            cooldown.pop(jwks_uri, None)
         return
     # Pop-and-reinsert so a refreshed URI moves to the end of insertion order
     # (FIFO eviction will not target it next when the cache is under pressure).
@@ -357,7 +415,10 @@ def apply_jwks_cache_outcome(
         cached_at=now,
         ttl=resolve_ttl(response.cache_control),
     )
-    _enforce_size_limit(cache)
+    evicted = _enforce_size_limit(cache)
+    if cooldown is not None:
+        for key in evicted:
+            cooldown.pop(key, None)
 
 
 def apply_disco_cache_outcome(
@@ -391,6 +452,10 @@ __all__ = [
     "DEFAULT_JWKS_CACHE_TTL_SECONDS",
     "DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS",
     "DEFAULT_MAX_CACHE_ENTRIES",
+    "MAX_CACHE_TTL_SECONDS",
+    "MAX_KID_MISS_COOLDOWN_SECONDS",
+    "MIN_CACHE_TTL_SECONDS",
+    "MIN_KID_MISS_COOLDOWN_SECONDS",
     "DiscoCacheEntry",
     "JwksCacheEntry",
     "apply_disco_cache_outcome",
