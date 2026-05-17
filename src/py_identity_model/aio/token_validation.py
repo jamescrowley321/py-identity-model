@@ -12,9 +12,10 @@ from ..core.discovery_policy import DiscoveryPolicy
 from ..core.jwks_cache import (
     DiscoCacheEntry,
     JwksCacheEntry,
+    apply_disco_cache_outcome,
+    apply_jwks_cache_outcome,
     is_cache_expired,
-    resolve_disco_ttl,
-    resolve_ttl,
+    should_attempt_kid_miss_refresh,
 )
 from ..core.models import (
     DiscoveryDocumentRequest,
@@ -52,34 +53,54 @@ from .managed_client import AsyncHTTPClient
 
 # Discovery TTL cache — keyed by (address, require_https) to prevent policy bypass
 _disco_cache: dict[tuple[str, bool], DiscoCacheEntry] = {}
-_disco_cache_lock = asyncio.Lock()
+# Brief CPU-only write lock; does NOT span the upstream HTTP fetch. See
+# the sync module for the full rationale and the cache-aside pattern.
+_disco_cache_write_lock = asyncio.Lock()
+# Per-URI fetch locks (striped). Allows two coroutines waiting on
+# discovery for *different* addresses to run in parallel rather than
+# serializing on a single global lock held across an awaited HTTP call.
+_DISCO_LOCK_STRIPES = 32
+_disco_fetch_locks: list[asyncio.Lock] = [
+    asyncio.Lock() for _ in range(_DISCO_LOCK_STRIPES)
+]
+
+
+def _get_disco_fetch_lock(cache_key: tuple[str, bool]) -> asyncio.Lock:
+    return _disco_fetch_locks[hash(cache_key) % _DISCO_LOCK_STRIPES]
 
 
 async def _get_disco_response(
     disco_doc_address: str | None,
     require_https: bool = True,
 ) -> DiscoveryDocumentResponse:
-    """Cached async discovery document fetching with TTL."""
+    """Cached async discovery document fetching with TTL.
+
+    Cache-aside with per-URI single-flight: a fresh cached entry returns
+    without acquiring any lock; only the upstream fetch on a cache miss
+    is serialized, and only against other requests for the same address.
+    """
     if disco_doc_address is None:
         raise ConfigurationException(
             "disco_doc_address is required when perform_disco is True"
         )
 
     cache_key = (disco_doc_address, require_https)
-    async with _disco_cache_lock:
+    entry = _disco_cache.get(cache_key)
+    if entry is not None and not is_cache_expired(entry):
+        return entry.response
+
+    fetch_lock = _get_disco_fetch_lock(cache_key)
+    async with fetch_lock:
         entry = _disco_cache.get(cache_key)
         if entry is not None and not is_cache_expired(entry):
             return entry.response
 
-        # Fetch under lock to prevent cache stampede (single-flight refresh)
         policy = DiscoveryPolicy(require_https=require_https)
         response = await get_discovery_document(
             DiscoveryDocumentRequest(address=disco_doc_address, policy=policy),
         )
-        ttl = resolve_disco_ttl(response.cache_control)
-        _disco_cache[cache_key] = DiscoCacheEntry(
-            response=response, cached_at=time.time(), ttl=ttl
-        )
+        async with _disco_cache_write_lock:
+            apply_disco_cache_outcome(_disco_cache, cache_key, response, time.time())
         return response
 
 
@@ -93,47 +114,79 @@ def clear_discovery_cache() -> None:
 # ============================================================================
 
 _jwks_cache: dict[str, JwksCacheEntry] = {}
-_jwks_cache_lock = asyncio.Lock()
+_jwks_cache_write_lock = asyncio.Lock()
+_JWKS_LOCK_STRIPES = 32
+_jwks_fetch_locks: list[asyncio.Lock] = [
+    asyncio.Lock() for _ in range(_JWKS_LOCK_STRIPES)
+]
+
+# See sync._kid_miss_last_attempt for rationale. Guarded by _jwks_cache_write_lock.
+_kid_miss_last_attempt: dict[str, float] = {}
+
+
+def _get_jwks_fetch_lock(jwks_uri: str) -> asyncio.Lock:
+    return _jwks_fetch_locks[hash(jwks_uri) % _JWKS_LOCK_STRIPES]
 
 
 async def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
-    """Return cached JWKS response if fresh, otherwise fetch and cache."""
-    async with _jwks_cache_lock:
+    """Return cached JWKS response if fresh, otherwise fetch and cache.
+
+    Cache-aside with per-URI single-flight (see ``_get_disco_response``).
+    """
+    entry = _jwks_cache.get(jwks_uri)
+    if entry is not None and not is_cache_expired(entry):
+        return entry.response
+
+    fetch_lock = _get_jwks_fetch_lock(jwks_uri)
+    async with fetch_lock:
         entry = _jwks_cache.get(jwks_uri)
         if entry is not None and not is_cache_expired(entry):
             return entry.response
 
-        # Fetch under lock to prevent cache stampede (single-flight refresh)
         response = await get_jwks(JwksRequest(address=jwks_uri))
-        ttl = resolve_ttl(response.cache_control)
-        _jwks_cache[jwks_uri] = JwksCacheEntry(
-            response=response, cached_at=time.time(), ttl=ttl
-        )
+        async with _jwks_cache_write_lock:
+            apply_jwks_cache_outcome(
+                _jwks_cache,
+                jwks_uri,
+                response,
+                time.time(),
+                cooldown=_kid_miss_last_attempt,
+            )
         return response
 
 
 async def _refresh_jwks(jwks_uri: str) -> JwksResponse:
-    """Force re-fetch JWKS and update cache (key rotation)."""
+    """Force re-fetch JWKS and update cache (key rotation).
+
+    Uses the per-URI fetch lock to coalesce concurrent refreshes for the
+    same URI while leaving unrelated URIs unblocked. The ``request_time``
+    guard catches the case where another coroutine for *this* URI completed
+    a refresh while we were blocked.
+    """
     request_time = time.time()
-    async with _jwks_cache_lock:
-        # If another coroutine already refreshed while we waited on the lock,
-        # return the fresh entry to avoid redundant sequential fetches
+    fetch_lock = _get_jwks_fetch_lock(jwks_uri)
+    async with fetch_lock:
         entry = _jwks_cache.get(jwks_uri)
         if entry is not None and entry.cached_at >= request_time:
             return entry.response
 
         logger.info("Forcing JWKS refresh for %s (possible key rotation)", jwks_uri)
         response = await get_jwks(JwksRequest(address=jwks_uri))
-        ttl = resolve_ttl(response.cache_control)
-        _jwks_cache[jwks_uri] = JwksCacheEntry(
-            response=response, cached_at=time.time(), ttl=ttl
-        )
+        async with _jwks_cache_write_lock:
+            apply_jwks_cache_outcome(
+                _jwks_cache,
+                jwks_uri,
+                response,
+                time.time(),
+                cooldown=_kid_miss_last_attempt,
+            )
         return response
 
 
 def clear_jwks_cache() -> None:
     """Clear the JWKS cache. Useful for testing."""
     _jwks_cache.clear()
+    _kid_miss_last_attempt.clear()
 
 
 # ============================================================================
@@ -178,6 +231,47 @@ async def _discover_and_resolve_key(
     jwks_response = await _get_cached_jwks(jwks_uri)
     validate_jwks_response(jwks_response)
     kid, jwt_alg = extract_jwt_header_fields(jwt)
+    # OP key rotation: if the JWT's kid is not in the cached JWKS, the cache
+    # is stale. Force a refresh before lookup so rotation is handled without
+    # waiting for a signature failure on a key we don't have. The cooldown
+    # gate prevents an unauthenticated attacker from amplifying inbound JWT
+    # traffic into upstream JWKS fetches by spamming random kids.
+    cached_keys = jwks_response.keys or []
+    if kid is not None and not any(k.kid == kid for k in cached_keys):
+        if should_attempt_kid_miss_refresh(
+            _kid_miss_last_attempt,
+            jwks_uri,
+            has_cached_keys=bool(cached_keys),
+            now=time.time(),
+        ):
+            logger.info(
+                "kid %s not present in cached JWKS; refreshing (possible key rotation)",
+                kid,
+            )
+            # See sync._discover_and_resolve_key for the rationale.
+            jwks_response = await _refresh_jwks(jwks_uri)
+            if jwks_response.is_successful:
+                refreshed_keys = jwks_response.keys or []
+                kid_found = any(k.kid == kid for k in refreshed_keys)
+                async with _jwks_cache_write_lock:
+                    if kid_found:
+                        _kid_miss_last_attempt.pop(jwks_uri, None)
+                    else:
+                        _kid_miss_last_attempt[jwks_uri] = time.time()
+            else:
+                kid_found = False
+            validate_jwks_response(jwks_response)
+            if not kid_found:
+                logger.warning(
+                    "kid %s still absent after JWKS refresh of %s", kid, jwks_uri
+                )
+        else:
+            logger.debug(
+                "kid %s not in cached JWKS for %s but refresh cooldown active; "
+                "falling through to no-matching-kid error",
+                kid,
+                jwks_uri,
+            )
     key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [], jwt_alg=jwt_alg)
     return key_dict, alg, disco_doc_response, True
 
@@ -188,20 +282,55 @@ async def _retry_with_refreshed_jwks(
     disco_doc_response: DiscoveryDocumentResponse,
     http_client: AsyncHTTPClient | None = None,
 ) -> dict:
-    """Re-fetch JWKS and retry decode once (key rotation recovery)."""
+    """Re-fetch JWKS and retry decode once (key rotation recovery).
+
+    See sync._retry_with_refreshed_jwks for the rationale. Shares
+    ``_kid_miss_last_attempt`` with the kid-miss path so an attacker
+    forging signatures against cached kids can't bypass the cooldown.
+    """
     logger.warning("Signature verification failed; retrying with refreshed keys")
     jwks_uri = validate_jwks_uri(disco_doc_response)
     if http_client is not None:
         jwks_response = await get_jwks(
             JwksRequest(address=jwks_uri), http_client=http_client
         )
-    else:
-        jwks_response = await _refresh_jwks(jwks_uri)
+        validate_jwks_response(jwks_response)
+        kid, jwt_alg = extract_jwt_header_fields(jwt)
+        key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [], jwt_alg=jwt_alg)
+        resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
+        return decode_with_config(jwt, resolved_config, disco_doc_response.issuer)
+
+    if not should_attempt_kid_miss_refresh(
+        _kid_miss_last_attempt,
+        jwks_uri,
+        has_cached_keys=True,
+        now=time.time(),
+    ):
+        logger.debug(
+            "Signature-failure retry suppressed for %s: refresh cooldown active",
+            jwks_uri,
+        )
+        raise SignatureVerificationException(
+            "Signature verification failed; refresh cooldown active"
+        )
+
+    jwks_response = await _refresh_jwks(jwks_uri)
+    # See sync._retry_with_refreshed_jwks — transient failures must not
+    # stamp the cooldown.
     validate_jwks_response(jwks_response)
-    kid, jwt_alg = extract_jwt_header_fields(jwt)
-    key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [], jwt_alg=jwt_alg)
-    resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
-    return decode_with_config(jwt, resolved_config, disco_doc_response.issuer)
+
+    try:
+        kid, jwt_alg = extract_jwt_header_fields(jwt)
+        key_dict, alg = find_key_by_kid(kid, jwks_response.keys or [], jwt_alg=jwt_alg)
+        resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
+        decoded = decode_with_config(jwt, resolved_config, disco_doc_response.issuer)
+    except Exception:
+        async with _jwks_cache_write_lock:
+            _kid_miss_last_attempt[jwks_uri] = time.time()
+        raise
+    async with _jwks_cache_write_lock:
+        _kid_miss_last_attempt.pop(jwks_uri, None)
+    return decoded
 
 
 async def validate_token(

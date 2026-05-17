@@ -10,6 +10,7 @@ from py_identity_model.core.jwks_cache import (
     MIN_CACHE_TTL_SECONDS,
     JwksCacheEntry,
     is_cache_expired,
+    is_uncacheable,
     parse_max_age,
     resolve_ttl,
 )
@@ -89,6 +90,41 @@ class TestCacheEntry:
     def test_entry_stores_custom_ttl(self):
         entry = self._make_entry(ttl=7200)
         assert entry.ttl == 7200
+
+
+class TestIsUncacheable:
+    def test_no_store(self):
+        assert is_uncacheable("no-store") is True
+
+    def test_no_cache(self):
+        assert is_uncacheable("no-cache") is True
+
+    def test_no_store_with_max_age(self):
+        """Per RFC 7234 §5.2.2.5, no-store overrides max-age."""
+        assert is_uncacheable("no-store, max-age=600") is True
+
+    def test_no_cache_with_max_age(self):
+        assert is_uncacheable("no-cache, max-age=600") is True
+
+    def test_descope_combined_directives(self):
+        """Real-world: Descope sends both no-store and no-cache on JWKS."""
+        assert is_uncacheable("no-store, no-cache") is True
+
+    def test_case_insensitive(self):
+        assert is_uncacheable("No-Store") is True
+        assert is_uncacheable("NO-CACHE") is True
+
+    def test_plain_max_age_is_cacheable(self):
+        assert is_uncacheable("max-age=3600") is False
+
+    def test_public_max_age_is_cacheable(self):
+        assert is_uncacheable("public, max-age=19800") is False
+
+    def test_none_header(self):
+        assert is_uncacheable(None) is False
+
+    def test_empty_string(self):
+        assert is_uncacheable("") is False
 
 
 class TestMultiProviderCacheIsolation:

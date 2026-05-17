@@ -21,6 +21,7 @@ based on their key rotation schedule (e.g., Google uses ``max-age=19800``).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 import os
 import re
 import time
@@ -37,18 +38,112 @@ DEFAULT_DISCO_CACHE_TTL_SECONDS: float = 3600.0  # 1 hour
 MIN_CACHE_TTL_SECONDS: float = 60.0
 MAX_CACHE_TTL_SECONDS: float = 86400.0
 
+# Cooldown bounds. 0 is permitted as an explicit opt-out for environments that
+# accept the DoS amplification risk in exchange for instant rotation. 3600s
+# (1h) is a soft ceiling — beyond that, rotation latency exceeds the documented
+# expectation that a real key rotation propagates "within one cooldown window."
+MIN_KID_MISS_COOLDOWN_SECONDS: float = 0.0
+MAX_KID_MISS_COOLDOWN_SECONDS: float = 3600.0
+
+# Minimum gap between forced JWKS refreshes for the *same* jwks_uri when the
+# incoming JWT's kid is not in the cached set. Bounds the DoS amplification
+# factor an unauthenticated attacker can drive by spamming JWTs with random
+# kids: under sustained load at most ⌈window / cooldown⌉ requests reach the
+# upstream JWKS endpoint per window. The cached keys remain usable inside the
+# window — the cooldown only short-circuits the refresh attempt, not the
+# lookup, so legitimate already-cached kids continue to validate normally.
+# Mirrors Microsoft IdentityModel's RefreshInterval (default 5 minutes) and
+# Auth0's node-jwks-rsa rateLimit (default 10 req/min); 5s is the conservative
+# floor between those two — small enough that a real rotation propagates
+# within one cooldown window per process.
+DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS: float = 5.0
+
+# Caps the number of distinct (jwks_uri) or (disco_address, require_https)
+# entries the cache will hold per process. Bounds an unbounded-growth attack
+# where attacker-controlled discovery addresses (multi-tenant gateways,
+# attacker-supplied issuer headers) accumulate cache entries forever — at
+# ~5KB per DiscoveryDocumentResponse, a few thousand unique entries is tens
+# of MB of memory leak. Default 64 covers any realistic multi-IdP deployment
+# while keeping worst-case memory bounded. Eviction is FIFO by insertion
+# order (Python dicts preserve insertion order since 3.7) — adequate for a
+# JWKS cache where all entries are roughly equally "hot."
+DEFAULT_MAX_CACHE_ENTRIES: int = 64
+
 _env_ttl: float | None = None
 _disco_env_ttl: float | None = None
+_kid_miss_cooldown: float | None = None
+_max_cache_entries: int | None = None
 _MAX_AGE_RE = re.compile(r"max-age=(\d+)", re.IGNORECASE)
+_NO_STORE_RE = re.compile(r"\bno-store\b", re.IGNORECASE)
+_NO_CACHE_RE = re.compile(r"\bno-cache\b", re.IGNORECASE)
+
+
+def _safe_env_float(
+    env_var: str,
+    default: float,
+    min_value: float,
+    max_value: float,
+) -> float:
+    """Read a float env var with NaN/Inf rejection, clamp, and fail-safe parsing.
+
+    Garbage values (``""``, ``"60s"``, non-numeric, NaN, Inf) log a warning
+    and fall back to the default rather than crashing the process at first
+    cache access. Values outside ``[min_value, max_value]`` are clamped.
+
+    Without this, ``JWKS_CACHE_TTL=0`` would silently disable the cache,
+    ``KID_MISS_REFRESH_COOLDOWN="abc"`` would crash at first kid-miss, and
+    ``KID_MISS_REFRESH_COOLDOWN=nan`` would make the cooldown permanent
+    (``now - last >= nan`` is False forever).
+    """
+    raw = os.getenv(env_var)
+    if raw is None or raw == "":
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning(
+            "Invalid %s=%r; falling back to default %s",
+            env_var,
+            raw,
+            default,
+        )
+        return default
+    if not math.isfinite(value):
+        logger.warning(
+            "Non-finite %s=%s; falling back to default %s",
+            env_var,
+            value,
+            default,
+        )
+        return default
+    clamped = max(min_value, min(value, max_value))
+    if clamped != value:
+        logger.warning(
+            "Clamped %s=%s to [%s, %s] → %s",
+            env_var,
+            value,
+            min_value,
+            max_value,
+            clamped,
+        )
+    return clamped
+
+
+def _safe_env_ttl(env_var: str, default: float) -> float:
+    """Read a TTL env var with clamp + fail-safe parsing.
+
+    Thin wrapper around :func:`_safe_env_float` with the TTL bounds.
+    """
+    return _safe_env_float(
+        env_var, default, MIN_CACHE_TTL_SECONDS, MAX_CACHE_TTL_SECONDS
+    )
 
 
 def _get_env_ttl() -> float:
     """Read JWKS_CACHE_TTL from env once, cache the result."""
     global _env_ttl  # noqa: PLW0603
     if _env_ttl is None:
-        _env_ttl = float(
-            os.getenv("JWKS_CACHE_TTL", str(DEFAULT_JWKS_CACHE_TTL_SECONDS))
-        )
+        _env_ttl = _safe_env_ttl("JWKS_CACHE_TTL", DEFAULT_JWKS_CACHE_TTL_SECONDS)
     return _env_ttl
 
 
@@ -56,10 +151,142 @@ def _get_disco_env_ttl() -> float:
     """Read DISCO_CACHE_TTL from env once, cache the result."""
     global _disco_env_ttl  # noqa: PLW0603
     if _disco_env_ttl is None:
-        _disco_env_ttl = float(
-            os.getenv("DISCO_CACHE_TTL", str(DEFAULT_DISCO_CACHE_TTL_SECONDS))
+        _disco_env_ttl = _safe_env_ttl(
+            "DISCO_CACHE_TTL", DEFAULT_DISCO_CACHE_TTL_SECONDS
         )
     return _disco_env_ttl
+
+
+def get_max_cache_entries() -> int:
+    """Read JWKS_CACHE_MAX_ENTRIES from env once, cache the result.
+
+    Falls back to the default on garbage or non-positive values, logging
+    a warning. Reset via ``_reset_env_for_testing``.
+    """
+    global _max_cache_entries  # noqa: PLW0603
+    if _max_cache_entries is None:
+        raw = os.getenv("JWKS_CACHE_MAX_ENTRIES")
+        if raw is None or raw == "":
+            _max_cache_entries = DEFAULT_MAX_CACHE_ENTRIES
+        else:
+            try:
+                value = int(raw)
+                if value < 1:
+                    logger.warning(
+                        "JWKS_CACHE_MAX_ENTRIES=%s must be >= 1; "
+                        "falling back to default %d",
+                        value,
+                        DEFAULT_MAX_CACHE_ENTRIES,
+                    )
+                    value = DEFAULT_MAX_CACHE_ENTRIES
+            except ValueError:
+                logger.warning(
+                    "Invalid JWKS_CACHE_MAX_ENTRIES=%r; falling back to default %d",
+                    raw,
+                    DEFAULT_MAX_CACHE_ENTRIES,
+                )
+                value = DEFAULT_MAX_CACHE_ENTRIES
+            _max_cache_entries = value
+    return _max_cache_entries
+
+
+def _enforce_size_limit(cache: dict) -> list:
+    """Evict oldest entries (by insertion order) until the cache fits.
+
+    Returns the list of evicted keys (in eviction order, oldest first) so
+    callers can clean up sidecar state keyed by the same identifiers — e.g.,
+    ``_kid_miss_last_attempt`` in the token_validation modules, which would
+    otherwise grow unbounded even though the JWKS cache itself is bounded.
+    """
+    max_size = get_max_cache_entries()
+    evicted: list = []
+    while len(cache) > max_size:
+        oldest_key = next(iter(cache))
+        cache.pop(oldest_key)
+        evicted.append(oldest_key)
+        logger.debug(
+            "Cache size %d exceeds max %d; evicted oldest entry",
+            len(cache) + 1,
+            max_size,
+        )
+    return evicted
+
+
+def get_kid_miss_cooldown() -> float:
+    """Read KID_MISS_REFRESH_COOLDOWN from env once, cache the result.
+
+    Routed through :func:`_safe_env_float` so garbage values do not crash
+    the first kid-miss caller, and so NaN does not silently make the
+    cooldown permanent. ``KID_MISS_REFRESH_COOLDOWN=0`` is honored as an
+    explicit opt-out (no cooldown — accepts the DoS amplification risk).
+    """
+    global _kid_miss_cooldown  # noqa: PLW0603
+    if _kid_miss_cooldown is None:
+        _kid_miss_cooldown = _safe_env_float(
+            "KID_MISS_REFRESH_COOLDOWN",
+            DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS,
+            MIN_KID_MISS_COOLDOWN_SECONDS,
+            MAX_KID_MISS_COOLDOWN_SECONDS,
+        )
+    return _kid_miss_cooldown
+
+
+def should_attempt_kid_miss_refresh(
+    last_attempts: dict[str, float],
+    jwks_uri: str,
+    has_cached_keys: bool,
+    now: float,
+) -> bool:
+    """Gate the kid-miss forced refresh to bound DoS amplification.
+
+    Returns True (proceed with refresh) when:
+    - We have no cached keys to fall back on (the cache cannot be a cause of
+      the kid miss — refusing here would brick token validation), OR
+    - The cooldown has elapsed since the last attempted refresh for this URI.
+
+    Returns False (skip refresh, let find_key_by_kid fail naturally) when a
+    recent kid-miss refresh for this URI did not produce the requested kid
+    and the cached keys are non-empty. The caller will hit the no-matching-kid
+    error path with cached keys still usable for already-known kids.
+
+    The state is keyed by ``jwks_uri`` so an attacker spamming kids against
+    one OP cannot suppress legitimate refreshes for a different OP.
+    """
+    if not has_cached_keys:
+        return True
+    last = last_attempts.get(jwks_uri)
+    if last is None:
+        return True
+    return (now - last) >= get_kid_miss_cooldown()
+
+
+def _reset_env_for_testing() -> None:
+    """Test-only helper: clear memoized env-derived values.
+
+    The module-level memoization (``_env_ttl``, ``_disco_env_ttl``,
+    ``_kid_miss_cooldown``, ``_max_cache_entries``) makes ``monkeypatch.setenv``
+    a silent no-op after any prior call has populated the cache. Tests that
+    need to vary these knobs across runs call this to reset the memos.
+    """
+    global _env_ttl, _disco_env_ttl, _kid_miss_cooldown, _max_cache_entries  # noqa: PLW0603
+    _env_ttl = None
+    _disco_env_ttl = None
+    _kid_miss_cooldown = None
+    _max_cache_entries = None
+
+
+def is_uncacheable(cache_control: str | None) -> bool:
+    """Return True when Cache-Control forbids caching the response.
+
+    Honors RFC 7234 §5.2.2.5 (``no-store``) and §5.2.2.4 (``no-cache``).
+    ``no-cache`` requires revalidation before use; the simplest correct
+    behavior is to skip caching so the next call re-fetches.
+    """
+    if not cache_control:
+        return False
+    return bool(
+        _NO_STORE_RE.search(cache_control) or _NO_CACHE_RE.search(cache_control)
+    )
 
 
 def parse_max_age(cache_control: str | None) -> float | None:
@@ -144,13 +371,101 @@ def is_cache_expired(entry: JwksCacheEntry | DiscoCacheEntry) -> bool:
     return expired
 
 
+def apply_jwks_cache_outcome(
+    cache: dict[str, JwksCacheEntry],
+    jwks_uri: str,
+    response: JwksResponse,
+    now: float,
+    cooldown: dict[str, float] | None = None,
+) -> None:
+    """Apply the cache-write/invalidate/retain decision for a JWKS response.
+
+    Decision matrix (order matters):
+    - Unsuccessful (network error, 4xx, parse failure): retain any existing
+      entry. The last known-good keys remain available while transient errors
+      pass. Mirrors the "retain cache on error" pattern from jose4j.
+    - Empty ``keys``: retain the existing entry. An empty JWKS is treated as
+      a transient upstream blip, never a valid replacement for working keys.
+      Checked *before* the uncacheable branch so a malformed ``200 {"keys":
+      []}`` paired with ``Cache-Control: no-cache`` does not delete a working
+      entry on a transient empty-body blip.
+    - ``Cache-Control: no-store`` or ``no-cache``: invalidate the existing
+      entry. Any stale entry would otherwise survive its TTL alongside a
+      provider that explicitly forbade caching, defeating key rotation.
+    - Successful, cacheable, non-empty: store with the resolved TTL.
+
+    The optional ``cooldown`` dict is a sidecar of per-URI timestamps that
+    must be evicted alongside their cache entry — otherwise it grows
+    unboundedly even when the cache itself is bounded.
+    """
+    if not response.is_successful:
+        return
+    if not response.keys:
+        return
+    if is_uncacheable(response.cache_control):
+        cache.pop(jwks_uri, None)
+        if cooldown is not None:
+            cooldown.pop(jwks_uri, None)
+        return
+    # Pop-and-reinsert so a refreshed URI moves to the end of insertion order
+    # (FIFO eviction will not target it next when the cache is under pressure).
+    cache.pop(jwks_uri, None)
+    cache[jwks_uri] = JwksCacheEntry(
+        response=response,
+        cached_at=now,
+        ttl=resolve_ttl(response.cache_control),
+    )
+    evicted = _enforce_size_limit(cache)
+    if cooldown is not None:
+        for key in evicted:
+            cooldown.pop(key, None)
+
+
+def apply_disco_cache_outcome(
+    cache: dict[tuple[str, bool], DiscoCacheEntry],
+    cache_key: tuple[str, bool],
+    response: DiscoveryDocumentResponse,
+    now: float,
+) -> None:
+    """Apply the cache-write/invalidate/retain decision for a discovery response.
+
+    Mirrors :func:`apply_jwks_cache_outcome` but without the empty-payload
+    check, since discovery responses do not have a single "payload" field
+    whose emptiness signals a broken response.
+    """
+    if not response.is_successful:
+        return
+    if is_uncacheable(response.cache_control):
+        cache.pop(cache_key, None)
+        return
+    cache.pop(cache_key, None)
+    cache[cache_key] = DiscoCacheEntry(
+        response=response,
+        cached_at=now,
+        ttl=resolve_disco_ttl(response.cache_control),
+    )
+    _enforce_size_limit(cache)
+
+
 __all__ = [
     "DEFAULT_DISCO_CACHE_TTL_SECONDS",
     "DEFAULT_JWKS_CACHE_TTL_SECONDS",
+    "DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS",
+    "DEFAULT_MAX_CACHE_ENTRIES",
+    "MAX_CACHE_TTL_SECONDS",
+    "MAX_KID_MISS_COOLDOWN_SECONDS",
+    "MIN_CACHE_TTL_SECONDS",
+    "MIN_KID_MISS_COOLDOWN_SECONDS",
     "DiscoCacheEntry",
     "JwksCacheEntry",
+    "apply_disco_cache_outcome",
+    "apply_jwks_cache_outcome",
+    "get_kid_miss_cooldown",
+    "get_max_cache_entries",
     "is_cache_expired",
+    "is_uncacheable",
     "parse_max_age",
     "resolve_disco_ttl",
     "resolve_ttl",
+    "should_attempt_kid_miss_refresh",
 ]

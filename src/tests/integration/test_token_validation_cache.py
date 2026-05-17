@@ -189,7 +189,11 @@ class TestBenchmarkWithPreGeneratedTokens:
     """
 
     def test_benchmark_with_multiple_unique_tokens(
-        self, test_config, token_endpoint, validation_config
+        self,
+        test_config,
+        token_endpoint,
+        validation_config,
+        provider_caches_responses,
     ):
         """
         Benchmark validation with multiple unique tokens.
@@ -200,6 +204,11 @@ class TestBenchmarkWithPreGeneratedTokens:
         3. Ensures the benchmark reflects real-world usage where
            different tokens are validated
         """
+        if not provider_caches_responses:
+            pytest.skip(
+                "Provider sends Cache-Control: no-store/no-cache; "
+                "benchmark assumes caching is in effect"
+            )
         num_unique_tokens = 5
         tokens = generate_tokens(test_config, token_endpoint, num_unique_tokens)
 
@@ -241,6 +250,7 @@ class TestBenchmarkWithPreGeneratedTokens:
         test_config,
         client_credentials_token,
         validation_config,
+        provider_caches_responses,
     ):
         """
         Benchmark validation of a single token repeated many times.
@@ -248,6 +258,11 @@ class TestBenchmarkWithPreGeneratedTokens:
         This represents the optimal caching scenario where the same
         token is validated repeatedly (e.g., during its lifetime).
         """
+        if not provider_caches_responses:
+            pytest.skip(
+                "Provider sends Cache-Control: no-store/no-cache; "
+                "benchmark assumes caching is in effect"
+            )
         token = client_credentials_token.token["access_token"]
 
         # Warm up

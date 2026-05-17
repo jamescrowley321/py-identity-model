@@ -107,6 +107,38 @@ conformance-build: ## Build conformance suite containers
 .PHONY: conformance-up
 conformance-up: ## Start conformance suite and RP harness
 	docker compose -f conformance/docker-compose.yml up -d --build --wait
+	@# docker --wait only checks container healthchecks; the conformance suite's
+	@# TLS listener and the RP harness's /health endpoint can still be cold for
+	@# several seconds after that. Poll them at the application level to match
+	@# the readiness gate CI applies (.github/workflows/conformance.yml) so
+	@# `make conformance-test` is not flaky from a cold start.
+	@echo "Waiting for conformance suite at https://localhost.emobix.co.uk:8443..."
+	@for i in $$(seq 1 60); do \
+	  HTTP_CODE=$$(curl -sk -o /dev/null -w '%{http_code}' https://localhost.emobix.co.uk:8443/ || echo 000); \
+	  if [ "$$HTTP_CODE" -ge 200 ] 2>/dev/null && [ "$$HTTP_CODE" -lt 400 ] 2>/dev/null; then \
+	    echo "Conformance suite is ready (HTTP $$HTTP_CODE)"; \
+	    break; \
+	  fi; \
+	  if [ "$$i" -eq 60 ]; then \
+	    echo "Timed out waiting for conformance suite"; \
+	    docker compose -f conformance/docker-compose.yml logs server; \
+	    exit 1; \
+	  fi; \
+	  sleep 5; \
+	done
+	@echo "Waiting for RP harness at http://localhost:8888/health..."
+	@for i in $$(seq 1 30); do \
+	  if curl -sf http://localhost:8888/health > /dev/null 2>&1; then \
+	    echo "RP harness is ready"; \
+	    break; \
+	  fi; \
+	  if [ "$$i" -eq 30 ]; then \
+	    echo "Timed out waiting for RP harness"; \
+	    docker compose -f conformance/docker-compose.yml logs rp; \
+	    exit 1; \
+	  fi; \
+	  sleep 2; \
+	done
 
 .PHONY: conformance-down
 conformance-down: ## Tear down conformance suite

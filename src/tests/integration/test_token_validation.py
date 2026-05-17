@@ -112,8 +112,15 @@ def test_cache_succeeds(test_config, client_credentials_token, require_https):
     # performance (5 validations complete without 5 separate HTTP round-trips).
 
 
-def test_benchmark_validation(test_config, client_credentials_token, require_https):
+def test_benchmark_validation(
+    test_config, client_credentials_token, require_https, provider_caches_responses
+):
     """Test benchmark using cached fixtures."""
+    if not provider_caches_responses:
+        pytest.skip(
+            "Provider sends Cache-Control: no-store/no-cache; "
+            "benchmark assumes caching is in effect"
+        )
     assert client_credentials_token.token is not None
     validation_config = TokenValidationConfig(
         perform_disco=True,
