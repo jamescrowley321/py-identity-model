@@ -30,6 +30,7 @@ import httpx
 import pytest
 import respx
 
+from py_identity_model.aio import token_validation as aio_tv
 from py_identity_model.aio.token_validation import (
     _get_cached_jwks as async_get_cached_jwks,
 )
@@ -39,6 +40,7 @@ from py_identity_model.aio.token_validation import (
 from py_identity_model.aio.token_validation import (
     clear_jwks_cache as async_clear_jwks_cache,
 )
+from py_identity_model.sync import token_validation as sync_tv
 from py_identity_model.sync.token_validation import (
     _get_cached_jwks,
     clear_discovery_cache,
@@ -59,6 +61,35 @@ def _clear_caches():
     clear_jwks_cache()
     async_clear_discovery_cache()
     async_clear_jwks_cache()
+
+
+@pytest.fixture
+def _distinct_lock_per_uri(monkeypatch):
+    """Force each distinct URI to get its own fetch lock for the duration
+    of the test, side-stepping ``PYTHONHASHSEED``-driven stripe collisions.
+
+    Runtime stripe selection uses ``hash(uri) % 32``. CPython's randomized
+    string hashing means two distinct URIs collide on the same stripe
+    with probability 1/32 ≈ 3.1% per process — enough to flake parallelism
+    tests across CI runs. The runtime-collision concern is tracked in
+    https://github.com/jamescrowley321/py-identity-model/issues/398;
+    here we just need the test to deterministically exercise the
+    distinct-URI parallelism guarantee."""
+    sync_locks: dict[str, threading.Lock] = {}
+    aio_locks: dict[str, asyncio.Lock] = {}
+
+    def _sync_per_uri(uri: str) -> threading.Lock:
+        if uri not in sync_locks:
+            sync_locks[uri] = threading.Lock()
+        return sync_locks[uri]
+
+    def _aio_per_uri(uri: str) -> asyncio.Lock:
+        if uri not in aio_locks:
+            aio_locks[uri] = asyncio.Lock()
+        return aio_locks[uri]
+
+    monkeypatch.setattr(sync_tv, "_get_jwks_fetch_lock", _sync_per_uri)
+    monkeypatch.setattr(aio_tv, "_get_jwks_fetch_lock", _aio_per_uri)
 
 
 # Per-fetch sleep. Long enough that serialized vs parallel differ by a
@@ -99,6 +130,7 @@ def _build_slow_async_handler(payload: dict):
 
 
 class TestSyncDistinctUrisParallelizeFetches:
+    @pytest.mark.usefixtures("_distinct_lock_per_uri")
     @respx.mock
     def test_two_distinct_uris_fetch_in_parallel(self):
         url_a = "https://op-a.example/jwks"
@@ -158,6 +190,7 @@ class TestSyncDistinctUrisParallelizeFetches:
 
 
 class TestAsyncDistinctUrisParallelizeFetches:
+    @pytest.mark.usefixtures("_distinct_lock_per_uri")
     @pytest.mark.asyncio
     @respx.mock
     async def test_two_distinct_uris_fetch_in_parallel_async(self):

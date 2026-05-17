@@ -8,7 +8,9 @@ Includes:
 
 from contextlib import suppress
 from dataclasses import dataclass
+import json
 import secrets
+import time
 from types import MappingProxyType
 from urllib.parse import urlencode, urlparse
 
@@ -25,6 +27,7 @@ from tenacity import (
 from py_identity_model import (
     AuthorizationCodeTokenRequest,
     ClientCredentialsTokenRequest,
+    ClientCredentialsTokenResponse,
     DiscoveryDocumentRequest,
     JwksRequest,
     get_discovery_document,
@@ -261,24 +264,76 @@ def require_https(test_config):
     return test_config.get("TEST_REQUIRE_HTTPS", True)
 
 
-@pytest.fixture(scope="session")
-def client_credentials_token(test_config, token_endpoint):
-    """Cached client credentials token (session-scoped).
+def _fetch_token_with_extended_backoff(
+    token_request: ClientCredentialsTokenRequest,
+    label: str,
+) -> ClientCredentialsTokenResponse:
+    """Fetch a client-credentials token with longer 429 backoff than the
+    library's internal retry budget.
 
-    The library's ``request_client_credentials_token`` already retries
-    3x on 429/5xx.
+    The library retries 3x with 1s/2s/4s backoff (~7s total). Provider
+    rate-limit recovery can exceed that, especially when several pytest
+    xdist workers race the same upstream at session start. Extends the
+    budget to 5+10+20+40s on 429 specifically; other failures are
+    returned immediately.
     """
-    response = request_client_credentials_token(
-        ClientCredentialsTokenRequest(
-            client_id=test_config["TEST_CLIENT_ID"],
-            client_secret=test_config["TEST_CLIENT_SECRET"],
-            address=token_endpoint,
-            scope=test_config["TEST_SCOPE"],
+    max_attempts = 5
+    last_error: str | None = None
+    for attempt in range(max_attempts):
+        response = request_client_credentials_token(token_request)
+        if response.is_successful:
+            return response
+        last_error = str(response.error or "unknown error")
+        is_rate_limited = "429" in last_error
+        if not is_rate_limited or attempt == max_attempts - 1:
+            break
+        sleep_for = 5 * (2**attempt)
+        print(
+            f"[{label}] token endpoint rate-limited "
+            f"(attempt {attempt + 1}/{max_attempts}); sleeping {sleep_for}s",
+            flush=True,
         )
-    )
-    if not response.is_successful:
-        pytest.fail(f"Failed to obtain token: {response.error}")
-    return response
+        time.sleep(sleep_for)
+    pytest.fail(f"Failed to obtain {label} after extended retries: {last_error}")
+
+
+@pytest.fixture(scope="session")
+def client_credentials_token(test_config, token_endpoint, tmp_path_factory):
+    """Client credentials token, shared across xdist workers.
+
+    Without cross-worker coordination, ``pytest -n auto`` fans out N
+    simultaneous token requests at session start. With N=4 workers and a
+    typical upstream rate limit, the cluster trips HTTP 429 and the
+    session-scoped fixture (which is actually per-worker under xdist)
+    fails for everyone downstream.
+
+    Serialize the fetch with a ``FileLock`` and persist the response to
+    a JSON cache under the xdist tmp root. The first worker to acquire
+    the lock fetches; subsequent workers see the cache and reconstruct
+    the response object instead of re-fetching.
+    """
+    root_tmp_dir = tmp_path_factory.getbasetemp().parent
+    cache_file = root_tmp_dir / "client_credentials_token.json"
+    lock_file = root_tmp_dir / "client_credentials_token.lock"
+
+    with FileLock(str(lock_file)):
+        if cache_file.exists():
+            cached = json.loads(cache_file.read_text())
+            return ClientCredentialsTokenResponse(
+                is_successful=True, token=cached["token"]
+            )
+
+        response = _fetch_token_with_extended_backoff(
+            ClientCredentialsTokenRequest(
+                client_id=test_config["TEST_CLIENT_ID"],
+                client_secret=test_config["TEST_CLIENT_SECRET"],
+                address=token_endpoint,
+                scope=test_config["TEST_SCOPE"],
+            ),
+            label="client_credentials_token",
+        )
+        cache_file.write_text(json.dumps({"token": response.token}))
+        return response
 
 
 @pytest.fixture(scope="session")
@@ -341,30 +396,43 @@ def jwt_signing_key(jwks_response, jwt_access_token):
 
 
 @pytest.fixture(scope="session")
-def opaque_access_token(test_config, token_endpoint):
+def opaque_access_token(test_config, token_endpoint, tmp_path_factory):
     """Opaque access token for introspection/revocation tests.
 
     Some providers (e.g. node-oidc-provider) cannot introspect or revoke
     JWT-format tokens.  This fixture uses a dedicated client that receives
     opaque tokens.  Skips when the opaque client is not configured.
+
+    Shared across xdist workers via FileLock + JSON cache; see
+    ``client_credentials_token`` for the rationale.
     """
     opaque_id = test_config.get("TEST_OPAQUE_CLIENT_ID")
     opaque_secret = test_config.get("TEST_OPAQUE_CLIENT_SECRET")
     if not opaque_id or not opaque_secret:
         pytest.skip("TEST_OPAQUE_CLIENT_ID not configured")
 
-    response = request_client_credentials_token(
-        ClientCredentialsTokenRequest(
-            client_id=opaque_id,
-            client_secret=opaque_secret,
-            address=token_endpoint,
-            scope=test_config["TEST_SCOPE"],
+    root_tmp_dir = tmp_path_factory.getbasetemp().parent
+    cache_file = root_tmp_dir / "opaque_access_token.json"
+    lock_file = root_tmp_dir / "opaque_access_token.lock"
+
+    with FileLock(str(lock_file)):
+        if cache_file.exists():
+            cached = json.loads(cache_file.read_text())
+            return cached["access_token"]
+
+        response = _fetch_token_with_extended_backoff(
+            ClientCredentialsTokenRequest(
+                client_id=opaque_id,
+                client_secret=opaque_secret,
+                address=token_endpoint,
+                scope=test_config["TEST_SCOPE"],
+            ),
+            label="opaque_access_token",
         )
-    )
-    if not response.is_successful:
-        pytest.fail(f"Failed to obtain opaque token: {response.error}")
-    assert response.token is not None, "Token response has no token dict"
-    return response.token["access_token"]
+        assert response.token is not None, "Token response has no token dict"
+        access_token = response.token["access_token"]
+        cache_file.write_text(json.dumps({"access_token": access_token}))
+        return access_token
 
 
 @pytest.fixture(autouse=True)
