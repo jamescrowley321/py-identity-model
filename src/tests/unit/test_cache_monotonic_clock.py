@@ -85,17 +85,17 @@ CLOCK_BACKSTEP_SECONDS = 60.0
 
 
 @pytest.fixture(autouse=True)
-def _clear_caches():
+async def _clear_caches():
     clear_discovery_cache()
     clear_jwks_cache()
-    async_clear_discovery_cache()
-    async_clear_jwks_cache()
+    await async_clear_discovery_cache()
+    await async_clear_jwks_cache()
     _reset_env_for_testing()
     yield
     clear_discovery_cache()
     clear_jwks_cache()
-    async_clear_discovery_cache()
-    async_clear_jwks_cache()
+    await async_clear_discovery_cache()
+    await async_clear_jwks_cache()
     _reset_env_for_testing()
 
 

@@ -76,17 +76,21 @@ async def _close_async_http_client():
 
 
 @pytest.fixture(autouse=True)
-def _clear_async_caches():
+async def _clear_async_caches():
     """Clear async caches between tests.
 
     Since pytest-asyncio creates a new event loop per test function,
     stale caches from a previous loop must be cleared.
+
+    The async ``clear_*`` helpers must be ``await``ed because they now
+    acquire the per-cache ``asyncio.Lock`` before clearing (#405). Runs
+    inside the test's event loop under pytest-asyncio auto mode.
     """
     # Clear TTL-based discovery cache
-    clear_discovery_cache()
+    await clear_discovery_cache()
 
     # Clear dict-based JWKS TTL cache
-    clear_jwks_cache()
+    await clear_jwks_cache()
 
     # Reset the singleton async HTTP client so it gets recreated
     # on the new event loop.  The client is already closed by the
