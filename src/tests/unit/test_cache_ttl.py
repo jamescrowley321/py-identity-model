@@ -44,7 +44,7 @@ class TestDiscoCacheTTL:
         response = MagicMock(spec=DiscoveryDocumentResponse)
         entry = DiscoCacheEntry(
             response=response,
-            cached_at=time.time() - 3700,  # 3700s ago, default TTL is 3600
+            cached_at=time.monotonic() - 3700,  # 3700s ago, default TTL is 3600
             ttl=DEFAULT_DISCO_CACHE_TTL_SECONDS,
         )
         assert is_cache_expired(entry) is True
@@ -54,7 +54,7 @@ class TestDiscoCacheTTL:
         response = MagicMock(spec=DiscoveryDocumentResponse)
         entry = DiscoCacheEntry(
             response=response,
-            cached_at=time.time(),
+            cached_at=time.monotonic(),
             ttl=DEFAULT_DISCO_CACHE_TTL_SECONDS,
         )
         assert is_cache_expired(entry) is False

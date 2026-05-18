@@ -242,7 +242,7 @@ class TestBoundedCacheSize:
                 cache,
                 jwks_uri=f"https://op-{i}.example/jwks",
                 response=_make_jwks_response(f"kid-{i}"),
-                now=time.time(),
+                now=time.monotonic(),
             )
 
         assert len(cache) == 5  # noqa: PLR2004
@@ -265,7 +265,7 @@ class TestBoundedCacheSize:
                 cache,
                 jwks_uri=f"https://op-{i}.example/jwks",
                 response=_make_jwks_response(f"kid-{i}"),
-                now=time.time(),
+                now=time.monotonic(),
             )
         assert list(cache.keys()) == [
             "https://op-0.example/jwks",
@@ -278,7 +278,7 @@ class TestBoundedCacheSize:
             cache,
             jwks_uri="https://op-0.example/jwks",
             response=_make_jwks_response("kid-0-rotated"),
-            now=time.time(),
+            now=time.monotonic(),
         )
         assert list(cache.keys()) == [
             "https://op-1.example/jwks",
@@ -292,7 +292,7 @@ class TestBoundedCacheSize:
             cache,
             jwks_uri="https://op-3.example/jwks",
             response=_make_jwks_response("kid-3"),
-            now=time.time(),
+            now=time.monotonic(),
         )
         assert set(cache.keys()) == {
             "https://op-2.example/jwks",

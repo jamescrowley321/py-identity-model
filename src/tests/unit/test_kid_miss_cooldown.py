@@ -332,9 +332,10 @@ class TestCooldownDoesNotBlockLegitimateTraffic:
             )
         assert jwks_route.call_count == 2  # noqa: PLR2004
 
-        # Simulate cooldown elapse by backdating the last-attempt timestamp.
+        # Simulate cooldown elapse by backdating the last-attempt timestamp
+        # on the same monotonic clock the production code uses.
         cooldown = get_kid_miss_cooldown()
-        sync_kid_miss_last_attempt[JWKS_URL] = time.time() - cooldown - 1.0
+        sync_kid_miss_last_attempt[JWKS_URL] = time.monotonic() - cooldown - 1.0
 
         # 3rd attempt past cooldown: refresh fires again, upstream now serves
         # new-kid, rotation_token validates successfully.
@@ -481,9 +482,9 @@ class TestCooldownEvictedWithCache:
                 cache_control="max-age=3600",
             )
             apply_jwks_cache_outcome(
-                cache, url, response, time.time(), cooldown=cooldown
+                cache, url, response, time.monotonic(), cooldown=cooldown
             )
-            cooldown[url] = time.time()
+            cooldown[url] = time.monotonic()
 
         assert set(cache.keys()) == set(urls)
         assert set(cooldown.keys()) == set(urls)
@@ -508,7 +509,7 @@ class TestCooldownEvictedWithCache:
                 keys=[overflow_jwk],
                 cache_control="max-age=3600",
             ),
-            time.time(),
+            time.monotonic(),
             cooldown=cooldown,
         )
 
@@ -540,10 +541,10 @@ class TestCooldownEvictedWithCache:
             cache,
             url,
             JwksResponse(is_successful=True, keys=[jwk], cache_control="max-age=3600"),
-            time.time(),
+            time.monotonic(),
             cooldown=cooldown,
         )
-        cooldown[url] = time.time()
+        cooldown[url] = time.monotonic()
         assert url in cache
         assert url in cooldown
 
@@ -562,7 +563,7 @@ class TestCooldownEvictedWithCache:
             cache,
             url,
             JwksResponse(is_successful=True, keys=[new_jwk], cache_control="no-cache"),
-            time.time(),
+            time.monotonic(),
             cooldown=cooldown,
         )
         assert url not in cache

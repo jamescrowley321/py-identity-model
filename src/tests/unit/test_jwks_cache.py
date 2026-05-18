@@ -71,7 +71,7 @@ class TestCacheEntry:
         mock_response = MagicMock()
         return JwksCacheEntry(
             response=mock_response,
-            cached_at=time.time() - age_seconds,
+            cached_at=time.monotonic() - age_seconds,
             ttl=ttl,
         )
 
@@ -136,10 +136,10 @@ class TestMultiProviderCacheIsolation:
         auth0_ttl = resolve_ttl("max-age=3600")
 
         google_entry = JwksCacheEntry(
-            response=MagicMock(), cached_at=time.time(), ttl=google_ttl
+            response=MagicMock(), cached_at=time.monotonic(), ttl=google_ttl
         )
         auth0_entry = JwksCacheEntry(
-            response=MagicMock(), cached_at=time.time(), ttl=auth0_ttl
+            response=MagicMock(), cached_at=time.monotonic(), ttl=auth0_ttl
         )
 
         assert google_entry.ttl == 19800.0
@@ -149,7 +149,7 @@ class TestMultiProviderCacheIsolation:
 
     def test_one_provider_expired_other_not(self):
         """Provider with short TTL expires while long-TTL provider stays cached."""
-        now = time.time()
+        now = time.monotonic()
         short_entry = JwksCacheEntry(response=MagicMock(), cached_at=now - 120, ttl=60)
         long_entry = JwksCacheEntry(response=MagicMock(), cached_at=now - 120, ttl=3600)
 
