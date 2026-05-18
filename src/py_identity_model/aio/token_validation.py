@@ -6,6 +6,7 @@ with automatic cache expiry and forced JWKS refresh on key rotation.
 """
 
 import asyncio
+import threading
 import time
 
 from ..core.discovery_policy import DiscoveryPolicy
@@ -193,6 +194,44 @@ def clear_jwks_cache() -> None:
 # Token validation
 # ============================================================================
 
+# See sync mirror for rationale. Uses ``threading.Lock`` rather than
+# ``asyncio.Lock`` so the once-per-process check is callable from a sync
+# context (the helper itself doesn't await) and works under any event loop.
+_injected_http_client_warning_emitted = False
+_injected_http_client_warning_lock = threading.Lock()
+
+
+def _maybe_warn_injected_http_client() -> None:
+    """Emit a one-shot warning when an injected ``http_client`` is first used.
+
+    Mirror of the sync helper — the warning state is per-module (sync and
+    aio each fire at most once per process) so a deployment that uses both
+    APIs sees at most two warnings, not one per call.
+    """
+    global _injected_http_client_warning_emitted  # noqa: PLW0603
+    if _injected_http_client_warning_emitted:
+        return
+    with _injected_http_client_warning_lock:
+        if _injected_http_client_warning_emitted:
+            return
+        _injected_http_client_warning_emitted = True
+        logger.warning(
+            "validate_token invoked with an injected http_client: discovery "
+            "cache, JWKS cache, kid-miss cooldown, and signature-failure "
+            "cooldown are all bypassed for this code path. Every call "
+            "re-fetches from the upstream provider and an attacker forging "
+            "unknown kids or wrong signatures can drive 1:1 upstream fetches. "
+            "This warning fires once per process; subsequent injected-client "
+            "calls are silent."
+        )
+
+
+def _reset_injected_http_client_warning_for_testing() -> None:
+    """Test helper: clear the one-shot warning flag so a test can re-trigger."""
+    global _injected_http_client_warning_emitted  # noqa: PLW0603
+    with _injected_http_client_warning_lock:
+        _injected_http_client_warning_emitted = False
+
 
 async def _discover_and_resolve_key(
     jwt: str,
@@ -205,6 +244,7 @@ async def _discover_and_resolve_key(
     Returns (key_dict, alg, disco_response, is_cached_path).
     """
     if http_client is not None:
+        _maybe_warn_injected_http_client()
         if disco_doc_address is None:
             raise ConfigurationException(
                 "disco_doc_address is required when perform_disco is True"
@@ -346,9 +386,28 @@ async def validate_token(
         jwt: The JWT token to validate
         token_validation_config: Token validation configuration
         disco_doc_address: Discovery document address (required if perform_disco=True)
-        http_client: Optional managed HTTP client.  When ``None``, uses the
-            module-level singleton with response caching.  When provided,
-            caching is bypassed and the injected client is used directly.
+        http_client: Optional managed HTTP client. When ``None`` (the default),
+            uses the module-level singleton with the full TTL cache + cooldown
+            stack. When provided, **all of the following are bypassed**:
+
+            - **Discovery document cache** — every call re-fetches the
+              ``.well-known/openid-configuration`` document.
+            - **JWKS cache** — every call re-fetches the JWKS.
+            - **Kid-miss cooldown** — an attacker forging tokens with unknown
+              ``kid`` headers drives 1:1 upstream JWKS fetches with no rate
+              limit.
+            - **Signature-failure cooldown** — an attacker forging signatures
+              against cached kids drives 1:1 upstream JWKS fetches on the
+              retry path with no rate limit.
+
+            The injected-client path is appropriate for one-off validations
+            (CLI tooling, tests) and for callers that have implemented their
+            own caching layer over the HTTP client. It is **not** appropriate
+            for high-volume request paths exposed to untrusted JWTs.
+
+            A ``logger.warning`` is emitted the first time an injected client
+            is used in the process so accidental opt-out is detectable in
+            production logs.
 
     Returns:
         dict: Decoded token claims
