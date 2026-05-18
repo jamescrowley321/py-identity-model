@@ -9,6 +9,8 @@ Covers three correctness fixes:
    simplest correct behavior is to skip caching.
 """
 
+import time
+
 import httpx
 import pytest
 import respx
@@ -419,10 +421,16 @@ class TestSyncRefreshInvalidatesStaleOnUncacheable:
         assert cache_key in sync_tv._disco_cache
 
         # Manually expire the entry without removing it — this is the state
-        # the cache lands in when the entry's TTL elapses naturally.
+        # the cache lands in when the entry's TTL elapses naturally. Backdate
+        # cached_at past the TTL boundary on the monotonic clock (post-#400
+        # the cache compares ages via time.monotonic, not time.time, so a
+        # literal 0.0 is just process-startup time and may still be fresh in
+        # short-running tests).
         stale_entry = sync_tv._disco_cache[cache_key]
         sync_tv._disco_cache[cache_key] = type(stale_entry)(
-            response=stale_entry.response, cached_at=0.0, ttl=stale_entry.ttl
+            response=stale_entry.response,
+            cached_at=time.monotonic() - stale_entry.ttl - 1,
+            ttl=stale_entry.ttl,
         )
 
         _get_disco_response(DISCO_URL)
