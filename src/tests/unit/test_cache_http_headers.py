@@ -376,12 +376,14 @@ class TestSyncRefreshInvalidatesStaleOnUncacheable:
         assert JWKS_URL in sync_tv._jwks_cache
         assert _kids(sync_tv._jwks_cache[JWKS_URL].response) == {"old-kid"}
 
-        refreshed = sync_tv._refresh_jwks(JWKS_URL)
+        refreshed, from_retained_cache = sync_tv._refresh_jwks(JWKS_URL)
         assert refreshed.is_successful is True
         # Fresh response is returned to the caller …
         assert _kids(refreshed) == {"new-kid"}
         # … but the stale entry MUST be popped, not left behind.
         assert JWKS_URL not in sync_tv._jwks_cache
+        # Real refresh (not an empty-fallback) — see #403 contract.
+        assert from_retained_cache is False
 
     @pytest.mark.parametrize("uncacheable_header", REFRESH_UNCACHEABLE_TEST_CASES)
     @respx.mock
@@ -470,10 +472,12 @@ class TestAsyncRefreshInvalidatesStaleOnUncacheable:
         assert JWKS_URL in aio_tv._jwks_cache
         assert _kids(aio_tv._jwks_cache[JWKS_URL].response) == {"old-kid"}
 
-        refreshed = await aio_tv._refresh_jwks(JWKS_URL)
+        refreshed, from_retained_cache = await aio_tv._refresh_jwks(JWKS_URL)
         assert refreshed.is_successful is True
         assert _kids(refreshed) == {"new-kid"}
         assert JWKS_URL not in aio_tv._jwks_cache
+        # Real refresh (not an empty-fallback) — see #403 contract.
+        assert from_retained_cache is False
 
 
 # ============================================================================
@@ -510,11 +514,14 @@ class TestSyncEmptyKeysNotCached:
         primed = _get_cached_jwks(JWKS_URL)
         assert primed.is_successful is True
 
-        refreshed = sync_tv._refresh_jwks(JWKS_URL)
-        # The empty response is returned to the caller (no lying about what
-        # the upstream sent), but the cache retains the last-known-good keys.
+        refreshed, from_retained_cache = sync_tv._refresh_jwks(JWKS_URL)
+        # #403: when upstream returns 200 with empty keys, _refresh_jwks
+        # surfaces the retained cache entry to the caller (not the empty
+        # response) so the in-flight validation has usable keys. The
+        # cache itself is also retained.
         assert refreshed.is_successful is True
-        assert refreshed.keys == []
+        assert _kids(refreshed) == {"retained-kid"}
+        assert from_retained_cache is True
         assert JWKS_URL in sync_tv._jwks_cache
         assert _kids(sync_tv._jwks_cache[JWKS_URL].response) == {"retained-kid"}
 
@@ -560,9 +567,11 @@ class TestAsyncEmptyKeysNotCached:
         respx.get(JWKS_URL).mock(side_effect=handler)
 
         await async_get_cached_jwks(JWKS_URL)
-        refreshed = await aio_tv._refresh_jwks(JWKS_URL)
+        refreshed, from_retained_cache = await aio_tv._refresh_jwks(JWKS_URL)
+        # See sync counterpart — #403 fallback: retained cache surfaced.
         assert refreshed.is_successful is True
-        assert refreshed.keys == []
+        assert _kids(refreshed) == {"retained-kid"}
+        assert from_retained_cache is True
         assert JWKS_URL in aio_tv._jwks_cache
         assert _kids(aio_tv._jwks_cache[JWKS_URL].response) == {"retained-kid"}
 
@@ -606,6 +615,8 @@ class TestEmptyKeysWithUncacheableHeaderRetains:
         respx.get(JWKS_URL).mock(side_effect=handler)
 
         _get_cached_jwks(JWKS_URL)
+        # Return is now a tuple — discard both halves; the test pins cache
+        # state, not what _refresh_jwks surfaces to the caller.
         sync_tv._refresh_jwks(JWKS_URL)
         assert JWKS_URL in sync_tv._jwks_cache
         assert _kids(sync_tv._jwks_cache[JWKS_URL].response) == {"retained-kid"}
@@ -638,6 +649,8 @@ class TestEmptyKeysWithUncacheableHeaderRetains:
         respx.get(JWKS_URL).mock(side_effect=handler)
 
         await async_get_cached_jwks(JWKS_URL)
+        # Return is now a tuple — discard both halves; the test pins cache
+        # state, not what _refresh_jwks surfaces to the caller.
         await aio_tv._refresh_jwks(JWKS_URL)
         assert JWKS_URL in aio_tv._jwks_cache
         assert _kids(aio_tv._jwks_cache[JWKS_URL].response) == {"retained-kid"}
@@ -671,8 +684,10 @@ class TestRetainOnError:
         respx.get(JWKS_URL).mock(side_effect=handler)
 
         _get_cached_jwks(JWKS_URL)
-        refreshed = sync_tv._refresh_jwks(JWKS_URL)
+        refreshed, from_retained_cache = sync_tv._refresh_jwks(JWKS_URL)
         assert refreshed.is_successful is False
+        # Failed refresh does not trigger the empty-keys fallback.
+        assert from_retained_cache is False
         assert JWKS_URL in sync_tv._jwks_cache
         assert _kids(sync_tv._jwks_cache[JWKS_URL].response) == {"retained-kid"}
 
@@ -695,7 +710,9 @@ class TestRetainOnError:
         respx.get(JWKS_URL).mock(side_effect=handler)
 
         await async_get_cached_jwks(JWKS_URL)
-        refreshed = await aio_tv._refresh_jwks(JWKS_URL)
+        refreshed, from_retained_cache = await aio_tv._refresh_jwks(JWKS_URL)
         assert refreshed.is_successful is False
+        # Failed refresh does not trigger the empty-keys fallback.
+        assert from_retained_cache is False
         assert JWKS_URL in aio_tv._jwks_cache
         assert _kids(aio_tv._jwks_cache[JWKS_URL].response) == {"retained-kid"}
