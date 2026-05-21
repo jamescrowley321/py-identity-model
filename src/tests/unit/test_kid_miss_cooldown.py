@@ -26,6 +26,9 @@ import pytest
 import respx
 
 from py_identity_model.aio.token_validation import (
+    _jwks_cache as async_jwks_cache,
+)
+from py_identity_model.aio.token_validation import (
     _kid_miss_last_attempt as async_kid_miss_last_attempt,
 )
 from py_identity_model.aio.token_validation import (
@@ -55,7 +58,13 @@ from py_identity_model.exceptions import (
     TokenValidationException,
 )
 from py_identity_model.sync.token_validation import (
+    _jwks_cache as sync_jwks_cache,
+)
+from py_identity_model.sync.token_validation import (
     _kid_miss_last_attempt as sync_kid_miss_last_attempt,
+)
+from py_identity_model.sync.token_validation import (
+    _refresh_jwks as sync_refresh_jwks,
 )
 from py_identity_model.sync.token_validation import (
     clear_discovery_cache,
@@ -915,3 +924,157 @@ class TestSignatureFailureRetryGatedByCooldown:
         assert decoded["sub"] == "user1"
         # Real rotation absorbed; cooldown must be clear.
         assert JWKS_URL not in sync_kid_miss_last_attempt
+
+
+# ============================================================================
+# #403: a kid-miss refresh that returns 200 with empty keys (transient
+# upstream blip) must NOT stamp the cooldown. Pre-fix behavior:
+#   1. apply_jwks_cache_outcome retains the populated cache entry.
+#   2. _refresh_jwks returned the empty response to the caller.
+#   3. The caller saw kid_found=False, stamped the cooldown.
+#   4. Subsequent kid-miss requests for the same URI were suppressed for
+#      one cooldown window, even though working cached keys were available.
+#
+# Post-fix:
+#   - _refresh_jwks surfaces the retained cache entry (from_retained_cache=True).
+#   - Caller skips the cooldown stamp because the empty upstream response
+#     is not attacker-amplifiable (returning empty regardless of attacker
+#     input).
+#   - validate_jwks_response succeeds (it sees the retained keys).
+#   - find_key_by_kid raises "no matching kid" — accurate, informative.
+# ============================================================================
+
+
+class TestEmptyRefreshDoesNotStampCooldown:
+    @respx.mock
+    def test_sync_empty_refresh_keeps_cooldown_clear(self):
+        old_key_dict, _ = generate_rsa_keypair()
+        old_key_dict["kid"] = "old-kid"
+
+        respx.get(DISCO_URL).mock(
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
+        )
+
+        call_log: list[int] = []
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            call_log.append(1)
+            if len(call_log) == 1:
+                # Prime: working keys.
+                return httpx.Response(200, json={"keys": [old_key_dict]})
+            # Refresh: 200 with empty keys (transient blip).
+            return httpx.Response(200, json={"keys": []})
+
+        respx.get(JWKS_URL).mock(side_effect=handler)
+
+        config = TokenValidationConfig(
+            perform_disco=True, audience=None, issuer="https://example.com"
+        )
+
+        with pytest.raises(TokenValidationException):
+            validate_token(
+                jwt=_sign_unknown_kid_token("new-kid"),
+                token_validation_config=config,
+                disco_doc_address=DISCO_URL,
+            )
+
+        # The cache MUST still hold the primed working keys (apply_jwks_cache_outcome
+        # retains the entry on an empty-successful response).
+        assert JWKS_URL in sync_jwks_cache
+        cached_kids = {k.kid for k in sync_jwks_cache[JWKS_URL].response.keys or []}
+        assert cached_kids == {"old-kid"}
+
+        # And the cooldown stamp must NOT be set — the empty refresh is
+        # treated as a no-op (not an attacker-amplifiable event), so
+        # subsequent kid-miss requests in the cooldown window are not wedged.
+        assert JWKS_URL not in sync_kid_miss_last_attempt
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_async_empty_refresh_keeps_cooldown_clear(self):
+        old_key_dict, _ = generate_rsa_keypair()
+        old_key_dict["kid"] = "old-kid"
+
+        respx.get(DISCO_URL).mock(
+            return_value=httpx.Response(200, json=DISCO_RESPONSE_WITH_JWKS)
+        )
+
+        call_log: list[int] = []
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            call_log.append(1)
+            if len(call_log) == 1:
+                return httpx.Response(200, json={"keys": [old_key_dict]})
+            return httpx.Response(200, json={"keys": []})
+
+        respx.get(JWKS_URL).mock(side_effect=handler)
+
+        config = TokenValidationConfig(
+            perform_disco=True, audience=None, issuer="https://example.com"
+        )
+
+        with pytest.raises(TokenValidationException):
+            await async_validate_token(
+                jwt=_sign_unknown_kid_token("new-kid"),
+                token_validation_config=config,
+                disco_doc_address=DISCO_URL,
+            )
+
+        assert JWKS_URL in async_jwks_cache
+        cached_kids = {k.kid for k in async_jwks_cache[JWKS_URL].response.keys or []}
+        assert cached_kids == {"old-kid"}
+        assert JWKS_URL not in async_kid_miss_last_attempt
+
+    @respx.mock
+    def test_sync_kid_present_in_retained_cache_decodes(self):
+        """If the refresh returns empty but the cached keys happen to contain
+        the requested kid (e.g. a different thread populated the cache between
+        the kid-miss check and the refresh), validation should succeed using
+        the retained cache.
+
+        This case is rare in practice but the fix should still produce the
+        right outcome — the test pins the contract.
+        """
+        # Use _refresh_jwks directly to exercise the surface, then assert
+        # the returned response has the cached kid and from_retained_cache=True.
+        cached_key_dict, _ = generate_rsa_keypair()
+        cached_key_dict["kid"] = "cached-kid"
+
+        call_log: list[int] = []
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            call_log.append(1)
+            if len(call_log) == 1:
+                return httpx.Response(200, json={"keys": [cached_key_dict]})
+            return httpx.Response(200, json={"keys": []})
+
+        respx.get(JWKS_URL).mock(side_effect=handler)
+
+        # Manually seed the cache so the refresh path uses retained-cache
+        # fallback. (Going through _get_cached_jwks first would set
+        # cached_at = now, and _refresh_jwks's freshness guard would
+        # short-circuit without re-fetching.)
+        cached_jwk = JsonWebKey(
+            kty=cached_key_dict["kty"],
+            kid=cached_key_dict["kid"],
+            n=cached_key_dict["n"],
+            e=cached_key_dict["e"],
+            alg=cached_key_dict.get("alg"),
+            use=cached_key_dict.get("use", "sig"),
+        )
+        sync_jwks_cache[JWKS_URL] = JwksCacheEntry(
+            response=JwksResponse(is_successful=True, keys=[cached_jwk]),
+            cached_at=time.monotonic() - 10.0,  # stale enough to trigger refresh
+            ttl=0.001,
+        )
+
+        # Now trigger refresh — upstream returns empty. Pre-fill call_log so
+        # the handler returns the empty-response branch on this first call.
+        call_log.append(1)
+        response, from_retained_cache = sync_refresh_jwks(JWKS_URL)
+
+        # The retained cache had the kid; the caller gets the retained response.
+        assert from_retained_cache is True
+        assert response.is_successful is True
+        kids = {k.kid for k in response.keys or []}
+        assert kids == {"cached-kid"}

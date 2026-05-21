@@ -167,7 +167,7 @@ async def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
         return response
 
 
-async def _refresh_jwks(jwks_uri: str) -> JwksResponse:
+async def _refresh_jwks(jwks_uri: str) -> tuple[JwksResponse, bool]:
     """Force re-fetch JWKS and update cache (key rotation).
 
     Uses the per-URI fetch lock to coalesce concurrent refreshes for the
@@ -179,13 +179,18 @@ async def _refresh_jwks(jwks_uri: str) -> JwksResponse:
     a just-released lock cannot observe its own ``request_time`` as older
     than the entry the prior coroutine just wrote (causing a spurious
     re-fetch).
+
+    See sync._refresh_jwks for the ``from_retained_cache`` semantics — a
+    successful-but-empty upstream response is surfaced as the retained
+    cache entry instead of the empty response, and callers must treat the
+    flag as "no new information from upstream" (no cooldown stamp).
     """
     fetch_lock = _get_jwks_fetch_lock(jwks_uri)
     async with fetch_lock:
         request_time = time.monotonic()
         entry = _jwks_cache.get(jwks_uri)
         if entry is not None and entry.cached_at >= request_time:
-            return entry.response
+            return entry.response, False
 
         logger.info("Forcing JWKS refresh for %s (possible key rotation)", jwks_uri)
         response = await get_jwks(JwksRequest(address=jwks_uri))
@@ -197,7 +202,17 @@ async def _refresh_jwks(jwks_uri: str) -> JwksResponse:
                 time.monotonic(),
                 cooldown=_kid_miss_last_attempt,
             )
-        return response
+            if response.is_successful and not response.keys:
+                retained = _jwks_cache.get(jwks_uri)
+                if retained is not None and retained.response.keys:
+                    logger.info(
+                        "JWKS refresh for %s returned 200 with empty keys; "
+                        "falling back to retained cache entry for in-flight "
+                        "validation",
+                        jwks_uri,
+                    )
+                    return retained.response, True
+        return response, False
 
 
 async def clear_jwks_cache() -> None:
@@ -316,15 +331,19 @@ async def _discover_and_resolve_key(
                 kid,
             )
             # See sync._discover_and_resolve_key for the rationale.
-            jwks_response = await _refresh_jwks(jwks_uri)
+            jwks_response, from_retained_cache = await _refresh_jwks(jwks_uri)
             if jwks_response.is_successful:
                 refreshed_keys = jwks_response.keys or []
                 kid_found = any(k.kid == kid for k in refreshed_keys)
-                async with _jwks_cache_write_lock:
-                    if kid_found:
-                        _kid_miss_last_attempt.pop(jwks_uri, None)
-                    else:
-                        _kid_miss_last_attempt[jwks_uri] = time.monotonic()
+                # Skip cooldown bookkeeping when refresh degraded to a
+                # retained-cache fallback (empty upstream is not
+                # attacker-amplifiable). Mirror of sync.
+                if not from_retained_cache:
+                    async with _jwks_cache_write_lock:
+                        if kid_found:
+                            _kid_miss_last_attempt.pop(jwks_uri, None)
+                        else:
+                            _kid_miss_last_attempt[jwks_uri] = time.monotonic()
             else:
                 kid_found = False
             validate_jwks_response(jwks_response)
@@ -381,7 +400,7 @@ async def _retry_with_refreshed_jwks(
             "Signature verification failed; refresh cooldown active"
         )
 
-    jwks_response = await _refresh_jwks(jwks_uri)
+    jwks_response, from_retained_cache = await _refresh_jwks(jwks_uri)
     # See sync._retry_with_refreshed_jwks — transient failures must not
     # stamp the cooldown.
     validate_jwks_response(jwks_response)
@@ -392,11 +411,15 @@ async def _retry_with_refreshed_jwks(
         resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
         decoded = decode_with_config(jwt, resolved_config, disco_doc_response.issuer)
     except Exception:
-        async with _jwks_cache_write_lock:
-            _kid_miss_last_attempt[jwks_uri] = time.monotonic()
+        # Skip cooldown stamp when refresh degraded to a retained-cache
+        # fallback. See sync._retry_with_refreshed_jwks.
+        if not from_retained_cache:
+            async with _jwks_cache_write_lock:
+                _kid_miss_last_attempt[jwks_uri] = time.monotonic()
         raise
-    async with _jwks_cache_write_lock:
-        _kid_miss_last_attempt.pop(jwks_uri, None)
+    if not from_retained_cache:
+        async with _jwks_cache_write_lock:
+            _kid_miss_last_attempt.pop(jwks_uri, None)
     return decoded
 
 

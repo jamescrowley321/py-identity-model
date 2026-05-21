@@ -353,8 +353,11 @@ class TestSyncRefreshJwksFreshnessGuard:
         )
 
         # _refresh_jwks should see the fresh entry and skip the HTTP fetch
-        result = _refresh_jwks(JWKS_URL)
+        result, from_retained_cache = _refresh_jwks(JWKS_URL)
         assert result is not None
+        # The freshness-guard short-circuit returns the cached entry without
+        # touching upstream, so this is not the #403 empty-fallback path.
+        assert from_retained_cache is False
         # No new fetch — still just the 1 from priming
         assert jwks_route.call_count == 1
 
@@ -371,8 +374,9 @@ class TestSyncRefreshJwksFreshnessGuard:
         assert jwks_route.call_count == 1
 
         # Call _refresh_jwks — cached_at is in the past relative to request_time
-        result = _refresh_jwks(JWKS_URL)
+        result, from_retained_cache = _refresh_jwks(JWKS_URL)
         assert result is not None
+        assert from_retained_cache is False
         assert jwks_route.call_count == FETCH_AFTER_EXPIRY
 
 
@@ -400,8 +404,9 @@ class TestAsyncRefreshJwksFreshnessGuard:
             ttl=entry.ttl,
         )
 
-        result = await async_refresh_jwks(JWKS_URL)
+        result, from_retained_cache = await async_refresh_jwks(JWKS_URL)
         assert result is not None
+        assert from_retained_cache is False
         assert jwks_route.call_count == 1
 
     @pytest.mark.asyncio
@@ -416,8 +421,9 @@ class TestAsyncRefreshJwksFreshnessGuard:
         await async_get_cached_jwks(JWKS_URL)
         assert jwks_route.call_count == 1
 
-        result = await async_refresh_jwks(JWKS_URL)
+        result, from_retained_cache = await async_refresh_jwks(JWKS_URL)
         assert result is not None
+        assert from_retained_cache is False
         assert jwks_route.call_count == FETCH_AFTER_EXPIRY
 
 
