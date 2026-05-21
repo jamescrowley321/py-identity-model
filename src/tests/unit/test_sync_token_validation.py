@@ -233,9 +233,10 @@ class TestSyncJwksCacheTTL:
         )
         assert jwks_route.call_count == 1
 
-        # Simulate TTL expiry by shifting cached_at into the past
+        # Simulate TTL expiry by shifting the monotonic clock forward past
+        # the default 24h JWKS TTL.
         with patch("py_identity_model.core.jwks_cache.time") as mock_time:
-            mock_time.time.return_value = time.time() + 86401  # past 24h default TTL
+            mock_time.monotonic.return_value = time.monotonic() + 86401
 
             validate_token(
                 jwt=token,

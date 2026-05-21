@@ -164,7 +164,7 @@ class TestSyncStampedeAfterExpiry:
         # Expire the entry by setting cached_at far in the past
         sync_tv._jwks_cache[JWKS_URL] = JwksCacheEntry(
             response=sync_tv._jwks_cache[JWKS_URL].response,
-            cached_at=time.time() - 86401,
+            cached_at=time.monotonic() - 86401,
             ttl=86400.0,
         )
 
@@ -204,7 +204,7 @@ class TestSyncStampedeAfterExpiry:
         cache_key = (DISCO_URL, True)
         sync_tv._disco_cache[cache_key] = DiscoCacheEntry(
             response=sync_tv._disco_cache[cache_key].response,
-            cached_at=time.time() - 3601,
+            cached_at=time.monotonic() - 3601,
             ttl=3600.0,
         )
 
@@ -288,7 +288,7 @@ class TestAsyncStampedeAfterExpiry:
         # Expire the entry
         aio_tv._jwks_cache[JWKS_URL] = JwksCacheEntry(
             response=aio_tv._jwks_cache[JWKS_URL].response,
-            cached_at=time.time() - 86401,
+            cached_at=time.monotonic() - 86401,
             ttl=86400.0,
         )
 
@@ -316,7 +316,7 @@ class TestAsyncStampedeAfterExpiry:
         cache_key = (DISCO_URL, True)
         aio_tv._disco_cache[cache_key] = DiscoCacheEntry(
             response=aio_tv._disco_cache[cache_key].response,
-            cached_at=time.time() - 3601,
+            cached_at=time.monotonic() - 3601,
             ttl=3600.0,
         )
 
@@ -348,7 +348,7 @@ class TestSyncRefreshJwksFreshnessGuard:
         entry = sync_tv._jwks_cache[JWKS_URL]
         sync_tv._jwks_cache[JWKS_URL] = JwksCacheEntry(
             response=entry.response,
-            cached_at=time.time() + 100,
+            cached_at=time.monotonic() + 100,
             ttl=entry.ttl,
         )
 
@@ -396,7 +396,7 @@ class TestAsyncRefreshJwksFreshnessGuard:
         entry = aio_tv._jwks_cache[JWKS_URL]
         aio_tv._jwks_cache[JWKS_URL] = JwksCacheEntry(
             response=entry.response,
-            cached_at=time.time() + 100,
+            cached_at=time.monotonic() + 100,
             ttl=entry.ttl,
         )
 

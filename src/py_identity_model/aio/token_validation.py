@@ -100,7 +100,9 @@ async def _get_disco_response(
             DiscoveryDocumentRequest(address=disco_doc_address, policy=policy),
         )
         async with _disco_cache_write_lock:
-            apply_disco_cache_outcome(_disco_cache, cache_key, response, time.time())
+            apply_disco_cache_outcome(
+                _disco_cache, cache_key, response, time.monotonic()
+            )
         return response
 
 
@@ -149,7 +151,7 @@ async def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
                 _jwks_cache,
                 jwks_uri,
                 response,
-                time.time(),
+                time.monotonic(),
                 cooldown=_kid_miss_last_attempt,
             )
         return response
@@ -162,10 +164,15 @@ async def _refresh_jwks(jwks_uri: str) -> JwksResponse:
     same URI while leaving unrelated URIs unblocked. The ``request_time``
     guard catches the case where another coroutine for *this* URI completed
     a refresh while we were blocked.
+
+    ``request_time`` is captured *inside* the lock so a coroutine that races
+    a just-released lock cannot observe its own ``request_time`` as older
+    than the entry the prior coroutine just wrote (causing a spurious
+    re-fetch).
     """
-    request_time = time.time()
     fetch_lock = _get_jwks_fetch_lock(jwks_uri)
     async with fetch_lock:
+        request_time = time.monotonic()
         entry = _jwks_cache.get(jwks_uri)
         if entry is not None and entry.cached_at >= request_time:
             return entry.response
@@ -177,7 +184,7 @@ async def _refresh_jwks(jwks_uri: str) -> JwksResponse:
                 _jwks_cache,
                 jwks_uri,
                 response,
-                time.time(),
+                time.monotonic(),
                 cooldown=_kid_miss_last_attempt,
             )
         return response
@@ -242,7 +249,7 @@ async def _discover_and_resolve_key(
             _kid_miss_last_attempt,
             jwks_uri,
             has_cached_keys=bool(cached_keys),
-            now=time.time(),
+            now=time.monotonic(),
         ):
             logger.info(
                 "kid %s not present in cached JWKS; refreshing (possible key rotation)",
@@ -257,7 +264,7 @@ async def _discover_and_resolve_key(
                     if kid_found:
                         _kid_miss_last_attempt.pop(jwks_uri, None)
                     else:
-                        _kid_miss_last_attempt[jwks_uri] = time.time()
+                        _kid_miss_last_attempt[jwks_uri] = time.monotonic()
             else:
                 kid_found = False
             validate_jwks_response(jwks_response)
@@ -304,7 +311,7 @@ async def _retry_with_refreshed_jwks(
         _kid_miss_last_attempt,
         jwks_uri,
         has_cached_keys=True,
-        now=time.time(),
+        now=time.monotonic(),
     ):
         logger.debug(
             "Signature-failure retry suppressed for %s: refresh cooldown active",
@@ -326,7 +333,7 @@ async def _retry_with_refreshed_jwks(
         decoded = decode_with_config(jwt, resolved_config, disco_doc_response.issuer)
     except Exception:
         async with _jwks_cache_write_lock:
-            _kid_miss_last_attempt[jwks_uri] = time.time()
+            _kid_miss_last_attempt[jwks_uri] = time.monotonic()
         raise
     async with _jwks_cache_write_lock:
         _kid_miss_last_attempt.pop(jwks_uri, None)

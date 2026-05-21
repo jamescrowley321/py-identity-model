@@ -358,13 +358,18 @@ class DiscoCacheEntry:
 def is_cache_expired(entry: JwksCacheEntry | DiscoCacheEntry) -> bool:
     """Check if a cache entry has expired using its own TTL.
 
+    Uses ``time.monotonic`` so cache freshness is robust against wall-clock
+    back-steps (NTP slew, container clock-skew correction). ``cached_at`` is
+    therefore a monotonic timestamp produced by the same clock — never an
+    interpretable wall-clock value.
+
     Args:
         entry: The cache entry to check.
 
     Returns:
         True if the entry is expired.
     """
-    age = time.time() - entry.cached_at
+    age = time.monotonic() - entry.cached_at
     expired = age >= entry.ttl
     if expired:
         logger.debug("Cache entry expired (age=%.1fs, ttl=%.1fs)", age, entry.ttl)

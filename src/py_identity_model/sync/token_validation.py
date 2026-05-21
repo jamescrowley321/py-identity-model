@@ -104,7 +104,9 @@ def _get_disco_response(
             DiscoveryDocumentRequest(address=disco_doc_address, policy=policy)
         )
         with _disco_cache_write_lock:
-            apply_disco_cache_outcome(_disco_cache, cache_key, response, time.time())
+            apply_disco_cache_outcome(
+                _disco_cache, cache_key, response, time.monotonic()
+            )
         return response
 
 
@@ -159,7 +161,7 @@ def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
                 _jwks_cache,
                 jwks_uri,
                 response,
-                time.time(),
+                time.monotonic(),
                 cooldown=_kid_miss_last_attempt,
             )
         return response
@@ -172,10 +174,14 @@ def _refresh_jwks(jwks_uri: str) -> JwksResponse:
     the same URI while leaving unrelated URIs unblocked. The ``request_time``
     guard catches the case where another caller for *this* URI completed a
     refresh while we were blocked.
+
+    ``request_time`` is captured *inside* the lock so a thread that races a
+    just-released lock cannot observe its own ``request_time`` as older than
+    the entry that thread A just wrote (causing a spurious re-fetch).
     """
-    request_time = time.time()
     fetch_lock = _get_jwks_fetch_lock(jwks_uri)
     with fetch_lock:
+        request_time = time.monotonic()
         entry = _jwks_cache.get(jwks_uri)
         if entry is not None and entry.cached_at >= request_time:
             return entry.response
@@ -187,7 +193,7 @@ def _refresh_jwks(jwks_uri: str) -> JwksResponse:
                 _jwks_cache,
                 jwks_uri,
                 response,
-                time.time(),
+                time.monotonic(),
                 cooldown=_kid_miss_last_attempt,
             )
         return response
@@ -251,7 +257,7 @@ def _discover_and_resolve_key(
             _kid_miss_last_attempt,
             jwks_uri,
             has_cached_keys=bool(cached_keys),
-            now=time.time(),
+            now=time.monotonic(),
         ):
             logger.info(
                 "kid %s not present in cached JWKS; refreshing (possible key rotation)",
@@ -279,7 +285,7 @@ def _discover_and_resolve_key(
                         # attacker drove an upstream fetch we couldn't
                         # turn into a successful validation). Stamp the
                         # cooldown to suppress repeats in the window.
-                        _kid_miss_last_attempt[jwks_uri] = time.time()
+                        _kid_miss_last_attempt[jwks_uri] = time.monotonic()
             else:
                 kid_found = False
             validate_jwks_response(jwks_response)
@@ -331,7 +337,7 @@ def _retry_with_refreshed_jwks(
         _kid_miss_last_attempt,
         jwks_uri,
         has_cached_keys=True,
-        now=time.time(),
+        now=time.monotonic(),
     ):
         logger.debug(
             "Signature-failure retry suppressed for %s: refresh cooldown active",
@@ -357,7 +363,7 @@ def _retry_with_refreshed_jwks(
         # decode) still failed — DoS amplifier case. Stamp to suppress
         # retry storms.
         with _jwks_cache_write_lock:
-            _kid_miss_last_attempt[jwks_uri] = time.time()
+            _kid_miss_last_attempt[jwks_uri] = time.monotonic()
         raise
     # Refreshed keys verified the JWT — real rotation absorbed. Clear the
     # stamp so a subsequent legitimate rotation isn't suppressed.
