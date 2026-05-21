@@ -107,9 +107,18 @@ async def _get_disco_response(
         return response
 
 
-def clear_discovery_cache() -> None:
-    """Clear the discovery cache."""
-    _disco_cache.clear()
+async def clear_discovery_cache() -> None:
+    """Clear the discovery cache.
+
+    **Breaking change (v3.0.0):** this helper is now ``async`` so it can
+    acquire ``_disco_cache_write_lock`` before clearing. The previous
+    synchronous version mutated state guarded by an ``asyncio.Lock``
+    without awaiting it, so a coroutine mid-flight in ``_refresh_jwks``
+    could write its result back *after* ``clear()`` ran, leaving the
+    "cleared" cache holding an entry. Callers must now ``await``.
+    """
+    async with _disco_cache_write_lock:
+        _disco_cache.clear()
 
 
 # ============================================================================
@@ -191,10 +200,21 @@ async def _refresh_jwks(jwks_uri: str) -> JwksResponse:
         return response
 
 
-def clear_jwks_cache() -> None:
-    """Clear the JWKS cache. Useful for testing."""
-    _jwks_cache.clear()
-    _kid_miss_last_attempt.clear()
+async def clear_jwks_cache() -> None:
+    """Clear the JWKS cache. Useful for testing.
+
+    **Breaking change (v3.0.0):** this helper is now ``async`` so it can
+    acquire ``_jwks_cache_write_lock`` before clearing. The previous
+    synchronous version mutated state guarded by an ``asyncio.Lock``
+    without awaiting it, so a coroutine mid-flight in ``_refresh_jwks``
+    could write its result back *after* ``clear()`` ran, leaving the
+    "cleared" cache holding an entry. The cooldown sidecar
+    (``_kid_miss_last_attempt``) is cleared under the same lock for the
+    same reason. Callers must now ``await``.
+    """
+    async with _jwks_cache_write_lock:
+        _jwks_cache.clear()
+        _kid_miss_last_attempt.clear()
 
 
 # ============================================================================

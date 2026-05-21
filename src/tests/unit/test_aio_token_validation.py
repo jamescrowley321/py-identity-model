@@ -46,13 +46,17 @@ def rsa_keypair():
 
 
 @pytest.fixture(autouse=True)
-def _clear_caches():
-    """Clear all caches between tests."""
-    clear_discovery_cache()
-    clear_jwks_cache()
+async def _clear_caches():
+    """Clear all caches between tests.
+
+    ``clear_*_cache`` helpers are imported from the aio module and are now
+    coroutines (#405) — must be awaited.
+    """
+    await clear_discovery_cache()
+    await clear_jwks_cache()
     yield
-    clear_discovery_cache()
-    clear_jwks_cache()
+    await clear_discovery_cache()
+    await clear_jwks_cache()
 
 
 class TestAsyncTokenValidation:

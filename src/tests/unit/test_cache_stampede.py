@@ -62,17 +62,17 @@ FETCH_AFTER_EXPIRY = 2
 
 
 @pytest.fixture(autouse=True)
-def _clear_caches():
+async def _clear_caches():
     """Clear all caches between tests."""
     clear_discovery_cache()
     clear_jwks_cache()
-    async_clear_discovery_cache()
-    async_clear_jwks_cache()
+    await async_clear_discovery_cache()
+    await async_clear_jwks_cache()
     yield
     clear_discovery_cache()
     clear_jwks_cache()
-    async_clear_discovery_cache()
-    async_clear_jwks_cache()
+    await async_clear_discovery_cache()
+    await async_clear_jwks_cache()
 
 
 class TestSyncDiscoCacheStampede:

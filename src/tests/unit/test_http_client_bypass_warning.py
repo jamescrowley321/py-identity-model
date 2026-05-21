@@ -60,18 +60,18 @@ JWKS_URL = "https://example.com/jwks"
 
 
 @pytest.fixture(autouse=True)
-def _reset_state():
+async def _reset_state():
     clear_discovery_cache()
     clear_jwks_cache()
-    async_clear_discovery_cache()
-    async_clear_jwks_cache()
+    await async_clear_discovery_cache()
+    await async_clear_jwks_cache()
     sync_tv._reset_injected_http_client_warning_for_testing()
     aio_tv._reset_injected_http_client_warning_for_testing()
     yield
     clear_discovery_cache()
     clear_jwks_cache()
-    async_clear_discovery_cache()
-    async_clear_jwks_cache()
+    await async_clear_discovery_cache()
+    await async_clear_jwks_cache()
     sync_tv._reset_injected_http_client_warning_for_testing()
     aio_tv._reset_injected_http_client_warning_for_testing()
 

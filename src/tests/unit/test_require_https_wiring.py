@@ -63,17 +63,17 @@ def rsa_keypair():
 
 
 @pytest.fixture(autouse=True)
-def _clear_caches():
+async def _clear_caches():
     """Clear all caches between tests."""
     sync_clear_discovery_cache()
     sync_clear_jwks_cache()
-    async_clear_discovery_cache()
-    async_clear_jwks_cache()
+    await async_clear_discovery_cache()
+    await async_clear_jwks_cache()
     yield
     sync_clear_discovery_cache()
     sync_clear_jwks_cache()
-    async_clear_discovery_cache()
-    async_clear_jwks_cache()
+    await async_clear_discovery_cache()
+    await async_clear_jwks_cache()
 
 
 class TestSyncRequireHttpsWiring:
