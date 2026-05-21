@@ -68,13 +68,25 @@ def _distinct_lock_per_uri(monkeypatch):
     """Force each distinct URI to get its own fetch lock for the duration
     of the test, side-stepping ``PYTHONHASHSEED``-driven stripe collisions.
 
-    Runtime stripe selection uses ``hash(uri) % 32``. CPython's randomized
-    string hashing means two distinct URIs collide on the same stripe
-    with probability 1/32 ≈ 3.1% per process — enough to flake parallelism
-    tests across CI runs. The runtime-collision concern is tracked in
-    https://github.com/jamescrowley321/py-identity-model/issues/398;
-    here we just need the test to deterministically exercise the
-    distinct-URI parallelism guarantee."""
+    Runtime stripe selection is ``hash(uri) % 32``. CPython's randomized
+    string hashing means two distinct URIs collide on the same stripe with
+    probability ~1/32 ≈ 3.1% per process — enough to flake any parallelism
+    test that picks two URIs and asserts they run concurrently. Without
+    this fixture, the test depends on luck of the hash seed; with it, the
+    test is deterministic.
+
+    Applied at the class level via ``pytestmark`` on every class whose
+    tests assert distinct-URI parallelism (see #398). Single-URI tests in
+    the same class technically don't need it — the fixture is a no-op for
+    them — but applying class-wide guarantees future parallelism tests
+    added to the class can't accidentally omit it.
+
+    The runtime concern (production fetches for distinct URIs serializing
+    on a stripe collision) is the same root cause but explicitly out of
+    scope for #398. A follow-up may bump stripe count or switch to a
+    ``WeakValueDictionary`` keyed by URI; this fixture only addresses the
+    test-side flake.
+    """
     sync_locks: dict[str, threading.Lock] = {}
     aio_locks: dict[str, asyncio.Lock] = {}
 
@@ -129,8 +141,13 @@ def _build_slow_async_handler(payload: dict):
 # ============================================================================
 
 
+@pytest.mark.usefixtures("_distinct_lock_per_uri")
 class TestSyncDistinctUrisParallelizeFetches:
-    @pytest.mark.usefixtures("_distinct_lock_per_uri")
+    """Distinct-URI parallelism, sync. Class-level fixture defends every
+    test in this class against the ``PYTHONHASHSEED`` flake described in
+    #398, including any future tests added below the existing two.
+    """
+
     @respx.mock
     def test_two_distinct_uris_fetch_in_parallel(self):
         url_a = "https://op-a.example/jwks"
@@ -189,8 +206,10 @@ class TestSyncDistinctUrisParallelizeFetches:
 # ============================================================================
 
 
+@pytest.mark.usefixtures("_distinct_lock_per_uri")
 class TestAsyncDistinctUrisParallelizeFetches:
-    @pytest.mark.usefixtures("_distinct_lock_per_uri")
+    """Async mirror — see ``TestSyncDistinctUrisParallelizeFetches``."""
+
     @pytest.mark.asyncio
     @respx.mock
     async def test_two_distinct_uris_fetch_in_parallel_async(self):
@@ -226,3 +245,56 @@ class TestAsyncDistinctUrisParallelizeFetches:
 
         await asyncio.gather(*(async_get_cached_jwks(url) for _ in range(5)))
         assert route.call_count == 1
+
+
+# ============================================================================
+# Pins the methodology: when two URIs share a stripe (forced via
+# monkeypatch, simulating the ``PYTHONHASHSEED`` collision that motivated
+# the ``_distinct_lock_per_uri`` fixture), the parallel-fetch test
+# methodology MUST be able to detect serialization. Otherwise the
+# parallelism tests above could be silently passing for the wrong reason.
+#
+# This test does NOT use the fixture: it forces every URI to share a
+# single lock, which is precisely the worst-case stripe-collision
+# scenario the fixture defends against in the other tests.
+# ============================================================================
+
+
+class TestSharedLockProducesSerialization:
+    """Negative-direction check: confirms the timing methodology detects
+    serialization. Without this, a hypothetical regression that made the
+    cache silently serialize everything could slip past the parallel
+    tests above if they happened to also stop measuring concurrency
+    correctly.
+    """
+
+    @respx.mock
+    def test_sync_shared_lock_serializes(self, monkeypatch):
+        shared_lock = threading.Lock()
+        monkeypatch.setattr(sync_tv, "_get_jwks_fetch_lock", lambda _uri: shared_lock)
+
+        url_a = "https://op-a.example/jwks"
+        url_b = "https://op-b.example/jwks"
+        respx.get(url_a).mock(side_effect=_build_slow_handler(_make_jwks_payload()))
+        respx.get(url_b).mock(side_effect=_build_slow_handler(_make_jwks_payload()))
+
+        barrier = threading.Barrier(2)
+
+        def fetch(url: str) -> None:
+            barrier.wait()
+            _get_cached_jwks(url)
+
+        start = time.monotonic()
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(fetch, url_a), pool.submit(fetch, url_b)]
+            for f in futures:
+                f.result()
+        elapsed = time.monotonic() - start
+
+        # With a single shared lock, the two fetches MUST serialize.
+        # Elapsed must be at least ~2x the single-fetch delay.
+        assert elapsed >= FETCH_DELAY_SECONDS * 1.8, (
+            f"Methodology check failed: elapsed {elapsed:.2f}s should have "
+            f"been ≥ {FETCH_DELAY_SECONDS * 1.8:.2f}s when a shared lock "
+            "serializes both fetches."
+        )
