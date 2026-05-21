@@ -6,6 +6,7 @@ This module provides asynchronous HTTP layer for fetching JSON Web Key Sets.
 
 import httpx
 
+from ..core.discovery_policy import DiscoveryPolicy, validate_url_scheme
 from ..core.error_handlers import handle_jwks_error
 from ..core.jwks_logic import log_jwks_request, process_jwks_response
 from ..core.models import (
@@ -49,6 +50,14 @@ async def get_jwks(
     log_jwks_request(jwks_request)
     response = None
     try:
+        # Pre-flight: validate URL scheme BEFORE making the HTTP request to
+        # prevent ftp://, file://, etc. and (per policy) plaintext HTTP to
+        # non-loopback hosts. JWKS validation is part of the public API and
+        # accepts caller-supplied URLs, so we cannot rely on the discovery
+        # document's scheme check having already vetted the address.
+        policy = jwks_request.policy or DiscoveryPolicy()
+        validate_url_scheme(jwks_request.address, policy)
+
         client = http_client.client if http_client else get_async_http_client()
         response = await _fetch_jwks(client, jwks_request.address)
         return process_jwks_response(response)

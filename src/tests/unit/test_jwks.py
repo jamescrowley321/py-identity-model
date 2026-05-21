@@ -4,6 +4,7 @@ import httpx
 import pytest
 import respx
 
+from py_identity_model.core.discovery_policy import DiscoveryPolicy
 from py_identity_model.exceptions import (
     ConfigurationException,
     FailedResponseAccessError,
@@ -690,3 +691,75 @@ class TestGetJwks:
             _ = result.keys
         assert result.error is not None
         assert "Unhandled exception during JWKS request" in result.error
+
+
+class TestGetJwksSchemeValidation:
+    """get_jwks() must reject non-HTTP(S) schemes before issuing a request.
+
+    Regression coverage for #380: prior to scheme pre-flight, calling
+    get_jwks() with ftp://, file://, javascript:, etc. would either hit
+    the HTTP client (SSRF surface) or fail with an opaque error. The
+    public API now mirrors discovery's pre-flight check.
+    """
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "ftp://example.com/jwks",
+            "file:///etc/passwd",
+            "data:application/json,{}",
+            "javascript:alert(1)",
+        ],
+    )
+    @respx.mock(assert_all_called=False)
+    def test_rejects_non_http_schemes(self, url):
+        # respx.mock with assert_all_called=False intercepts every network
+        # call. The pre-flight check must reject the URL before any HTTP
+        # request, so there's nothing for respx to route — the absence of
+        # an unhandled-call error confirms no network egress happened.
+        result = get_jwks(JwksRequest(address=url))
+
+        assert result.is_successful is False
+        assert result.error is not None
+        assert "Invalid JWKS endpoint URL" in result.error
+
+    @respx.mock
+    def test_https_is_accepted(self):
+        url = "https://example.com/jwks"
+        respx.get(url).mock(
+            return_value=httpx.Response(200, json={"keys": []}),
+        )
+        result = get_jwks(JwksRequest(address=url))
+        assert result.is_successful is True
+
+    @respx.mock(assert_all_called=False)
+    def test_http_rejected_under_default_policy(self):
+        # Default DiscoveryPolicy requires HTTPS off loopback. example.com is
+        # not loopback, so http:// must be rejected before any request goes out.
+        url = "http://example.com/jwks"
+        route = respx.get(url)
+        result = get_jwks(JwksRequest(address=url))
+
+        assert result.is_successful is False
+        assert result.error is not None
+        assert "HTTPS is required" in result.error
+        assert route.call_count == 0
+
+    @respx.mock
+    def test_http_loopback_allowed_under_default_policy(self):
+        url = "http://127.0.0.1:8080/jwks"
+        respx.get(url).mock(
+            return_value=httpx.Response(200, json={"keys": []}),
+        )
+        result = get_jwks(JwksRequest(address=url))
+        assert result.is_successful is True
+
+    @respx.mock
+    def test_http_allowed_when_policy_disables_require_https(self):
+        url = "http://example.com/jwks"
+        respx.get(url).mock(
+            return_value=httpx.Response(200, json={"keys": []}),
+        )
+        policy = DiscoveryPolicy(require_https=False)
+        result = get_jwks(JwksRequest(address=url, policy=policy))
+        assert result.is_successful is True

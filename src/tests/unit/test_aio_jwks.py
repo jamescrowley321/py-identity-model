@@ -5,6 +5,7 @@ import pytest
 import respx
 
 from py_identity_model.aio.jwks import JwksRequest, get_jwks
+from py_identity_model.core.discovery_policy import DiscoveryPolicy
 from py_identity_model.exceptions import FailedResponseAccessError
 
 
@@ -83,3 +84,64 @@ class TestAsyncJwks:
         assert result.is_successful is False
         assert result.error is not None
         assert "Network error" in result.error
+
+
+@pytest.mark.asyncio
+class TestAsyncGetJwksSchemeValidation:
+    """Async mirror of the sync scheme-validation regression coverage for #380."""
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "ftp://example.com/jwks",
+            "file:///etc/passwd",
+            "data:application/json,{}",
+            "javascript:alert(1)",
+        ],
+    )
+    @respx.mock(assert_all_called=False)
+    async def test_rejects_non_http_schemes(self, url):
+        result = await get_jwks(JwksRequest(address=url))
+
+        assert result.is_successful is False
+        assert result.error is not None
+        assert "Invalid JWKS endpoint URL" in result.error
+
+    @respx.mock
+    async def test_https_is_accepted(self):
+        url = "https://example.com/jwks"
+        respx.get(url).mock(
+            return_value=httpx.Response(200, json={"keys": []}),
+        )
+        result = await get_jwks(JwksRequest(address=url))
+        assert result.is_successful is True
+
+    @respx.mock(assert_all_called=False)
+    async def test_http_rejected_under_default_policy(self):
+        url = "http://example.com/jwks"
+        route = respx.get(url)
+        result = await get_jwks(JwksRequest(address=url))
+
+        assert result.is_successful is False
+        assert result.error is not None
+        assert "HTTPS is required" in result.error
+        assert route.call_count == 0
+
+    @respx.mock
+    async def test_http_loopback_allowed_under_default_policy(self):
+        url = "http://127.0.0.1:8080/jwks"
+        respx.get(url).mock(
+            return_value=httpx.Response(200, json={"keys": []}),
+        )
+        result = await get_jwks(JwksRequest(address=url))
+        assert result.is_successful is True
+
+    @respx.mock
+    async def test_http_allowed_when_policy_disables_require_https(self):
+        url = "http://example.com/jwks"
+        respx.get(url).mock(
+            return_value=httpx.Response(200, json={"keys": []}),
+        )
+        policy = DiscoveryPolicy(require_https=False)
+        result = await get_jwks(JwksRequest(address=url, policy=policy))
+        assert result.is_successful is True

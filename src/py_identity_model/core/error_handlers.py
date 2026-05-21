@@ -86,6 +86,14 @@ def handle_jwks_error(e: Exception) -> JwksResponse:
     Returns:
         JwksResponse: Error response
     """
+    if isinstance(e, ConfigurationException):
+        error_msg = f"Invalid JWKS endpoint URL: {e!s}"
+        logger.error(error_msg)
+        return JwksResponse(
+            is_successful=False,
+            error=error_msg,
+        )
+
     if isinstance(e, httpx.RequestError):
         error_msg = f"Network error during JWKS request: {e!s}"
         logger.error(error_msg, exc_info=True)
