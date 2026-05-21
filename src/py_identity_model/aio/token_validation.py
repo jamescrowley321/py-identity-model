@@ -8,6 +8,7 @@ with automatic cache expiry and forced JWKS refresh on key rotation.
 import asyncio
 import threading
 import time
+from weakref import WeakKeyDictionary
 
 from ..core.discovery_policy import DiscoveryPolicy
 from ..core.jwks_cache import (
@@ -54,20 +55,54 @@ from .managed_client import AsyncHTTPClient
 
 # Discovery TTL cache — keyed by (address, require_https) to prevent policy bypass
 _disco_cache: dict[tuple[str, bool], DiscoCacheEntry] = {}
-# Brief CPU-only write lock; does NOT span the upstream HTTP fetch. See
-# the sync module for the full rationale and the cache-aside pattern.
-_disco_cache_write_lock = asyncio.Lock()
-# Per-URI fetch locks (striped). Allows two coroutines waiting on
-# discovery for *different* addresses to run in parallel rather than
-# serializing on a single global lock held across an awaited HTTP call.
+
+# Per-event-loop lock storage. Module-level ``asyncio.Lock()`` instances bind
+# to whichever event loop first calls ``.acquire()`` (Python 3.10+), so any
+# embed or test runner that creates a new loop per scope hits
+# ``RuntimeError: <Lock> is bound to a different event loop``. Keying locks
+# on the running loop via ``WeakKeyDictionary`` gives each loop its own
+# independent lock set, and the entries get reclaimed when a loop is closed.
+# ``_lock_creation_lock`` is a plain ``threading.Lock`` so creation is safe
+# from any thread regardless of which loop is running. See #399.
 _DISCO_LOCK_STRIPES = 32
-_disco_fetch_locks: list[asyncio.Lock] = [
-    asyncio.Lock() for _ in range(_DISCO_LOCK_STRIPES)
-]
+_JWKS_LOCK_STRIPES = 32
+_disco_cache_write_locks: WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock] = (
+    WeakKeyDictionary()
+)
+_disco_fetch_locks_by_loop: WeakKeyDictionary[
+    asyncio.AbstractEventLoop, list[asyncio.Lock]
+] = WeakKeyDictionary()
+_jwks_cache_write_locks: WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock] = (
+    WeakKeyDictionary()
+)
+_jwks_fetch_locks_by_loop: WeakKeyDictionary[
+    asyncio.AbstractEventLoop, list[asyncio.Lock]
+] = WeakKeyDictionary()
+_lock_creation_lock = threading.Lock()
+
+
+def _get_disco_cache_write_lock() -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    lock = _disco_cache_write_locks.get(loop)
+    if lock is None:
+        with _lock_creation_lock:
+            lock = _disco_cache_write_locks.get(loop)
+            if lock is None:
+                lock = asyncio.Lock()
+                _disco_cache_write_locks[loop] = lock
+    return lock
 
 
 def _get_disco_fetch_lock(cache_key: tuple[str, bool]) -> asyncio.Lock:
-    return _disco_fetch_locks[hash(cache_key) % _DISCO_LOCK_STRIPES]
+    loop = asyncio.get_running_loop()
+    stripes = _disco_fetch_locks_by_loop.get(loop)
+    if stripes is None:
+        with _lock_creation_lock:
+            stripes = _disco_fetch_locks_by_loop.get(loop)
+            if stripes is None:
+                stripes = [asyncio.Lock() for _ in range(_DISCO_LOCK_STRIPES)]
+                _disco_fetch_locks_by_loop[loop] = stripes
+    return stripes[hash(cache_key) % _DISCO_LOCK_STRIPES]
 
 
 async def _get_disco_response(
@@ -100,7 +135,7 @@ async def _get_disco_response(
         response = await get_discovery_document(
             DiscoveryDocumentRequest(address=disco_doc_address, policy=policy),
         )
-        async with _disco_cache_write_lock:
+        async with _get_disco_cache_write_lock():
             apply_disco_cache_outcome(
                 _disco_cache, cache_key, response, time.monotonic()
             )
@@ -111,13 +146,19 @@ async def clear_discovery_cache() -> None:
     """Clear the discovery cache.
 
     **Breaking change (v3.0.0):** this helper is now ``async`` so it can
-    acquire ``_disco_cache_write_lock`` before clearing. The previous
+    acquire the disco-cache write lock before clearing. The previous
     synchronous version mutated state guarded by an ``asyncio.Lock``
     without awaiting it, so a coroutine mid-flight in ``_refresh_jwks``
     could write its result back *after* ``clear()`` ran, leaving the
     "cleared" cache holding an entry. Callers must now ``await``.
+
+    Acquires the *current loop's* write lock. The cache dict itself is
+    process-shared, so the clear is visible to operations on any loop;
+    in-flight writes on a different loop are not coordinated with this
+    clear, which matches the prior (single-lock) semantics modulo the
+    per-loop lock plumbing for #399.
     """
-    async with _disco_cache_write_lock:
+    async with _get_disco_cache_write_lock():
         _disco_cache.clear()
 
 
@@ -126,18 +167,34 @@ async def clear_discovery_cache() -> None:
 # ============================================================================
 
 _jwks_cache: dict[str, JwksCacheEntry] = {}
-_jwks_cache_write_lock = asyncio.Lock()
-_JWKS_LOCK_STRIPES = 32
-_jwks_fetch_locks: list[asyncio.Lock] = [
-    asyncio.Lock() for _ in range(_JWKS_LOCK_STRIPES)
-]
 
-# See sync._kid_miss_last_attempt for rationale. Guarded by _jwks_cache_write_lock.
+# See sync._kid_miss_last_attempt for rationale. Guarded by the per-loop
+# JWKS cache write lock.
 _kid_miss_last_attempt: dict[str, float] = {}
 
 
+def _get_jwks_cache_write_lock() -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    lock = _jwks_cache_write_locks.get(loop)
+    if lock is None:
+        with _lock_creation_lock:
+            lock = _jwks_cache_write_locks.get(loop)
+            if lock is None:
+                lock = asyncio.Lock()
+                _jwks_cache_write_locks[loop] = lock
+    return lock
+
+
 def _get_jwks_fetch_lock(jwks_uri: str) -> asyncio.Lock:
-    return _jwks_fetch_locks[hash(jwks_uri) % _JWKS_LOCK_STRIPES]
+    loop = asyncio.get_running_loop()
+    stripes = _jwks_fetch_locks_by_loop.get(loop)
+    if stripes is None:
+        with _lock_creation_lock:
+            stripes = _jwks_fetch_locks_by_loop.get(loop)
+            if stripes is None:
+                stripes = [asyncio.Lock() for _ in range(_JWKS_LOCK_STRIPES)]
+                _jwks_fetch_locks_by_loop[loop] = stripes
+    return stripes[hash(jwks_uri) % _JWKS_LOCK_STRIPES]
 
 
 async def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
@@ -156,7 +213,7 @@ async def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
             return entry.response
 
         response = await get_jwks(JwksRequest(address=jwks_uri))
-        async with _jwks_cache_write_lock:
+        async with _get_jwks_cache_write_lock():
             apply_jwks_cache_outcome(
                 _jwks_cache,
                 jwks_uri,
@@ -189,7 +246,7 @@ async def _refresh_jwks(jwks_uri: str) -> JwksResponse:
 
         logger.info("Forcing JWKS refresh for %s (possible key rotation)", jwks_uri)
         response = await get_jwks(JwksRequest(address=jwks_uri))
-        async with _jwks_cache_write_lock:
+        async with _get_jwks_cache_write_lock():
             apply_jwks_cache_outcome(
                 _jwks_cache,
                 jwks_uri,
@@ -204,15 +261,18 @@ async def clear_jwks_cache() -> None:
     """Clear the JWKS cache. Useful for testing.
 
     **Breaking change (v3.0.0):** this helper is now ``async`` so it can
-    acquire ``_jwks_cache_write_lock`` before clearing. The previous
+    acquire the JWKS-cache write lock before clearing. The previous
     synchronous version mutated state guarded by an ``asyncio.Lock``
     without awaiting it, so a coroutine mid-flight in ``_refresh_jwks``
     could write its result back *after* ``clear()`` ran, leaving the
     "cleared" cache holding an entry. The cooldown sidecar
     (``_kid_miss_last_attempt``) is cleared under the same lock for the
     same reason. Callers must now ``await``.
+
+    Acquires the current loop's write lock; see ``clear_discovery_cache``
+    for the cross-loop semantics added in the #399 per-loop lock plumbing.
     """
-    async with _jwks_cache_write_lock:
+    async with _get_jwks_cache_write_lock():
         _jwks_cache.clear()
         _kid_miss_last_attempt.clear()
 
@@ -320,7 +380,7 @@ async def _discover_and_resolve_key(
             if jwks_response.is_successful:
                 refreshed_keys = jwks_response.keys or []
                 kid_found = any(k.kid == kid for k in refreshed_keys)
-                async with _jwks_cache_write_lock:
+                async with _get_jwks_cache_write_lock():
                     if kid_found:
                         _kid_miss_last_attempt.pop(jwks_uri, None)
                     else:
@@ -392,10 +452,10 @@ async def _retry_with_refreshed_jwks(
         resolved_config = build_resolved_config(token_validation_config, key_dict, alg)
         decoded = decode_with_config(jwt, resolved_config, disco_doc_response.issuer)
     except Exception:
-        async with _jwks_cache_write_lock:
+        async with _get_jwks_cache_write_lock():
             _kid_miss_last_attempt[jwks_uri] = time.monotonic()
         raise
-    async with _jwks_cache_write_lock:
+    async with _get_jwks_cache_write_lock():
         _kid_miss_last_attempt.pop(jwks_uri, None)
     return decoded
 
