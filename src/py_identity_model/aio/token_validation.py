@@ -197,7 +197,7 @@ def _get_jwks_fetch_lock(jwks_uri: str) -> asyncio.Lock:
     return stripes[hash(jwks_uri) % _JWKS_LOCK_STRIPES]
 
 
-async def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
+async def _get_cached_jwks(jwks_uri: str, require_https: bool = True) -> JwksResponse:
     """Return cached JWKS response if fresh, otherwise fetch and cache.
 
     Cache-aside with per-URI single-flight (see ``_get_disco_response``).
@@ -212,7 +212,11 @@ async def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
         if entry is not None and not is_cache_expired(entry):
             return entry.response
 
-        response = await get_jwks(JwksRequest(address=jwks_uri))
+        # The jwks_uri was already vetted against this policy when the
+        # discovery document was processed; thread it through so the
+        # pre-flight scheme check inside get_jwks() does not double-reject.
+        policy = DiscoveryPolicy(require_https=require_https)
+        response = await get_jwks(JwksRequest(address=jwks_uri, policy=policy))
         async with _get_jwks_cache_write_lock():
             apply_jwks_cache_outcome(
                 _jwks_cache,
@@ -224,7 +228,9 @@ async def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
         return response
 
 
-async def _refresh_jwks(jwks_uri: str) -> tuple[JwksResponse, bool]:
+async def _refresh_jwks(
+    jwks_uri: str, require_https: bool = True
+) -> tuple[JwksResponse, bool]:
     """Force re-fetch JWKS and update cache (key rotation).
 
     Uses the per-URI fetch lock to coalesce concurrent refreshes for the
@@ -250,7 +256,8 @@ async def _refresh_jwks(jwks_uri: str) -> tuple[JwksResponse, bool]:
             return entry.response, False
 
         logger.info("Forcing JWKS refresh for %s (possible key rotation)", jwks_uri)
-        response = await get_jwks(JwksRequest(address=jwks_uri))
+        policy = DiscoveryPolicy(require_https=require_https)
+        response = await get_jwks(JwksRequest(address=jwks_uri, policy=policy))
         async with _get_jwks_cache_write_lock():
             apply_jwks_cache_outcome(
                 _jwks_cache,
@@ -359,7 +366,7 @@ async def _discover_and_resolve_key(
         validate_disco_response(disco_doc_response)
         jwks_uri = validate_jwks_uri(disco_doc_response)
         jwks_response = await get_jwks(
-            JwksRequest(address=jwks_uri), http_client=http_client
+            JwksRequest(address=jwks_uri, policy=policy), http_client=http_client
         )
         validate_jwks_response(jwks_response)
         kid, jwt_alg = extract_jwt_header_fields(jwt)
@@ -370,7 +377,7 @@ async def _discover_and_resolve_key(
     disco_doc_response = await _get_disco_response(disco_doc_address, require_https)
     validate_disco_response(disco_doc_response)
     jwks_uri = validate_jwks_uri(disco_doc_response)
-    jwks_response = await _get_cached_jwks(jwks_uri)
+    jwks_response = await _get_cached_jwks(jwks_uri, require_https=require_https)
     validate_jwks_response(jwks_response)
     kid, jwt_alg = extract_jwt_header_fields(jwt)
     # OP key rotation: if the JWT's kid is not in the cached JWKS, the cache
@@ -391,7 +398,9 @@ async def _discover_and_resolve_key(
                 kid,
             )
             # See sync._discover_and_resolve_key for the rationale.
-            jwks_response, from_retained_cache = await _refresh_jwks(jwks_uri)
+            jwks_response, from_retained_cache = await _refresh_jwks(
+                jwks_uri, require_https=require_https
+            )
             if jwks_response.is_successful:
                 refreshed_keys = jwks_response.keys or []
                 kid_found = any(k.kid == kid for k in refreshed_keys)
@@ -436,9 +445,10 @@ async def _retry_with_refreshed_jwks(
     """
     logger.warning("Signature verification failed; retrying with refreshed keys")
     jwks_uri = validate_jwks_uri(disco_doc_response)
+    policy = DiscoveryPolicy(require_https=token_validation_config.require_https)
     if http_client is not None:
         jwks_response = await get_jwks(
-            JwksRequest(address=jwks_uri), http_client=http_client
+            JwksRequest(address=jwks_uri, policy=policy), http_client=http_client
         )
         validate_jwks_response(jwks_response)
         kid, jwt_alg = extract_jwt_header_fields(jwt)
@@ -460,7 +470,9 @@ async def _retry_with_refreshed_jwks(
             "Signature verification failed; refresh cooldown active"
         )
 
-    jwks_response, from_retained_cache = await _refresh_jwks(jwks_uri)
+    jwks_response, from_retained_cache = await _refresh_jwks(
+        jwks_uri, require_https=token_validation_config.require_https
+    )
     # See sync._retry_with_refreshed_jwks — transient failures must not
     # stamp the cooldown.
     validate_jwks_response(jwks_response)

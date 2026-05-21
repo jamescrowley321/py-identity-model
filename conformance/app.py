@@ -7,6 +7,7 @@ using py-identity-model's public API to exercise all RP conformance tests.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import html
 import logging
 import os
 import secrets
@@ -360,7 +361,7 @@ def _fetch_and_validate_discovery(
         session.result["error"] = f"discovery_failed: {disco.error}"
         _store_test_result(session)
         return HTMLResponse(
-            content=f"<h1>Discovery Failed</h1><p>{disco.error}</p>",
+            content=f"<h1>Discovery Failed</h1><p>{html.escape(str(disco.error))}</p>",
             status_code=502,
         )
 
@@ -372,7 +373,7 @@ def _fetch_and_validate_discovery(
         session.result["error"] = f"missing_issuer: {error_msg}"
         _store_test_result(session)
         return HTMLResponse(
-            content=f"<h1>Missing Issuer</h1><p>{error_msg}</p>",
+            content=f"<h1>Missing Issuer</h1><p>{html.escape(error_msg)}</p>",
             status_code=502,
         )
     if disco.issuer != issuer:
@@ -385,7 +386,7 @@ def _fetch_and_validate_discovery(
         session.result["error"] = f"issuer_mismatch: {error_msg}"
         _store_test_result(session)
         return HTMLResponse(
-            content=f"<h1>Issuer Mismatch</h1><p>{error_msg}</p>",
+            content=f"<h1>Issuer Mismatch</h1><p>{html.escape(error_msg)}</p>",
             status_code=502,
         )
 
@@ -424,7 +425,10 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
         session.result["error"] = f"state_validation: {state_result.result.value}"
         _store_test_result(session)
         return HTMLResponse(
-            content=f"<h1>State Validation Failed</h1><p>{state_result.result.value}</p>",
+            content=(
+                "<h1>State Validation Failed</h1>"
+                f"<p>{html.escape(state_result.result.value)}</p>"
+            ),
             status_code=400,
         )
 
@@ -435,7 +439,11 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
         session.result["error_description"] = cb_response.error_description
         _store_test_result(session)
         return HTMLResponse(
-            content=f"<h1>OP Error</h1><p>{cb_response.error}: {cb_response.error_description}</p>",
+            content=(
+                "<h1>OP Error</h1>"
+                f"<p>{html.escape(str(cb_response.error))}: "
+                f"{html.escape(str(cb_response.error_description))}</p>"
+            ),
             status_code=400,
         )
 
@@ -479,7 +487,10 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
         session.result["error"] = f"token_exchange: {token_response.error}"
         _store_test_result(session)
         return HTMLResponse(
-            content=f"<h1>Token Exchange Failed</h1><p>{token_response.error}</p>",
+            content=(
+                "<h1>Token Exchange Failed</h1>"
+                f"<p>{html.escape(str(token_response.error))}</p>"
+            ),
             status_code=400,
         )
 
@@ -532,7 +543,10 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
             session.result["error"] = f"id_token_validation: {exc.message}"
             _store_test_result(session)
             return HTMLResponse(
-                content=f"<h1>ID Token Validation Failed</h1><p>{exc.message}</p>",
+                content=(
+                    "<h1>ID Token Validation Failed</h1>"
+                    f"<p>{html.escape(str(exc.message))}</p>"
+                ),
                 status_code=400,
             )
 
@@ -545,8 +559,11 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
             )
             _store_test_result(session)
             return HTMLResponse(
-                content=f"<h1>Nonce Mismatch</h1>"
-                f"<p>Expected: {session.nonce}, Got: {token_nonce}</p>",
+                content=(
+                    "<h1>Nonce Mismatch</h1>"
+                    f"<p>Expected: {html.escape(str(session.nonce))}, "
+                    f"Got: {html.escape(str(token_nonce))}</p>"
+                ),
                 status_code=400,
             )
 
@@ -574,7 +591,10 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
                 session.result["error"] = f"userinfo_validation: {error_msg}"
                 _store_test_result(session)
                 return HTMLResponse(
-                    content=f"<h1>UserInfo Validation Failed</h1><p>{error_msg}</p>",
+                    content=(
+                        "<h1>UserInfo Validation Failed</h1>"
+                        f"<p>{html.escape(str(error_msg))}</p>"
+                    ),
                     status_code=400,
                 )
         except PyIdentityModelException as exc:
@@ -593,15 +613,19 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
     )
 
     # Build response body with ID token and UserInfo claims so the conformance
-    # suite can verify the RP fetched and displayed them.
+    # suite can verify the RP fetched and displayed them. All interpolated
+    # values originate from the IdP (claims, error messages) and must be
+    # HTML-escaped before rendering — see #381.
     claim_lines = [
-        f"<p>Subject: {claims.get('sub', 'N/A')}</p>",
-        f"<p>Issuer: {claims.get('iss', 'N/A')}</p>",
+        f"<p>Subject: {html.escape(str(claims.get('sub', 'N/A')))}</p>",
+        f"<p>Issuer: {html.escape(str(claims.get('iss', 'N/A')))}</p>",
     ]
     if userinfo_claims:
         claim_lines.append("<h2>UserInfo Claims</h2>")
         for key, value in userinfo_claims.items():
-            claim_lines.append(f"<p>{key}: {value}</p>")
+            claim_lines.append(
+                f"<p>{html.escape(str(key))}: {html.escape(str(value))}</p>"
+            )
 
     return HTMLResponse(
         content="<h1>Authentication Successful</h1>" + "\n".join(claim_lines),
