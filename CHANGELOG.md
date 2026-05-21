@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v3.0.0 (2026-05-21)
+
+### Bug Fixes
+
+- **jwks-cache**: Convert aio clear_*_cache helpers to async
+  ([`06e4236`](https://github.com/jamescrowley321/py-identity-model/commit/06e4236dd316e4e4f837a757fb3fe3c1fc32793b))
+
+### Breaking Changes
+
+- **jwks-cache**: Callers of ``py_identity_model.aio.token_validation``'s ``clear_discovery_cache``
+  and ``clear_jwks_cache`` must now ``await`` them. The sync mirrors in
+  ``py_identity_model.sync.token_validation`` are unchanged.
+
+
 ## v2.19.14 (2026-05-21)
 
 ### Bug Fixes
