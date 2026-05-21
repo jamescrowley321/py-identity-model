@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v2.19.14 (2026-05-21)
+
+### Bug Fixes
+
+- **jwks-cache**: Use monotonic clock and capture request_time inside fetch lock
+  ([`d00dcb3`](https://github.com/jamescrowley321/py-identity-model/commit/d00dcb308861b2e739232f57e22e2166b302ace3))
+
+- **tests**: Backdate cached_at via time.monotonic for stale-entry test
+  ([`c724a93`](https://github.com/jamescrowley321/py-identity-model/commit/c724a932258ba0eb90d1f41f72044c00df440f3d))
+
+
 ## v2.19.13 (2026-05-17)
 
 ### Bug Fixes
