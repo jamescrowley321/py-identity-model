@@ -534,7 +534,12 @@ class JwksRequest(BaseRequest):
 
     Attributes:
         address: The JWKS endpoint URL (typically from ``DiscoveryDocumentResponse.jwks_uri``).
+        policy: Optional discovery policy for pre-flight URL scheme
+            validation. When ``None``, strict defaults apply
+            (HTTPS required outside loopback).
     """
+
+    policy: DiscoveryPolicy | None = None
 
 
 @dataclass(repr=False, eq=False)
