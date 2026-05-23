@@ -203,15 +203,13 @@ def test_get_jwks_failure():
 
 def test_get_jwks_network_error():
     """Test get_jwks with network errors"""
-    # Test with malformed URL
+    # Test with malformed URL — rejected by the URL scheme pre-flight before
+    # any network call (see DiscoveryPolicy.validate_url_scheme).
     jwks_request = JwksRequest(address="not-a-valid-url")
     jwks_response = get_jwks(jwks_request)
 
     assert jwks_response.is_successful is False
     assert jwks_response.error is not None
-    assert (
-        "Network error during JWKS request" in jwks_response.error
-        or "Unhandled exception during JWKS request" in jwks_response.error
-    )
+    assert "Invalid JWKS endpoint URL" in jwks_response.error
     with pytest.raises(FailedResponseAccessError):
         _ = jwks_response.keys
