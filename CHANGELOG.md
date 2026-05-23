@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v3.0.1 (2026-05-23)
+
+### Bug Fixes
+
+- **aio**: Per-event-loop async locks (#399)
+  ([#399](https://github.com/jamescrowley321/py-identity-model/pull/399),
+  [`94ceddc`](https://github.com/jamescrowley321/py-identity-model/commit/94ceddcdac559bdbe56bba90d75e0e2d8f461334))
+
+### Testing
+
+- **jwks-cache**: Pin _distinct_lock_per_uri at class level (#398)
+  ([#398](https://github.com/jamescrowley321/py-identity-model/pull/398),
+  [`6eb301f`](https://github.com/jamescrowley321/py-identity-model/commit/6eb301f77178d22b767453c5271d8c164bd7a583))
+
+
 ## v3.0.0 (2026-05-21)
 
 ### Bug Fixes
