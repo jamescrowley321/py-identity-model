@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v3.0.2 (2026-05-23)
+
+### Bug Fixes
+
+- **jwks-cache**: Surface retained cache on empty refresh (#403) (#417)
+  ([#417](https://github.com/jamescrowley321/py-identity-model/pull/417),
+  [`bd19d74`](https://github.com/jamescrowley321/py-identity-model/commit/bd19d741310c040e40b3da1440211460f4ddceee))
+
+
 ## v3.0.1 (2026-05-23)
 
 ### Bug Fixes
