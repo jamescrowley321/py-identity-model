@@ -167,7 +167,7 @@ def _get_cached_jwks(jwks_uri: str) -> JwksResponse:
         return response
 
 
-def _refresh_jwks(jwks_uri: str) -> JwksResponse:
+def _refresh_jwks(jwks_uri: str) -> tuple[JwksResponse, bool]:
     """Force re-fetch JWKS and update cache (key rotation).
 
     Uses the per-URI fetch lock to coalesce concurrent refresh requests for
@@ -178,13 +178,25 @@ def _refresh_jwks(jwks_uri: str) -> JwksResponse:
     ``request_time`` is captured *inside* the lock so a thread that races a
     just-released lock cannot observe its own ``request_time`` as older than
     the entry that thread A just wrote (causing a spurious re-fetch).
+
+    Returns:
+        ``(response, from_retained_cache)``. When ``from_retained_cache`` is
+        ``True``, the upstream refresh returned a successful-but-empty body
+        and we surface the retained cache entry instead of the empty
+        response (the cached working keys are sitting there; raising "no
+        keys available" with usable keys in hand is the wrong UX, and
+        stamping the kid-miss cooldown on an empty-but-not-attacker-driven
+        refresh wedges legitimate traffic for the cooldown window). Callers
+        treat this flag as "no new information from upstream" — i.e. do not
+        update the kid-miss cooldown, since the empty response isn't
+        attacker-amplifiable.
     """
     fetch_lock = _get_jwks_fetch_lock(jwks_uri)
     with fetch_lock:
         request_time = time.monotonic()
         entry = _jwks_cache.get(jwks_uri)
         if entry is not None and entry.cached_at >= request_time:
-            return entry.response
+            return entry.response, False
 
         logger.info("Forcing JWKS refresh for %s (possible key rotation)", jwks_uri)
         response = get_jwks(JwksRequest(address=jwks_uri))
@@ -196,7 +208,20 @@ def _refresh_jwks(jwks_uri: str) -> JwksResponse:
                 time.monotonic(),
                 cooldown=_kid_miss_last_attempt,
             )
-        return response
+            # apply_jwks_cache_outcome retains the existing entry on an
+            # empty-successful response. Surface that retained entry so
+            # the in-flight validation has usable keys to work with.
+            if response.is_successful and not response.keys:
+                retained = _jwks_cache.get(jwks_uri)
+                if retained is not None and retained.response.keys:
+                    logger.info(
+                        "JWKS refresh for %s returned 200 with empty keys; "
+                        "falling back to retained cache entry for in-flight "
+                        "validation",
+                        jwks_uri,
+                    )
+                    return retained.response, True
+        return response, False
 
 
 def clear_jwks_cache() -> None:
@@ -310,24 +335,32 @@ def _discover_and_resolve_key(
             # is_successful=False by get_jwks) must not wedge the cooldown,
             # so a single dropped packet does not stretch a rotation outage
             # by the cooldown window.
-            jwks_response = _refresh_jwks(jwks_uri)
+            jwks_response, from_retained_cache = _refresh_jwks(jwks_uri)
             if jwks_response.is_successful:
                 refreshed_keys = jwks_response.keys or []
                 kid_found = any(k.kid == kid for k in refreshed_keys)
-                with _jwks_cache_write_lock:
-                    if kid_found:
-                        # Refresh produced the missing kid — legitimate
-                        # rotation absorbed. Drop the stamp so a back-to-back
-                        # second rotation within the cooldown window can
-                        # still refresh.
-                        _kid_miss_last_attempt.pop(jwks_uri, None)
-                    else:
-                        # Refresh completed and produced a response but the
-                        # kid is still absent — DoS amplifier case (the
-                        # attacker drove an upstream fetch we couldn't
-                        # turn into a successful validation). Stamp the
-                        # cooldown to suppress repeats in the window.
-                        _kid_miss_last_attempt[jwks_uri] = time.monotonic()
+                # Skip the cooldown bookkeeping entirely when the refresh
+                # degraded to a retained-cache fallback. The upstream's
+                # empty response is not attacker-amplifiable, so the
+                # DoS-stamp framing does not apply; and we must not pop
+                # a legitimate prior stamp on what was effectively a
+                # no-op refresh.
+                if not from_retained_cache:
+                    with _jwks_cache_write_lock:
+                        if kid_found:
+                            # Refresh produced the missing kid — legitimate
+                            # rotation absorbed. Drop the stamp so a
+                            # back-to-back second rotation within the
+                            # cooldown window can still refresh.
+                            _kid_miss_last_attempt.pop(jwks_uri, None)
+                        else:
+                            # Refresh completed and produced a response
+                            # but the kid is still absent — DoS amplifier
+                            # case (the attacker drove an upstream fetch
+                            # we couldn't turn into a successful
+                            # validation). Stamp the cooldown to suppress
+                            # repeats in the window.
+                            _kid_miss_last_attempt[jwks_uri] = time.monotonic()
             else:
                 kid_found = False
             validate_jwks_response(jwks_response)
@@ -389,7 +422,7 @@ def _retry_with_refreshed_jwks(
             "Signature verification failed; refresh cooldown active"
         )
 
-    jwks_response = _refresh_jwks(jwks_uri)
+    jwks_response, from_retained_cache = _refresh_jwks(jwks_uri)
     # Transient upstream failures (wrapped as is_successful=False) must not
     # stamp the cooldown — let validate_jwks_response raise naturally so
     # the next attempt can retry once upstream recovers.
@@ -403,14 +436,21 @@ def _retry_with_refreshed_jwks(
     except Exception:
         # Refresh delivered a usable response but the chain (find_key,
         # decode) still failed — DoS amplifier case. Stamp to suppress
-        # retry storms.
-        with _jwks_cache_write_lock:
-            _kid_miss_last_attempt[jwks_uri] = time.monotonic()
+        # retry storms. Skip the stamp when the refresh degraded to a
+        # retained-cache fallback (empty upstream response is not
+        # attacker-amplifiable).
+        if not from_retained_cache:
+            with _jwks_cache_write_lock:
+                _kid_miss_last_attempt[jwks_uri] = time.monotonic()
         raise
     # Refreshed keys verified the JWT — real rotation absorbed. Clear the
-    # stamp so a subsequent legitimate rotation isn't suppressed.
-    with _jwks_cache_write_lock:
-        _kid_miss_last_attempt.pop(jwks_uri, None)
+    # stamp so a subsequent legitimate rotation isn't suppressed. Only do
+    # this for real refreshes; a cache-fallback success would have worked
+    # with the cached keys all along and tells us nothing new about
+    # rotation state.
+    if not from_retained_cache:
+        with _jwks_cache_write_lock:
+            _kid_miss_last_attempt.pop(jwks_uri, None)
     return decoded
 
 
