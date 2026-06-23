@@ -10,6 +10,12 @@ permissions:
   contents: write
   pull-requests: write
 
+# Cancel any in-progress Publish Pre-release run on the same PR ref
+# when a new commit lands. Avoids stacked CI runs on rapid pushes.
+concurrency:
+  group: publish-prerelease-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci:
     uses: ./.github/workflows/ci.yml
@@ -17,6 +23,11 @@ jobs:
       run-descope-integration: true
       run-example-tests: true
       run-build: true
+      # Ory integration runs in build.yml on the same push; skipping it
+      # here eliminates duplicate concurrent hits to Ory's rate-limited
+      # discovery/JWKS endpoints, which was the dominant cause of
+      # integration-tests-ory 429s on PRs.
+      run-ory-integration: false
     secrets: inherit
 
   publish-prerelease:
