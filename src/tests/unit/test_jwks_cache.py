@@ -11,6 +11,7 @@ from py_identity_model.core.jwks_cache import (
     JwksCacheEntry,
     is_cache_expired,
     is_uncacheable,
+    is_uncacheable_for_jwks,
     parse_max_age,
     resolve_ttl,
 )
@@ -125,6 +126,40 @@ class TestIsUncacheable:
 
     def test_empty_string(self):
         assert is_uncacheable("") is False
+
+
+class TestIsUncacheableForJwks:
+    """JWKS-specific policy: ignore no-cache/no-store on public keys.
+
+    See ``is_uncacheable_for_jwks`` docstring and issue #396 for
+    rationale. JWKS responses are public material and the strict
+    interpretation causes self-DoS at meaningful traffic levels.
+    """
+
+    def test_no_store_is_still_cacheable(self):
+        assert is_uncacheable_for_jwks("no-store") is False
+
+    def test_no_cache_is_still_cacheable(self):
+        assert is_uncacheable_for_jwks("no-cache") is False
+
+    def test_ory_combined_directives_still_cacheable(self):
+        """Real-world: Ory sends 'private, no-cache, no-store, must-revalidate'."""
+        assert (
+            is_uncacheable_for_jwks("private, no-cache, no-store, must-revalidate")
+            is False
+        )
+
+    def test_descope_combined_directives_still_cacheable(self):
+        assert is_uncacheable_for_jwks("no-store, no-cache") is False
+
+    def test_max_age_still_cacheable(self):
+        assert is_uncacheable_for_jwks("max-age=3600") is False
+
+    def test_none_header_still_cacheable(self):
+        assert is_uncacheable_for_jwks(None) is False
+
+    def test_empty_string_still_cacheable(self):
+        assert is_uncacheable_for_jwks("") is False
 
 
 class TestMultiProviderCacheIsolation:

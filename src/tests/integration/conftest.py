@@ -264,16 +264,17 @@ def jwks_response(test_config, tmp_path_factory):
 def provider_caches_responses(discovery_document, jwks_response):
     """Whether the provider's Cache-Control allows the library to cache.
 
-    Per RFC 7234 §5.2.2.4-5, ``no-store`` and ``no-cache`` directives
-    instruct the client to skip caching. Some providers (e.g., Descope on
-    JWKS) set these directives, which means the library will (correctly)
-    re-fetch on every validation. Benchmarks that rely on caching should
-    skip when this fixture is False.
+    Discovery still honors strict ``no-store``/``no-cache`` semantics
+    (sensitive metadata). JWKS, per
+    :func:`py_identity_model.core.jwks_cache.is_uncacheable_for_jwks`
+    and issue #396, is always cached regardless of provider directives
+    — JWKS contains public keys, and strict honoring self-DoSes the
+    upstream at scale. ``jwks_response`` is therefore unused here but
+    retained as a fixture dep so its session-scoped cache stays
+    populated for downstream tests.
     """
-    return not (
-        is_uncacheable(discovery_document.cache_control)
-        or is_uncacheable(jwks_response.cache_control)
-    )
+    del jwks_response  # see docstring
+    return not is_uncacheable(discovery_document.cache_control)
 
 
 @pytest.fixture(scope="session")
