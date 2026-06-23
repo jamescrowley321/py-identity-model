@@ -5,6 +5,14 @@ on:
     branches: [main]
   pull_request:
 
+# Cancel any in-progress Build run on the same PR ref when a new commit
+# lands. Without this, rapid pushes to a PR stack multiple full CI runs
+# against the same provider endpoints (Ory in particular), compounding
+# rate-limit pressure. Main pushes are never cancelled.
+concurrency:
+  group: build-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 

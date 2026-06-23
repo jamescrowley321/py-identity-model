@@ -26,6 +26,11 @@ on:
         required: false
         type: boolean
         default: false
+      run-ory-integration:
+        description: 'Run Ory integration tests (skip in duplicate-call workflows to avoid upstream rate limits)'
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   lint:
@@ -83,6 +88,7 @@ jobs:
         run: make test-unit
 
   integration-tests-ory:
+    if: inputs.run-ory-integration
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
