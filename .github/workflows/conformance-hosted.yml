@@ -64,6 +64,16 @@ jobs:
             --output conformance/results/hosted/config-rp-latest.json \
             --verbose
 
+      - name: Run Form Post Basic RP conformance tests
+        env:
+          CONFORMANCE_SERVER: https://www.certification.openid.net/
+          CONFORMANCE_TOKEN: ${{ secrets.CONFORMANCE_TOKEN }}
+        run: |
+          python conformance/run_tests.py \
+            --plan form-post-basic-rp \
+            --output conformance/results/hosted/form-post-basic-rp-latest.json \
+            --verbose
+
       - name: Upload conformance results
         uses: actions/upload-artifact@v7
         if: always()
