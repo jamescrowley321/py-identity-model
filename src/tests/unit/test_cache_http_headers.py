@@ -1,12 +1,18 @@
 """
 Tests for HTTP cache header semantics in JWKS and discovery caches.
 
-Covers three correctness fixes:
-1. Failed JWKS/discovery responses must not be cached (a transient 5xx or
-   network error would otherwise poison the cache for up to 24h).
-2. ``Cache-Control: no-store`` must not be cached at all (RFC 7234 §5.2.2.5).
-3. ``Cache-Control: no-cache`` must always re-fetch (RFC 7234 §5.2.2.4) —
-   simplest correct behavior is to skip caching.
+Discovery responses retain strict RFC 7234 semantics: ``no-store`` and
+``no-cache`` skip the cache. JWKS responses, per issue #396 and
+:func:`is_uncacheable_for_jwks`, ignore those directives because JWKS
+is public key material; strict honoring self-DoSes the upstream issuer
+at production traffic levels.
+
+Covered behaviors:
+1. Failed JWKS/discovery responses are not cached.
+2. JWKS no-store / no-cache responses ARE cached (new policy).
+3. Discovery no-store / no-cache responses are NOT cached (strict).
+4. JWKS refresh with uncacheable response writes the new entry,
+   never leaves the cache empty.
 """
 
 import time
@@ -169,10 +175,10 @@ class TestAsyncFailedResponseNotCached:
 # ============================================================================
 
 
-class TestSyncNoStoreNotCached:
+class TestSyncNoStoreCachedForJwks:
     @respx.mock
-    def test_jwks_no_store_skips_cache(self):
-        """no-store responses are returned but not cached, even with max-age."""
+    def test_jwks_no_store_still_cached(self):
+        """no-store on JWKS is ignored; response is cached. See #396."""
         key_dict = generate_rsa_keypair()[0]
         respx.get(JWKS_URL).mock(
             return_value=httpx.Response(
@@ -185,7 +191,7 @@ class TestSyncNoStoreNotCached:
         response = _get_cached_jwks(JWKS_URL)
         assert response.is_successful is True
         assert response.keys is not None
-        assert JWKS_URL not in sync_tv._jwks_cache
+        assert JWKS_URL in sync_tv._jwks_cache
 
     @respx.mock
     def test_disco_no_store_skips_cache(self):
@@ -202,10 +208,11 @@ class TestSyncNoStoreNotCached:
         assert (DISCO_URL, True) not in sync_tv._disco_cache
 
 
-class TestAsyncNoStoreNotCached:
+class TestAsyncNoStoreCachedForJwks:
     @pytest.mark.asyncio
     @respx.mock
-    async def test_jwks_no_store_skips_cache_async(self):
+    async def test_jwks_no_store_still_cached_async(self):
+        """no-store on JWKS is ignored; response is cached. See #396."""
         key_dict = generate_rsa_keypair()[0]
         respx.get(JWKS_URL).mock(
             return_value=httpx.Response(
@@ -217,7 +224,7 @@ class TestAsyncNoStoreNotCached:
 
         response = await async_get_cached_jwks(JWKS_URL)
         assert response.is_successful is True
-        assert JWKS_URL not in aio_tv._jwks_cache
+        assert JWKS_URL in aio_tv._jwks_cache
 
     @pytest.mark.asyncio
     @respx.mock
@@ -240,10 +247,10 @@ class TestAsyncNoStoreNotCached:
 # ============================================================================
 
 
-class TestSyncNoCacheRefetched:
+class TestSyncNoCacheCachedForJwks:
     @respx.mock
-    def test_jwks_no_cache_refetches_each_call(self):
-        """no-cache responses always re-fetch (we don't store them)."""
+    def test_jwks_no_cache_serves_from_cache(self):
+        """no-cache on JWKS is ignored; subsequent calls hit cache. See #396."""
         key_dict = generate_rsa_keypair()[0]
         jwks_route = respx.get(JWKS_URL).mock(
             return_value=httpx.Response(
@@ -257,8 +264,8 @@ class TestSyncNoCacheRefetched:
             response = _get_cached_jwks(JWKS_URL)
             assert response.is_successful is True
 
-        assert JWKS_URL not in sync_tv._jwks_cache
-        assert jwks_route.call_count == 3  # noqa: PLR2004
+        assert JWKS_URL in sync_tv._jwks_cache
+        assert jwks_route.call_count == 1
 
     @respx.mock
     def test_disco_no_cache_refetches_each_call(self):
@@ -278,10 +285,11 @@ class TestSyncNoCacheRefetched:
         assert disco_route.call_count == 3  # noqa: PLR2004
 
 
-class TestAsyncNoCacheRefetched:
+class TestAsyncNoCacheCachedForJwks:
     @pytest.mark.asyncio
     @respx.mock
-    async def test_jwks_no_cache_refetches_each_call_async(self):
+    async def test_jwks_no_cache_serves_from_cache_async(self):
+        """no-cache on JWKS is ignored; subsequent calls hit cache. See #396."""
         key_dict = generate_rsa_keypair()[0]
         jwks_route = respx.get(JWKS_URL).mock(
             return_value=httpx.Response(
@@ -295,8 +303,8 @@ class TestAsyncNoCacheRefetched:
             response = await async_get_cached_jwks(JWKS_URL)
             assert response.is_successful is True
 
-        assert JWKS_URL not in aio_tv._jwks_cache
-        assert jwks_route.call_count == 3  # noqa: PLR2004
+        assert JWKS_URL in aio_tv._jwks_cache
+        assert jwks_route.call_count == 1
 
     @pytest.mark.asyncio
     @respx.mock
@@ -317,14 +325,11 @@ class TestAsyncNoCacheRefetched:
 
 
 # ============================================================================
-# Refresh-time invalidation: when a refresh response is uncacheable, the
-# existing (potentially stale) cache entry must be POPPED, not left in place.
-#
-# Otherwise a key-rotation event against a provider that sends
-# ``no-store``/``no-cache`` (Descope, others) leaves the stale entry live
-# for the remainder of its 24h TTL. Every subsequent validation hits the
-# stale entry, triggers another _refresh_jwks, and pounds the upstream JWKS
-# endpoint — the exact DoS the cache exists to prevent.
+# Refresh under uncacheable response: with the JWKS-specific cache policy
+# (#396), the cache is REPLACED with the new keys rather than popped. This
+# eliminates the kid-miss → refresh → re-fetch loop the old pop-on-uncacheable
+# behavior introduced, without leaving stale keys live (the response keys
+# are fresh by definition).
 # ============================================================================
 
 
@@ -345,10 +350,10 @@ REFRESH_UNCACHEABLE_TEST_CASES = [
 ]
 
 
-class TestSyncRefreshInvalidatesStaleOnUncacheable:
+class TestSyncRefreshReplacesStaleOnUncacheable:
     @pytest.mark.parametrize("uncacheable_header", REFRESH_UNCACHEABLE_TEST_CASES)
     @respx.mock
-    def test_refresh_pops_stale_entry_when_response_uncacheable(
+    def test_refresh_writes_new_entry_when_response_uncacheable(
         self, uncacheable_header: str
     ):
         old_key = _key_with_kid("old-kid")
@@ -380,8 +385,11 @@ class TestSyncRefreshInvalidatesStaleOnUncacheable:
         assert refreshed.is_successful is True
         # Fresh response is returned to the caller …
         assert _kids(refreshed) == {"new-kid"}
-        # … but the stale entry MUST be popped, not left behind.
-        assert JWKS_URL not in sync_tv._jwks_cache
+        # … and the cache is updated with the new key (not popped).
+        # See #396: pop-on-uncacheable caused the kid-miss-refresh-loop
+        # this branch was meant to prevent.
+        assert JWKS_URL in sync_tv._jwks_cache
+        assert _kids(sync_tv._jwks_cache[JWKS_URL].response) == {"new-kid"}
         # Real refresh (not an empty-fallback) — see #403 contract.
         assert from_retained_cache is False
 
@@ -440,11 +448,11 @@ class TestSyncRefreshInvalidatesStaleOnUncacheable:
         assert cache_key not in sync_tv._disco_cache
 
 
-class TestAsyncRefreshInvalidatesStaleOnUncacheable:
+class TestAsyncRefreshReplacesStaleOnUncacheable:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("uncacheable_header", REFRESH_UNCACHEABLE_TEST_CASES)
     @respx.mock
-    async def test_refresh_pops_stale_entry_when_response_uncacheable_async(
+    async def test_refresh_writes_new_entry_when_response_uncacheable_async(
         self, uncacheable_header: str
     ):
         old_key = _key_with_kid("old-kid")
@@ -475,7 +483,9 @@ class TestAsyncRefreshInvalidatesStaleOnUncacheable:
         refreshed, from_retained_cache = await aio_tv._refresh_jwks(JWKS_URL)
         assert refreshed.is_successful is True
         assert _kids(refreshed) == {"new-kid"}
-        assert JWKS_URL not in aio_tv._jwks_cache
+        # Cache updated with new key, not popped (see #396).
+        assert JWKS_URL in aio_tv._jwks_cache
+        assert _kids(aio_tv._jwks_cache[JWKS_URL].response) == {"new-kid"}
         # Real refresh (not an empty-fallback) — see #403 contract.
         assert from_retained_cache is False
 

@@ -528,9 +528,11 @@ class TestCooldownEvictedWithCache:
         # Surviving entries preserved on both sides.
         assert set(cache.keys()) == {urls[1], urls[2], overflow_url}
 
-    def test_uncacheable_response_clears_cooldown_alongside_cache(self):
-        """``Cache-Control: no-cache`` pops the cache entry; the matching
-        cooldown stamp must also clear so a future fetch isn't suppressed."""
+    def test_uncacheable_response_replaces_entry_and_preserves_cooldown(self):
+        """``Cache-Control: no-cache`` on JWKS is ignored (see #396); the
+        rotated keys replace the cached entry and the cooldown stamp is
+        preserved (kid-miss suppression continues to apply to the URI).
+        """
         url = "https://op.example/jwks"
         cache: dict[str, JwksCacheEntry] = {}
         cooldown: dict[str, float] = {}
@@ -557,7 +559,8 @@ class TestCooldownEvictedWithCache:
         assert url in cache
         assert url in cooldown
 
-        # Now an uncacheable response with non-empty keys: pop both.
+        # Now an uncacheable response with non-empty keys: replace cache
+        # entry with rotated key, retain cooldown.
         new_kd, _ = generate_rsa_keypair()
         new_kd["kid"] = "rotated"
         new_jwk = JsonWebKey(
@@ -575,8 +578,9 @@ class TestCooldownEvictedWithCache:
             time.monotonic(),
             cooldown=cooldown,
         )
-        assert url not in cache
-        assert url not in cooldown
+        assert url in cache
+        assert {k.kid for k in (cache[url].response.keys or [])} == {"rotated"}
+        assert url in cooldown
 
 
 # Async cooldown state covered for symmetry — most of the integration

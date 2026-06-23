@@ -281,12 +281,56 @@ def is_uncacheable(cache_control: str | None) -> bool:
     Honors RFC 7234 §5.2.2.5 (``no-store``) and §5.2.2.4 (``no-cache``).
     ``no-cache`` requires revalidation before use; the simplest correct
     behavior is to skip caching so the next call re-fetches.
+
+    Used for response types whose contents are per-user or sensitive
+    (token responses, discovery documents). For JWKS, see
+    :func:`is_uncacheable_for_jwks` — JWKS responses contain public
+    signing keys, and strict ``no-cache``/``no-store`` honoring causes
+    a self-DoS against the upstream issuer at any meaningful traffic
+    level (see issue #396).
     """
     if not cache_control:
         return False
     return bool(
         _NO_STORE_RE.search(cache_control) or _NO_CACHE_RE.search(cache_control)
     )
+
+
+def is_uncacheable_for_jwks(cache_control: str | None) -> bool:  # noqa: ARG001
+    """Return True only when JWKS caching is genuinely forbidden.
+
+    JWKS responses contain *public* signing keys that the issuer
+    publishes for every relying party to fetch and reuse. The standard
+    Cache-Control directives are interpreted accordingly:
+
+    - ``no-cache`` (RFC 7234 §5.2.2.4): means "revalidate before use,"
+      not "do not cache." A strict implementation would issue ETag /
+      If-None-Match conditional GETs. As a practical compromise, we
+      cache for the resolved TTL (``max-age`` if present, else the
+      configured floor). This is the dominant industry behavior — see
+      e.g. Auth0, Keycloak, and ``jose`` adapters.
+
+    - ``no-store`` (RFC 7234 §5.2.2.5): means "MUST NOT store." On
+      sensitive responses (tokens, user data) this matters. On JWKS —
+      public material the issuer publicly advertises — the directive
+      provides no confidentiality benefit and creates an operational
+      hazard: at 100 token validations / second, strictly honoring
+      ``no-store`` produces 100 JWKS fetches / second against the
+      issuer, which self-DoSes the upstream and the relying party in
+      short order. We deliberately ignore ``no-store`` on JWKS.
+
+    Always returns False today. The function exists as the call site so
+    the policy is documented and overridable in one place if a future
+    ``max-age=0`` honoring path is added.
+
+    Refs:
+        - Issue #396 (security: jwks-cache C-4 — ``no-cache`` providers
+          fetch JWKS on every request).
+        - Common deployments that send ``no-cache, no-store`` on JWKS
+          include Ory Network's free tier and some Descope-style
+          configurations.
+    """
+    return False
 
 
 def parse_max_age(cache_control: str | None) -> float | None:
@@ -394,9 +438,12 @@ def apply_jwks_cache_outcome(
       Checked *before* the uncacheable branch so a malformed ``200 {"keys":
       []}`` paired with ``Cache-Control: no-cache`` does not delete a working
       entry on a transient empty-body blip.
-    - ``Cache-Control: no-store`` or ``no-cache``: invalidate the existing
-      entry. Any stale entry would otherwise survive its TTL alongside a
-      provider that explicitly forbade caching, defeating key rotation.
+    - ``Cache-Control: no-store`` or ``no-cache`` (via
+      :func:`is_uncacheable_for_jwks`): JWKS is public material, so
+      caching with the resolved TTL is operationally safe and
+      necessary at scale. Today this branch is never taken because
+      ``is_uncacheable_for_jwks`` always returns False; it is retained
+      as the documented policy hook for future strict-mode opt-ins.
     - Successful, cacheable, non-empty: store with the resolved TTL.
 
     The optional ``cooldown`` dict is a sidecar of per-URI timestamps that
@@ -407,7 +454,7 @@ def apply_jwks_cache_outcome(
         return
     if not response.keys:
         return
-    if is_uncacheable(response.cache_control):
+    if is_uncacheable_for_jwks(response.cache_control):
         cache.pop(jwks_uri, None)
         if cooldown is not None:
             cooldown.pop(jwks_uri, None)
@@ -469,6 +516,7 @@ __all__ = [
     "get_max_cache_entries",
     "is_cache_expired",
     "is_uncacheable",
+    "is_uncacheable_for_jwks",
     "parse_max_age",
     "resolve_disco_ttl",
     "resolve_ttl",
