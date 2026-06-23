@@ -36,9 +36,15 @@ py-identity-model is a production-grade OIDC/OAuth2.0 helper library for Python 
    make pre-push    # Runs: lint + node-oidc integration + conformance harness + examples
    ```
 
-4. **Use conventional commits** — commit messages must follow the Angular convention (see Git Workflow section below). Commits to `main` trigger semantic-release version bumps.
+4. **Always run integration tests locally before pushing changes to `src/tests/integration/conftest.py`, any test fixture, or shared test utilities.** `make lint` only covers unit tests; `pytest --collect-only` only imports fixtures and does NOT exercise fixture network code paths or cross-worker xdist behavior. Use the credentials-free local fixture:
+   ```bash
+   make test-integration-node-oidc   # Local Docker fixture, no credentials needed
+   ```
+   For changes that affect provider-specific behavior, also run `make test-integration-ory` and/or `make test-integration-descope`. Do NOT push fixture/conftest changes solely on the strength of lint passing — relying on CI to catch fixture regressions wastes a review cycle.
 
-5. **Create a PR for all changes** — push the feature branch and open a PR against `main`. PR titles **must** follow conventional commit format (e.g., `feat(discovery): add metadata support`, `fix: handle missing kid`, `ci: update actions`).
+5. **Use conventional commits** — commit messages must follow the Angular convention (see Git Workflow section below). Commits to `main` trigger semantic-release version bumps.
+
+6. **Create a PR for all changes** — push the feature branch and open a PR against `main`. PR titles **must** follow conventional commit format (e.g., `feat(discovery): add metadata support`, `fix: handle missing kid`, `ci: update actions`).
 
 ## Architecture
 

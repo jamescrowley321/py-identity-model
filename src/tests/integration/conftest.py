@@ -7,7 +7,7 @@ Includes:
 """
 
 from contextlib import suppress
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 import json
 import secrets
 import time
@@ -123,7 +123,9 @@ def discovery_document(test_config, tmp_path_factory):
         response = get_discovery_document(disco_doc_req)
         if not response.is_successful:
             pytest.fail(f"Failed to fetch discovery document: {response.error}")
-        cache_file.write_text(json.dumps(asdict(response)))
+        # ``asdict()`` trips the BaseResponse field-access guards; use vars()
+        # to read the underlying storage. See models.BaseResponse docstring.
+        cache_file.write_text(json.dumps(vars(response)))
         return response
 
 
@@ -250,7 +252,11 @@ def jwks_response(test_config, tmp_path_factory):
         response = get_jwks(jwks_req)
         if not response.is_successful:
             pytest.fail(f"Failed to fetch JWKS: {response.error}")
-        cache_file.write_text(json.dumps(asdict(response)))
+        # vars() bypasses BaseResponse field-access guards; manually expand
+        # the nested JsonWebKey list since vars() doesn't recurse.
+        data = vars(response).copy()
+        data["keys"] = [vars(k) for k in response.keys or []]
+        cache_file.write_text(json.dumps(data))
         return response
 
 
