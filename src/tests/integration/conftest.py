@@ -7,7 +7,7 @@ Includes:
 """
 
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import json
 import secrets
 import time
@@ -29,7 +29,9 @@ from py_identity_model import (
     ClientCredentialsTokenRequest,
     ClientCredentialsTokenResponse,
     DiscoveryDocumentRequest,
+    JsonWebKey,
     JwksRequest,
+    JwksResponse,
     get_discovery_document,
     get_jwks,
     parse_authorize_callback_response,
@@ -96,55 +98,77 @@ def test_config(env_file, tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
-def discovery_document(test_config):
-    """Cached discovery document (session-scoped).
+def discovery_document(test_config, tmp_path_factory):
+    """Cached discovery document, shared across xdist workers.
 
-    The library's ``get_discovery_document`` already retries 3x on
-    429/5xx via ``@retry_with_backoff``.  No outer retry needed.
+    See ``client_credentials_token`` for the cross-worker FileLock +
+    JSON cache rationale: without it, ``pytest -n auto`` fans out N
+    simultaneous discovery requests at session start and trips upstream
+    rate limits.
     """
-    require_https = test_config.get("TEST_REQUIRE_HTTPS", True)
-    policy = DiscoveryPolicy(require_https=require_https)
-    disco_doc_req = DiscoveryDocumentRequest(
-        address=test_config["TEST_DISCO_ADDRESS"],
-        policy=policy,
-    )
-    response = get_discovery_document(disco_doc_req)
-    if not response.is_successful:
-        pytest.fail(f"Failed to fetch discovery document: {response.error}")
-    return response
+    root_tmp_dir = tmp_path_factory.getbasetemp().parent
+    cache_file = root_tmp_dir / "discovery_document.json"
+    lock_file = root_tmp_dir / "discovery_document.lock"
+
+    with FileLock(str(lock_file)):
+        if cache_file.exists():
+            return DiscoveryDocumentResponse(**json.loads(cache_file.read_text()))
+
+        require_https = test_config.get("TEST_REQUIRE_HTTPS", True)
+        policy = DiscoveryPolicy(require_https=require_https)
+        disco_doc_req = DiscoveryDocumentRequest(
+            address=test_config["TEST_DISCO_ADDRESS"],
+            policy=policy,
+        )
+        response = get_discovery_document(disco_doc_req)
+        if not response.is_successful:
+            pytest.fail(f"Failed to fetch discovery document: {response.error}")
+        cache_file.write_text(json.dumps(asdict(response)))
+        return response
 
 
 @pytest.fixture(scope="session")
-def raw_discovery(test_config):
+def raw_discovery(test_config, tmp_path_factory):
     """Raw discovery JSON for capability detection.
 
     Provides access to all RFC 8414 fields, including those not yet
-    in the typed DiscoveryDocumentResponse model. Uses retry logic
-    for rate-limited providers (consistent with discovery_document).
+    in the typed DiscoveryDocumentResponse model. Shared across xdist
+    workers via FileLock + JSON cache; see ``client_credentials_token``
+    for the rationale.
     """
-    address = test_config["TEST_DISCO_ADDRESS"]
+    root_tmp_dir = tmp_path_factory.getbasetemp().parent
+    cache_file = root_tmp_dir / "raw_discovery.json"
+    lock_file = root_tmp_dir / "raw_discovery.lock"
 
-    @retry_with_backoff()
-    def fetch_raw():
-        resp = httpx.get(address, timeout=10.0)
-        if resp.status_code == HTTP_TOO_MANY_REQUESTS:
-            raise httpx.HTTPStatusError(
-                RATE_LIMIT_ERROR_MESSAGE,
-                request=resp.request,
-                response=resp,
-            )
-        return resp
+    with FileLock(str(lock_file)):
+        if cache_file.exists():
+            return json.loads(cache_file.read_text())
 
-    try:
-        resp = fetch_raw()
-    except httpx.TransportError as exc:
-        pytest.fail(f"raw_discovery: cannot reach {address}: {exc}")
-    if resp.status_code != HTTP_OK:
-        pytest.fail(f"raw_discovery: HTTP {resp.status_code} from {address}")
-    try:
-        return resp.json()
-    except ValueError as exc:
-        pytest.fail(f"raw_discovery: invalid JSON from {address}: {exc}")
+        address = test_config["TEST_DISCO_ADDRESS"]
+
+        @retry_with_backoff()
+        def fetch_raw():
+            resp = httpx.get(address, timeout=10.0)
+            if resp.status_code == HTTP_TOO_MANY_REQUESTS:
+                raise httpx.HTTPStatusError(
+                    RATE_LIMIT_ERROR_MESSAGE,
+                    request=resp.request,
+                    response=resp,
+                )
+            return resp
+
+        try:
+            resp = fetch_raw()
+        except httpx.TransportError as exc:
+            pytest.fail(f"raw_discovery: cannot reach {address}: {exc}")
+        if resp.status_code != HTTP_OK:
+            pytest.fail(f"raw_discovery: HTTP {resp.status_code} from {address}")
+        try:
+            data = resp.json()
+        except ValueError as exc:
+            pytest.fail(f"raw_discovery: invalid JSON from {address}: {exc}")
+        cache_file.write_text(json.dumps(data))
+        return data
 
 
 def _detect_grant_capabilities(raw_discovery: dict, grants: set) -> set[str]:
@@ -206,16 +230,28 @@ def provider_capabilities(raw_discovery):
 
 
 @pytest.fixture(scope="session")
-def jwks_response(test_config):
-    """Cached JWKS response (session-scoped).
+def jwks_response(test_config, tmp_path_factory):
+    """Cached JWKS response, shared across xdist workers.
 
-    The library's ``get_jwks`` already retries 3x on 429/5xx.
+    See ``client_credentials_token`` for the cross-worker FileLock +
+    JSON cache rationale.
     """
-    jwks_req = JwksRequest(address=test_config["TEST_JWKS_ADDRESS"])
-    response = get_jwks(jwks_req)
-    if not response.is_successful:
-        pytest.fail(f"Failed to fetch JWKS: {response.error}")
-    return response
+    root_tmp_dir = tmp_path_factory.getbasetemp().parent
+    cache_file = root_tmp_dir / "jwks_response.json"
+    lock_file = root_tmp_dir / "jwks_response.lock"
+
+    with FileLock(str(lock_file)):
+        if cache_file.exists():
+            cached = json.loads(cache_file.read_text())
+            keys = [JsonWebKey(**k) for k in cached.pop("keys") or []]
+            return JwksResponse(keys=keys, **cached)
+
+        jwks_req = JwksRequest(address=test_config["TEST_JWKS_ADDRESS"])
+        response = get_jwks(jwks_req)
+        if not response.is_successful:
+            pytest.fail(f"Failed to fetch JWKS: {response.error}")
+        cache_file.write_text(json.dumps(asdict(response)))
+        return response
 
 
 @pytest.fixture(scope="session")
