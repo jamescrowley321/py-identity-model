@@ -149,10 +149,12 @@ conformance-test: $(if $(HOSTED),,conformance-up) ## Run conformance tests (HOST
 ifdef HOSTED
 	uv run python conformance/run_tests.py --plan basic-rp --suite-url "$(CONFORMANCE_SERVER)" --output conformance/results/hosted/basic-rp-latest.json --verbose
 	uv run python conformance/run_tests.py --plan config-rp --suite-url "$(CONFORMANCE_SERVER)" --output conformance/results/hosted/config-rp-latest.json --verbose
+	uv run python conformance/run_tests.py --plan form-post-basic-rp --suite-url "$(CONFORMANCE_SERVER)" --output conformance/results/hosted/form-post-basic-rp-latest.json --verbose
 	@echo "Hosted conformance tests complete. Results in conformance/results/hosted/"
 else
 	uv run python conformance/run_tests.py --plan basic-rp --output conformance/results/basic-rp-latest.json --verbose
 	uv run python conformance/run_tests.py --plan config-rp --output conformance/results/config-rp-latest.json --verbose
+	uv run python conformance/run_tests.py --plan form-post-basic-rp --output conformance/results/form-post-basic-rp-latest.json --verbose
 	@echo "Conformance tests complete. Results in conformance/results/"
 endif
 
