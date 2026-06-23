@@ -1,4 +1,14 @@
+import os
+
 import pytest
+
+
+# Disable retry backoff for the whole test session. The production retry
+# decorator sleeps base_delay * 2**attempt seconds between attempts; with
+# defaults (3 attempts, 1.0s base) every test that exercises an httpx
+# RequestError path serially waits ~7s (1+2+4) before raising. Tests that
+# specifically cover retry timing override these via monkeypatch.setenv.
+os.environ.setdefault("HTTP_RETRY_BASE_DELAY", "0")
 
 from py_identity_model.aio.http_client import (
     _reset_async_http_client,
