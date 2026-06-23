@@ -39,8 +39,15 @@ from py_identity_model import (
     request_client_credentials_token,
     validate_authorize_callback_state,
 )
+from py_identity_model.aio import token_validation as aio_tv
 from py_identity_model.core.discovery_policy import DiscoveryPolicy
-from py_identity_model.core.jwks_cache import is_uncacheable
+from py_identity_model.core.jwks_cache import (
+    DiscoCacheEntry,
+    JwksCacheEntry,
+    is_uncacheable,
+    resolve_disco_ttl,
+    resolve_ttl,
+)
 from py_identity_model.core.models import DiscoveryDocumentResponse
 from py_identity_model.core.parsers import (
     extract_kid_from_jwt,
@@ -48,6 +55,7 @@ from py_identity_model.core.parsers import (
 )
 from py_identity_model.core.pkce import generate_pkce_pair
 from py_identity_model.exceptions import TokenValidationException
+from py_identity_model.sync import token_validation as sync_tv
 from py_identity_model.sync.http_client import close_http_client
 
 from .test_utils import get_config
@@ -275,6 +283,48 @@ def provider_caches_responses(discovery_document, jwks_response):
     """
     del jwks_response  # see docstring
     return not is_uncacheable(discovery_document.cache_control)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _prime_library_caches(discovery_document, jwks_response, test_config):
+    """Pre-populate the library's internal JWKS + discovery caches.
+
+    The conftest already fetches discovery/JWKS once per xdist worker
+    (cross-worker-coordinated via FileLock). But ``validate_token()``
+    consults its own per-process module-level caches
+    (``sync/aio.token_validation._jwks_cache`` and ``_disco_cache``),
+    which start cold in every worker. Without priming, the *first*
+    ``validate_token`` call in each worker triggers a fresh upstream
+    fetch — and against rate-limited providers (Ory free tier) those
+    bursts produce 429s mid-test.
+
+    Inject the fixture-resolved responses directly into both sync and
+    aio caches. After this fixture runs, no test in the session needs
+    to hit the upstream for discovery or JWKS.
+
+    Keyed identically to the library: JWKS by URI; discovery by
+    ``(address, require_https)`` tuple.
+    """
+    now = time.monotonic()
+    require_https = test_config.get("TEST_REQUIRE_HTTPS", True)
+
+    jwks_uri = test_config["TEST_JWKS_ADDRESS"]
+    jwks_entry = JwksCacheEntry(
+        response=jwks_response,
+        cached_at=now,
+        ttl=resolve_ttl(jwks_response.cache_control),
+    )
+    sync_tv._jwks_cache[jwks_uri] = jwks_entry
+    aio_tv._jwks_cache[jwks_uri] = jwks_entry
+
+    disco_key = (test_config["TEST_DISCO_ADDRESS"], require_https)
+    disco_entry = DiscoCacheEntry(
+        response=discovery_document,
+        cached_at=now,
+        ttl=resolve_disco_ttl(discovery_document.cache_control),
+    )
+    sync_tv._disco_cache[disco_key] = disco_entry
+    aio_tv._disco_cache[disco_key] = disco_entry
 
 
 @pytest.fixture(scope="session")
