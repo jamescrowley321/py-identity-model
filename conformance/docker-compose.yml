@@ -37,12 +37,15 @@ services:
         condition: service_healthy
 
   server:
-    image: authelia/openid-connect-conformance-suite:latest
+    image: registry.gitlab.com/openid/conformance-suite:latest
     environment:
-      - JAVA_EXTRA_ARGS=-Dspring.data.mongodb.uri=mongodb://mongodb:27017/test_suite -Dfintechlabs.devmode=true -Dfintechlabs.startredir=false -Dfintechlabs.base_url=https://localhost.emobix.co.uk:8443
-      - CONFORMANCE_SERVER_BASE_URL=https://localhost.emobix.co.uk:8443
-      - SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GITLAB_CLIENT_ID=dummy
-      - SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GITLAB_CLIENT_SECRET=dummy
+      - BASE_URL=https://localhost.emobix.co.uk:8443
+      - MONGODB_HOST=mongodb
+      - SPRING_PROFILES_ACTIVE=dev
+      - OIDC_GOOGLE_CLIENTID=dummy
+      - OIDC_GOOGLE_SECRET=dummy
+      - OIDC_GITLAB_CLIENTID=dummy
+      - OIDC_GITLAB_SECRET=dummy
     depends_on:
       - mongodb
     healthcheck:
