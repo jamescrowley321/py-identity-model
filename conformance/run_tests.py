@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from email.message import Message
 from html.parser import HTMLParser
 import json
 import logging
 import os
 from pathlib import Path
-import re
 import shutil
 import sys
 import time
@@ -53,6 +53,21 @@ def _is_local_suite(url: str) -> bool:
     """Check if the suite URL points to a local conformance instance."""
     hostname = urlparse(url).hostname or ""
     return hostname in LOCAL_HOSTNAMES
+
+
+def _parse_content_disposition_filename(disposition: str) -> str | None:
+    """Extract the filename from a ``Content-Disposition`` header.
+
+    Uses the stdlib ``email`` parser so quoted, token, and RFC 5987/2231
+    extended (``filename*=``) forms are all handled correctly, rather than a
+    greedy regex that over-captures multi-parameter headers and ignores
+    ``filename*``. Returns ``None`` when no filename is present.
+    """
+    if not disposition:
+        return None
+    msg = Message()
+    msg["content-disposition"] = disposition
+    return msg.get_filename()
 
 
 # ---------------------------------------------------------------------------
@@ -208,10 +223,22 @@ class ConformanceSuiteClient:
             timeout=120.0,
         )
         response.raise_for_status()
-        disposition = response.headers.get("content-disposition", "")
-        match = re.findall(r'filename="(.+)"', disposition)
-        filename = match[0] if match else f"{plan_id}-{kind}.zip"
-        return filename, response.content
+        content = response.content
+        # The export is a zip; a 200 carrying an HTML proxy-error page or an
+        # empty body would otherwise be written out as worthless "evidence".
+        if not content.startswith(b"PK"):
+            raise ValueError(
+                f"plan export for {plan_id!r} is not a zip "
+                f"(got {len(content)} bytes, content-type "
+                f"{response.headers.get('content-type', 'unknown')!r})"
+            )
+        filename = (
+            _parse_content_disposition_filename(
+                response.headers.get("content-disposition", "")
+            )
+            or f"{plan_id}-{kind}.zip"
+        )
+        return filename, content
 
 
 # ---------------------------------------------------------------------------
@@ -653,15 +680,27 @@ def run_plan(
     return plan_id, results
 
 
+# Statuses that count as a clean, submission-worthy outcome. Everything else —
+# FAILED/INTERRUPTED/TIMEOUT, REVIEW (needs a human), and any unknown status —
+# must keep an export from being treated as passing evidence. SKIPPED is fine
+# (e.g. the expected idtoken-sig-none skip); WARNING is an accepted pass.
+PASSING_STATUSES = frozenset({"PASSED", "WARNING", "SKIPPED"})
+
+
 def print_summary(results: list[TestResult]) -> bool:
-    """Print a summary table and return True if all passed/warned."""
+    """Print a summary table and return True only if the run is evidence-worthy.
+
+    Returns True when there is at least one result and every result is in
+    :data:`PASSING_STATUSES`. An empty run (no test ran) and any REVIEW/unknown
+    status both return False — "nothing ran" and "needs review" are not "all
+    passed", and neither should gate a certification export open.
+    """
     print("\n" + "=" * 70)
     print("CONFORMANCE TEST RESULTS")
     print("=" * 70)
     print(f"{'Test':<50} {'Result':<10}")
     print("-" * 70)
 
-    all_ok = True
     for r in results:
         symbol = {
             "PASSED": "PASS",
@@ -673,8 +712,8 @@ def print_summary(results: list[TestResult]) -> bool:
         print(f"{r.test_name:<50} [{symbol}]")
         if r.detail:
             print(f"  {r.detail}")
-        if r.status in ("FAILED", "INTERRUPTED", "TIMEOUT"):
-            all_ok = False
+
+    all_ok = bool(results) and all(r.status in PASSING_STATUSES for r in results)
 
     print("-" * 70)
     passed = sum(1 for r in results if r.status == "PASSED")
@@ -686,6 +725,8 @@ def print_summary(results: list[TestResult]) -> bool:
         f"Total: {len(results)} | Passed: {passed} | Warnings: {warned} | "
         f"Failed: {failed} | Review: {review} | Skipped: {skipped}"
     )
+    if not results:
+        print("No tests ran — not treating this as a passing run.")
     print("=" * 70)
 
     return all_ok
@@ -868,7 +909,18 @@ def main() -> None:
 
     # Reset this profile's RP-log directory so the zip only contains this run's
     # per-test logs (the harness appends, so stale files would otherwise leak in).
-    rp_log_profile_dir = _rp_log_dir() / args.plan
+    # Confine the rmtree target to the log base before deleting — args.plan is
+    # already constrained by argparse choices, but _reset_dir removes a tree, so
+    # a mistuned RP_LOG_DIR must never let it escape the intended directory.
+    rp_log_base = _rp_log_dir().resolve()
+    rp_log_profile_dir = (rp_log_base / args.plan).resolve()
+    if not rp_log_profile_dir.is_relative_to(rp_log_base):
+        logger.error(
+            "Refusing to use RP log dir outside base: %s not under %s",
+            rp_log_profile_dir,
+            rp_log_base,
+        )
+        sys.exit(1)
     if args.rp_logs_zip:
         _reset_dir(rp_log_profile_dir)
 
@@ -922,6 +974,7 @@ def main() -> None:
     do_download, skip_reason = _should_download_export(
         args.export_zip, args.suite_url, all_ok
     )
+    artifact_failed = False
     if args.export_zip and not do_download:
         logger.warning("Plan export skipped: %s", skip_reason)
     elif do_download:
@@ -929,18 +982,26 @@ def main() -> None:
         download_client = ConformanceSuiteClient(
             args.suite_url, token=env_token or None
         )
-        filename, content = download_client.download_plan_export(
-            plan_id, kind=args.export_kind
-        )
-        export_path = Path(args.export_zip)
-        export_path.parent.mkdir(parents=True, exist_ok=True)
-        export_path.write_bytes(content)
-        logger.info(
-            "Plan export (%s) written to %s (%d bytes)",
-            filename,
-            export_path,
-            len(content),
-        )
+        try:
+            filename, content = download_client.download_plan_export(
+                plan_id, kind=args.export_kind
+            )
+            export_path = Path(args.export_zip)
+            export_path.parent.mkdir(parents=True, exist_ok=True)
+            export_path.write_bytes(content)
+            logger.info(
+                "Plan export (%s) written to %s (%d bytes)",
+                filename,
+                export_path,
+                len(content),
+            )
+        except (httpx.HTTPError, ValueError, OSError) as exc:
+            # The run passed but we could not capture its evidence — fail loudly
+            # rather than exit 0 with a missing/corrupt export.
+            logger.error("Plan export failed for plan %s: %s", plan_id, exc)
+            artifact_failed = True
+        finally:
+            download_client.client.close()
 
     # Assemble the per-test RP client-side logs zip (clientSideData). Captured
     # regardless of pass/fail — the logs for failed tests are exactly what you'd
@@ -948,11 +1009,15 @@ def main() -> None:
     if args.rp_logs_zip:
         count = _zip_directory(rp_log_profile_dir, Path(args.rp_logs_zip))
         if count == 0:
-            logger.warning(
+            # An empty clientSideData bundle is worthless as a submission
+            # artifact, so an explicit --rp-logs-zip that captured nothing is a
+            # hard failure, not a warning that exits 0.
+            logger.error(
                 "No RP logs captured in %s — is the harness running this build "
                 "(it must receive test_name/profile and share RP_LOG_DIR)?",
                 rp_log_profile_dir,
             )
+            artifact_failed = True
         else:
             logger.info(
                 "RP client-side logs (%d files) written to %s",
@@ -960,7 +1025,7 @@ def main() -> None:
                 args.rp_logs_zip,
             )
 
-    sys.exit(0 if all_ok else 1)
+    sys.exit(0 if (all_ok and not artifact_failed) else 1)
 
 
 if __name__ == "__main__":

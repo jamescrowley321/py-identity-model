@@ -6,6 +6,7 @@ using py-identity-model's public API to exercise all RP conformance tests.
 
 from __future__ import annotations
 
+import contextvars
 from dataclasses import dataclass, field
 import html
 import logging
@@ -13,6 +14,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import sys
 from urllib.parse import urlencode
 
 from fastapi import FastAPI, Query, Request
@@ -56,19 +58,24 @@ app = FastAPI(title="py-identity-model Conformance RP")
 # Per-test RP log capture (clientSideData for OIDF RP certification)
 # ---------------------------------------------------------------------------
 #
-# OIDF RP certification requires one log file per test, named by the test id,
-# demonstrating the RP's behaviour — in particular that negative tests are
-# rejected (https://openid.net/certification/connect_rp_submission/). The
-# conformance suite only logs the OP side, so the RP must produce these itself.
+# OIDF RP certification requires one log file per test (named by the suite test
+# module name), demonstrating the RP's behaviour — in particular that negative
+# tests are rejected (https://openid.net/certification/connect_rp_submission/).
+# The conformance suite only logs the OP side, so the RP must produce these.
 #
-# The runner drives tests strictly sequentially and tells the harness which
-# test is active via /authorize, /discover and /callback, so a process-global
-# pointer plus a logging handler that routes records to the active test's file
-# is sufficient. RP_LOG_DIR defaults to an absolute path derived from this
-# file's location so the harness and the (separately-launched) runner agree on
-# it regardless of working directory.
+# The runner tells the harness which test is active via /authorize, /discover
+# and /callback, and a logging handler routes records to the active test's file.
+# The active-test pointer is a ContextVar rather than a plain global: every
+# request (and the threadpool call FastAPI runs sync endpoints in) gets its own
+# context copy, so concurrent or overlapping requests can never route a record
+# to the wrong test's file, and a request's pointer cannot leak into the next
+# one. RP_LOG_DIR defaults to an absolute path derived from this file's location
+# so the harness and the (separately-launched) runner agree on it regardless of
+# working directory.
 
-_active_test: tuple[str, str] | None = None
+_active_test: contextvars.ContextVar[tuple[str, str] | None] = contextvars.ContextVar(
+    "rp_active_test", default=None
+)
 
 
 def _rp_log_base() -> Path:
@@ -79,20 +86,34 @@ def _rp_log_base() -> Path:
     )
 
 
+def _sanitize_path_component(value: str, fallback: str) -> str:
+    """Reduce ``value`` to a single safe path segment.
+
+    Every character outside ``[A-Za-z0-9._-]`` is replaced (removing path
+    separators), and a result that is empty or consists only of dots (``""``,
+    ``"."``, ``".."``, ...) — which the character class alone would let through
+    and which would walk out of the log base — collapses to ``fallback``.
+    """
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", value)
+    if not safe or set(safe) == {"."}:
+        return fallback
+    return safe
+
+
 def _rp_log_path(profile: str, test_name: str) -> Path:
     """Path to the log file for ``test_name`` within ``profile`` (dir created).
 
     ``profile`` and ``test_name`` arrive as request parameters, so the path is
-    hardened two ways: every character outside ``[A-Za-z0-9._-]`` is replaced
-    (removing any path separators), and the resolved path is verified to stay
-    inside the log base — a value that somehow escaped raises rather than
-    writing outside the base directory.
+    hardened two ways: each is reduced to a single sanitised path segment via
+    :func:`_sanitize_path_component` (no separators, no dot-only escapes), and
+    the resolved path is verified to stay inside the log base — a value that
+    somehow escaped raises rather than writing outside the base directory.
     """
     base = _rp_log_base().resolve()
-    safe_profile = re.sub(r"[^A-Za-z0-9._-]", "_", profile) or "default"
-    safe_test = re.sub(r"[^A-Za-z0-9._-]", "_", test_name) or "unknown"
+    safe_profile = _sanitize_path_component(profile, "default")
+    safe_test = _sanitize_path_component(test_name, "unknown")
     candidate = (base / safe_profile / f"{safe_test}.log").resolve()
-    if base not in candidate.parents:
+    if not candidate.is_relative_to(base):
         raise ValueError(
             f"refusing unsafe RP log path (profile={profile!r}, test={test_name!r})"
         )
@@ -102,23 +123,37 @@ def _rp_log_path(profile: str, test_name: str) -> Path:
 
 def _set_active_test(profile: str | None, test_name: str | None) -> None:
     """Point per-test logging at ``test_name`` (or clear it when no test)."""
-    global _active_test
-    _active_test = (profile or "", test_name) if test_name else None
+    _active_test.set((profile or "", test_name) if test_name else None)
+
+
+def _get_active_test() -> tuple[str, str] | None:
+    """Current ``(profile, test_name)`` for log routing, or ``None``."""
+    return _active_test.get()
 
 
 class _PerTestLogRouter(logging.Handler):
     """Appends harness + library log records to the active test's log file."""
 
+    _warned_on_failure = False
+
     def emit(self, record: logging.LogRecord) -> None:
-        test = _active_test
+        test = _get_active_test()
         if not test or not test[1]:
             return
         try:
             with _rp_log_path(test[0], test[1]).open("a", encoding="utf-8") as fh:
                 fh.write(self.format(record) + "\n")
-        except (OSError, ValueError):
-            # Never let log capture break the flow under test.
-            pass
+        except (OSError, ValueError) as exc:
+            # Never let log capture break the flow under test, but a silently
+            # empty clientSideData bundle is a worthless submission artifact, so
+            # surface the first failure on stderr (bypassing logging to avoid
+            # recursing back into this handler).
+            if not _PerTestLogRouter._warned_on_failure:
+                _PerTestLogRouter._warned_on_failure = True
+                sys.stderr.write(
+                    f"WARNING: RP per-test log capture failing for "
+                    f"profile={test[0]!r} test={test[1]!r}: {exc}\n"
+                )
 
 
 def _install_rp_log_router() -> None:
@@ -229,7 +264,7 @@ def discover(
         disco_endpoint = parse_discovery_url(issuer)
     except ConfigurationException as exc:
         error_msg = f"invalid_issuer: {exc}"
-        logger.error("Discovery URL parse error: %s", exc)
+        logger.error("REJECTED: invalid issuer URL: %s", exc)
         if test_id:
             error_session = AuthSession(issuer=issuer, state="", nonce="")
             error_session.result = {
@@ -249,6 +284,7 @@ def discover(
     )
 
     if not disco.is_successful:
+        logger.error("REJECTED: discovery fetch failed: %s", disco.error)
         if test_id:
             error_session = AuthSession(issuer=issuer, state="", nonce="")
             error_session.result = {
@@ -271,6 +307,10 @@ def discover(
         }
         test_results[test_id] = session
 
+    logger.info(
+        "ACCEPTED: discovery document fetched and validated for issuer '%s'",
+        disco.issuer,
+    )
     return JSONResponse(content={"status": "ok", "issuer": disco.issuer})
 
 
@@ -302,7 +342,7 @@ def authorize(
         disco_endpoint = parse_discovery_url(issuer)
     except ConfigurationException as exc:
         error_msg = f"invalid_issuer: {exc}"
-        logger.error("Discovery URL parse error: %s", exc)
+        logger.error("REJECTED: invalid issuer URL: %s", exc)
         if test_id:
             error_session = AuthSession(issuer=issuer, state="", nonce="")
             error_session.result = {
@@ -323,6 +363,7 @@ def authorize(
 
     if not disco.is_successful:
         # Discovery failure includes format/validation errors — store as test result
+        logger.error("REJECTED: discovery fetch failed: %s", disco.error)
         if test_id:
             error_session = AuthSession(issuer=issuer, state="", nonce="")
             error_session.result = {
@@ -339,7 +380,7 @@ def authorize(
     # OIDC Discovery 1.0 §4.3: issuer in document MUST match the URL used to retrieve it
     if not disco.issuer:
         error_msg = "Discovery document missing required 'issuer' field"
-        logger.error(error_msg)
+        logger.error("REJECTED: %s", error_msg)
         if test_id:
             error_session = AuthSession(issuer=issuer, state="", nonce="")
             error_session.result = {
@@ -357,7 +398,7 @@ def authorize(
             f"Issuer mismatch: discovery document issuer '{disco.issuer}' "
             f"does not match expected '{issuer}'"
         )
-        logger.error(error_msg)
+        logger.error("REJECTED: %s", error_msg)
         if test_id:
             error_session = AuthSession(issuer=issuer, state="", nonce="")
             error_session.result = {
@@ -424,7 +465,7 @@ def authorize(
         session.result["test_id"] = test_id
 
     logger.info(
-        "ACCEPTED discovery: issuer '%s' matches expected; redirecting to OP", issuer
+        "ACCEPTED: discovery issuer '%s' matches expected; redirecting to OP", issuer
     )
     logger.info("Redirecting to OP: %s", auth_url)
     return RedirectResponse(url=auth_url, status_code=302)
@@ -441,7 +482,7 @@ def _fetch_and_validate_discovery(
         disco_endpoint = parse_discovery_url(issuer)
     except ConfigurationException as exc:
         error_msg = f"invalid_issuer: {exc}"
-        logger.error("Discovery URL parse error in callback: %s", exc)
+        logger.error("REJECTED: invalid issuer URL in callback: %s", exc)
         session.result["status"] = "error"
         session.result["error"] = error_msg
         _store_test_result(session)
@@ -456,6 +497,7 @@ def _fetch_and_validate_discovery(
     )
 
     if not disco.is_successful:
+        logger.error("REJECTED: discovery fetch failed in callback: %s", disco.error)
         session.result["status"] = "error"
         session.result["error"] = f"discovery_failed: {disco.error}"
         _store_test_result(session)
@@ -467,7 +509,7 @@ def _fetch_and_validate_discovery(
     # OIDC Discovery 1.0 §4.3: issuer in document MUST match the URL used to retrieve it
     if not disco.issuer:
         error_msg = "Discovery document missing required 'issuer' field"
-        logger.error(error_msg)
+        logger.error("REJECTED: %s", error_msg)
         session.result["status"] = "error"
         session.result["error"] = f"missing_issuer: {error_msg}"
         _store_test_result(session)
@@ -480,7 +522,7 @@ def _fetch_and_validate_discovery(
             f"Issuer mismatch: discovery document issuer '{disco.issuer}' "
             f"does not match expected '{issuer}'"
         )
-        logger.error(error_msg)
+        logger.error("REJECTED: %s", error_msg)
         session.result["status"] = "error"
         session.result["error"] = f"issuer_mismatch: {error_msg}"
         _store_test_result(session)

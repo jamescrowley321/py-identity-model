@@ -15,7 +15,20 @@ import logging
 import zipfile
 
 import app as harness_app
+import pytest
 from run_tests import _reset_dir, _rp_log_dir, _zip_directory
+
+
+@pytest.fixture(autouse=True)
+def _reset_active_test():
+    """Keep the process-wide active-test pointer from leaking across tests.
+
+    Tests poke ``_set_active_test`` directly; an early failure before a manual
+    reset would otherwise route a later test's records to a stale file.
+    """
+    harness_app._set_active_test(None, None)
+    yield
+    harness_app._set_active_test(None, None)
 
 
 # ---------------------------------------------------------------------------
@@ -56,12 +69,38 @@ def test_rp_log_path_sanitises_and_creates_dir(tmp_path, monkeypatch) -> None:
     assert path.parent.is_dir()
 
 
+def test_rp_log_path_collapses_dot_only_components(tmp_path, monkeypatch) -> None:
+    # A profile of ".." survives the character class (all dots) but must not be
+    # allowed to walk out of the base — it collapses to the fallback segment.
+    monkeypatch.setenv("RP_LOG_DIR", str(tmp_path))
+    base = tmp_path.resolve()
+    path = harness_app._rp_log_path("..", "..")
+
+    assert path == base / "default" / "unknown.log"
+    assert base in path.parents
+
+
+def test_rp_log_path_router_drops_dot_only_without_writing_outside(
+    tmp_path, monkeypatch
+) -> None:
+    # End-to-end: routing a record for a dot-only profile/test writes inside the
+    # base (collapsed), never a sibling of it.
+    monkeypatch.setenv("RP_LOG_DIR", str(tmp_path / "base"))
+    harness_app._set_active_test("..", "..")
+    logging.getLogger("conformance-rp").error("REJECTED: dotty")
+
+    assert not list((tmp_path).glob("*.log"))  # nothing beside the base
+    written = list((tmp_path / "base").rglob("*.log"))
+    assert [p.name for p in written] == ["unknown.log"]
+
+
 def test_set_active_test_clears_on_empty_name() -> None:
     harness_app._set_active_test("basic-rp", "")
-    assert harness_app._active_test is None
+    assert harness_app._get_active_test() is None
     harness_app._set_active_test("basic-rp", "some-test")
-    assert harness_app._active_test == ("basic-rp", "some-test")
+    assert harness_app._get_active_test() == ("basic-rp", "some-test")
     harness_app._set_active_test(None, None)
+    assert harness_app._get_active_test() is None
 
 
 # ---------------------------------------------------------------------------
