@@ -181,9 +181,9 @@ Docker suite. The zips are git-ignored binaries — in CI they're retained via t
 
 ### RP client-side logs (`clientSideData`)
 
-OIDF RP certification additionally requires **one log file per test, named by the
-test id**, showing the RP's behaviour — in particular that negative tests are
-*rejected* ([connect_rp_submission](https://openid.net/certification/connect_rp_submission/)).
+OIDF RP certification additionally requires **one log file per test** (named by the
+suite test module name), showing the RP's behaviour — in particular that negative
+tests are *rejected* ([connect_rp_submission](https://openid.net/certification/connect_rp_submission/)).
 The conformance suite only logs the OP side, so the RP harness produces these:
 
 - The harness (`app.py`) routes its own + `py_identity_model` log records to

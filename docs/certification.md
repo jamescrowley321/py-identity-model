@@ -51,7 +51,7 @@ every test passes). This is **not** the certification package — see
 
 ### 2. RP client-side logs (`clientSideData`)
 
-OIDF requires **one log file per test, named by the test id**, demonstrating
+OIDF requires **one log file per test**, demonstrating
 the RP's behaviour — in particular that negative tests are *rejected*
 ([submission rules](https://openid.net/certification/connect_rp_submission/)).
 The conformance suite only logs the OP side, so the RP harness produces these
@@ -101,7 +101,7 @@ conformance-rp: ACCEPTED: authentication successful ... sub=user-subject-1234531
 | OIDF requirement | How it is met |
 |------------------|---------------|
 | One log file per test (not one combined log) | One `<test_name>.log` per module |
-| Named by test id | Files named exactly by the suite test id |
+| Identifiable per test | Files named by the suite test module name (e.g. `oidcc-client-test-...`), one per plan module |
 | Must demonstrate detecting the error condition | Negative tests log the library rejection plus a `REJECTED:` line |
 | One zip per profile | One `<plan>-rp-logs.zip` per profile |
 
