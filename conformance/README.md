@@ -155,26 +155,46 @@ uv run conformance/scripts/rotate_conformance_token.py --dry-run
 
 See the script's module docstring for full design notes and flag reference.
 
-## Producing a certification package
+## Plan exports vs. the certification package
 
-A passing run prints a pass/fail summary, but OIDF certification submission
-requires the **certification package** — a zip of every test log downloaded from
-`GET /api/plan/{plan_id}/certificationpackage` on the hosted suite. Pass
-`--cert-package PATH` to fetch it after the run:
+Two distinct artifacts — don't confuse them:
+
+### Plan export (automated, safe)
+
+A passing run prints a pass/fail summary; `--export-zip PATH` additionally
+downloads the suite's **signed plan export** (`GET /api/plan/export/{plan_id}` —
+JSON + RSA signature, the format the suite recommends for CI). It's a read-only
+evidence/regression artifact: no publish, no freeze.
 
 ```bash
-# Hosted run that also downloads the submission package
+# Hosted run that also downloads the signed plan export per profile
 make conformance-test HOSTED=1 CONFORMANCE_SERVER=https://www.certification.openid.net/
-# -> conformance/results/hosted/<plan>-cert-package.zip
+# -> conformance/results/hosted/<plan>-export.zip
 ```
 
-The package is only downloaded for a **hosted** suite when **every test passes**;
-`--cert-package` is ignored (with a warning) for the local Docker suite, which
-does not produce a valid OIDF package. The zips are git-ignored binary artifacts
-— in CI they are retained via the `conformance-hosted` workflow's uploaded
-artifacts (`gh run download -n conformance-hosted-results`).
+`--export-kind` selects `export` (default, JSON+signature) or `exporthtml`
+(human-readable). Exports are only downloaded for a **hosted** suite when
+**every test passes**; `--export-zip` is ignored (with a warning) for the local
+Docker suite. The zips are git-ignored binaries — in CI they're retained via the
+`conformance-hosted` workflow's uploaded artifacts
+(`gh run download -n conformance-hosted-results`).
 
-`--publish {none,summary,everything}` (default `none`) controls whether the run
-is listed publicly on certification.openid.net; the package is generated either
-way. Publishing is typically done at actual submission time (see #331). The
+### Certification package (manual — the actual OIDF submission)
+
+The **certification package** is a different thing and is **not automated here**.
+Per the suite's own `scripts/conformance.py`, it is created via
+`POST /api/plan/{plan_id}/certificationpackage` as `multipart/form-data` with:
+
+- `certificationOfConformancePdf` — the **signed Certification of Conformance**
+  PDF (you fill and sign this), and
+- `clientSideData` — **required for RP tests**: the RP (harness) client-side
+  logs as a zip.
+
+Calling it **publishes the plan and marks it permanently immutable**. Because it
+needs the signed PDF + RP logs and is irreversible, it is the owner-driven
+submission step tracked in **#331**, not something CI or this runner fires
+automatically.
+
+`--publish {none,summary,everything}` (default `none`) is independent: it only
+controls whether a *run* is listed on the public published-tests list. The
 hosted CI workflow exposes the same choice as a `workflow_dispatch` input.

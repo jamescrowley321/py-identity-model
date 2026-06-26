@@ -14,6 +14,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import sys
 import time
 from urllib.parse import urljoin, urlparse
@@ -99,8 +100,8 @@ class ConformanceSuiteClient:
 
         ``publish`` controls whether the suite makes the plan's results publicly
         visible on the published-tests list: "" (default) keeps it private,
-        "summary" / "everything" publish it. The downloadable certification
-        package is produced regardless of this setting.
+        "summary" / "everything" publish it. The downloadable plan export is
+        available regardless of this setting.
 
         Returns the plan response including plan ID and list of test modules.
         """
@@ -180,21 +181,35 @@ class ConformanceSuiteClient:
             time.sleep(POLL_INTERVAL)
         return {"status": "TIMEOUT", "id": module_id}
 
-    def get_certification_package(self, plan_id: str) -> bytes:
-        """Download the OIDF certification package zip for a completed plan.
+    def download_plan_export(
+        self, plan_id: str, kind: str = "export"
+    ) -> tuple[str, bytes]:
+        """Download a plan-results export zip for a completed plan.
 
-        ``GET /api/plan/{plan_id}/certificationpackage`` returns a zip archive
-        bundling every test log in the plan — this is the artifact submitted to
-        the OpenID Foundation for certification. Uses a longer read timeout than
-        the default client because the suite generates the archive on demand and
-        bundling all logs can take a while.
+        ``kind`` is "export" (JSON + RSA signature — cheap, tamper-evident, the
+        suite's recommended CI artifact) or "exporthtml" (human-readable HTML).
+        The endpoint shape mirrors the suite's own ``scripts/conformance.py``
+        client: ``GET /api/plan/{kind}/{plan_id}``. Returns
+        ``(filename, zip_bytes)`` where ``filename`` comes from the
+        Content-Disposition header. Uses a longer read timeout than the default
+        client because the suite generates the archive on demand.
+
+        NOTE: this is NOT the OIDF certification package. The certification
+        package (``POST /api/plan/{plan_id}/certificationpackage``) additionally
+        requires a signed Certification of Conformance PDF and the RP
+        client-side logs zip, and it publishes and permanently freezes the plan.
+        That is the manual submission step (see #331) and is deliberately not
+        automated here.
         """
         response = self.client.get(
-            f"{self.base_url}/api/plan/{plan_id}/certificationpackage",
+            f"{self.base_url}/api/plan/{kind}/{plan_id}",
             timeout=120.0,
         )
         response.raise_for_status()
-        return response.content
+        disposition = response.headers.get("content-disposition", "")
+        match = re.findall(r'filename="(.+)"', disposition)
+        filename = match[0] if match else f"{plan_id}-{kind}.zip"
+        return filename, response.content
 
 
 # ---------------------------------------------------------------------------
@@ -656,28 +671,28 @@ def print_summary(results: list[TestResult]) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Certification package gating
+# Plan export gating
 # ---------------------------------------------------------------------------
 
 
-def _should_download_package(
-    cert_package: str | None, suite_url: str, all_ok: bool
+def _should_download_export(
+    export_zip: str | None, suite_url: str, all_ok: bool
 ) -> tuple[bool, str | None]:
-    """Decide whether to download a certification package.
+    """Decide whether to download a plan-results export zip.
 
     Returns ``(do_download, skip_reason)``. ``skip_reason`` is ``None`` when
-    ``do_download`` is True. The package is only worth generating when a real
+    ``do_download`` is True. An export is only worth keeping when a real
     (hosted) suite ran every test to a passing/warning state — the local
-    conformance instance does not produce a valid OIDF package, and a run with
-    failures is not submission-worthy.
+    conformance instance is a throwaway regression shield, and a run with
+    failures is not evidence-worthy.
     """
-    if not cert_package:
+    if not export_zip:
         return False, None
     if _is_local_suite(suite_url):
         return (
             False,
-            "local suite does not produce a valid OIDF certification package; "
-            "run against a hosted suite (CONFORMANCE_SERVER) to generate one",
+            "local suite export is not useful evidence; run against a hosted "
+            "suite (CONFORMANCE_SERVER) to capture a signed plan export",
         )
     if not all_ok:
         return False, "not all tests passed"
@@ -720,11 +735,23 @@ def main() -> None:
         help="Path to write JSON results file",
     )
     parser.add_argument(
-        "--cert-package",
+        "--export-zip",
         default=None,
         help=(
-            "Path to write the OIDF certification package (.zip). Only honoured "
+            "Path to write the signed plan-results export (.zip) after a passing "
+            "hosted run. This is the suite's CI evidence artifact, NOT the OIDF "
+            "certification package (which is a manual, publish-and-freeze step "
+            "requiring a signed PDF — see conformance/README.md). Only honoured "
             "for a hosted suite when every test passes; ignored for local runs."
+        ),
+    )
+    parser.add_argument(
+        "--export-kind",
+        choices=["export", "exporthtml"],
+        default="export",
+        help=(
+            "Plan export format: 'export' (JSON + RSA signature, default) or "
+            "'exporthtml' (human-readable HTML)."
         ),
     )
     parser.add_argument(
@@ -812,25 +839,29 @@ def main() -> None:
         output_path.write_text(json.dumps(results_json, indent=2) + "\n")
         logger.info("Results written to %s", output_path)
 
-    # Download the certification package for submission-worthy hosted runs.
-    do_download, skip_reason = _should_download_package(
-        args.cert_package, args.suite_url, all_ok
+    # Download the signed plan export as evidence for submission-worthy hosted
+    # runs. This is NOT the OIDF certification package — see download_plan_export.
+    do_download, skip_reason = _should_download_export(
+        args.export_zip, args.suite_url, all_ok
     )
-    if args.cert_package and not do_download:
-        logger.warning("Certification package skipped: %s", skip_reason)
+    if args.export_zip and not do_download:
+        logger.warning("Plan export skipped: %s", skip_reason)
     elif do_download:
-        logger.info("Downloading certification package for plan %s...", plan_id)
+        logger.info("Downloading %s for plan %s...", args.export_kind, plan_id)
         download_client = ConformanceSuiteClient(
             args.suite_url, token=env_token or None
         )
-        package = download_client.get_certification_package(plan_id)
-        pkg_path = Path(args.cert_package)
-        pkg_path.parent.mkdir(parents=True, exist_ok=True)
-        pkg_path.write_bytes(package)
+        filename, content = download_client.download_plan_export(
+            plan_id, kind=args.export_kind
+        )
+        export_path = Path(args.export_zip)
+        export_path.parent.mkdir(parents=True, exist_ok=True)
+        export_path.write_bytes(content)
         logger.info(
-            "Certification package written to %s (%d bytes)",
-            pkg_path,
-            len(package),
+            "Plan export (%s) written to %s (%d bytes)",
+            filename,
+            export_path,
+            len(content),
         )
 
     sys.exit(0 if all_ok else 1)
