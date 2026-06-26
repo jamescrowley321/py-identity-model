@@ -88,9 +88,19 @@ class ConformanceSuiteClient:
         )
 
     def create_plan(
-        self, plan_name: str, variant: dict, alias: str, rp_base_url: str = RP_BASE_URL
+        self,
+        plan_name: str,
+        variant: dict,
+        alias: str,
+        rp_base_url: str = RP_BASE_URL,
+        publish: str = "",
     ) -> dict:
         """Create a test plan.
+
+        ``publish`` controls whether the suite makes the plan's results publicly
+        visible on the published-tests list: "" (default) keeps it private,
+        "summary" / "everything" publish it. The downloadable certification
+        package is produced regardless of this setting.
 
         Returns the plan response including plan ID and list of test modules.
         """
@@ -98,7 +108,7 @@ class ConformanceSuiteClient:
         plan_config = {
             "alias": alias,
             "description": f"py-identity-model conformance: {alias}",
-            "publish": "",
+            "publish": publish,
             "server": {
                 "discoveryUrl": "",
             },
@@ -169,6 +179,22 @@ class ConformanceSuiteClient:
             logger.debug("Test %s status: %s", module_id, status)
             time.sleep(POLL_INTERVAL)
         return {"status": "TIMEOUT", "id": module_id}
+
+    def get_certification_package(self, plan_id: str) -> bytes:
+        """Download the OIDF certification package zip for a completed plan.
+
+        ``GET /api/plan/{plan_id}/certificationpackage`` returns a zip archive
+        bundling every test log in the plan — this is the artifact submitted to
+        the OpenID Foundation for certification. Uses a longer read timeout than
+        the default client because the suite generates the archive on demand and
+        bundling all logs can take a while.
+        """
+        response = self.client.get(
+            f"{self.base_url}/api/plan/{plan_id}/certificationpackage",
+            timeout=120.0,
+        )
+        response.raise_for_status()
+        return response.content
 
 
 # ---------------------------------------------------------------------------
@@ -523,6 +549,7 @@ def run_plan(
     suite_base_url: str = SUITE_BASE_URL,
     rp_base_url: str = RP_BASE_URL,
     token: str | None = None,
+    publish: str = "",
 ) -> tuple[str, list[TestResult]]:
     """Run all tests in a conformance test plan.
 
@@ -544,7 +571,7 @@ def run_plan(
     # Create the test plan
     logger.info("Creating test plan...")
     plan_response = suite.create_plan(
-        plan_name, variant, alias, rp_base_url=rp_base_url
+        plan_name, variant, alias, rp_base_url=rp_base_url, publish=publish
     )
     plan_id = plan_response.get("id", "")
     modules = plan_response.get("modules", [])
@@ -629,6 +656,35 @@ def print_summary(results: list[TestResult]) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Certification package gating
+# ---------------------------------------------------------------------------
+
+
+def _should_download_package(
+    cert_package: str | None, suite_url: str, all_ok: bool
+) -> tuple[bool, str | None]:
+    """Decide whether to download a certification package.
+
+    Returns ``(do_download, skip_reason)``. ``skip_reason`` is ``None`` when
+    ``do_download`` is True. The package is only worth generating when a real
+    (hosted) suite ran every test to a passing/warning state — the local
+    conformance instance does not produce a valid OIDF package, and a run with
+    failures is not submission-worthy.
+    """
+    if not cert_package:
+        return False, None
+    if _is_local_suite(suite_url):
+        return (
+            False,
+            "local suite does not produce a valid OIDF certification package; "
+            "run against a hosted suite (CONFORMANCE_SERVER) to generate one",
+        )
+    if not all_ok:
+        return False, "not all tests passed"
+    return True, None
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -664,6 +720,24 @@ def main() -> None:
         help="Path to write JSON results file",
     )
     parser.add_argument(
+        "--cert-package",
+        default=None,
+        help=(
+            "Path to write the OIDF certification package (.zip). Only honoured "
+            "for a hosted suite when every test passes; ignored for local runs."
+        ),
+    )
+    parser.add_argument(
+        "--publish",
+        choices=["none", "summary", "everything"],
+        default="none",
+        help=(
+            "Publish results on the suite's public published-tests list "
+            "(default: none — keep private). The certification package is "
+            "produced regardless."
+        ),
+    )
+    parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -692,11 +766,14 @@ def main() -> None:
         logger.error("Config not found: %s", config_path)
         sys.exit(1)
 
+    publish_value = "" if args.publish == "none" else args.publish
+
     plan_id, results = run_plan(
         config_path=str(config_path),
         suite_base_url=args.suite_url,
         rp_base_url=args.rp_url,
         token=env_token or None,
+        publish=publish_value,
     )
 
     all_ok = print_summary(results)
@@ -734,6 +811,27 @@ def main() -> None:
         }
         output_path.write_text(json.dumps(results_json, indent=2) + "\n")
         logger.info("Results written to %s", output_path)
+
+    # Download the certification package for submission-worthy hosted runs.
+    do_download, skip_reason = _should_download_package(
+        args.cert_package, args.suite_url, all_ok
+    )
+    if args.cert_package and not do_download:
+        logger.warning("Certification package skipped: %s", skip_reason)
+    elif do_download:
+        logger.info("Downloading certification package for plan %s...", plan_id)
+        download_client = ConformanceSuiteClient(
+            args.suite_url, token=env_token or None
+        )
+        package = download_client.get_certification_package(plan_id)
+        pkg_path = Path(args.cert_package)
+        pkg_path.parent.mkdir(parents=True, exist_ok=True)
+        pkg_path.write_bytes(package)
+        logger.info(
+            "Certification package written to %s (%d bytes)",
+            pkg_path,
+            len(package),
+        )
 
     sys.exit(0 if all_ok else 1)
 
