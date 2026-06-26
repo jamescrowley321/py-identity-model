@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 import html
 import logging
 import os
+from pathlib import Path
+import re
 import secrets
 from urllib.parse import urlencode
 
@@ -51,6 +53,79 @@ logger = logging.getLogger("conformance-rp")
 app = FastAPI(title="py-identity-model Conformance RP")
 
 # ---------------------------------------------------------------------------
+# Per-test RP log capture (clientSideData for OIDF RP certification)
+# ---------------------------------------------------------------------------
+#
+# OIDF RP certification requires one log file per test, named by the test id,
+# demonstrating the RP's behaviour — in particular that negative tests are
+# rejected (https://openid.net/certification/connect_rp_submission/). The
+# conformance suite only logs the OP side, so the RP must produce these itself.
+#
+# The runner drives tests strictly sequentially and tells the harness which
+# test is active via /authorize, /discover and /callback, so a process-global
+# pointer plus a logging handler that routes records to the active test's file
+# is sufficient. RP_LOG_DIR defaults to an absolute path derived from this
+# file's location so the harness and the (separately-launched) runner agree on
+# it regardless of working directory.
+
+_active_test: tuple[str, str] | None = None
+
+
+def _rp_log_base() -> Path:
+    """Base directory for per-test RP logs (env-overridable)."""
+    return Path(
+        os.environ.get("RP_LOG_DIR")
+        or (Path(__file__).parent / "results" / "hosted" / "rp-logs")
+    )
+
+
+def _rp_log_path(profile: str, test_name: str) -> Path:
+    """Path to the log file for ``test_name`` within ``profile`` (dir created).
+
+    Names are sanitised so a test id can never escape the profile directory.
+    """
+    safe_profile = re.sub(r"[^A-Za-z0-9._-]", "_", profile) or "default"
+    safe_test = re.sub(r"[^A-Za-z0-9._-]", "_", test_name)
+    profile_dir = _rp_log_base() / safe_profile
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    return profile_dir / f"{safe_test}.log"
+
+
+def _set_active_test(profile: str | None, test_name: str | None) -> None:
+    """Point per-test logging at ``test_name`` (or clear it when no test)."""
+    global _active_test
+    _active_test = (profile or "", test_name) if test_name else None
+
+
+class _PerTestLogRouter(logging.Handler):
+    """Appends harness + library log records to the active test's log file."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        test = _active_test
+        if not test or not test[1]:
+            return
+        try:
+            with _rp_log_path(test[0], test[1]).open("a", encoding="utf-8") as fh:
+                fh.write(self.format(record) + "\n")
+        except OSError:
+            # Never let log capture break the flow under test.
+            pass
+
+
+def _install_rp_log_router() -> None:
+    router = _PerTestLogRouter()
+    router.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)-8s %(name)s: %(message)s")
+    )
+    for name in ("conformance-rp", "py_identity_model"):
+        logging.getLogger(name).addHandler(router)
+    # Capture the library's own validation detail in the per-test logs.
+    logging.getLogger("py_identity_model").setLevel(logging.DEBUG)
+
+
+_install_rp_log_router()
+
+# ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
@@ -76,6 +151,9 @@ class AuthSession:
     client_secret: str = ""
     redirect_uri: str = ""
     skip_userinfo: bool = False
+    # Per-test RP-log routing (recovered in /callback via the session)
+    test_name: str = ""
+    profile: str = ""
     # Results populated after callback
     result: dict = field(default_factory=dict)
 
@@ -117,6 +195,7 @@ def clear_cache() -> dict:
     Without clearing caches, validate_token uses stale keys and hangs on
     retry backoff (3 retries x 30s timeout = ~2 min timeout per test).
     """
+    _set_active_test(None, None)
     clear_discovery_cache()
     clear_jwks_cache()
     logger.info("Cleared discovery and JWKS caches")
@@ -127,12 +206,15 @@ def clear_cache() -> dict:
 def discover(
     issuer: str = Query(..., description="Issuer URL for this test"),
     test_id: str = Query("", description="Test module ID for result tracking"),
+    test_name: str = Query("", description="Test module name for RP log capture"),
+    profile: str = Query("", description="Profile/plan name for RP log capture"),
 ) -> JSONResponse:
     """Fetch discovery document (and JWKS) without starting an auth flow.
 
     Used for Config RP discovery-only tests where the suite just needs to
     observe the RP fetching the openid-configuration endpoint.
     """
+    _set_active_test(profile, test_name)
     http_client = _get_http_client()
     try:
         disco_endpoint = parse_discovery_url(issuer)
@@ -189,6 +271,8 @@ def authorize(
     client_id: str = Query(..., description="Client ID registered with the suite"),
     client_secret: str = Query("", description="Client secret"),
     test_id: str = Query("", description="Test module ID for result tracking"),
+    test_name: str = Query("", description="Test module name for RP log capture"),
+    profile: str = Query("", description="Profile/plan name for RP log capture"),
     use_pkce: str = Query("false", description="Whether to use PKCE"),
     skip_userinfo: str = Query(
         "false", description="Skip UserInfo fetch after token validation"
@@ -201,6 +285,7 @@ def authorize(
 
     The conformance test runner calls this to start an authorization flow.
     """
+    _set_active_test(profile, test_name)
     http_client = _get_http_client()
 
     # Fetch discovery document for this issuer
@@ -322,11 +407,16 @@ def authorize(
         client_secret=client_secret,
         redirect_uri=redirect_uri,
         skip_userinfo=skip_userinfo.lower() == "true",
+        test_name=test_name,
+        profile=profile,
     )
     sessions[state] = session
     if test_id:
         session.result["test_id"] = test_id
 
+    logger.info(
+        "ACCEPTED discovery: issuer '%s' matches expected; redirecting to OP", issuer
+    )
     logger.info("Redirecting to OP: %s", auth_url)
     return RedirectResponse(url=auth_url, status_code=302)
 
@@ -417,12 +507,15 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
         )
 
     session = sessions.pop(state_value)
+    # Route this flow's logs to the test that started it (recovered via state).
+    _set_active_test(session.profile, session.test_name)
 
     # Validate state
     state_result = validate_authorize_callback_state(cb_response, session.state)
     if not state_result.is_valid:
         session.result["status"] = "error"
         session.result["error"] = f"state_validation: {state_result.result.value}"
+        logger.error("REJECTED: state validation failed: %s", state_result.result.value)
         _store_test_result(session)
         return HTMLResponse(
             content=(
@@ -437,6 +530,11 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
         session.result["status"] = "error"
         session.result["error"] = cb_response.error
         session.result["error_description"] = cb_response.error_description
+        logger.error(
+            "REJECTED: OP returned error response: %s (%s)",
+            cb_response.error,
+            cb_response.error_description,
+        )
         _store_test_result(session)
         return HTMLResponse(
             content=(
@@ -485,6 +583,7 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
     if not token_response.is_successful:
         session.result["status"] = "error"
         session.result["error"] = f"token_exchange: {token_response.error}"
+        logger.error("REJECTED: token exchange failed: %s", token_response.error)
         _store_test_result(session)
         return HTMLResponse(
             content=(
@@ -541,6 +640,7 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
         except TokenValidationException as exc:
             session.result["status"] = "error"
             session.result["error"] = f"id_token_validation: {exc.message}"
+            logger.error("REJECTED: id_token validation failed: %s", exc.message)
             _store_test_result(session)
             return HTMLResponse(
                 content=(
@@ -550,12 +650,22 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
                 status_code=400,
             )
 
+        logger.info(
+            "ACCEPTED: id_token validated by py-identity-model "
+            "(signature, issuer, audience, expiry)"
+        )
+
         # Validate nonce
         token_nonce = claims.get("nonce")
         if token_nonce != session.nonce:
             session.result["status"] = "error"
             session.result["error"] = (
                 f"nonce_mismatch: expected={session.nonce}, got={token_nonce}"
+            )
+            logger.error(
+                "REJECTED: nonce mismatch (expected=%s, got=%s)",
+                session.nonce,
+                token_nonce,
             )
             _store_test_result(session)
             return HTMLResponse(
@@ -586,7 +696,11 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
                 # The RP MUST reject the UserInfo response if sub differs
                 # from the ID token sub.
                 error_msg = userinfo_response.error
-                logger.error("UserInfo validation failed: %s", error_msg)
+                logger.error(
+                    "REJECTED: UserInfo validation failed (sub mismatch per "
+                    "OIDC Core §5.3.4): %s",
+                    error_msg,
+                )
                 session.result["status"] = "error"
                 session.result["error"] = f"userinfo_validation: {error_msg}"
                 _store_test_result(session)
@@ -609,7 +723,9 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
     _store_test_result(session)
 
     logger.info(
-        "Callback successful for issuer=%s, sub=%s", session.issuer, claims.get("sub")
+        "ACCEPTED: authentication successful for issuer=%s, sub=%s",
+        session.issuer,
+        claims.get("sub"),
     )
 
     # Build response body with ID token and UserInfo claims so the conformance
