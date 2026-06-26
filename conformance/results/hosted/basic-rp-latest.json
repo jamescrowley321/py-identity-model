@@ -1,104 +1,104 @@
 {
   "plan": "basic-rp",
-  "plan_id": "jBXwIRd9C8nzj",
+  "plan_id": "IMdvuXvIWxTdR",
   "suite_url": "https://www.certification.openid.net/",
   "results": [
     {
       "test": "oidcc-client-test",
       "status": "PASSED",
-      "test_id": "p98Qh66dgVctRhL",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=p98Qh66dgVctRhL",
+      "test_id": "SX2Sf0s6Nd9P7zY",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=SX2Sf0s6Nd9P7zY",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-invalid-iss",
       "status": "PASSED",
-      "test_id": "RLH60wjqUWR40jf",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=RLH60wjqUWR40jf",
+      "test_id": "FmaUQTEwISHL1nc",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=FmaUQTEwISHL1nc",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-missing-sub",
       "status": "PASSED",
-      "test_id": "FadQlL8CV3WQ53t",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=FadQlL8CV3WQ53t",
+      "test_id": "XpxQSZ6NmVDnnII",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=XpxQSZ6NmVDnnII",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-invalid-aud",
       "status": "PASSED",
-      "test_id": "9Rl5xhcnLjvqkKa",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=9Rl5xhcnLjvqkKa",
+      "test_id": "MKp9HCa71Pt7jJH",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=MKp9HCa71Pt7jJH",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-missing-iat",
       "status": "PASSED",
-      "test_id": "L34kjo8vWtAAg8B",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=L34kjo8vWtAAg8B",
+      "test_id": "00ElBx2h76lQICK",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=00ElBx2h76lQICK",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-kid-absent-single-jwks",
       "status": "PASSED",
-      "test_id": "D7a54cbDv9m91Wu",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=D7a54cbDv9m91Wu",
+      "test_id": "Eun9qEXqAIPrPbH",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=Eun9qEXqAIPrPbH",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-kid-absent-multiple-jwks",
       "status": "PASSED",
-      "test_id": "NQhymRCfWJ4dxI4",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=NQhymRCfWJ4dxI4",
+      "test_id": "G4WvSGZXpn5dhLW",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=G4WvSGZXpn5dhLW",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-idtoken-sig-rs256",
       "status": "PASSED",
-      "test_id": "hEGyqR3aOmsx0VR",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=hEGyqR3aOmsx0VR",
+      "test_id": "AEh6mqH7AiBnWAq",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=AEh6mqH7AiBnWAq",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-idtoken-sig-none",
       "status": "SKIPPED",
-      "test_id": "69EQkOXuvETe3eI",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=69EQkOXuvETe3eI",
+      "test_id": "U3D3z1PiJXy3jEr",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=U3D3z1PiJXy3jEr",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-invalid-sig-rs256",
       "status": "PASSED",
-      "test_id": "J9H5335ANFTez5k",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=J9H5335ANFTez5k",
+      "test_id": "3fy9hQDGAgGXBZa",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=3fy9hQDGAgGXBZa",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-userinfo-invalid-sub",
       "status": "PASSED",
-      "test_id": "EMkdA2u5olxNL23",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=EMkdA2u5olxNL23",
+      "test_id": "6TxFNUUnwju5BBR",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=6TxFNUUnwju5BBR",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-nonce-invalid",
       "status": "PASSED",
-      "test_id": "CyYrDKdDO4rOFZ2",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=CyYrDKdDO4rOFZ2",
+      "test_id": "7Vr9QYsLs2wBV33",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=7Vr9QYsLs2wBV33",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-scope-userinfo-claims",
       "status": "PASSED",
-      "test_id": "D5Z3SjG0gPsqXmL",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=D5Z3SjG0gPsqXmL",
+      "test_id": "Ki7eUhXmuotPr1J",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=Ki7eUhXmuotPr1J",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-client-secret-basic",
       "status": "PASSED",
-      "test_id": "r3Wl4Y2HnTxLL4H",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=r3Wl4Y2HnTxLL4H",
+      "test_id": "BaNOsQJOqyOhJiG",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=BaNOsQJOqyOhJiG",
       "detail": ""
     }
   ],

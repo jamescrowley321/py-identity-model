@@ -1,48 +1,48 @@
 {
   "plan": "config-rp",
-  "plan_id": "BuVb1cr1NCfrh",
+  "plan_id": "6GYBauwh5fa3v",
   "suite_url": "https://www.certification.openid.net/",
   "results": [
     {
       "test": "oidcc-client-test-discovery-openid-config",
       "status": "PASSED",
-      "test_id": "K7VUnOHR8OM5FQb",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=K7VUnOHR8OM5FQb",
+      "test_id": "1kHFfJC0bYSGAhQ",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=1kHFfJC0bYSGAhQ",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-discovery-jwks-uri-keys",
       "status": "PASSED",
-      "test_id": "bqutxl2nEsryGSD",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=bqutxl2nEsryGSD",
+      "test_id": "LCXQOuFC0HkPkZL",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=LCXQOuFC0HkPkZL",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-discovery-issuer-mismatch",
       "status": "PASSED",
-      "test_id": "VX62iE3rTJpyPYn",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=VX62iE3rTJpyPYn",
+      "test_id": "CJcgHqO9f0RVjI7",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=CJcgHqO9f0RVjI7",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-idtoken-sig-none",
       "status": "SKIPPED",
-      "test_id": "S8eGdDBJ1kag3fK",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=S8eGdDBJ1kag3fK",
+      "test_id": "JXDrRzyMvzmsL1Z",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=JXDrRzyMvzmsL1Z",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-signing-key-rotation-just-before-signing",
       "status": "PASSED",
-      "test_id": "MSgvdwunmgrpk5H",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=MSgvdwunmgrpk5H",
+      "test_id": "JzNuFp75Iz2rP1j",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=JzNuFp75Iz2rP1j",
       "detail": ""
     },
     {
       "test": "oidcc-client-test-signing-key-rotation",
       "status": "PASSED",
-      "test_id": "o8bWMpy6lto8Plc",
-      "log_url": "https://www.certification.openid.net/log-detail.html?log=o8bWMpy6lto8Plc",
+      "test_id": "ycaVxoOQFxIy1jh",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=ycaVxoOQFxIy1jh",
       "detail": ""
     }
   ],
