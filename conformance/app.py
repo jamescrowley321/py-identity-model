@@ -82,13 +82,22 @@ def _rp_log_base() -> Path:
 def _rp_log_path(profile: str, test_name: str) -> Path:
     """Path to the log file for ``test_name`` within ``profile`` (dir created).
 
-    Names are sanitised so a test id can never escape the profile directory.
+    ``profile`` and ``test_name`` arrive as request parameters, so the path is
+    hardened two ways: every character outside ``[A-Za-z0-9._-]`` is replaced
+    (removing any path separators), and the resolved path is verified to stay
+    inside the log base — a value that somehow escaped raises rather than
+    writing outside the base directory.
     """
+    base = _rp_log_base().resolve()
     safe_profile = re.sub(r"[^A-Za-z0-9._-]", "_", profile) or "default"
-    safe_test = re.sub(r"[^A-Za-z0-9._-]", "_", test_name)
-    profile_dir = _rp_log_base() / safe_profile
-    profile_dir.mkdir(parents=True, exist_ok=True)
-    return profile_dir / f"{safe_test}.log"
+    safe_test = re.sub(r"[^A-Za-z0-9._-]", "_", test_name) or "unknown"
+    candidate = (base / safe_profile / f"{safe_test}.log").resolve()
+    if base not in candidate.parents:
+        raise ValueError(
+            f"refusing unsafe RP log path (profile={profile!r}, test={test_name!r})"
+        )
+    candidate.parent.mkdir(parents=True, exist_ok=True)
+    return candidate
 
 
 def _set_active_test(profile: str | None, test_name: str | None) -> None:
@@ -107,7 +116,7 @@ class _PerTestLogRouter(logging.Handler):
         try:
             with _rp_log_path(test[0], test[1]).open("a", encoding="utf-8") as fh:
                 fh.write(self.format(record) + "\n")
-        except OSError:
+        except (OSError, ValueError):
             # Never let log capture break the flow under test.
             pass
 

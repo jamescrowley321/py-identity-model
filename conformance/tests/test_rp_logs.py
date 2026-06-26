@@ -46,11 +46,13 @@ def test_router_silent_when_no_active_test(tmp_path, monkeypatch) -> None:
 
 def test_rp_log_path_sanitises_and_creates_dir(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("RP_LOG_DIR", str(tmp_path))
+    base = tmp_path.resolve()
     path = harness_app._rp_log_path("basic/rp", "oidcc/../evil")
 
     # Path separators in either component are neutralised — no escaping the base.
-    assert path.parent == tmp_path / "basic_rp"
     assert path.name == "oidcc_.._evil.log"
+    assert path.parent == base / "basic_rp"
+    assert base in path.parents
     assert path.parent.is_dir()
 
 
