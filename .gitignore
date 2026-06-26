@@ -148,9 +148,10 @@ dmypy.json
 .claude/review-*.patch
 .claude/pre-review-sha.txt
 
-# Conformance plan export zips (binary evidence artifacts; preserved via CI
-# upload-artifact, not committed)
+# Conformance plan export zips + per-test RP logs (binary evidence artifacts;
+# preserved via CI upload-artifact, not committed)
 conformance/results/hosted/*.zip
+conformance/results/hosted/rp-logs/
 
 # Ralph orchestrator runtime state
 .ralph/

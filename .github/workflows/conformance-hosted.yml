@@ -62,6 +62,7 @@ jobs:
             --plan basic-rp \
             --output conformance/results/hosted/basic-rp-latest.json \
             --export-zip conformance/results/hosted/basic-rp-export.zip \
+            --rp-logs-zip conformance/results/hosted/basic-rp-rp-logs.zip \
             --publish "${{ inputs.publish }}" \
             --verbose
 
@@ -74,6 +75,7 @@ jobs:
             --plan config-rp \
             --output conformance/results/hosted/config-rp-latest.json \
             --export-zip conformance/results/hosted/config-rp-export.zip \
+            --rp-logs-zip conformance/results/hosted/config-rp-rp-logs.zip \
             --publish "${{ inputs.publish }}" \
             --verbose
 
@@ -86,6 +88,7 @@ jobs:
             --plan form-post-basic-rp \
             --output conformance/results/hosted/form-post-basic-rp-latest.json \
             --export-zip conformance/results/hosted/form-post-basic-rp-export.zip \
+            --rp-logs-zip conformance/results/hosted/form-post-basic-rp-rp-logs.zip \
             --publish "${{ inputs.publish }}" \
             --verbose
 
@@ -97,4 +100,5 @@ jobs:
           path: |
             conformance/results/hosted/*-latest.json
             conformance/results/hosted/*-export.zip
+            conformance/results/hosted/*-rp-logs.zip
           retention-days: 30

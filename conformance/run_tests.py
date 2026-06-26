@@ -15,9 +15,11 @@ import logging
 import os
 from pathlib import Path
 import re
+import shutil
 import sys
 import time
 from urllib.parse import urljoin, urlparse
+import zipfile
 
 import httpx
 
@@ -257,6 +259,8 @@ def drive_rp_discover(
     rp_base_url: str,
     issuer: str,
     test_id: str,
+    test_name: str = "",
+    profile: str = "",
 ) -> None:
     """Hit the RP's /discover endpoint to fetch discovery without starting an auth flow.
 
@@ -266,6 +270,8 @@ def drive_rp_discover(
     params = {
         "issuer": issuer,
         "test_id": test_id,
+        "test_name": test_name,
+        "profile": profile,
     }
 
     with httpx.Client(verify=False, timeout=30.0) as client:
@@ -321,6 +327,8 @@ def drive_rp_authorize(
     test_id: str,
     use_pkce: bool = False,
     skip_userinfo: bool = False,
+    test_name: str = "",
+    profile: str = "",
 ) -> None:
     """Hit the RP's /authorize endpoint to start an auth flow.
 
@@ -337,6 +345,8 @@ def drive_rp_authorize(
         "client_id": client_id,
         "client_secret": client_secret,
         "test_id": test_id,
+        "test_name": test_name,
+        "profile": profile,
         "use_pkce": str(use_pkce).lower(),
         "skip_userinfo": str(skip_userinfo).lower(),
     }
@@ -419,6 +429,7 @@ def run_test_module(
     rp_base_url: str,
     client_id: str,
     client_secret: str,
+    profile: str = "",
 ) -> TestResult:
     """Execute a single conformance test module."""
     logger.info("=" * 60)
@@ -478,6 +489,8 @@ def run_test_module(
             rp_base_url=rp_base_url,
             issuer=issuer,
             test_id=module_id,
+            test_name=test_name,
+            profile=profile,
         )
     elif test_type == "auth_double":
         # Double-flow tests (key rotation): drive two sequential auth flows
@@ -488,6 +501,8 @@ def run_test_module(
             client_id=client_id,
             client_secret=client_secret,
             test_id=module_id,
+            test_name=test_name,
+            profile=profile,
         )
         # Wait briefly for the suite to rotate keys
         time.sleep(1)
@@ -498,6 +513,8 @@ def run_test_module(
             client_id=client_id,
             client_secret=client_secret,
             test_id=module_id,
+            test_name=test_name,
+            profile=profile,
         )
     else:
         # Standard auth flow (with optional userinfo skip)
@@ -508,6 +525,8 @@ def run_test_module(
             client_secret=client_secret,
             test_id=module_id,
             skip_userinfo=(test_type == "auth_no_userinfo"),
+            test_name=test_name,
+            profile=profile,
         )
 
     # Poll until the test finishes
@@ -565,6 +584,7 @@ def run_plan(
     rp_base_url: str = RP_BASE_URL,
     token: str | None = None,
     publish: str = "",
+    profile: str = "",
 ) -> tuple[str, list[TestResult]]:
     """Run all tests in a conformance test plan.
 
@@ -626,6 +646,7 @@ def run_plan(
             rp_base_url=rp_base_url,
             client_id=client_id,
             client_secret=client_secret,
+            profile=profile,
         )
         results.append(result)
 
@@ -700,6 +721,46 @@ def _should_download_export(
 
 
 # ---------------------------------------------------------------------------
+# RP client-side logs (clientSideData)
+# ---------------------------------------------------------------------------
+
+
+def _rp_log_dir() -> Path:
+    """Base directory for per-test RP logs the harness writes.
+
+    Defaults to an absolute path derived from this file's location so it matches
+    the harness default (``app.py`` computes the same path from its own
+    ``__file__``) regardless of working directory. Env-overridable via
+    ``RP_LOG_DIR`` — set the same value for both processes if you override it.
+    """
+    return Path(
+        os.environ.get("RP_LOG_DIR")
+        or (Path(__file__).parent / "results" / "hosted" / "rp-logs")
+    )
+
+
+def _reset_dir(path: Path) -> None:
+    """Remove ``path`` and recreate it empty (so stale logs never leak in)."""
+    if path.exists():
+        shutil.rmtree(path)
+    path.mkdir(parents=True, exist_ok=True)
+
+
+def _zip_directory(src_dir: Path, output: Path) -> int:
+    """Zip the files directly under ``src_dir`` (flat) into ``output``.
+
+    Returns the number of files written. Used to assemble the per-profile RP
+    log bundle submitted to OIDF as ``clientSideData``.
+    """
+    files = sorted(p for p in src_dir.glob("*") if p.is_file())
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as zf:
+        for p in files:
+            zf.write(p, arcname=p.name)
+    return len(files)
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -755,6 +816,16 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--rp-logs-zip",
+        default=None,
+        help=(
+            "Path to write the per-test RP client-side logs (.zip) the harness "
+            "captured for this plan — one log file per test, the 'clientSideData' "
+            "uploaded with an OIDF certification submission (see #331). The "
+            "per-profile log dir is reset before the run and zipped after."
+        ),
+    )
+    parser.add_argument(
         "--publish",
         choices=["none", "summary", "everything"],
         default="none",
@@ -795,12 +866,19 @@ def main() -> None:
 
     publish_value = "" if args.publish == "none" else args.publish
 
+    # Reset this profile's RP-log directory so the zip only contains this run's
+    # per-test logs (the harness appends, so stale files would otherwise leak in).
+    rp_log_profile_dir = _rp_log_dir() / args.plan
+    if args.rp_logs_zip:
+        _reset_dir(rp_log_profile_dir)
+
     plan_id, results = run_plan(
         config_path=str(config_path),
         suite_base_url=args.suite_url,
         rp_base_url=args.rp_url,
         token=env_token or None,
         publish=publish_value,
+        profile=args.plan,
     )
 
     all_ok = print_summary(results)
@@ -863,6 +941,24 @@ def main() -> None:
             export_path,
             len(content),
         )
+
+    # Assemble the per-test RP client-side logs zip (clientSideData). Captured
+    # regardless of pass/fail — the logs for failed tests are exactly what you'd
+    # inspect — so this is gated only on the flag, not on all_ok.
+    if args.rp_logs_zip:
+        count = _zip_directory(rp_log_profile_dir, Path(args.rp_logs_zip))
+        if count == 0:
+            logger.warning(
+                "No RP logs captured in %s — is the harness running this build "
+                "(it must receive test_name/profile and share RP_LOG_DIR)?",
+                rp_log_profile_dir,
+            )
+        else:
+            logger.info(
+                "RP client-side logs (%d files) written to %s",
+                count,
+                args.rp_logs_zip,
+            )
 
     sys.exit(0 if all_ok else 1)
 
