@@ -154,3 +154,27 @@ uv run conformance/scripts/rotate_conformance_token.py --dry-run
 - HCP Vault Secrets app configured (default name: `py-identity-model`)
 
 See the script's module docstring for full design notes and flag reference.
+
+## Producing a certification package
+
+A passing run prints a pass/fail summary, but OIDF certification submission
+requires the **certification package** — a zip of every test log downloaded from
+`GET /api/plan/{plan_id}/certificationpackage` on the hosted suite. Pass
+`--cert-package PATH` to fetch it after the run:
+
+```bash
+# Hosted run that also downloads the submission package
+make conformance-test HOSTED=1 CONFORMANCE_SERVER=https://www.certification.openid.net/
+# -> conformance/results/hosted/<plan>-cert-package.zip
+```
+
+The package is only downloaded for a **hosted** suite when **every test passes**;
+`--cert-package` is ignored (with a warning) for the local Docker suite, which
+does not produce a valid OIDF package. The zips are git-ignored binary artifacts
+— in CI they are retained via the `conformance-hosted` workflow's uploaded
+artifacts (`gh run download -n conformance-hosted-results`).
+
+`--publish {none,summary,everything}` (default `none`) controls whether the run
+is listed publicly on certification.openid.net; the package is generated either
+way. Publishing is typically done at actual submission time (see #331). The
+hosted CI workflow exposes the same choice as a `workflow_dispatch` input.

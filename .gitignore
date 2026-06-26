@@ -148,6 +148,10 @@ dmypy.json
 .claude/review-*.patch
 .claude/pre-review-sha.txt
 
+# Conformance certification packages (binary OIDF submission artifacts;
+# preserved via CI upload-artifact, not committed)
+conformance/results/hosted/*.zip
+
 # Ralph orchestrator runtime state
 .ralph/
 PROMPT.md

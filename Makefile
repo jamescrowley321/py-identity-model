@@ -147,9 +147,9 @@ conformance-down: ## Tear down conformance suite
 .PHONY: conformance-test
 conformance-test: $(if $(HOSTED),,conformance-up) ## Run conformance tests (HOSTED=1 for hosted suite)
 ifdef HOSTED
-	uv run python conformance/run_tests.py --plan basic-rp --suite-url "$(CONFORMANCE_SERVER)" --output conformance/results/hosted/basic-rp-latest.json --verbose
-	uv run python conformance/run_tests.py --plan config-rp --suite-url "$(CONFORMANCE_SERVER)" --output conformance/results/hosted/config-rp-latest.json --verbose
-	uv run python conformance/run_tests.py --plan form-post-basic-rp --suite-url "$(CONFORMANCE_SERVER)" --output conformance/results/hosted/form-post-basic-rp-latest.json --verbose
+	uv run python conformance/run_tests.py --plan basic-rp --suite-url "$(CONFORMANCE_SERVER)" --output conformance/results/hosted/basic-rp-latest.json --cert-package conformance/results/hosted/basic-rp-cert-package.zip --publish "$(or $(PUBLISH),none)" --verbose
+	uv run python conformance/run_tests.py --plan config-rp --suite-url "$(CONFORMANCE_SERVER)" --output conformance/results/hosted/config-rp-latest.json --cert-package conformance/results/hosted/config-rp-cert-package.zip --publish "$(or $(PUBLISH),none)" --verbose
+	uv run python conformance/run_tests.py --plan form-post-basic-rp --suite-url "$(CONFORMANCE_SERVER)" --output conformance/results/hosted/form-post-basic-rp-latest.json --cert-package conformance/results/hosted/form-post-basic-rp-cert-package.zip --publish "$(or $(PUBLISH),none)" --verbose
 	@echo "Hosted conformance tests complete. Results in conformance/results/hosted/"
 else
 	uv run python conformance/run_tests.py --plan basic-rp --output conformance/results/basic-rp-latest.json --verbose
@@ -160,7 +160,7 @@ endif
 
 .PHONY: conformance-test-harness
 conformance-test-harness: ## Run conformance harness unit tests (parser + callback)
-	uv run --with fastapi --with httpx --with python-multipart pytest conformance/tests/ -v
+	uv run --with fastapi --with httpx --with python-multipart --with respx pytest conformance/tests/ -v
 
 .PHONY: conformance-token
 conformance-token: ## Manage OIDF API token (ACTION=create|show|env)

@@ -5,6 +5,15 @@ permissions:
 
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish results on the public certification.openid.net list"
+        type: choice
+        default: none
+        options:
+          - none
+          - summary
+          - everything
 
 jobs:
   conformance-hosted:
@@ -52,6 +61,8 @@ jobs:
           python conformance/run_tests.py \
             --plan basic-rp \
             --output conformance/results/hosted/basic-rp-latest.json \
+            --cert-package conformance/results/hosted/basic-rp-cert-package.zip \
+            --publish "${{ inputs.publish }}" \
             --verbose
 
       - name: Run Config RP conformance tests
@@ -62,6 +73,8 @@ jobs:
           python conformance/run_tests.py \
             --plan config-rp \
             --output conformance/results/hosted/config-rp-latest.json \
+            --cert-package conformance/results/hosted/config-rp-cert-package.zip \
+            --publish "${{ inputs.publish }}" \
             --verbose
 
       - name: Run Form Post Basic RP conformance tests
@@ -72,6 +85,8 @@ jobs:
           python conformance/run_tests.py \
             --plan form-post-basic-rp \
             --output conformance/results/hosted/form-post-basic-rp-latest.json \
+            --cert-package conformance/results/hosted/form-post-basic-rp-cert-package.zip \
+            --publish "${{ inputs.publish }}" \
             --verbose
 
       - name: Upload conformance results
@@ -81,4 +96,5 @@ jobs:
           name: conformance-hosted-results
           path: |
             conformance/results/hosted/*-latest.json
+            conformance/results/hosted/*-cert-package.zip
           retention-days: 30
