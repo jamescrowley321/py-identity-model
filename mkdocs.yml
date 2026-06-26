@@ -86,6 +86,7 @@ nav:
   - Specifications:
       - Discovery Compliance: discovery_specification_compliance_assessment.md
       - JWKS Compliance: jwks_specification_compliance_assessment.md
+      - OIDC Certification: certification.md
   - API Reference:
       - Overview: api/index.md
       - Discovery: api/discovery.md
