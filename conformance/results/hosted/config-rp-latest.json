@@ -1,0 +1,58 @@
+{
+  "plan": "config-rp",
+  "plan_id": "BuVb1cr1NCfrh",
+  "suite_url": "https://www.certification.openid.net/",
+  "results": [
+    {
+      "test": "oidcc-client-test-discovery-openid-config",
+      "status": "PASSED",
+      "test_id": "K7VUnOHR8OM5FQb",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=K7VUnOHR8OM5FQb",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-discovery-jwks-uri-keys",
+      "status": "PASSED",
+      "test_id": "bqutxl2nEsryGSD",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=bqutxl2nEsryGSD",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-discovery-issuer-mismatch",
+      "status": "PASSED",
+      "test_id": "VX62iE3rTJpyPYn",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=VX62iE3rTJpyPYn",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-idtoken-sig-none",
+      "status": "SKIPPED",
+      "test_id": "S8eGdDBJ1kag3fK",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=S8eGdDBJ1kag3fK",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-signing-key-rotation-just-before-signing",
+      "status": "PASSED",
+      "test_id": "MSgvdwunmgrpk5H",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=MSgvdwunmgrpk5H",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-signing-key-rotation",
+      "status": "PASSED",
+      "test_id": "o8bWMpy6lto8Plc",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=o8bWMpy6lto8Plc",
+      "detail": ""
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "passed": 5,
+    "warning": 0,
+    "failed": 0,
+    "review": 0,
+    "skipped": 1
+  },
+  "all_passed": true
+}
