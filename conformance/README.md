@@ -203,21 +203,21 @@ runner agree regardless of working directory); override it for *both* processes
 if you change it. The logs are captured regardless of pass/fail — the logs for a
 failed test are exactly what you'd want to inspect.
 
-### Certification package (manual — the actual OIDF submission)
+### Submission (manual — the actual OIDF certification)
 
-The **certification package** is a different thing and is **not automated here**.
-Per the suite's own `scripts/conformance.py`, it is created via
-`POST /api/plan/{plan_id}/certificationpackage` as `multipart/form-data` with:
+Submission is **not automated here**. The current OIDF flow is portal-based:
+fill the web form at <https://submissions.openid.net/>, upload the test result
+zips (`*-export.zip`) + client data (`*-rp-logs.zip`) per profile, and OIDF
+generates the Certification of Conformance and emails a **DocuSign** signature
+request — there is no PDF template to fill manually.
 
-- `certificationOfConformancePdf` — the **signed Certification of Conformance**
-  PDF (you fill and sign this), and
-- `clientSideData` — **required for RP tests**: the RP (harness) client-side
-  logs as a zip.
+(The suite's `scripts/conformance.py` also exposes a programmatic
+`POST /api/plan/{plan_id}/certificationpackage` taking a *pre-signed* PDF +
+`clientSideData`, which **publishes and permanently freezes** the plan. The
+portal is the standard route.)
 
-Calling it **publishes the plan and marks it permanently immutable**. Because it
-needs the signed PDF + RP logs and is irreversible, it is the owner-driven
-submission step tracked in **#331**, not something CI or this runner fires
-automatically.
+This is the owner-driven step tracked in **#331**. See the full write-up in
+[`docs/certification.md`](../docs/certification.md).
 
 `--publish {none,summary,everything}` (default `none`) is independent: it only
 controls whether a *run* is listed on the public published-tests list. The
