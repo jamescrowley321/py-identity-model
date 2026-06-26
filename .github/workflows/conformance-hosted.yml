@@ -61,7 +61,7 @@ jobs:
           python conformance/run_tests.py \
             --plan basic-rp \
             --output conformance/results/hosted/basic-rp-latest.json \
-            --cert-package conformance/results/hosted/basic-rp-cert-package.zip \
+            --export-zip conformance/results/hosted/basic-rp-export.zip \
             --publish "${{ inputs.publish }}" \
             --verbose
 
@@ -73,7 +73,7 @@ jobs:
           python conformance/run_tests.py \
             --plan config-rp \
             --output conformance/results/hosted/config-rp-latest.json \
-            --cert-package conformance/results/hosted/config-rp-cert-package.zip \
+            --export-zip conformance/results/hosted/config-rp-export.zip \
             --publish "${{ inputs.publish }}" \
             --verbose
 
@@ -85,7 +85,7 @@ jobs:
           python conformance/run_tests.py \
             --plan form-post-basic-rp \
             --output conformance/results/hosted/form-post-basic-rp-latest.json \
-            --cert-package conformance/results/hosted/form-post-basic-rp-cert-package.zip \
+            --export-zip conformance/results/hosted/form-post-basic-rp-export.zip \
             --publish "${{ inputs.publish }}" \
             --verbose
 
@@ -96,5 +96,5 @@ jobs:
           name: conformance-hosted-results
           path: |
             conformance/results/hosted/*-latest.json
-            conformance/results/hosted/*-cert-package.zip
+            conformance/results/hosted/*-export.zip
           retention-days: 30

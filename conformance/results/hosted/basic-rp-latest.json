@@ -1,0 +1,114 @@
+{
+  "plan": "basic-rp",
+  "plan_id": "BzbbUs8KpKRez",
+  "suite_url": "https://www.certification.openid.net/",
+  "results": [
+    {
+      "test": "oidcc-client-test",
+      "status": "PASSED",
+      "test_id": "RyLhZeiGnoq7tot",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=RyLhZeiGnoq7tot",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-invalid-iss",
+      "status": "PASSED",
+      "test_id": "YWacaFvLeiMTx3O",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=YWacaFvLeiMTx3O",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-missing-sub",
+      "status": "PASSED",
+      "test_id": "ECB12rpy4uAdfwc",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=ECB12rpy4uAdfwc",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-invalid-aud",
+      "status": "PASSED",
+      "test_id": "B45hDzdJCxWg3NP",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=B45hDzdJCxWg3NP",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-missing-iat",
+      "status": "PASSED",
+      "test_id": "gCW9Ma4KOBaAWeH",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=gCW9Ma4KOBaAWeH",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-kid-absent-single-jwks",
+      "status": "PASSED",
+      "test_id": "OO2KUXPghetjA3W",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=OO2KUXPghetjA3W",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-kid-absent-multiple-jwks",
+      "status": "PASSED",
+      "test_id": "Jm5bGqCZqCHG9v6",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=Jm5bGqCZqCHG9v6",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-idtoken-sig-rs256",
+      "status": "PASSED",
+      "test_id": "n66lMhylU2Y2Cx7",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=n66lMhylU2Y2Cx7",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-idtoken-sig-none",
+      "status": "SKIPPED",
+      "test_id": "I2AODPCZA74senD",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=I2AODPCZA74senD",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-invalid-sig-rs256",
+      "status": "PASSED",
+      "test_id": "QjWUtr2j1r4xQHY",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=QjWUtr2j1r4xQHY",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-userinfo-invalid-sub",
+      "status": "PASSED",
+      "test_id": "uxrfdnzBpS8dGy8",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=uxrfdnzBpS8dGy8",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-nonce-invalid",
+      "status": "PASSED",
+      "test_id": "6wtZlfbF1hJ846x",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=6wtZlfbF1hJ846x",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-scope-userinfo-claims",
+      "status": "PASSED",
+      "test_id": "4uB5gbMzTgTtRKD",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=4uB5gbMzTgTtRKD",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-client-secret-basic",
+      "status": "PASSED",
+      "test_id": "kZXEWmkEo8Avk5x",
+      "log_url": "https://www.certification.openid.net/log-detail.html?log=kZXEWmkEo8Avk5x",
+      "detail": ""
+    }
+  ],
+  "summary": {
+    "total": 14,
+    "passed": 13,
+    "warning": 0,
+    "failed": 0,
+    "review": 0,
+    "skipped": 1
+  },
+  "all_passed": true
+}
