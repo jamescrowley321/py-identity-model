@@ -122,17 +122,27 @@ def _parse_error_response(response: httpx.Response) -> str:
         )
 
     if isinstance(data, dict):
-        error = data.get("error", "unknown")
+        error = data.get("error")
         error_description = data.get("error_description", "")
-        if error_description:
+        if error:
+            if error_description:
+                return (
+                    f"Token exchange failed with status code: "
+                    f"{response.status_code}. "
+                    f"Error: {error} — {error_description}"
+                )
             return (
                 f"Token exchange failed with status code: "
-                f"{response.status_code}. "
-                f"Error: {error} — {error_description}"
+                f"{response.status_code}. Error: {error}"
             )
+        # No standard RFC 6749 §5.2 ``error`` field. Surface the raw JSON body
+        # rather than masking it as "unknown" — providers such as Descope return
+        # a non-standard error shape (e.g. errorCode/errorDescription) whose
+        # detail is essential for diagnosing the rejection.
+        body = json.dumps(data)[:1024]
         return (
             f"Token exchange failed with status code: "
-            f"{response.status_code}. Error: {error}"
+            f"{response.status_code}. Response: {body}"
         )
 
     content = response.content[:1024]

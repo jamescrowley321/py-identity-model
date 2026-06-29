@@ -111,6 +111,39 @@ class TestExchangeToken:
         assert response.is_successful is False
 
     @respx.mock
+    def test_nonstandard_error_body_surfaces_raw_body(self):
+        """A 400 without a standard OAuth ``error`` field surfaces the raw body.
+
+        Providers such as Descope return a non-standard error shape
+        (errorCode/errorDescription); the detail must not be masked as
+        "unknown".
+        """
+        respx.post(TOKEN_URL).mock(
+            return_value=httpx.Response(
+                400,
+                json={
+                    "errorCode": "E062108",
+                    "errorDescription": "Token exchange not enabled",
+                    "errorMessage": "grant type not allowed for client",
+                },
+            )
+        )
+        response = exchange_token(
+            TokenExchangeRequest(
+                address=TOKEN_URL,
+                client_id="service-a",
+                subject_token="some-token",
+                subject_token_type=ACCESS_TOKEN,
+                client_secret="secret",
+            )
+        )
+        assert response.is_successful is False
+        assert response.error is not None
+        assert "unknown" not in response.error
+        assert "E062108" in response.error
+        assert "Token exchange not enabled" in response.error
+
+    @respx.mock
     def test_public_client(self):
         respx.post(TOKEN_URL).mock(
             return_value=httpx.Response(200, json=TOKEN_EXCHANGE_RESPONSE)

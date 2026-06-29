@@ -169,13 +169,9 @@ class TestTokenExchangeLive:
             )
         )
 
-        # A provider may advertise the token-exchange grant in its discovery
-        # document (so provider_capabilities reports it) yet reject the actual
-        # exchange for this client. Treat that as an unsupported-config skip,
-        # consistent with test_exchange_with_audience below.
-        if not response.is_successful:
-            pytest.skip(f"Provider rejected token exchange: {response.error}")
-
+        assert response.is_successful is True, (
+            f"Token exchange failed: {response.error}"
+        )
         assert response.token is not None
         assert "access_token" in response.token
         assert response.issued_token_type is not None
