@@ -19,6 +19,29 @@ from py_identity_model.sync.device_auth import (
 from py_identity_model.sync.token_exchange import exchange_token
 
 
+# Signals that a provider's token endpoint rejects the token-exchange grant as
+# *unsupported*, despite advertising it in grant_types_supported. Descope is
+# known to over-advertise its discovery metadata: it lists token-exchange (and
+# jwt-bearer) but the endpoint returns E011003 "grant_type field must be one of:
+# authorization_code, refresh_token, client_credentials".
+_UNSUPPORTED_GRANT_SIGNALS = (
+    "unsupported_grant_type",  # RFC 6749 Section 5.2
+    "grant_type field must be one of",  # Descope E011003
+)
+
+
+def _provider_lacks_token_exchange(error: str | None) -> bool:
+    """True when the failure is the provider declaring the grant unsupported.
+
+    Distinguishes "provider does not implement token-exchange" (skip) from a
+    genuine library or request defect (which must still fail the test).
+    """
+    if not error:
+        return False
+    lowered = error.lower()
+    return any(signal in lowered for signal in _UNSUPPORTED_GRANT_SIGNALS)
+
+
 # ============================================================================
 # Device Authorization (RFC 8628)
 # ============================================================================
@@ -168,6 +191,17 @@ class TestTokenExchangeLive:
                 client_secret=test_config.get("TEST_CLIENT_SECRET"),
             )
         )
+
+        # Some providers advertise the token-exchange grant in discovery but
+        # reject it at the endpoint (e.g. Descope E011003). Skip only on that
+        # explicit unsupported-grant signal — any other failure is a real defect.
+        if not response.is_successful and _provider_lacks_token_exchange(
+            response.error
+        ):
+            pytest.skip(
+                "Provider advertises token-exchange in discovery but the token "
+                f"endpoint rejects the grant: {response.error}"
+            )
 
         assert response.is_successful is True, (
             f"Token exchange failed: {response.error}"
