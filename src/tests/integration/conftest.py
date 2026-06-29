@@ -39,15 +39,9 @@ from py_identity_model import (
     request_client_credentials_token,
     validate_authorize_callback_state,
 )
-from py_identity_model.aio import token_validation as aio_tv
+from py_identity_model.aio.http_client import _reset_async_http_client
 from py_identity_model.core.discovery_policy import DiscoveryPolicy
-from py_identity_model.core.jwks_cache import (
-    DiscoCacheEntry,
-    JwksCacheEntry,
-    is_uncacheable,
-    resolve_disco_ttl,
-    resolve_ttl,
-)
+from py_identity_model.core.jwks_cache import is_uncacheable
 from py_identity_model.core.models import DiscoveryDocumentResponse
 from py_identity_model.core.parsers import (
     extract_kid_from_jwt,
@@ -55,7 +49,6 @@ from py_identity_model.core.parsers import (
 )
 from py_identity_model.core.pkce import generate_pkce_pair
 from py_identity_model.exceptions import TokenValidationException
-from py_identity_model.sync import token_validation as sync_tv
 from py_identity_model.sync.http_client import close_http_client
 
 from .test_utils import get_config
@@ -285,46 +278,36 @@ def provider_caches_responses(discovery_document, jwks_response):
     return not is_uncacheable(discovery_document.cache_control)
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _prime_library_caches(discovery_document, jwks_response, test_config):
-    """Pre-populate the library's internal JWKS + discovery caches.
+@pytest.fixture(autouse=True)
+async def _clear_async_caches():
+    """Override the root fixture: reset the async HTTP client but keep caches.
 
-    The conftest already fetches discovery/JWKS once per xdist worker
-    (cross-worker-coordinated via FileLock). But ``validate_token()``
-    consults its own per-process module-level caches
-    (``sync/aio.token_validation._jwks_cache`` and ``_disco_cache``),
-    which start cold in every worker. Without priming, the *first*
-    ``validate_token`` call in each worker triggers a fresh upstream
-    fetch — and against rate-limited providers (Ory free tier) those
-    bursts produce 429s mid-test.
+    The root conftest's ``_clear_async_caches`` wipes the library's
+    discovery/JWKS caches before *every* test. For integration tests that
+    defeats the library's own per-process caching, so each test would refetch
+    discovery + JWKS live and trip provider rate limits (429). Instead we want
+    integration tests to exercise the *real* fetch once per worker and then
+    reuse the genuine cache — exactly how a real application behaves.
 
-    Inject the fixture-resolved responses directly into both sync and
-    aio caches. After this fixture runs, no test in the session needs
-    to hit the upstream for discovery or JWKS.
-
-    Keyed identically to the library: JWKS by URI; discovery by
-    ``(address, require_https)`` tuple.
+    We still reset the singleton async HTTP client so it is recreated on each
+    test's event loop (pytest-asyncio uses a fresh loop per test); only the
+    cache clears are dropped. Cache-behavior tests that need a cold cache clear
+    it explicitly via the local ``clear_validation_caches`` fixture.
     """
-    now = time.monotonic()
-    require_https = test_config.get("TEST_REQUIRE_HTTPS", True)
+    _reset_async_http_client()
 
-    jwks_uri = test_config["TEST_JWKS_ADDRESS"]
-    jwks_entry = JwksCacheEntry(
-        response=jwks_response,
-        cached_at=now,
-        ttl=resolve_ttl(jwks_response.cache_control),
-    )
-    sync_tv._jwks_cache[jwks_uri] = jwks_entry
-    aio_tv._jwks_cache[jwks_uri] = jwks_entry
 
-    disco_key = (test_config["TEST_DISCO_ADDRESS"], require_https)
-    disco_entry = DiscoCacheEntry(
-        response=discovery_document,
-        cached_at=now,
-        ttl=resolve_disco_ttl(discovery_document.cache_control),
-    )
-    sync_tv._disco_cache[disco_key] = disco_entry
-    aio_tv._disco_cache[disco_key] = disco_entry
+@pytest.fixture(autouse=True)
+def _integration_retry_backoff(monkeypatch):
+    """Give the library a real retry backoff for integration tests.
+
+    The root conftest zeroes ``HTTP_RETRY_BASE_DELAY`` so unit tests that
+    exercise retry paths don't sleep. Integration tests hit live, rate-limited
+    providers, so a genuine discovery/JWKS fetch that draws a transient 429
+    must actually back off (and honor ``Retry-After``) to recover instead of
+    hammering the endpoint with zero delay.
+    """
+    monkeypatch.setenv("HTTP_RETRY_BASE_DELAY", "1.0")
 
 
 @pytest.fixture(scope="session")

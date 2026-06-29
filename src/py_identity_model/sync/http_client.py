@@ -21,6 +21,7 @@ from ..core.http_utils import (
     check_no_redirect,
     get_retry_config,
     get_timeout,
+    resolve_retry_delay,
     should_retry_response,
 )
 from ..logging_config import logger
@@ -85,7 +86,7 @@ def retry_with_backoff(max_retries: int | None = None, base_delay: float | None 
 
                     # Check if response needs retry (429 or 5xx with retries remaining)
                     if should_retry_response(response, attempt, retries):
-                        delay = calculate_delay(delay_base, attempt)
+                        delay = resolve_retry_delay(response, delay_base, attempt)
                         _log_retry(
                             f"HTTP {response.status_code}",
                             delay,
