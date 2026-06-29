@@ -2,6 +2,53 @@
 
 <!-- version list -->
 
+## v3.1.0 (2026-06-29)
+
+### Bug Fixes
+
+- **conformance**: Download signed plan export, not the certification package
+  ([`006e603`](https://github.com/jamescrowley321/py-identity-model/commit/006e6038d809c1caaabfce04ad4e01c325af9a47))
+
+- **conformance**: Harden RP log path against path injection (CodeQL py/path-injection)
+  ([`c1a7e05`](https://github.com/jamescrowley321/py-identity-model/commit/c1a7e05a0de7699abdf89c373f72c9717c64bcbd))
+
+- **conformance**: Harden submission-artifact gating and log routing
+  ([`30a3da2`](https://github.com/jamescrowley321/py-identity-model/commit/30a3da2f0be16e5b88d2e67952b8963cf9f66599))
+
+- **token-exchange**: Surface raw error body when no standard OAuth error field
+  ([`1e50877`](https://github.com/jamescrowley321/py-identity-model/commit/1e50877b1ba39dd9c52a5923bfba78c28f3f8b5d))
+
+### Documentation
+
+- **certification**: Add OIDC certification guide
+  ([`f8e24cc`](https://github.com/jamescrowley321/py-identity-model/commit/f8e24cc335975fd80a03b5256fda913abc8ffa16))
+
+- **certification**: Correct submission flow — payment code gate, sourced waiver
+  ([`50e5c87`](https://github.com/jamescrowley321/py-identity-model/commit/50e5c87e6ccc47a3ef82ccad7f46e6c523416861))
+
+### Features
+
+- **conformance**: Capture per-test RP client-side logs (clientSideData)
+  ([`0b439f5`](https://github.com/jamescrowley321/py-identity-model/commit/0b439f5afb34f0c98257b9dd2d19d9d7fbfd5bcb))
+
+- **conformance**: Download OIDF certification package for hosted runs
+  ([`f3a8bb5`](https://github.com/jamescrowley321/py-identity-model/commit/f3a8bb543d90359388e6cd5af5a12f89af933484))
+
+### Testing
+
+- **conformance**: Add live hosted plan results as evidence
+  ([`ff81387`](https://github.com/jamescrowley321/py-identity-model/commit/ff8138748df68dabb3c6cbb14aadab3df0b48fbc))
+
+- **conformance**: Refresh hosted evidence from full local run
+  ([`d9906dc`](https://github.com/jamescrowley321/py-identity-model/commit/d9906dcfd3b96fb82bdd656cebf11ab977b81901))
+
+- **integration**: Skip token exchange when provider advertises but rejects grant
+  ([`b10618f`](https://github.com/jamescrowley321/py-identity-model/commit/b10618f3bea05904eaff66c1b87e1caff33a27f2))
+
+- **integration**: Skip token exchange when provider rejects grant as unsupported
+  ([`c924385`](https://github.com/jamescrowley321/py-identity-model/commit/c924385d9dcd58f9c48de589970b6c2aae03a936))
+
+
 ## v3.0.2 (2026-05-23)
 
 ### Bug Fixes
