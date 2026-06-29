@@ -145,18 +145,29 @@ regardless.
 The **Certification of Conformance is not a downloadable template.** The current
 flow is portal-based:
 
+0. **Obtain a payment code first — this is a hard prerequisite.** The submission
+   form at <https://submissions.openid.net/> cannot be started without one. The
+   form states: *"The Payment Code was created when the payment for the
+   submission was done or the invoice requested."* The standard fee is **$700**
+   per deployment (member rate; see
+   <https://openid.net/certification/fees/>). py-identity-model **may qualify**
+   for a no-cost waiver under the OIDF **Open-Source Project Certification
+   Policy** (<https://openid.net/certification/open-source-project-certification-policy/>),
+   which the OIDF evaluates **case-by-case** — "Not all open source projects
+   will qualify." Request the waiver from `certification@oidf.org`
+   (Apache-2.0, unpaid individual maintainer); if granted, the waiver reference
+   code goes in the form's payment-code field. See issue #331. (OIDF members can
+   recover an existing code under
+   <https://openid.net/foundation/members/certifications/>.)
 1. Go to **<https://submissions.openid.net/>** and complete the web form
-   (deployment name `py-identity-model <version>`, profiles, etc.).
-2. **Upload the artifacts** — the test result zips (`*-export.zip`) and the
-   client data (`*-rp-logs.zip`), one set per profile.
-3. OIDF **generates** the Certification of Conformance from the form data and
-   emails the designated signer a **DocuSign** request (subject *"Declaration of
-   Conformance signing"*). Sign electronically — there is no PDF to handle
-   manually.
-
-py-identity-model qualifies for the OIDF **Open-Source Project Certification
-Policy fee waiver** (Apache-2.0, unpaid individual maintainer); request it from
-`certification@oidf.org`. See issue #331.
+   (deployment name `py-identity-model <version>`, profiles, payment code, etc.).
+2. **Upload the artifacts** — up to **6 zip files** total. We submit exactly 6:
+   the test result zip (`*-export.zip`) and the client data zip (`*-rp-logs.zip`)
+   for each of the three profiles.
+3. OIDF validates the submission and **sends the Declaration of Conformance for
+   signature** to the designated signer, then generates the certification.
+   Processing usually takes a few working days. (The form does not specify the
+   signature mechanism — do not assume DocuSign or any particular tool.)
 
 !!! note "Alternative API path"
     The suite's `scripts/conformance.py` exposes a programmatic
@@ -168,6 +179,11 @@ Policy fee waiver** (Apache-2.0, unpaid individual maintainer); request it from
 ## Status
 
 Library code and conformance harness are complete; all three target profiles
-pass against the hosted suite, and both submission artifacts are generated
-automatically. The remaining steps (portal submission, DocuSign signature, fee
-waiver) are owner-driven and tracked in #331 / #242.
+pass against the hosted suite, and both submission artifacts (6 zips total) are
+generated automatically. The remaining steps are owner-driven and tracked in
+#331 / #242:
+
+1. **Obtain a payment code** (fee waiver via `certification@oidf.org`) — the
+   submission form is blocked without it. This is the current gating step.
+2. Complete the portal submission and upload the 6 artifact zips.
+3. Sign the Declaration of Conformance when OIDF sends it for signature.
