@@ -11,6 +11,7 @@ static private key embedded below.  They are skipped against any other
 provider (remote providers in the CI matrix do not register this client).
 """
 
+import base64
 import secrets
 
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -18,6 +19,7 @@ from cryptography.hazmat.primitives.serialization import (
     Encoding,
     NoEncryption,
     PrivateFormat,
+    load_pem_private_key,
 )
 import pytest
 
@@ -48,6 +50,35 @@ uOCH355J2/auzrggNZRPhCSxQfGhRANCAATbM7xgqsqkG4DJUQPYKHBlgV/OS3nZ
 E2+SampTwVolT/BEG7coOzdYem3Yr2FkBicTXhqWNGiG7RWkD+d/rVhW
 -----END PRIVATE KEY-----
 """
+
+# Public JWK coordinates registered for ``test-private-key-jwt`` in
+# ``test-fixtures/node-oidc-provider/provider.js``. The self-check below pins
+# the coupling so a key/JWK mismatch fails loudly instead of surfacing as an
+# opaque signature error (or a silent skip) during the live tests.
+PKJWT_REGISTERED_JWK_X = "2zO8YKrKpBuAyVED2ChwZYFfzkt52RNvkmpqU8FaJU8"
+PKJWT_REGISTERED_JWK_Y = "8EQbtyg7N1h6bdivYWQGJxNeGpY0aIbtFaQP53-tWFY"
+
+
+def _b64url_uint(value: int) -> str:
+    """Encode a P-256 coordinate as an unpadded base64url string (JWK form)."""
+    return base64.urlsafe_b64encode(value.to_bytes(32, "big")).rstrip(b"=").decode()
+
+
+@pytest.mark.unit
+def test_static_private_key_matches_registered_jwk():
+    """The checked-in private key's public half must equal the provider's JWK.
+
+    Runs in the unit suite (no network) so a copy-paste drift between the
+    private key here and the JWK in ``provider.js`` is caught immediately
+    rather than as an opaque live-test signature failure.
+    """
+    public_key = load_pem_private_key(
+        PKJWT_PRIVATE_KEY.encode(), password=None
+    ).public_key()
+    assert isinstance(public_key, ec.EllipticCurvePublicKey)
+    public_numbers = public_key.public_numbers()
+    assert _b64url_uint(public_numbers.x) == PKJWT_REGISTERED_JWK_X
+    assert _b64url_uint(public_numbers.y) == PKJWT_REGISTERED_JWK_Y
 
 
 def _is_node_oidc_fixture(raw_discovery: dict) -> bool:

@@ -23,6 +23,11 @@ from .jwt_signing import validate_signing_algorithm
 if TYPE_CHECKING:
     from .models import PrivateKeyJwt
 
+# Backdate ``iat``/``nbf`` by a small margin so an authorization server whose
+# clock runs slightly ahead does not reject a freshly minted assertion as
+# not-yet-valid at the boundary (RFC 7523 leaves skew tolerance to the AS).
+_CLOCK_SKEW_LEEWAY_SECONDS = 10
+
 
 def build_client_assertion(  # noqa: PLR0913  # RFC 7523 assertion params are all distinct
     *,
@@ -76,14 +81,15 @@ def build_client_assertion(  # noqa: PLR0913  # RFC 7523 assertion params are al
     if kid is not None and not kid:
         raise ValueError("kid must be non-empty when provided")
 
-    now = int(time.time())
+    issued_at = int(time.time()) - _CLOCK_SKEW_LEEWAY_SECONDS
     claims = {
         "iss": client_id,
         "sub": client_id,
         "aud": audience,
         "jti": str(uuid.uuid4()),
-        "iat": now,
-        "exp": now + lifetime,
+        "iat": issued_at,
+        "nbf": issued_at,
+        "exp": issued_at + lifetime,
     }
 
     headers: dict[str, str] = {}
