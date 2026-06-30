@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v3.1.1 (2026-06-30)
+
+### Bug Fixes
+
+- **integration**: Exercise real discovery/JWKS fetch instead of fake-primed caches
+  ([`0bfe060`](https://github.com/jamescrowley321/py-identity-model/commit/0bfe060ba4c8fd3222618632159fff26c99980b2))
+
+
 ## v3.1.0 (2026-06-29)
 
 ### Bug Fixes
