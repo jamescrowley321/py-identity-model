@@ -10,6 +10,7 @@ import httpx
 
 from ..logging_config import logger
 from ..logging_utils import redact_url
+from .client_assertion import apply_private_key_jwt
 from .models import TokenExchangeRequest, TokenExchangeResponse
 
 
@@ -102,7 +103,15 @@ def prepare_token_exchange_request_data(
 
     # RFC 6749 §2.3.1 — client_id excluded from body when using Basic Auth
     auth: tuple[str, str] | None = None
-    if request.client_secret:
+    if request.private_key_jwt is not None:
+        # RFC 7523: private_key_jwt assertion in body, no auth header.
+        apply_private_key_jwt(
+            params,
+            request.private_key_jwt,
+            client_id=request.client_id,
+            default_audience=request.address,
+        )
+    elif request.client_secret:
         auth = (request.client_id, request.client_secret)
     else:
         params["client_id"] = request.client_id

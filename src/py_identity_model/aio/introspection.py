@@ -47,10 +47,10 @@ async def introspect_token(
         TokenIntrospectionResponse with claims dict including ``active`` bool.
     """
     log_introspection_request(request)
-    params, headers, auth = prepare_introspection_request_data(request)
 
     response = None
     try:
+        params, headers, auth = prepare_introspection_request_data(request)
         client = http_client.client if http_client else get_async_http_client()
         response = await _introspect_token(
             client, request.address, params, headers, auth

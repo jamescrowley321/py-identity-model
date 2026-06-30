@@ -70,18 +70,12 @@ async def request_client_credentials_token(
         ClientCredentialsTokenResponse: Token response
     """
     log_token_request(request)
-    params, headers = prepare_token_request_data(request)
 
     response = None
     try:
+        params, headers, auth = prepare_token_request_data(request)
         client = http_client.client if http_client else get_async_http_client()
-        response = await _request_token(
-            client,
-            request.address,
-            params,
-            headers,
-            (request.client_id, request.client_secret),
-        )
+        response = await _request_token(client, request.address, params, headers, auth)
         return process_token_response(response)
     except Exception as e:
         return handle_token_error(e)
@@ -104,10 +98,10 @@ async def request_authorization_code_token(
         AuthorizationCodeTokenResponse with token dict or error.
     """
     log_auth_code_token_request(request)
-    params, headers, auth = prepare_auth_code_token_request_data(request)
 
     response = None
     try:
+        params, headers, auth = prepare_auth_code_token_request_data(request)
         client = http_client.client if http_client else get_async_http_client()
         response = await _request_token(client, request.address, params, headers, auth)
         return process_auth_code_token_response(response)
@@ -132,10 +126,10 @@ async def refresh_token(
         RefreshTokenResponse with new token dict or error.
     """
     log_refresh_token_request(request)
-    params, headers, auth = prepare_refresh_token_request_data(request)
 
     response = None
     try:
+        params, headers, auth = prepare_refresh_token_request_data(request)
         client = http_client.client if http_client else get_async_http_client()
         response = await _request_token(client, request.address, params, headers, auth)
         return process_refresh_token_response(response)

@@ -128,8 +128,38 @@ async function startProvider() {
         scope: "openid api",
         token_endpoint_auth_method: "client_secret_basic",
       },
-      // FAPI 2.0 client deferred to T125 — requires private_key_jwt,
-      // signed request objects, and PAR enforcement.
+      {
+        // private_key_jwt client (RFC 7523 / OIDC Core 1.0 Section 9).
+        // Authenticates with a signed JWT assertion instead of a secret.
+        // The matching ES256 private key is held by the integration test
+        // (src/tests/integration/test_private_key_jwt.py). Exercises the
+        // token endpoint (client_credentials + authorization_code) and the
+        // PAR endpoint under private_key_jwt client authentication.
+        client_id: "test-private-key-jwt",
+        grant_types: [
+          "client_credentials",
+          "authorization_code",
+          "refresh_token",
+        ],
+        response_types: ["code"],
+        redirect_uris: ["http://localhost:8080/callback"],
+        scope: "openid profile email offline_access api",
+        token_endpoint_auth_method: "private_key_jwt",
+        token_endpoint_auth_signing_alg: "ES256",
+        jwks: {
+          keys: [
+            {
+              kty: "EC",
+              crv: "P-256",
+              x: "2zO8YKrKpBuAyVED2ChwZYFfzkt52RNvkmpqU8FaJU8",
+              y: "8EQbtyg7N1h6bdivYWQGJxNeGpY0aIbtFaQP53-tWFY",
+              kid: "pkjwt-client-key",
+              use: "sig",
+              alg: "ES256",
+            },
+          ],
+        },
+      },
     ],
 
     // JWKS
@@ -266,6 +296,8 @@ async function startProvider() {
       requestObjectSigningAlgValues: ["RS256", "ES256"],
       dPoPSigningAlgValues: ["RS256", "ES256"],
       introspectionSigningAlgValues: ["RS256", "ES256"],
+      // FAPI 2.0 client authentication algorithms for private_key_jwt.
+      clientAuthSigningAlgValues: ["PS256", "ES256"],
     },
   };
 

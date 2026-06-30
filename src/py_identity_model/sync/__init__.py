@@ -28,7 +28,7 @@ from ..core.fapi import (
     validate_fapi_discovery,
 )
 from ..core.jar import build_jar_authorization_url, create_request_object
-from ..core.models import BaseRequest, BaseResponse
+from ..core.models import BaseRequest, BaseResponse, PrivateKeyJwt
 from ..core.pkce import (
     generate_code_challenge,
     generate_code_verifier,
@@ -143,6 +143,7 @@ __all__ = [
     "JwksRequest",
     "JwksResponse",
     # PAR
+    "PrivateKeyJwt",
     "PushedAuthorizationRequest",
     "PushedAuthorizationResponse",
     # Refresh Token

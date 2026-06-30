@@ -46,10 +46,10 @@ async def request_device_authorization(
         and ``verification_uri`` for user display.
     """
     log_device_auth_request(request)
-    params, headers, auth = prepare_device_auth_request_data(request)
 
     response = None
     try:
+        params, headers, auth = prepare_device_auth_request_data(request)
         client = http_client.client if http_client else get_async_http_client()
         response = await _request_device_auth(
             client, request.address, params, headers, auth
@@ -89,10 +89,10 @@ async def poll_device_token(
         indicating poll status.
     """
     log_device_token_request(request)
-    params, headers, auth = prepare_device_token_request_data(request)
 
     response = None
     try:
+        params, headers, auth = prepare_device_token_request_data(request)
         client = http_client.client if http_client else get_async_http_client()
         response = await _poll_device_token(
             client, request.address, params, headers, auth
