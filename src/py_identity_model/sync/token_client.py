@@ -70,18 +70,12 @@ def request_client_credentials_token(
         ClientCredentialsTokenResponse: Token response
     """
     log_token_request(request)
-    params, headers = prepare_token_request_data(request)
+    params, headers, auth = prepare_token_request_data(request)
 
     response = None
     try:
         client = http_client.client if http_client else get_http_client()
-        response = _request_token(
-            client,
-            request.address,
-            params,
-            headers,
-            (request.client_id, request.client_secret),
-        )
+        response = _request_token(client, request.address, params, headers, auth)
         return process_token_response(response)
     except Exception as e:
         return handle_token_error(e)

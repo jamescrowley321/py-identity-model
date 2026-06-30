@@ -9,6 +9,7 @@ import httpx
 
 from ..logging_config import logger
 from ..logging_utils import redact_url
+from .client_assertion import apply_private_key_jwt
 from .error_handlers import (
     handle_auth_code_token_error,
     handle_refresh_token_error,
@@ -54,19 +55,34 @@ def log_token_success(token_response: ClientCredentialsTokenResponse) -> None:
 
 def prepare_token_request_data(
     request: ClientCredentialsTokenRequest,
-) -> tuple[dict, dict]:
-    """
-    Prepare request data and headers for token request.
-
-    Args:
-        request: Client credentials token request
+) -> tuple[dict, dict, tuple[str, str] | None]:
+    """Prepare request data, headers, and optional auth for a token request.
 
     Returns:
-        Tuple of (data dict, headers dict)
+        ``(data, headers, auth)`` where *auth* is the HTTP Basic tuple for
+        ``client_secret`` authentication, or ``None`` when ``private_key_jwt``
+        is used (the assertion is carried in the body).
     """
-    params = {"grant_type": "client_credentials", "scope": request.scope}
+    params: dict[str, str] = {"grant_type": "client_credentials"}
+    if request.scope is not None:
+        params["scope"] = request.scope
+
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    return params, headers
+
+    auth: tuple[str, str] | None = None
+    if request.private_key_jwt is not None:
+        apply_private_key_jwt(
+            params,
+            request.private_key_jwt,
+            client_id=request.client_id,
+            default_audience=request.address,
+        )
+    elif request.client_secret:
+        auth = (request.client_id, request.client_secret)
+    else:
+        params["client_id"] = request.client_id
+
+    return params, headers, auth
 
 
 def process_token_response(
@@ -128,7 +144,15 @@ def prepare_auth_code_token_request_data(
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
     auth: tuple[str, str] | None = None
-    if request.client_secret is not None:
+    if request.private_key_jwt is not None:
+        # RFC 7523: private_key_jwt assertion in body, no auth header.
+        apply_private_key_jwt(
+            params,
+            request.private_key_jwt,
+            client_id=request.client_id,
+            default_audience=request.address,
+        )
+    elif request.client_secret is not None:
         # RFC 6749 §2.3.1: use Basic auth for confidential clients;
         # client_id is carried in the auth header, not the body.
         auth = (request.client_id, request.client_secret)
@@ -179,7 +203,15 @@ def prepare_refresh_token_request_data(
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
     auth: tuple[str, str] | None = None
-    if request.client_secret is not None:
+    if request.private_key_jwt is not None:
+        # RFC 7523: private_key_jwt assertion in body, no auth header.
+        apply_private_key_jwt(
+            params,
+            request.private_key_jwt,
+            client_id=request.client_id,
+            default_audience=request.address,
+        )
+    elif request.client_secret is not None:
         # RFC 6749 §2.3.1: use Basic auth for confidential clients;
         # client_id is carried in the auth header, not the body.
         auth = (request.client_id, request.client_secret)

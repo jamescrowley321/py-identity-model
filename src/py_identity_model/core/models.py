@@ -556,6 +556,39 @@ class JwksResponse(BaseResponse):
 
 
 # ============================================================================
+# Client Authentication - private_key_jwt (RFC 7523, OIDC Core 1.0 Section 9)
+# ============================================================================
+
+
+@dataclass
+class PrivateKeyJwt:
+    """``private_key_jwt`` client authentication parameters (RFC 7523).
+
+    When supplied on a client-authenticating request, the client is
+    authenticated by a signed JWT assertion (OpenID Connect Core 1.0
+    Section 9) instead of a client secret.  It takes precedence over
+    ``client_secret`` when both are present.
+
+    Attributes:
+        private_key: PEM-encoded private key used to sign the assertion
+            (``bytes`` or ``str``).
+        algorithm: Asymmetric signing algorithm (default ``"PS256"``).
+            FAPI 2.0 requires ``PS256`` or ``ES256``.
+        kid: Optional key ID placed in the assertion JWT header to aid the
+            authorization server's key lookup.
+        audience: Override for the assertion ``aud`` claim.  Defaults to the
+            request ``address`` (the endpoint URL) when ``None``.
+        lifetime: Assertion validity in seconds (default 300).
+    """
+
+    private_key: str | bytes
+    algorithm: str = "PS256"
+    kid: str | None = None
+    audience: str | None = None
+    lifetime: int = 300
+
+
+# ============================================================================
 # Token Client Models
 # ============================================================================
 
@@ -567,13 +600,17 @@ class ClientCredentialsTokenRequest(BaseRequest):
     Attributes:
         address: The token endpoint URL.
         client_id: The client identifier.
-        client_secret: The client secret.
-        scope: Space-delimited list of requested scopes.
+        client_secret: The client secret (optional when authenticating with
+            ``private_key_jwt``).
+        scope: Space-delimited list of requested scopes (optional).
+        private_key_jwt: ``private_key_jwt`` authentication parameters.  When
+            set, takes precedence over ``client_secret`` (RFC 7523).
     """
 
     client_id: str
-    client_secret: str
-    scope: str
+    client_secret: str | None = None
+    scope: str | None = None
+    private_key_jwt: PrivateKeyJwt | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -613,6 +650,7 @@ class AuthorizationCodeTokenRequest(BaseRequest):
     code_verifier: str | None = None
     client_secret: str | None = None
     scope: str | None = None
+    private_key_jwt: PrivateKeyJwt | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -650,6 +688,7 @@ class RefreshTokenRequest(BaseRequest):
     refresh_token: str
     scope: str | None = None
     client_secret: str | None = None
+    private_key_jwt: PrivateKeyJwt | None = None
 
 
 @dataclass
@@ -687,6 +726,7 @@ class TokenIntrospectionRequest(BaseRequest):
     client_id: str
     token_type_hint: str | None = None
     client_secret: str | None = None
+    private_key_jwt: PrivateKeyJwt | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -739,6 +779,7 @@ class PushedAuthorizationRequest(BaseRequest):
     code_challenge: str | None = None
     code_challenge_method: str | None = None
     client_secret: str | None = None
+    private_key_jwt: PrivateKeyJwt | None = None
 
 
 @dataclass
@@ -774,6 +815,7 @@ class DeviceAuthorizationRequest(BaseRequest):
     client_id: str
     scope: str = "openid"
     client_secret: str | None = None
+    private_key_jwt: PrivateKeyJwt | None = None
 
 
 @dataclass
@@ -818,6 +860,7 @@ class DeviceTokenRequest(BaseRequest):
     client_id: str
     device_code: str
     client_secret: str | None = None
+    private_key_jwt: PrivateKeyJwt | None = None
 
 
 @dataclass
@@ -878,6 +921,7 @@ class TokenExchangeRequest(BaseRequest):
     scope: str | None = None
     requested_token_type: str | None = None
     client_secret: str | None = None
+    private_key_jwt: PrivateKeyJwt | None = None
 
 
 @dataclass
@@ -918,6 +962,7 @@ class TokenRevocationRequest(BaseRequest):
     client_id: str
     token_type_hint: str | None = None
     client_secret: str | None = None
+    private_key_jwt: PrivateKeyJwt | None = None
 
 
 @dataclass(repr=False, eq=False)

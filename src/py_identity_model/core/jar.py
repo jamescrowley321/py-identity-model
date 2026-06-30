@@ -15,6 +15,8 @@ import uuid
 
 import jwt as pyjwt
 
+from .jwt_signing import validate_signing_algorithm
+
 
 @dataclass(frozen=True)
 class _RequestParams:
@@ -52,19 +54,6 @@ _RESERVED_CLAIMS = frozenset(
     }
 )
 
-_SUPPORTED_ALGORITHMS = {
-    "ES256",
-    "ES384",
-    "ES512",
-    "EdDSA",
-    "RS256",
-    "RS384",
-    "RS512",
-    "PS256",
-    "PS384",
-    "PS512",
-}
-
 
 def _validate_request_params(params: _RequestParams) -> None:
     """Validate all inputs for :func:`create_request_object`."""
@@ -78,12 +67,7 @@ def _validate_request_params(params: _RequestParams) -> None:
         if not value:
             raise ValueError(f"{name} must not be empty")
 
-    if params.algorithm not in _SUPPORTED_ALGORITHMS:
-        msg = (
-            f"Unsupported JAR algorithm: {params.algorithm}. "
-            f"Supported: {sorted(_SUPPORTED_ALGORITHMS)}"
-        )
-        raise ValueError(msg)
+    validate_signing_algorithm(params.algorithm, context="JAR")
 
     if params.lifetime <= 0:
         raise ValueError(f"lifetime must be positive, got {params.lifetime}")
