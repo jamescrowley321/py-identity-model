@@ -37,6 +37,7 @@ uv add py-identity-model
 | DPoP | RFC 9449 | Done |
 | Pushed Authorization Requests | RFC 9126 | Done |
 | JWT Secured Authorization Request | RFC 9101 | Done |
+| private_key_jwt Client Authentication | RFC 7523 | Done |
 | FAPI 2.0 Security Profile | FAPI 2.0 | Done |
 | UserInfo Endpoint | OIDC Core | Done |
 | OAuth Callback State Validation | RFC 6749 | Done |
@@ -104,6 +105,7 @@ Each protocol feature has a standalone example in [`examples/`](examples/):
 | [dpop_example.py](examples/dpop_example.py) | DPoP proof creation (RFC 9449) |
 | [par_example.py](examples/par_example.py) | Pushed Authorization Requests (RFC 9126) |
 | [jar_example.py](examples/jar_example.py) | JWT Secured Authorization Request (RFC 9101) |
+| [private_key_jwt_example.py](examples/private_key_jwt_example.py) | private_key_jwt client authentication (RFC 7523) |
 | [fapi_example.py](examples/fapi_example.py) | FAPI 2.0 Security Profile |
 | [device_auth_example.py](examples/device_auth_example.py) | Device Authorization Grant (RFC 8628) |
 | [token_exchange_example.py](examples/token_exchange_example.py) | Token Exchange (RFC 8693) |
