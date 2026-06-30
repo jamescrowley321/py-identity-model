@@ -1,5 +1,6 @@
 """Unit tests for private_key_jwt client authentication (RFC 7523)."""
 
+import time
 from urllib.parse import parse_qs
 
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
@@ -96,6 +97,21 @@ class TestBuildClientAssertion:
         assert len(decoded["jti"]) == UUID_STRING_LENGTH
         assert isinstance(decoded["iat"], int)
         assert decoded["exp"] == decoded["iat"] + 120
+
+    def test_iat_nbf_backdated_for_clock_skew(self):
+        # iat/nbf are backdated a few seconds so an AS clock running slightly
+        # ahead does not reject a freshly minted assertion as not-yet-valid.
+        before = int(time.time())
+        token = build_client_assertion(
+            client_id="my-client",
+            audience="https://as.example.com/token",
+            private_key=_ec_keypair()[0],
+            algorithm="ES256",
+        )
+        decoded = pyjwt.decode(token, options={"verify_signature": False})
+        assert decoded["nbf"] == decoded["iat"]
+        # iat must be at or before "now" (never in the future).
+        assert decoded["iat"] <= before
 
     def test_signature_verifies_ps256(self):
         private_pem, public_pem = _rsa_keypair()
@@ -467,3 +483,31 @@ class TestEndToEndNoBasicHeader:
         body = parse_qs(sent.content.decode())
         assert "client_assertion" in body
         assert body["client_id"] == ["c"]
+
+
+@pytest.mark.unit
+class TestSigningFailureReturnsErrorResponse:
+    """A malformed signing key must yield a structured error response.
+
+    ``build_client_assertion`` runs inside the wrapper's ``try`` block, so a
+    ``pyjwt.encode`` failure on a bad PEM is routed through the endpoint's
+    error handler instead of propagating uncaught to the caller.
+    """
+
+    _BAD_KEY = PrivateKeyJwt(private_key="not-a-pem", algorithm="PS256")
+
+    def test_sync_client_credentials_bad_key_returns_error(self):
+        request = ClientCredentialsTokenRequest(
+            address=ADDR, client_id="c", scope="api", private_key_jwt=self._BAD_KEY
+        )
+        response = request_client_credentials_token(request)
+        assert response.is_successful is False
+        assert response.error
+
+    async def test_async_client_credentials_bad_key_returns_error(self):
+        request = ClientCredentialsTokenRequest(
+            address=ADDR, client_id="c", scope="api", private_key_jwt=self._BAD_KEY
+        )
+        response = await async_request_client_credentials_token(request)
+        assert response.is_successful is False
+        assert response.error

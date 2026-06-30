@@ -47,10 +47,10 @@ async def revoke_token(
         TokenRevocationResponse indicating success or error.
     """
     log_revocation_request(request)
-    params, headers, auth = prepare_revocation_request_data(request)
 
     response = None
     try:
+        params, headers, auth = prepare_revocation_request_data(request)
         client = http_client.client if http_client else get_async_http_client()
         response = await _revoke_token(client, request.address, params, headers, auth)
         return process_revocation_response(response)
