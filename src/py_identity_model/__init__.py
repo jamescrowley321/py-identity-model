@@ -57,6 +57,7 @@ from .sync import (
     JsonWebKeyParameterNames,
     JwksRequest,
     JwksResponse,
+    PrivateKeyJwt,
     PushedAuthorizationRequest,
     PushedAuthorizationResponse,
     RefreshTokenRequest,
@@ -155,6 +156,8 @@ __all__ = [
     "JwksRequest",
     "JwksResponse",
     "NetworkException",
+    # Client authentication (private_key_jwt)
+    "PrivateKeyJwt",
     # PAR
     "PushedAuthorizationRequest",
     "PushedAuthorizationResponse",

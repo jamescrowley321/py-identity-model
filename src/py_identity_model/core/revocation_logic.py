@@ -8,6 +8,7 @@ import httpx
 
 from ..logging_config import logger
 from ..logging_utils import redact_url
+from .client_assertion import apply_private_key_jwt
 from .models import TokenRevocationRequest, TokenRevocationResponse
 
 
@@ -34,7 +35,15 @@ def prepare_revocation_request_data(
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
     auth: tuple[str, str] | None = None
-    if request.client_secret and request.client_secret.strip():
+    if request.private_key_jwt is not None:
+        # RFC 7523: private_key_jwt assertion in body, no auth header.
+        apply_private_key_jwt(
+            params,
+            request.private_key_jwt,
+            client_id=request.client_id,
+            default_audience=request.address,
+        )
+    elif request.client_secret and request.client_secret.strip():
         auth = (request.client_id, request.client_secret)
     else:
         params["client_id"] = request.client_id
