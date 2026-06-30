@@ -32,6 +32,7 @@ from py_identity_model import (
     JsonWebKey,
     JwksRequest,
     JwksResponse,
+    PrivateKeyJwt,
     get_discovery_document,
     get_jwks,
     parse_authorize_callback_response,
@@ -624,6 +625,7 @@ class AuthCodeFlowConfig:
     resource: str | None = None
     login_hint: str = "test-user"
     login_password: str = "test"
+    private_key_jwt: PrivateKeyJwt | None = None
 
 
 def perform_auth_code_flow(
@@ -731,6 +733,7 @@ def perform_auth_code_flow(
         redirect_uri=redirect_uri,
         code_verifier=code_verifier,
         client_secret=config.client_secret,
+        private_key_jwt=config.private_key_jwt,
     )
     token_response = request_authorization_code_token(token_request)
 
