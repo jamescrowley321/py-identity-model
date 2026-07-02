@@ -236,6 +236,23 @@ See `ssl_config.py` for implementation details.
 4. **Don't forget to close responses**: HTTP responses must be fully consumed (`response.read()` or `response.json()`) to return connections to the pool. Sync wrappers call `response.close()` explicitly.
 5. **Always add type hints**: This codebase requires comprehensive type annotations for all functions and classes.
 
+## Workspace Packages
+
+This repo is a `uv` workspace. Besides the core `py-identity-model` library
+(`src/py_identity_model/`), it ships framework packages under `packages/`:
+
+- **`packages/fastapi-identity-model/`** — FastAPI OIDC middleware + relying-party
+  login router, built on the core library. Independently versioned and published.
+  - Test + typecheck: `make test-fastapi`. Build: `make build-fastapi`.
+  - **Released independently** via `.github/workflows/release-fastapi.yml`
+    (manual dispatch or a `fastapi-identity-model-v*` tag, PyPI trusted
+    publishing). Its version lives in its own `pyproject.toml` + `CHANGELOG.md`,
+    not in the root semantic-release config.
+  - **Commit convention:** to avoid bumping the root `py-identity-model` version,
+    commit package-only changes with **non-releasing** types (`build`/`chore`/
+    `refactor`/`docs`/`test`) scoped `(fastapi)`. Only core-library `feat`/`fix`/
+    `perf` commits should drive the root semantic-release.
+
 ## Version Management
 
 The project uses semantic versioning with python-semantic-release:

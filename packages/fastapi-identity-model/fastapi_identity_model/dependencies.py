@@ -14,6 +14,7 @@ from fastapi import (  # type: ignore[attr-defined]
     Request,
     status,
 )
+
 from py_identity_model.identity import ClaimsPrincipal
 
 

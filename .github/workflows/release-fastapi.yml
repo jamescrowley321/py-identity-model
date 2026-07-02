@@ -1,0 +1,63 @@
+# Independent release pipeline for the `fastapi-identity-model` sub-package.
+#
+# Deliberately decoupled from the root `release.yml` (python-semantic-release):
+# this is driven by manual dispatch or a `fastapi-identity-model-v*` tag, and the
+# package version is owned by packages/fastapi-identity-model/pyproject.toml.
+# That keeps `feat(fastapi): ...` commits from bumping the root py-identity-model
+# version. Commit package-only changes with non-releasing types (build/chore/…)
+# so the root pipeline stays quiet.
+#
+# One-time owner setup: register a PyPI Trusted Publisher for the project
+# `fastapi-identity-model` pointing at this repo + workflow `release-fastapi.yml`
+# + environment `pypi`. No API token is stored (publishing uses OIDC).
+#
+# Cut a release:
+#   1. bump `version` in packages/fastapi-identity-model/pyproject.toml (+ CHANGELOG)
+#   2. git tag fastapi-identity-model-v<version> && git push --tags
+name: Release fastapi-identity-model
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "fastapi-identity-model-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # OIDC token for PyPI trusted publishing
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Build fastapi-identity-model
+        run: uv build --package fastapi-identity-model --out-dir dist-fastapi
+
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version="$(grep -m1 '^version' packages/fastapi-identity-model/pyproject.toml | cut -d'"' -f2)"
+          tag="${GITHUB_REF_NAME#fastapi-identity-model-v}"
+          if [ "$version" != "$tag" ]; then
+            echo "::error::Tag '$tag' does not match package version '$version'"
+            exit 1
+          fi
+          echo "Releasing fastapi-identity-model $version"
+
+      - name: Check distribution metadata
+        run: uvx twine check dist-fastapi/*
+
+      - name: Publish to PyPI (trusted publishing)
+        run: uv publish --trusted-publishing always dist-fastapi/*

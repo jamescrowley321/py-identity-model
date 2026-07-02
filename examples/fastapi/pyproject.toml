@@ -6,14 +6,17 @@ authors = [{ name = "jamescrowley321", email = "jamescrowley151@gmail.com" }]
 requires-python = ">=3.12"
 readme = "README.md"
 dependencies = [
+    "fastapi-identity-model",
     "py-identity-model",
     "fastapi>=0.100.0",
     "starlette>=0.49.1",
     "uvicorn[standard]>=0.23.0",
+    "itsdangerous>=2.0",
     "types-requests",
 ]
 
 [tool.uv.sources]
+fastapi-identity-model = { workspace = true }
 py-identity-model = { workspace = true }
 
 [tool.hatch.build.targets.wheel]

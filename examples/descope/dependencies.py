@@ -10,8 +10,8 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 
-# Import base dependencies from generic FastAPI example
-from examples.fastapi.dependencies import (
+# Base dependencies from the fastapi-identity-model package
+from fastapi_identity_model import (
     get_claims,
     get_current_user,
     get_token,

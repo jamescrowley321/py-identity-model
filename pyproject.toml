@@ -1,5 +1,5 @@
 [tool.uv.workspace]
-members = [".", "examples/fastapi", "examples/descope"]
+members = [".", "packages/fastapi-identity-model", "examples/fastapi", "examples/descope"]
 
 [project]
 name = "py-identity-model"
@@ -102,9 +102,13 @@ dist_glob_patterns = ["dist/*"]
 upload_to_vcs_release = true
 
 [tool.pyrefly]
+# The root lint env installs only py-identity-model, so it can't resolve
+# fastapi/starlette imports. The package is type-checked in its own flow
+# (`make test-fastapi`) where the workspace is synced with --all-packages.
 project_excludes = [
     "examples/fastapi/",
     "examples/descope/",
+    "packages/fastapi-identity-model/",
     "conformance/",
 ]
 
@@ -157,6 +161,14 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "src/tests/**/*.py" = ["S101"]   # 1858 assert violations — all test assertions, 0 in production code
 "examples/**/*.py" = ["S101"]    # 73 assert violations in example integration tests
+"packages/**/tests/**/*.py" = [
+    "S101",    # pytest assertions
+    "PLR2004", # magic values — HTTP status codes in assertions
+    "B008",    # Depends(...) in route defaults — standard FastAPI test pattern
+    "S105",    # hardcoded "secret" — test fixtures
+    "S106",
+    "S107",
+]
 "conformance/tests/**/*.py" = ["S101"]  # conformance harness unit tests — assert is the standard pytest assertion mechanism
 "conformance/**/*.py" = [
     "S501",    # verify=False required — conformance suite uses self-signed certs
@@ -169,7 +181,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["py_identity_model"]
+known-first-party = ["py_identity_model", "fastapi_identity_model"]
 force-sort-within-sections = true
 lines-after-imports = 2
 
