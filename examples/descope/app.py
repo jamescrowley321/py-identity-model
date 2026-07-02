@@ -25,8 +25,7 @@ from examples.descope.dependencies import (
     require_descope_role,
     require_scope,
 )
-from examples.fastapi.dependencies import CurrentUser
-from examples.fastapi.middleware import TokenValidationMiddleware
+from fastapi_identity_model import CurrentUser, TokenValidationMiddleware
 
 
 # Annotated type alias for raw token dependency

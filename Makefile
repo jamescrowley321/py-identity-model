@@ -65,10 +65,23 @@ test-examples: ## Run example integration tests (Docker)
 .PHONY: test-all
 test-all: test test-examples ## Run all tests including examples
 
+# ── fastapi-identity-model package ───────────────────────────────────
+
+.PHONY: test-fastapi
+test-fastapi: ## Typecheck + unit-test the fastapi-identity-model package (80% coverage)
+	uv sync --all-packages
+	uv run --no-sync pyrefly check packages/fastapi-identity-model/fastapi_identity_model/
+	uv run --no-sync pytest packages/fastapi-identity-model/tests -v -n auto -p no:benchmark \
+		--cov=fastapi_identity_model --cov-report=term-missing --cov-fail-under=80
+
+.PHONY: build-fastapi
+build-fastapi: ## Build the fastapi-identity-model wheel + sdist
+	uv build --package fastapi-identity-model
+
 # ── Pre-push ────────────────────────────────────────────────────────
 
 .PHONY: pre-push
-pre-push: lint test-integration-node-oidc conformance-test-harness test-examples ## Full local validation before push
+pre-push: lint test-fastapi test-integration-node-oidc conformance-test-harness test-examples ## Full local validation before push
 
 # ── Docs ─────────────────────────────────────────────────────────────
 

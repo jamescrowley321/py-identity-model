@@ -6,7 +6,9 @@ in FastAPI applications using py-identity-model.
 """
 
 from collections.abc import Callable
+import logging
 
+from fastapi import Request, status  # type: ignore[attr-defined]
 from starlette.middleware.base import (
     BaseHTTPMiddleware,  # type: ignore[attr-defined]
 )
@@ -15,7 +17,6 @@ from starlette.responses import (  # type: ignore[attr-defined]
     Response,
 )
 
-from fastapi import Request, status  # type: ignore[attr-defined]
 from py_identity_model import (
     PyIdentityModelException,
     TokenValidationConfig,
@@ -23,6 +24,8 @@ from py_identity_model import (
 )
 from py_identity_model.aio import validate_token
 
+
+logger = logging.getLogger("fastapi_identity_model")
 
 # Expected number of parts in "Bearer <token>" authorization header
 _BEARER_HEADER_PART_COUNT = 2
@@ -117,11 +120,14 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
                 content={"detail": f"Token validation failed: {e!s}"},
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        except Exception as e:
+        except Exception:
+            # An unexpected failure (e.g. transient network/JWKS error) is a
+            # server fault, not an authentication decision. Surface a 500
+            # without leaking internals rather than masking it as a 401.
+            logger.exception("Unexpected error during token validation")
             return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": f"Token validation error: {e!s}"},
-                headers={"WWW-Authenticate": "Bearer"},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"detail": "Internal server error during authentication"},
             )
 
         # Continue processing the request

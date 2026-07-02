@@ -18,6 +18,7 @@ from fastapi import (  # type: ignore[attr-defined]
     Depends,
     FastAPI,
     HTTPException,
+    Request,
 )
 from fastapi.responses import JSONResponse  # type: ignore[attr-defined]
 
@@ -51,39 +52,73 @@ if os.getenv("DISABLE_SSL_VERIFICATION", "false").lower() == "true":
     requests.get = patched_get
     requests.post = patched_post
 
-from dependencies import (
+from starlette.middleware.sessions import SessionMiddleware
+
+from fastapi_identity_model import (
     Claims,
     CurrentUser,
+    OIDCSettings,
+    TokenValidationMiddleware,
+    build_oidc_router,
     get_token,
     require_claim,
     require_scope,
 )
-from middleware import TokenValidationMiddleware
 
 
 # Annotated type alias for raw token dependency
 Token = Annotated[str, Depends(get_token)]
 
 
-DISCOVERY_URL = os.getenv(
-    "DISCOVERY_URL",
-    "https://localhost:5001/.well-known/openid-configuration",
+# Browser-login (RP) and API-protection paths that must skip the Bearer middleware.
+_SESSION_PATHS = [
+    "/",
+    "/health",
+    "/docs",
+    "/openapi.json",
+    "/auth/login",
+    "/auth/callback",
+    "/auth/logout",
+    "/me",
+]
+
+settings = OIDCSettings(
+    discovery_url=os.getenv(
+        "DISCOVERY_URL",
+        "https://localhost:5001/.well-known/openid-configuration",
+    ),
+    client_id=os.getenv("CLIENT_ID", "py-identity-model-client"),
+    redirect_uri=os.getenv("REDIRECT_URI", "http://localhost:8000/auth/callback"),
+    client_secret=os.getenv("CLIENT_SECRET"),
+    audience=os.getenv("AUDIENCE", "py-identity-model"),
+    scope=os.getenv("SCOPE", "openid profile email"),
+    post_login_redirect="/me",
+    post_logout_redirect="/",
+    excluded_paths=_SESSION_PATHS,
 )
-AUDIENCE = os.getenv("AUDIENCE", "py-identity-model")
 
 # Create FastAPI app
 app = FastAPI(
-    title="py-identity-model FastAPI Example",
-    description="Example API demonstrating OAuth2/OIDC authentication with py-identity-model",
+    title="fastapi-identity-model example",
+    description="OIDC browser login (relying party) + Bearer-token API protection",
     version="1.0.0",
 )
 
-# Add token validation middleware
+# Signed-cookie session for the RP login flow (use a real secret in production).
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SESSION_SECRET", "dev-insecure-change-me"),
+)
+
+# Browser login: GET /auth/login -> provider -> /auth/callback -> session identity.
+app.include_router(build_oidc_router(settings, store_tokens=True), prefix="/auth")
+
+# Bearer-token validation for the /api/* resource-server routes.
 app.add_middleware(
     TokenValidationMiddleware,
-    discovery_url=DISCOVERY_URL,
-    audience=AUDIENCE,
-    excluded_paths=["/", "/health", "/docs", "/openapi.json"],
+    discovery_url=settings.discovery_url,
+    audience=settings.audience,
+    excluded_paths=settings.excluded_paths,
 )
 
 
@@ -102,6 +137,24 @@ async def root():
 async def health():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+@app.get("/me", tags=["session"])
+async def me(request: Request):
+    """Return the browser-session identity established by the RP login flow.
+
+    Unlike the ``/api/*`` routes (which require a Bearer token), this reads the
+    logged-in user from the session cookie set by ``/auth/callback``.
+    """
+    user = request.session.get("oidc")
+    if not user:
+        return {"authenticated": False, "login": "/auth/login"}
+    return {
+        "authenticated": True,
+        "sub": user.get("sub"),
+        "claims": user.get("claims"),
+        "userinfo": user.get("userinfo"),
+    }
 
 
 # Protected routes (authentication required)
@@ -270,12 +323,14 @@ async def http_exception_handler(_request, exc):
 
 
 if __name__ == "__main__":
-    print("🚀 Starting FastAPI application...")
-    print(f"📍 Discovery URL: {DISCOVERY_URL}")
-    print(f"🎯 Expected Audience: {AUDIENCE}")
-    print("\n💡 To get a token, run: python ../generate_token.py")
+    print("🚀 Starting fastapi-identity-model example...")
+    print(f"📍 Discovery URL: {settings.discovery_url}")
+    print(f"🎯 Expected Audience: {settings.audience}")
+    print("\n🔐 Browser login (relying party): open http://localhost:8000/auth/login")
+    print("   → after login, GET http://localhost:8000/me")
+    print("\n💡 For API (Bearer) routes, get a token: python ../generate_token.py")
     print("\n📚 API documentation: http://localhost:8000/docs")
-    print("\n🔐 Example request:")
+    print("\n🔐 Example API request:")
     print(
         '   curl -H "Authorization: Bearer <token>" http://localhost:8000/api/me',
     )
