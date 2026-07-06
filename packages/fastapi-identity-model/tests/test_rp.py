@@ -126,6 +126,34 @@ async def test_store_tokens_persists_tokens(monkeypatch):
     assert me["tokens"]["access_token"] == "at"
 
 
+async def test_form_post_callback_full_login_flow(monkeypatch):
+    # form_post response mode: the provider POSTs code/state as form fields
+    # instead of query parameters; the flow must complete identically to GET.
+    _patch(monkeypatch)
+    async with _client(_app()) as client:
+        state, nonce = await _login(client)
+        rp.validate_token.return_value = {"sub": "user-1", "nonce": nonce}
+
+        resp = await client.post("/auth/callback", data={"code": "abc", "state": state})
+        assert resp.status_code == 302
+        assert resp.headers["location"] == "/"
+
+        me = (await client.get("/me")).json()
+    assert me["sub"] == "user-1"
+    assert me["userinfo"] == {"sub": "user-1", "email": "u@e"}
+
+
+async def test_form_post_callback_state_mismatch(monkeypatch):
+    _patch(monkeypatch)
+    async with _client(_app()) as client:
+        await _login(client)
+        resp = await client.post(
+            "/auth/callback", data={"code": "abc", "state": "wrong"}
+        )
+    assert resp.status_code == 400
+    assert "State mismatch" in resp.json()["detail"]
+
+
 async def test_callback_without_active_flow(monkeypatch):
     _patch(monkeypatch)
     async with _client(_app()) as client:

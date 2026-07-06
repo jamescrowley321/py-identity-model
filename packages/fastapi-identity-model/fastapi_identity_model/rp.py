@@ -12,14 +12,19 @@ using the async ``py_identity_model.aio`` API for all protocol work:
     app.add_middleware(SessionMiddleware, secret_key="...")   # required
     app.include_router(build_oidc_router(settings), prefix="/auth")
 
-Routes: ``GET /login`` → provider, ``GET /callback`` (exchange + validate +
-nonce + UserInfo), ``POST /logout``. The transient PKCE/state/nonce are kept
+Routes: ``GET /login`` → provider, ``GET/POST /callback`` (exchange + validate
++ nonce + UserInfo; the POST route accepts the OAuth 2.0 ``form_post`` response
+mode), ``POST /logout``. The transient PKCE/state/nonce are kept
 under a separate ``<session_key>.flow`` entry and popped on callback (single
 use); the resulting identity is written to ``session[session_key]`` only after
 a verified ID token, so reading ``session[session_key]`` never observes an
 in-flight login. Logout is POST-only so a cross-site GET cannot force it.
 
-Security note: ``SessionMiddleware`` signs but does **not** encrypt the cookie.
+Security note: browsers only send the session cookie on the cross-site POST a
+``form_post`` provider issues if it was set with ``same_site="none"`` (which
+requires ``https_only=True``); with the default ``lax`` the POST callback
+arrives without the flow cookie and fails with "No active login flow".
+``SessionMiddleware`` signs but does **not** encrypt the cookie.
 Identity claims stored there are tamper-proof but readable by the client. Raw
 tokens are stored only when ``store_tokens=True`` — enable that only with an
 encrypted or server-side session store. Logout clears the local session only;
@@ -31,6 +36,7 @@ from __future__ import annotations
 import logging
 import secrets
 from typing import TYPE_CHECKING
+from urllib.parse import parse_qsl, urlencode
 
 from fastapi import APIRouter, HTTPException, Request, status
 from starlette.responses import RedirectResponse
@@ -229,6 +235,7 @@ async def _callback(
     request: Request,
     settings: OIDCSettings,
     session_key: str,
+    callback_url: str,
     *,
     store_tokens: bool,
 ) -> RedirectResponse:
@@ -243,7 +250,7 @@ async def _callback(
         )
 
     try:
-        cb = parse_authorize_callback_response(str(request.url))
+        cb = parse_authorize_callback_response(callback_url)
     except PyIdentityModelException as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -332,7 +339,23 @@ def build_oidc_router(
     @router.get("/callback")
     async def callback(request: Request) -> RedirectResponse:
         return await _callback(
-            request, settings, session_key, store_tokens=store_tokens
+            request, settings, session_key, str(request.url), store_tokens=store_tokens
+        )
+
+    @router.post("/callback")
+    async def callback_form_post(request: Request) -> RedirectResponse:
+        # form_post response mode: the provider delivers the authorization
+        # response as an application/x-www-form-urlencoded POST body instead
+        # of query parameters. Rebuild a callback URL carrying the fields as
+        # a query string so GET and POST share the exact same validation path
+        # (parse → state → code → exchange). Parsed with stdlib parse_qsl —
+        # form_post is urlencoded by definition, so this avoids taking a
+        # python-multipart dependency for starlette's request.form().
+        body = (await request.body()).decode("utf-8", errors="replace")
+        params = urlencode(parse_qsl(body, keep_blank_values=True))
+        callback_url = str(request.url.replace(query=params))
+        return await _callback(
+            request, settings, session_key, callback_url, store_tokens=store_tokens
         )
 
     @router.post("/logout")
