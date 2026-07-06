@@ -31,6 +31,9 @@ from py_identity_model import (
     push_authorization_request,
     request_client_credentials_token,
 )
+from py_identity_model.aio import (
+    request_client_credentials_token as async_request_client_credentials_token,
+)
 
 from .conftest import AuthCodeFlowConfig, perform_auth_code_flow
 
@@ -239,3 +242,63 @@ class TestPrivateKeyJwtLive:
         )
         assert token_response.token is not None
         assert token_response.token.get("access_token")
+
+
+@pytest.mark.integration
+class TestPrivateKeyJwtLiveAsync:
+    """private_key_jwt via the async API against a live provider.
+
+    Issue #213 requires both sync and async paths to be exercised against a
+    real provider; the async client-authentication logic is shared with the
+    sync path via ``core/`` but the aio wrapper wiring is covered here.
+    """
+
+    async def test_client_credentials_with_private_key_jwt(
+        self,
+        raw_discovery,
+        token_endpoint,
+    ):
+        _require_node_oidc(raw_discovery)
+
+        response = await async_request_client_credentials_token(
+            ClientCredentialsTokenRequest(
+                address=token_endpoint,
+                client_id=PKJWT_CLIENT_ID,
+                scope="api",
+                private_key_jwt=_private_key_jwt(),
+            )
+        )
+
+        assert response.is_successful is True, (
+            f"async private_key_jwt client_credentials failed: {response.error}"
+        )
+        assert response.token is not None
+        assert response.token.get("access_token")
+        assert response.token.get("token_type", "").lower() == "bearer"
+
+    async def test_client_credentials_wrong_key_rejected(
+        self,
+        raw_discovery,
+        token_endpoint,
+    ):
+        _require_node_oidc(raw_discovery)
+
+        wrong_key = ec.generate_private_key(ec.SECP256R1()).private_bytes(
+            Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
+        )
+
+        response = await async_request_client_credentials_token(
+            ClientCredentialsTokenRequest(
+                address=token_endpoint,
+                client_id=PKJWT_CLIENT_ID,
+                scope="api",
+                private_key_jwt=PrivateKeyJwt(
+                    private_key=wrong_key,
+                    algorithm=PKJWT_ALGORITHM,
+                    kid=PKJWT_KID,
+                ),
+            )
+        )
+
+        assert response.is_successful is False
+        assert response.error is not None

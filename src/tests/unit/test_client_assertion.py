@@ -146,6 +146,25 @@ class TestBuildClientAssertion:
         )
         assert decoded["sub"] == "my-client"
 
+    def test_signature_verifies_rs256(self):
+        # RS256 is in SUPPORTED_SIGNING_ALGORITHMS; exercise it explicitly so
+        # the non-FAPI2 algorithm is not left unverified (issue #213 asks for
+        # RS256 + ES256 coverage).
+        private_pem, public_pem = _rsa_keypair()
+        token = build_client_assertion(
+            client_id="my-client",
+            audience="https://as.example.com/token",
+            private_key=private_pem,
+            algorithm="RS256",
+        )
+        decoded = pyjwt.decode(
+            token,
+            public_pem,
+            algorithms=["RS256"],
+            audience="https://as.example.com/token",
+        )
+        assert decoded["sub"] == "my-client"
+
     def test_kid_header_included_when_provided(self):
         private_pem, _ = _ec_keypair()
         token = build_client_assertion(
@@ -201,15 +220,40 @@ class TestBuildClientAssertion:
                 algorithm="ES256",
             )
 
-    def test_nonpositive_lifetime_raises(self):
+    @pytest.mark.parametrize("lifetime", [0, -30, 1, 10])
+    def test_lifetime_at_or_below_clock_skew_leeway_raises(self, lifetime):
+        # A lifetime <= the clock-skew leeway would mint an already-expired
+        # assertion (exp = (now - leeway) + lifetime <= now).
         private_pem, _ = _ec_keypair()
-        with pytest.raises(ValueError, match="lifetime must be positive"):
+        with pytest.raises(ValueError, match="clock-skew leeway"):
             build_client_assertion(
                 client_id="my-client",
                 audience="https://as.example.com",
                 private_key=private_pem,
                 algorithm="ES256",
-                lifetime=0,
+                lifetime=lifetime,
+            )
+
+    @pytest.mark.parametrize("value", [" ", "\t", "\n  "])
+    def test_whitespace_only_client_id_raises(self, value):
+        private_pem, _ = _ec_keypair()
+        with pytest.raises(ValueError, match="client_id must not be empty"):
+            build_client_assertion(
+                client_id=value,
+                audience="https://as.example.com",
+                private_key=private_pem,
+                algorithm="ES256",
+            )
+
+    def test_whitespace_only_kid_raises(self):
+        private_pem, _ = _ec_keypair()
+        with pytest.raises(ValueError, match="kid must be non-empty"):
+            build_client_assertion(
+                client_id="my-client",
+                audience="https://as.example.com",
+                private_key=private_pem,
+                algorithm="ES256",
+                kid="  ",
             )
 
     def test_jti_unique_across_builds(self):
@@ -227,6 +271,32 @@ class TestBuildClientAssertion:
             build_client_assertion(**kwargs), options={"verify_signature": False}
         )
         assert first["jti"] != second["jti"]
+
+
+@pytest.mark.unit
+class TestPrivateKeyJwtRepr:
+    """The PEM signing key must never surface in repr/str output."""
+
+    def test_repr_does_not_leak_private_key(self):
+        private_pem, _ = _ec_keypair()
+        config = PrivateKeyJwt(private_key=private_pem, algorithm="ES256", kid="k1")
+        rendered = repr(config)
+        assert "BEGIN" not in rendered
+        assert "PRIVATE KEY" not in rendered
+        if isinstance(private_pem, str):
+            assert private_pem not in rendered
+        # Non-secret fields remain visible for debuggability.
+        assert "ES256" in rendered
+        assert "k1" in rendered
+
+    def test_repr_of_request_holding_config_does_not_leak(self):
+        private_pem, _ = _ec_keypair()
+        request = ClientCredentialsTokenRequest(
+            address="https://as.example.com/token",
+            client_id="my-client",
+            private_key_jwt=PrivateKeyJwt(private_key=private_pem, algorithm="ES256"),
+        )
+        assert "BEGIN" not in repr(request)
 
 
 @pytest.mark.unit

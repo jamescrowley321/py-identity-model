@@ -77,7 +77,9 @@ def prepare_token_request_data(
             client_id=request.client_id,
             default_audience=request.address,
         )
-    elif request.client_secret:
+    elif request.client_secret is not None:
+        # ``is not None`` (not truthiness) mirrors the auth-code/refresh
+        # branches so an empty-string secret is handled identically here.
         auth = (request.client_id, request.client_secret)
     else:
         params["client_id"] = request.client_id

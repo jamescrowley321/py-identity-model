@@ -41,6 +41,8 @@ def redact_sensitive(data: dict[str, Any]) -> dict[str, Any]:
         "secret",
         "api_key",
         "apikey",
+        "private_key",
+        "client_assertion",
     }
 
     redacted = data.copy()
