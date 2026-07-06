@@ -63,11 +63,14 @@ def _patch(monkeypatch, *, disco=_DISCO, token=None, claims=None, userinfo=None)
     )
 
 
-def _app(store_tokens: bool = False) -> FastAPI:
+def _app(store_tokens: bool = False, fetch_userinfo: bool = True) -> FastAPI:
     app = FastAPI()
     app.add_middleware(SessionMiddleware, secret_key="test-secret")
     app.include_router(
-        build_oidc_router(SETTINGS, store_tokens=store_tokens), prefix="/auth"
+        build_oidc_router(
+            SETTINGS, store_tokens=store_tokens, fetch_userinfo=fetch_userinfo
+        ),
+        prefix="/auth",
     )
 
     @app.get("/me")
@@ -186,6 +189,39 @@ async def test_login_discovery_failure(monkeypatch):
         resp = await client.get("/auth/login")
     assert resp.status_code == 502
     assert "discovery failed" in resp.json()["detail"].lower()
+
+
+async def test_login_rejects_discovery_issuer_mismatch(monkeypatch):
+    # OIDC Discovery 1.0 §4.3: a document whose issuer does not match the
+    # URL it was retrieved from must be rejected (issuer mix-up defense).
+    mismatched = SimpleNamespace(
+        is_successful=True,
+        error=None,
+        authorization_endpoint="https://op/authorize",
+        token_endpoint="https://op/token",
+        userinfo_endpoint="https://op/userinfo",
+        issuer="https://op/INVALID",
+    )
+    _patch(monkeypatch, disco=mismatched)
+    async with _client(_app()) as client:
+        resp = await client.get("/auth/login")
+    assert resp.status_code == 502
+    assert "issuer mismatch" in resp.json()["detail"].lower()
+
+
+async def test_fetch_userinfo_disabled_skips_userinfo(monkeypatch):
+    # fetch_userinfo=False anchors identity on the validated ID token and
+    # never calls the UserInfo endpoint.
+    _patch(monkeypatch)
+    async with _client(_app(fetch_userinfo=False)) as client:
+        state, nonce = await _login(client)
+        rp.validate_token.return_value = {"sub": "user-1", "nonce": nonce}
+        resp = await client.get(f"/auth/callback?code=abc&state={state}")
+        assert resp.status_code == 302
+        me = (await client.get("/me")).json()
+    assert me["sub"] == "user-1"
+    assert me["userinfo"] == {}
+    rp.get_userinfo.assert_not_called()
 
 
 async def test_callback_token_exchange_failure(monkeypatch):

@@ -87,6 +87,17 @@ def _require_session(request: Request) -> None:
         )
 
 
+_WELL_KNOWN_SUFFIX = "/.well-known/openid-configuration"
+
+
+def _expected_issuer(discovery_url: str) -> str:
+    """Issuer implied by the discovery URL (OIDC Discovery 1.0 §4.1)."""
+    base = discovery_url.rstrip("/")
+    if base.endswith(_WELL_KNOWN_SUFFIX):
+        base = base[: -len(_WELL_KNOWN_SUFFIX)]
+    return base.rstrip("/")
+
+
 async def _discover(settings: OIDCSettings) -> DiscoveryDocumentResponse:
     disco = await get_discovery_document(
         DiscoveryDocumentRequest(address=settings.discovery_url),
@@ -95,6 +106,20 @@ async def _discover(settings: OIDCSettings) -> DiscoveryDocumentResponse:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"OIDC discovery failed: {disco.error}",
+        )
+    # OIDC Discovery 1.0 §4.3: the document's issuer MUST match the URL the
+    # document was retrieved from (issuer mix-up defense). The library only
+    # validates the issuer's *format*; the equality check is the RP's job.
+    # Trailing slashes are normalized — issuer "https://op/" serves its
+    # document at "https://op/.well-known/openid-configuration".
+    expected = _expected_issuer(settings.discovery_url)
+    if (disco.issuer or "").rstrip("/") != expected:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                f"Discovery document issuer mismatch: expected '{expected}', "
+                f"got '{disco.issuer}'"
+            ),
         )
     return disco
 
@@ -231,13 +256,14 @@ async def _fetch_userinfo(
     return claims
 
 
-async def _callback(
+async def _callback(  # noqa: PLR0913  # request-scoped args + the router's build-time options
     request: Request,
     settings: OIDCSettings,
     session_key: str,
     callback_url: str,
     *,
     store_tokens: bool,
+    fetch_userinfo: bool,
 ) -> RedirectResponse:
     _require_session(request)
     # Pop the flow state so it is single-use: a failed or replayed callback
@@ -287,7 +313,9 @@ async def _callback(
         )
     claims = await _validate_id_token(settings, disco, id_token, flow["nonce"])
 
-    userinfo = await _fetch_userinfo(disco, access_token, claims.get("sub"))
+    userinfo: dict = {}
+    if fetch_userinfo:
+        userinfo = await _fetch_userinfo(disco, access_token, claims.get("sub"))
 
     session_data: dict = {
         "sub": claims.get("sub"),
@@ -313,6 +341,7 @@ def build_oidc_router(
     *,
     session_key: str = "oidc",
     store_tokens: bool = False,
+    fetch_userinfo: bool = True,
 ) -> APIRouter:
     """Build an OIDC relying-party router.
 
@@ -321,6 +350,10 @@ def build_oidc_router(
         session_key: Key under which flow + identity state is kept in the session.
         store_tokens: When True, also persist the access/refresh/id tokens in the
             session (requires an encrypted or server-side session store).
+        fetch_userinfo: When False, skip the UserInfo request after ID-token
+            validation and anchor identity on the ID token claims alone —
+            for providers without a usable UserInfo endpoint, or to avoid
+            the extra round-trip per login.
 
     Returns:
         An ``APIRouter`` with ``/login``, ``/callback`` and ``/logout`` routes.
@@ -339,7 +372,12 @@ def build_oidc_router(
     @router.get("/callback")
     async def callback(request: Request) -> RedirectResponse:
         return await _callback(
-            request, settings, session_key, str(request.url), store_tokens=store_tokens
+            request,
+            settings,
+            session_key,
+            str(request.url),
+            store_tokens=store_tokens,
+            fetch_userinfo=fetch_userinfo,
         )
 
     @router.post("/callback")
@@ -355,7 +393,12 @@ def build_oidc_router(
         params = urlencode(parse_qsl(body, keep_blank_values=True))
         callback_url = str(request.url.replace(query=params))
         return await _callback(
-            request, settings, session_key, callback_url, store_tokens=store_tokens
+            request,
+            settings,
+            session_key,
+            callback_url,
+            store_tokens=store_tokens,
+            fetch_userinfo=fetch_userinfo,
         )
 
     @router.post("/logout")
