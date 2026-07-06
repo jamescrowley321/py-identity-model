@@ -21,9 +21,11 @@ state-keyed recovery ``app.py`` uses for its sessions. When the OP calls back
 the callback into that per-test router, flow cookie and all. The router's own
 verdict (302 = login established, 4xx/5xx = rejected) is the test outcome.
 
-The router always uses PKCE and always attempts UserInfo when available, so
-the runner's ``use_pkce``/``skip_userinfo`` hints are accepted but not acted
-on — both behaviours are safe supersets of what the suite requires.
+The router always uses PKCE, so the runner's ``use_pkce`` hint is accepted
+but not acted on (a safe superset of what the suite requires). The
+``skip_userinfo`` hint maps to the router's ``fetch_userinfo`` option — the
+discovery-jwks-uri-keys module is FINISHED once the token is issued, and a
+trailing UserInfo request would be an illegal test state change.
 """
 
 from __future__ import annotations
@@ -126,11 +128,13 @@ def _record_error(test_id: str, error: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _build_test_app(settings: OIDCSettings) -> FastAPI:
+def _build_test_app(settings: OIDCSettings, *, fetch_userinfo: bool = True) -> FastAPI:
     """A minimal app hosting the real OIDC router for one test's issuer."""
     test_app = FastAPI()
     test_app.add_middleware(SessionMiddleware, secret_key=secrets.token_urlsafe(32))
-    test_app.include_router(build_oidc_router(settings, store_tokens=True))
+    test_app.include_router(
+        build_oidc_router(settings, store_tokens=True, fetch_userinfo=fetch_userinfo)
+    )
 
     @test_app.get("/session")
     async def session_view(request: Request) -> JSONResponse:
@@ -261,7 +265,7 @@ async def authorize(
     profile: str = Query("", description="Profile/plan name for RP log capture"),
     use_pkce: str = Query("false", description="Ignored: the router always uses PKCE"),
     skip_userinfo: str = Query(
-        "false", description="Ignored: the router always attempts UserInfo"
+        "false", description="Maps to the router's fetch_userinfo option"
     ),
     scope: str = Query(DEFAULT_SCOPE, description="Requested scopes"),
 ) -> RedirectResponse | JSONResponse:
@@ -289,7 +293,9 @@ async def authorize(
         redirect_uri=f"{RP_BASE_URL}/callback",
         scope=scope,
     )
-    client = _build_test_client(_build_test_app(settings))
+    client = _build_test_client(
+        _build_test_app(settings, fetch_userinfo=skip_userinfo.lower() != "true")
+    )
 
     resp = await client.get("/login")
     if resp.status_code != HTTP_FOUND:
