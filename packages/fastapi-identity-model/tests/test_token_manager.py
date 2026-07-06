@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -118,3 +119,32 @@ async def test_refresh_without_access_token_raises(monkeypatch):
     tm.set_tokens(access_token="stale", refresh_token="r", expires_in=-10)
     with pytest.raises(PyIdentityModelException, match="no access token"):
         await tm.get_access_token()
+
+
+async def test_zero_expires_in_is_expired():
+    # expires_in=0 means already expired, not "no expiry" — the token must be
+    # treated as needing refresh, not served forever.
+    tm = TokenManager("d", "cid")
+    tm.set_tokens(access_token="a", refresh_token="r", expires_in=0)
+    assert tm.is_token_expired() is True
+
+
+async def test_concurrent_get_access_token_refreshes_once(monkeypatch):
+    monkeypatch.setattr(
+        tm_mod, "get_discovery_document", AsyncMock(return_value=_disco())
+    )
+    refresh = AsyncMock(
+        return_value=_refresh_response(
+            token={"access_token": "fresh", "refresh_token": "r2", "expires_in": 3600}
+        )
+    )
+    monkeypatch.setattr(tm_mod, "refresh_token", refresh)
+
+    tm = TokenManager("d", "cid", "secret")
+    tm.set_tokens(access_token="stale", refresh_token="r1", expires_in=-10)
+
+    results = await asyncio.gather(*(tm.get_access_token() for _ in range(5)))
+
+    assert results == ["fresh"] * 5
+    # The lock + re-check must collapse the concurrent callers into one grant.
+    assert refresh.await_count == 1

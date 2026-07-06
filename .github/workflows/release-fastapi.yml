@@ -1,8 +1,10 @@
 # Independent release pipeline for the `fastapi-identity-model` sub-package.
 #
 # Deliberately decoupled from the root `release.yml` (python-semantic-release):
-# this is driven by manual dispatch or a `fastapi-identity-model-v*` tag, and the
-# package version is owned by packages/fastapi-identity-model/pyproject.toml.
+# a `fastapi-identity-model-v*` tag builds, tests, validates and PUBLISHES;
+# a manual workflow_dispatch runs the same build/test/validate as a dry run but
+# does NOT publish. The package version is owned by
+# packages/fastapi-identity-model/pyproject.toml.
 # That keeps `feat(fastapi): ...` commits from bumping the root py-identity-model
 # version. Commit package-only changes with non-releasing types (build/chore/…)
 # so the root pipeline stays quiet.
@@ -30,6 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
+      contents: read # restore checkout access (job perms replace, not extend)
       id-token: write # OIDC token for PyPI trusted publishing
     steps:
       - uses: actions/checkout@v7
@@ -41,6 +44,9 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
+
+      - name: Test fastapi-identity-model
+        run: make test-fastapi
 
       - name: Build fastapi-identity-model
         run: uv build --package fastapi-identity-model --out-dir dist-fastapi
@@ -59,5 +65,9 @@ jobs:
       - name: Check distribution metadata
         run: uvx twine check dist-fastapi/*
 
+      # Publish only on a version tag. A workflow_dispatch run builds, tests and
+      # validates but never publishes — so a dispatch from an arbitrary branch
+      # cannot ship an unversioned/unchecked package.
       - name: Publish to PyPI (trusted publishing)
+        if: startsWith(github.ref, 'refs/tags/')
         run: uv publish --trusted-publishing always dist-fastapi/*

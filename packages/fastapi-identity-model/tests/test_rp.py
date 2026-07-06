@@ -193,14 +193,63 @@ async def test_callback_nonce_mismatch(monkeypatch):
 
 
 async def test_callback_userinfo_failure_is_tolerated(monkeypatch):
+    # An unavailable/failed UserInfo fetch is tolerated: identity comes from
+    # the validated ID token, so login still completes with empty userinfo.
     _patch(monkeypatch)
     async with _client(_app()) as client:
         state, nonce = await _login(client)
         rp.validate_token.return_value = {"sub": "user-1", "nonce": nonce}
-        rp.get_userinfo.return_value = SimpleNamespace(is_successful=False, claims=None)
+        rp.get_userinfo.return_value = SimpleNamespace(
+            is_successful=False, claims=None, error="unreachable"
+        )
         resp = await client.get(f"/auth/callback?code=abc&state={state}")
         assert resp.status_code == 302
         assert (await client.get("/me")).json()["userinfo"] == {}
+
+
+async def test_callback_userinfo_sub_mismatch_aborts(monkeypatch):
+    # A *successful* UserInfo whose sub disagrees with the ID token is a
+    # token-substitution signal and must fail the login, not be swallowed.
+    _patch(monkeypatch)
+    async with _client(_app()) as client:
+        state, nonce = await _login(client)
+        rp.validate_token.return_value = {"sub": "user-1", "nonce": nonce}
+        rp.get_userinfo.return_value = SimpleNamespace(
+            is_successful=True, claims={"sub": "someone-else"}, error=None
+        )
+        resp = await client.get(f"/auth/callback?code=abc&state={state}")
+    assert resp.status_code == 401
+    assert "subject" in resp.json()["detail"].lower()
+
+
+async def test_callback_missing_id_token_rejected(monkeypatch):
+    # A token response without an id_token must not establish a session.
+    _patch(monkeypatch)
+    async with _client(_app()) as client:
+        state, _ = await _login(client)
+        rp.request_authorization_code_token.return_value = SimpleNamespace(
+            is_successful=True, error=None, token={"access_token": "at"}
+        )
+        resp = await client.get(f"/auth/callback?code=abc&state={state}")
+    assert resp.status_code == 401
+    assert "ID token" in resp.json()["detail"]
+
+
+async def test_login_flow_not_visible_as_identity(monkeypatch):
+    # Merely starting a login must not make /me (reading the identity key)
+    # report an authenticated user, and must not leak the code_verifier.
+    _patch(monkeypatch)
+    async with _client(_app()) as client:
+        await _login(client)
+        body = (await client.get("/me")).json()
+    assert body == {}
+
+
+async def test_logout_requires_post(monkeypatch):
+    _patch(monkeypatch)
+    async with _client(_app()) as client:
+        resp = await client.get("/auth/logout")
+    assert resp.status_code == 405
 
 
 async def test_logout_clears_session(monkeypatch):
@@ -211,6 +260,6 @@ async def test_logout_clears_session(monkeypatch):
         await client.get(f"/auth/callback?code=abc&state={state}")
         assert (await client.get("/me")).json().get("sub") == "user-1"
 
-        resp = await client.get("/auth/logout")
-        assert resp.status_code == 302
+        resp = await client.post("/auth/logout")
+        assert resp.status_code == 303
         assert (await client.get("/me")).json() == {}

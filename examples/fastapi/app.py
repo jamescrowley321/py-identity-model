@@ -9,9 +9,10 @@ This example shows how to use py-identity-model with FastAPI to:
 """
 
 import os
+import secrets
 from typing import Annotated
 
-import urllib3
+from starlette.middleware.sessions import SessionMiddleware
 import uvicorn
 
 from fastapi import (  # type: ignore[attr-defined]
@@ -21,39 +22,6 @@ from fastapi import (  # type: ignore[attr-defined]
     Request,
 )
 from fastapi.responses import JSONResponse  # type: ignore[attr-defined]
-
-
-# Fallback: Disable SSL warnings for self-signed certificates in test environment
-# This should only be used when REQUESTS_CA_BUNDLE is not set (non-Docker environments)
-if os.getenv("DISABLE_SSL_VERIFICATION", "false").lower() == "true":
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    # Monkey-patch requests to disable SSL verification for testing
-    import requests
-
-    original_request = requests.Session.request
-
-    def patched_request(self, method, url, **kwargs):
-        kwargs.setdefault("verify", False)
-        return original_request(self, method, url, **kwargs)
-
-    requests.Session.request = patched_request  # type: ignore[method-assign]
-    # Also patch requests.get and requests.post directly
-    _original_get = requests.get
-    _original_post = requests.post
-
-    def patched_get(*args, **kwargs):
-        kwargs.setdefault("verify", False)
-        return _original_get(*args, **kwargs)
-
-    def patched_post(*args, **kwargs):
-        kwargs.setdefault("verify", False)
-        return _original_post(*args, **kwargs)
-
-    requests.get = patched_get
-    requests.post = patched_post
-
-from starlette.middleware.sessions import SessionMiddleware
-
 from fastapi_identity_model import (
     Claims,
     CurrentUser,
@@ -104,14 +72,33 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Signed-cookie session for the RP login flow (use a real secret in production).
+# Signed-cookie session for the RP login flow.
+#
+# The signing key is never a hardcoded fallback: a published static key would
+# let anyone forge a session cookie and impersonate any user. When
+# SESSION_SECRET is unset we generate a random per-process key (sessions do not
+# survive a restart — set SESSION_SECRET in production for that).
+#
+# same_site="lax" is required, not optional: the provider's redirect back to
+# /auth/callback is a cross-site top-level GET, and only Lax (not Strict) sends
+# the session cookie on it so state/nonce can be looked up. Set
+# SESSION_HTTPS_ONLY=true behind TLS to add the Secure flag.
+session_secret = os.getenv("SESSION_SECRET")
+if not session_secret:
+    session_secret = secrets.token_urlsafe(32)
+    print("⚠️  SESSION_SECRET unset — using a random ephemeral key for this run.")
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.getenv("SESSION_SECRET", "dev-insecure-change-me"),
+    secret_key=session_secret,
+    same_site="lax",
+    https_only=os.getenv("SESSION_HTTPS_ONLY", "false").lower() == "true",
 )
 
 # Browser login: GET /auth/login -> provider -> /auth/callback -> session identity.
-app.include_router(build_oidc_router(settings, store_tokens=True), prefix="/auth")
+# store_tokens stays False: SessionMiddleware signs but does not encrypt the
+# cookie, so raw access/refresh tokens must not be placed in it. This example
+# only needs the session identity, not the tokens.
+app.include_router(build_oidc_router(settings, store_tokens=False), prefix="/auth")
 
 # Bearer-token validation for the /api/* resource-server routes.
 app.add_middleware(

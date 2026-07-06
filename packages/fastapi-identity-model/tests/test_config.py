@@ -58,3 +58,19 @@ def test_from_env_default_excluded_paths(monkeypatch):
     monkeypatch.delenv("OIDC_EXCLUDED_PATHS", raising=False)
     s = OIDCSettings.from_env()
     assert s.excluded_paths == ["/docs", "/openapi.json", "/health"]
+
+
+def test_from_env_redirect_uri_optional_for_resource_server(monkeypatch):
+    # A resource-server-only deployment (middleware, no login router) needs no
+    # callback URL.
+    monkeypatch.setenv("OIDC_DISCOVERY_URL", "d")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "cid")
+    monkeypatch.delenv("OIDC_REDIRECT_URI", raising=False)
+    s = OIDCSettings.from_env()
+    assert s.redirect_uri == ""
+
+
+@pytest.mark.parametrize(("discovery_url", "client_id"), [("", "cid"), ("d", "")])
+def test_empty_required_fields_rejected(discovery_url, client_id):
+    with pytest.raises(ValueError, match="non-empty"):
+        OIDCSettings(discovery_url=discovery_url, client_id=client_id)
