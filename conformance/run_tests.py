@@ -817,7 +817,16 @@ def main() -> None:
     parser.add_argument(
         "--plan",
         required=True,
-        choices=["basic-rp", "config-rp", "form-post-basic-rp"],
+        choices=[
+            "basic-rp",
+            "config-rp",
+            "form-post-basic-rp",
+            # fastapi-identity-model package regression plans (same suite
+            # plans, driven against the rp-fastapi harness on :8889)
+            "fastapi-basic-rp",
+            "fastapi-config-rp",
+            "fastapi-form-post-basic-rp",
+        ],
         help="Test plan to run",
     )
     parser.add_argument(

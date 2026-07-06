@@ -135,3 +135,109 @@ jobs:
         if: always()
         working-directory: conformance
         run: docker compose down -v
+
+  # fastapi-identity-model package regression: the same local suite plans,
+  # driven against the real build_oidc_router via the rp-fastapi harness.
+  # Regression stage only — no hosted suite, no certification export (#242).
+  conformance-fastapi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Start conformance suite
+        working-directory: conformance
+        run: docker compose up -d --build --wait
+        timeout-minutes: 10
+
+      - name: Wait for conformance suite
+        run: |
+          echo "Waiting for conformance suite at https://localhost.emobix.co.uk:8443..."
+          for i in $(seq 1 60); do
+            HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' https://localhost.emobix.co.uk:8443/ || true)
+            if [ "$HTTP_CODE" -ge 200 ] 2>/dev/null && [ "$HTTP_CODE" -lt 400 ] 2>/dev/null; then
+              echo "Conformance suite is ready (HTTP $HTTP_CODE)"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "Timed out waiting for conformance suite"
+              docker compose -f conformance/docker-compose.yml logs server
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Wait for fastapi RP harness
+        run: |
+          echo "Waiting for fastapi RP harness at http://localhost:8889/health..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8889/health > /dev/null 2>&1; then
+              echo "fastapi RP harness is ready"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "Timed out waiting for fastapi RP harness"
+              docker compose -f conformance/docker-compose.yml logs rp-fastapi
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install test runner dependencies
+        run: pip install httpx
+
+      - name: Run Basic RP package regression
+        run: |
+          python conformance/run_tests.py \
+            --plan fastapi-basic-rp \
+            --rp-url http://localhost:8889 \
+            --output conformance/results/fastapi-basic-rp-latest.json \
+            --verbose
+
+      - name: Run Config RP package regression
+        # signing-key-rotation is a known pre-existing timeout — don't block other profiles
+        continue-on-error: true
+        run: |
+          python conformance/run_tests.py \
+            --plan fastapi-config-rp \
+            --rp-url http://localhost:8889 \
+            --output conformance/results/fastapi-config-rp-latest.json \
+            --verbose
+
+      - name: Run Form Post Basic RP package regression
+        run: |
+          python conformance/run_tests.py \
+            --plan fastapi-form-post-basic-rp \
+            --rp-url http://localhost:8889 \
+            --output conformance/results/fastapi-form-post-basic-rp-latest.json \
+            --verbose
+
+      - name: Collect suite and harness logs
+        if: always()
+        run: |
+          mkdir -p conformance/results/logs
+          docker compose -f conformance/docker-compose.yml logs server > conformance/results/logs/server.log 2>&1 || true
+          docker compose -f conformance/docker-compose.yml logs rp-fastapi > conformance/results/logs/rp-fastapi.log 2>&1 || true
+
+      - name: Upload conformance results
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: conformance-fastapi-results
+          path: |
+            conformance/results/fastapi-*-latest.json
+            conformance/results/logs/
+          retention-days: 30
+
+      - name: Teardown
+        if: always()
+        working-directory: conformance
+        run: docker compose down -v

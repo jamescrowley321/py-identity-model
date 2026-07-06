@@ -1,0 +1,23 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install harness dependencies
+COPY conformance/requirements.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install py-identity-model from source (satisfies the package's core dependency)
+COPY pyproject.toml README.md ./
+COPY src/ src/
+RUN pip install --no-cache-dir .
+
+# Install the fastapi-identity-model workspace package under test
+COPY packages/fastapi-identity-model/ packages/fastapi-identity-model/
+RUN pip install --no-cache-dir packages/fastapi-identity-model/
+
+# Copy harness apps (app_fastapi.py reuses app.py's per-test log plumbing)
+COPY conformance/app.py conformance/app_fastapi.py ./
+
+EXPOSE 8889
+
+CMD ["uvicorn", "app_fastapi:app", "--host", "0.0.0.0", "--port", "8889"]
