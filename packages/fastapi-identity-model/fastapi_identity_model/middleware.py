@@ -9,6 +9,7 @@ from collections.abc import Callable
 import logging
 
 from fastapi import Request, status  # type: ignore[attr-defined]
+from jwt import InvalidTokenError
 from starlette.middleware.base import (
     BaseHTTPMiddleware,  # type: ignore[attr-defined]
 )
@@ -149,6 +150,10 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
             )
         except PyIdentityModelException as e:
             return self._unauthorized(f"Token validation failed: {e!s}")
+        except InvalidTokenError as e:
+            # A malformed/undecodable token (e.g. raw pyjwt DecodeError from
+            # header parsing during key lookup) is a client error, not a 500.
+            return self._unauthorized(f"Invalid token: {e!s}")
         except Exception:
             # A genuinely unexpected (non-library) failure is a server fault,
             # not an auth decision. Surface a 500 without leaking internals.

@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock
 
 from fastapi import Depends, FastAPI
 import httpx
+from jwt import DecodeError
 import pytest
 
 from fastapi_identity_model import TokenValidationMiddleware, get_claims
@@ -89,6 +90,17 @@ async def test_network_error_returns_503(monkeypatch):
     async with _client(_app(monkeypatch, validate)) as client:
         resp = await client.get("/me", headers={"Authorization": "Bearer x"})
     assert resp.status_code == 503
+
+
+async def test_malformed_token_returns_401_not_500(monkeypatch):
+    # A non-JWT ("invalid-token-123") makes the library's header parsing raise
+    # a raw pyjwt DecodeError before validation wraps it; that is a client
+    # error (401), not a server fault (500).
+    validate = AsyncMock(side_effect=DecodeError("Not enough segments"))
+    async with _client(_app(monkeypatch, validate)) as client:
+        resp = await client.get("/me", headers={"Authorization": "Bearer invalid"})
+    assert resp.status_code == 401
+    assert "Invalid token" in resp.json()["detail"]
 
 
 async def test_id_token_rejected_as_access_token(monkeypatch):
