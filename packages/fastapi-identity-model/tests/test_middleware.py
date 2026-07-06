@@ -126,3 +126,17 @@ def test_explicit_empty_excluded_paths_excludes_nothing():
     )
     assert mw_obj.excluded_paths == []
     assert mw_obj._is_excluded("/docs") is False
+
+
+def test_root_excluded_path_is_not_a_catch_all():
+    # A "/" entry must match only the root, not every path via subpath prefix.
+    mw_obj = TokenValidationMiddleware(
+        FastAPI(),
+        discovery_url=DISCOVERY_URL,
+        audience="cid",
+        excluded_paths=["/", "/docs"],
+    )
+    assert mw_obj._is_excluded("/") is True
+    assert mw_obj._is_excluded("/api/me") is False
+    assert mw_obj._is_excluded("/docs") is True
+    assert mw_obj._is_excluded("/docs/oauth2-redirect") is True

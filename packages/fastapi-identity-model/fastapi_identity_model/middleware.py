@@ -84,11 +84,18 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
         self.custom_claims_validator = custom_claims_validator
 
     def _is_excluded(self, path: str) -> bool:
-        """Whether *path* equals or is a subpath of an excluded entry."""
-        return any(
-            path == entry or path.startswith(entry.rstrip("/") + "/")
-            for entry in self.excluded_paths
-        )
+        """Whether *path* equals or is a subpath of an excluded entry.
+
+        A bare ``/`` entry matches only the root, never as a subpath prefix
+        (otherwise it would exclude every path).
+        """
+        for entry in self.excluded_paths:
+            if path == entry:
+                return True
+            prefix = entry.rstrip("/")
+            if prefix and path.startswith(prefix + "/"):
+                return True
+        return False
 
     @staticmethod
     def _unauthorized(detail: str) -> JSONResponse:
