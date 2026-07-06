@@ -2,6 +2,32 @@
 
 <!-- version list -->
 
+## v3.2.0 (2026-07-06)
+
+### Bug Fixes
+
+- **client-auth**: Redact private_key repr and harden assertion guards
+  ([`2dd6420`](https://github.com/jamescrowley321/py-identity-model/commit/2dd642093d4f6d423d19969529d73db7cf15377b))
+
+- **client-auth**: Route private_key_jwt signing failures through error handlers
+  ([`901d4ed`](https://github.com/jamescrowley321/py-identity-model/commit/901d4ed88184a82fb650a09102130164d67456f1))
+
+### Documentation
+
+- **client-auth**: Add private_key_jwt usage example
+  ([`f2acf0c`](https://github.com/jamescrowley321/py-identity-model/commit/f2acf0c9afdd4f76f84e7ea6585fcdf9065897c4))
+
+### Features
+
+- **client-auth**: Add private_key_jwt (RFC 7523) client authentication
+  ([`acbc529`](https://github.com/jamescrowley321/py-identity-model/commit/acbc529eb248c6acd9bc5dc4e879ef1d79921d17))
+
+### Testing
+
+- **client-auth**: Integration tests for private_key_jwt against node-oidc
+  ([`0191f65`](https://github.com/jamescrowley321/py-identity-model/commit/0191f652715215972243f6163a95272c7f915cea))
+
+
 ## v3.1.1 (2026-06-30)
 
 ### Bug Fixes
