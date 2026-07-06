@@ -6,6 +6,9 @@ Test infrastructure for running the [OpenID Foundation conformance suite](https:
 
 - **Conformance suite** — OIDF Java server + MongoDB + nginx (TLS termination)
 - **RP harness** — Thin FastAPI app using py-identity-model's sync API
+- **Package RP harness** (`app_fastapi.py`, port 8889) — drives the real
+  `fastapi_identity_model.build_oidc_router` through the same plans, one
+  in-process router per test issuer (regression stage, not a certification target)
 - **Test runner** — Python script that orchestrates test plans via the suite's REST API
 
 ## Quick Start
@@ -44,6 +47,14 @@ The conformance suite uses `localhost.emobix.co.uk` which resolves to `127.0.0.1
 |------|--------|-------------|
 | `basic-rp` | `configs/basic-rp.json` | Basic RP certification (code flow, client_secret_basic) |
 | `config-rp` | `configs/config-rp.json` | Config RP certification (discovery-based config) |
+| `form-post-basic-rp` | `configs/form-post-basic-rp.json` | Basic RP with `form_post` response mode |
+| `fastapi-basic-rp` | `configs/fastapi-basic-rp.json` | Basic RP regression for the fastapi-identity-model router (`--rp-url http://localhost:8889`) |
+| `fastapi-config-rp` | `configs/fastapi-config-rp.json` | Config RP regression for the fastapi-identity-model router |
+| `fastapi-form-post-basic-rp` | `configs/fastapi-form-post-basic-rp.json` | Form Post Basic RP regression for the fastapi-identity-model router |
+
+The `fastapi-*` plans run the identical suite plans against the package harness
+(`make conformance-test-fastapi`). They are a CI regression shield for the
+package — the core library remains the OIDF certification target (#242).
 
 ## Profile Test Counts
 

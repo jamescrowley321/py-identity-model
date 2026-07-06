@@ -152,6 +152,19 @@ conformance-up: ## Start conformance suite and RP harness
 	  fi; \
 	  sleep 2; \
 	done
+	@echo "Waiting for fastapi RP harness at http://localhost:8889/health..."
+	@for i in $$(seq 1 30); do \
+	  if curl -sf http://localhost:8889/health > /dev/null 2>&1; then \
+	    echo "fastapi RP harness is ready"; \
+	    break; \
+	  fi; \
+	  if [ "$$i" -eq 30 ]; then \
+	    echo "Timed out waiting for fastapi RP harness"; \
+	    docker compose -f conformance/docker-compose.yml logs rp-fastapi; \
+	    exit 1; \
+	  fi; \
+	  sleep 2; \
+	done
 
 .PHONY: conformance-down
 conformance-down: ## Tear down conformance suite
@@ -170,6 +183,13 @@ else
 	uv run python conformance/run_tests.py --plan form-post-basic-rp --output conformance/results/form-post-basic-rp-latest.json --verbose
 	@echo "Conformance tests complete. Results in conformance/results/"
 endif
+
+.PHONY: conformance-test-fastapi
+conformance-test-fastapi: conformance-up ## Run fastapi-identity-model package regression against the local suite
+	uv run python conformance/run_tests.py --plan fastapi-basic-rp --rp-url http://localhost:8889 --output conformance/results/fastapi-basic-rp-latest.json --verbose
+	uv run python conformance/run_tests.py --plan fastapi-config-rp --rp-url http://localhost:8889 --output conformance/results/fastapi-config-rp-latest.json --verbose
+	uv run python conformance/run_tests.py --plan fastapi-form-post-basic-rp --rp-url http://localhost:8889 --output conformance/results/fastapi-form-post-basic-rp-latest.json --verbose
+	@echo "fastapi-identity-model conformance regression complete. Results in conformance/results/"
 
 .PHONY: conformance-test-harness
 conformance-test-harness: ## Run conformance harness unit tests (parser + callback)

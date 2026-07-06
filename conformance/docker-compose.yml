@@ -76,6 +76,28 @@ services:
       server:
         condition: service_healthy
 
+  # Same suite, second RP: the fastapi-identity-model package's real
+  # build_oidc_router driven through the identical plans (regression stage).
+  rp-fastapi:
+    build:
+      context: ..
+      dockerfile: conformance/Dockerfile.fastapi
+    ports:
+      - "8889:8889"
+    environment:
+      - RP_BASE_URL=http://localhost:8889
+      - CONFORMANCE_SUITE_BASE_URL=https://localhost.emobix.co.uk:8443
+      - SSL_CERT_FILE=/certs/nginx-selfsigned.crt
+    volumes:
+      - certs:/certs:ro
+    depends_on:
+      cert-init:
+        condition: service_completed_successfully
+      nginx:
+        condition: service_started
+      server:
+        condition: service_healthy
+
 volumes:
   mongodb-data:
   certs:
