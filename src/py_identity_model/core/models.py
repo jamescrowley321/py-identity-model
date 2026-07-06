@@ -7,7 +7,7 @@ This module contains all dataclasses and models used by both sync and async impl
 from __future__ import annotations
 
 from base64 import urlsafe_b64decode
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from enum import Enum
 import json
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -581,7 +581,10 @@ class PrivateKeyJwt:
         lifetime: Assertion validity in seconds (default 300).
     """
 
-    private_key: str | bytes
+    # repr suppressed: the raw PEM signing key must never leak into logs,
+    # exception messages, or crash-reporter frame captures. Mirrors the
+    # ``repr=False`` treatment of secret-bearing request models below.
+    private_key: str | bytes = field(repr=False)
     algorithm: str = "PS256"
     kid: str | None = None
     audience: str | None = None

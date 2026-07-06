@@ -70,15 +70,23 @@ def build_client_assertion(  # noqa: PLR0913  # RFC 7523 assertion params are al
         ("audience", audience),
         ("private_key", private_key),
     ):
-        if not value:
+        # Reject whitespace-only string values: they are truthy but would be
+        # signed into ``iss``/``sub``/``aud`` and rejected opaquely by the AS.
+        if not value or (isinstance(value, str) and not value.strip()):
             raise ValueError(f"{name} must not be empty")
 
     validate_signing_algorithm(algorithm, context="client assertion")
 
-    if lifetime <= 0:
-        raise ValueError(f"lifetime must be positive, got {lifetime}")
+    # ``exp`` is derived from the backdated ``iat`` (``now - leeway``), so a
+    # lifetime at or below the leeway yields an assertion already expired at
+    # mint time. Require a lifetime that clears the skew window.
+    if lifetime <= _CLOCK_SKEW_LEEWAY_SECONDS:
+        raise ValueError(
+            f"lifetime must be greater than the {_CLOCK_SKEW_LEEWAY_SECONDS}s "
+            f"clock-skew leeway, got {lifetime}"
+        )
 
-    if kid is not None and not kid:
+    if kid is not None and not kid.strip():
         raise ValueError("kid must be non-empty when provided")
 
     issued_at = int(time.time()) - _CLOCK_SKEW_LEEWAY_SECONDS
