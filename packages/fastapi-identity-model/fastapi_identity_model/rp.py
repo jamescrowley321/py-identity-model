@@ -13,13 +13,17 @@ using the async ``py_identity_model.aio`` API for all protocol work:
     app.include_router(build_oidc_router(settings), prefix="/auth")
 
 Routes: ``GET /login`` → provider, ``GET /callback`` (exchange + validate +
-nonce + UserInfo), ``GET /logout``. The transient PKCE/state/nonce and the
-resulting identity are kept in ``request.session`` (Starlette ``SessionMiddleware``).
+nonce + UserInfo), ``POST /logout``. The transient PKCE/state/nonce are kept
+under a separate ``<session_key>.flow`` entry and popped on callback (single
+use); the resulting identity is written to ``session[session_key]`` only after
+a verified ID token, so reading ``session[session_key]`` never observes an
+in-flight login. Logout is POST-only so a cross-site GET cannot force it.
 
 Security note: ``SessionMiddleware`` signs but does **not** encrypt the cookie.
 Identity claims stored there are tamper-proof but readable by the client. Raw
 tokens are stored only when ``store_tokens=True`` — enable that only with an
-encrypted or server-side session store.
+encrypted or server-side session store. Logout clears the local session only;
+it does not call the provider's ``end_session_endpoint``.
 """
 
 from __future__ import annotations
@@ -58,6 +62,25 @@ logger = logging.getLogger("fastapi_identity_model")
 _STATE_TOKEN_BYTES = 32
 
 
+def _flow_key(session_key: str) -> str:
+    """Session key holding transient login-flow state (state/nonce/verifier).
+
+    Kept separate from *session_key* (which holds the final identity) so a
+    consumer reading ``session[session_key]`` never observes an in-flight
+    login as an authenticated identity, and never sees the ``code_verifier``.
+    """
+    return f"{session_key}.flow"
+
+
+def _require_session(request: Request) -> None:
+    """Fail with a clear error when ``SessionMiddleware`` is not installed."""
+    if "session" not in request.scope:
+        raise RuntimeError(
+            "SessionMiddleware is required by the OIDC router but is not "
+            "installed. Add: app.add_middleware(SessionMiddleware, secret_key=...)"
+        )
+
+
 async def _discover(settings: OIDCSettings) -> DiscoveryDocumentResponse:
     disco = await get_discovery_document(
         DiscoveryDocumentRequest(address=settings.discovery_url),
@@ -82,6 +105,7 @@ def _require_endpoint(value: str | None, name: str) -> str:
 async def _login(
     request: Request, settings: OIDCSettings, session_key: str
 ) -> RedirectResponse:
+    _require_session(request)
     disco = await _discover(settings)
     authorization_endpoint = _require_endpoint(
         disco.authorization_endpoint, "authorization_endpoint"
@@ -89,7 +113,7 @@ async def _login(
     code_verifier, code_challenge = generate_pkce_pair()
     state = secrets.token_urlsafe(_STATE_TOKEN_BYTES)
     nonce = secrets.token_urlsafe(_STATE_TOKEN_BYTES)
-    request.session[session_key] = {
+    request.session[_flow_key(session_key)] = {
         "state": state,
         "nonce": nonce,
         "code_verifier": code_verifier,
@@ -140,14 +164,17 @@ async def _validate_id_token(
     expected_nonce: str,
 ) -> dict:
     """Validate the ID token (signature/iss/aud/exp/required claims) and bind the nonce."""
+    # Guard the issuer explicitly: a discovery doc missing ``issuer`` would
+    # otherwise pass ``issuer=None`` and silently disable issuer verification.
+    issuer = _require_endpoint(disco.issuer, "issuer")
     try:
         claims = await validate_token(
             jwt=id_token,
             token_validation_config=TokenValidationConfig(
                 perform_disco=True,
                 audience=settings.client_id,
-                issuer=disco.issuer,
-                options={"verify_exp": True, "require": ["sub", "iat"]},
+                issuer=issuer,
+                options={"verify_exp": True, "require": ["sub", "iat", "exp"]},
             ),
             disco_doc_address=settings.discovery_url,
         )
@@ -171,17 +198,31 @@ async def _fetch_userinfo(
     access_token: str | None,
     expected_sub: str | None,
 ) -> dict:
+    """Fetch UserInfo, enforcing the OIDC Core 5.3.2 ``sub`` match as a hard gate.
+
+    An unavailable UserInfo endpoint (no endpoint, or a transient fetch
+    failure) is tolerated — identity is anchored on the validated ID token.
+    But a *successful* fetch whose ``sub`` disagrees with the ID token is a
+    token-substitution signal and must abort the login, not be swallowed.
+    """
     userinfo_endpoint = disco.userinfo_endpoint
     if not access_token or not userinfo_endpoint:
         return {}
+    # Fetch without expected_sub so is_successful reflects only the fetch;
+    # the sub comparison is enforced here so a mismatch fails the login.
     ui = await get_userinfo(
-        UserInfoRequest(
-            address=userinfo_endpoint,
-            token=access_token,
-            expected_sub=expected_sub,
-        ),
+        UserInfoRequest(address=userinfo_endpoint, token=access_token),
     )
-    return ui.claims or {} if ui.is_successful else {}
+    if not ui.is_successful:
+        logger.warning("UserInfo fetch failed, continuing on ID token: %s", ui.error)
+        return {}
+    claims = ui.claims or {}
+    if expected_sub is not None and claims.get("sub") != expected_sub:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="UserInfo subject does not match ID token subject",
+        )
+    return claims
 
 
 async def _callback(
@@ -191,14 +232,23 @@ async def _callback(
     *,
     store_tokens: bool,
 ) -> RedirectResponse:
-    flow = request.session.get(session_key)
-    if not flow or "state" not in flow:
+    _require_session(request)
+    # Pop the flow state so it is single-use: a failed or replayed callback
+    # cannot reuse the same state/verifier for another attempt.
+    flow = request.session.pop(_flow_key(session_key), None)
+    if not flow or not {"state", "nonce", "code_verifier"} <= flow.keys():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No active login flow in session",
         )
 
-    cb = parse_authorize_callback_response(str(request.url))
+    try:
+        cb = parse_authorize_callback_response(str(request.url))
+    except PyIdentityModelException as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Malformed authorization callback: {exc}",
+        ) from exc
     if not cb.is_successful:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -220,9 +270,15 @@ async def _callback(
     id_token = token.get("id_token")
     access_token = token.get("access_token")
 
-    claims: dict = {}
-    if id_token:
-        claims = await _validate_id_token(settings, disco, id_token, flow["nonce"])
+    # An OIDC login flow (openid scope, nonce sent) requires a verified ID
+    # token. Refuse to establish a session on a token response that omits it
+    # rather than degrading to an unauthenticated "logged-in" session.
+    if not id_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Provider did not return an ID token",
+        )
+    claims = await _validate_id_token(settings, disco, id_token, flow["nonce"])
 
     userinfo = await _fetch_userinfo(disco, access_token, claims.get("sub"))
 
@@ -262,6 +318,11 @@ def build_oidc_router(
     Returns:
         An ``APIRouter`` with ``/login``, ``/callback`` and ``/logout`` routes.
     """
+    if not settings.redirect_uri:
+        raise ValueError(
+            "build_oidc_router requires settings.redirect_uri (the provider "
+            "callback URL); it is only optional for resource-server-only setups."
+        )
     router = APIRouter()
 
     @router.get("/login")
@@ -274,12 +335,16 @@ def build_oidc_router(
             request, settings, session_key, store_tokens=store_tokens
         )
 
-    @router.get("/logout")
+    @router.post("/logout")
     async def logout(request: Request) -> RedirectResponse:
+        # POST-only: a state-changing session mutation must not be triggerable
+        # by a cross-site GET (e.g. an <img> tag) under a Lax cookie.
+        _require_session(request)
         request.session.pop(session_key, None)
+        request.session.pop(_flow_key(session_key), None)
         return RedirectResponse(
             settings.post_logout_redirect,
-            status_code=status.HTTP_302_FOUND,
+            status_code=status.HTTP_303_SEE_OTHER,
         )
 
     return router

@@ -47,7 +47,7 @@ Interactive docs: <http://localhost:8000/docs>.
 | Path | Auth | Description |
 |------|------|-------------|
 | `/`, `/health` | none | Public |
-| `/auth/login`, `/auth/callback`, `/auth/logout` | session | RP login flow |
+| `GET /auth/login`, `GET /auth/callback`, `POST /auth/logout` | session | RP login flow |
 | `/me` | session | Logged-in identity from the session cookie |
 | `/api/me`, `/api/claims`, `/api/profile`, `/api/token-info` | Bearer | Validated-token info |
 | `/api/data` (GET/POST) | Bearer + scope | Scope-based authorization |
@@ -62,7 +62,8 @@ Interactive docs: <http://localhost:8000/docs>.
 | `REDIRECT_URI` | `http://localhost:8000/auth/callback` | Must match the router's callback |
 | `CLIENT_SECRET` | _(unset)_ | Omit for public/PKCE clients |
 | `AUDIENCE` | `py-identity-model` | Expected token audience |
-| `SESSION_SECRET` | `dev-insecure-change-me` | **Set a real secret in production** |
+| `SESSION_SECRET` | _(random per run)_ | Set a stable secret so sessions survive restarts; never a shared/committed value |
+| `SESSION_HTTPS_ONLY` | `false` | Set `true` behind TLS to add the cookie `Secure` flag |
 
 ## Tests
 

@@ -18,7 +18,8 @@ class OIDCSettings:
         discovery_url: OpenID Connect discovery document URL of the provider.
         client_id: OAuth2 client identifier.
         redirect_uri: Absolute callback URL registered with the provider
-            (must match the router's ``/callback`` route).
+            (must match the router's ``/callback`` route). Only required for the
+            login router; a resource-server-only deployment may leave it empty.
         client_secret: Client secret; omit for public/PKCE clients.
         scope: Space-delimited scopes requested at authorization.
         audience: Expected ``aud`` for the resource-server middleware. Defaults
@@ -30,7 +31,7 @@ class OIDCSettings:
 
     discovery_url: str
     client_id: str
-    redirect_uri: str
+    redirect_uri: str = ""
     client_secret: str | None = None
     scope: str = "openid profile email"
     audience: str | None = None
@@ -39,6 +40,11 @@ class OIDCSettings:
     excluded_paths: list[str] = field(default_factory=_default_excluded_paths)
 
     def __post_init__(self) -> None:
+        # Validate required fields are non-empty even on direct construction
+        # (from_env guards its own inputs, but OIDCSettings(...) did not).
+        for name in ("discovery_url", "client_id"):
+            if not getattr(self, name):
+                raise ValueError(f"OIDCSettings requires a non-empty {name}")
         # The middleware validates the ID/access token audience; default it to
         # the client_id, which is the audience Descope and most OPs mint.
         if self.audience is None:
@@ -48,8 +54,9 @@ class OIDCSettings:
     def from_env(cls, prefix: str = "OIDC_") -> OIDCSettings:
         """Build settings from environment variables (e.g. ``OIDC_DISCOVERY_URL``).
 
-        Required: ``{prefix}DISCOVERY_URL``, ``{prefix}CLIENT_ID``,
-        ``{prefix}REDIRECT_URI``. Others fall back to the dataclass defaults.
+        Required: ``{prefix}DISCOVERY_URL``, ``{prefix}CLIENT_ID``. ``REDIRECT_URI``
+        is required only for the login router; a resource-server-only deployment
+        may omit it. Others fall back to the dataclass defaults.
         """
 
         def _req(name: str) -> str:
@@ -62,7 +69,7 @@ class OIDCSettings:
         return cls(
             discovery_url=_req("DISCOVERY_URL"),
             client_id=_req("CLIENT_ID"),
-            redirect_uri=_req("REDIRECT_URI"),
+            redirect_uri=os.environ.get(f"{prefix}REDIRECT_URI", ""),
             client_secret=os.environ.get(f"{prefix}CLIENT_SECRET"),
             scope=os.environ.get(f"{prefix}SCOPE", "openid profile email"),
             audience=os.environ.get(f"{prefix}AUDIENCE"),

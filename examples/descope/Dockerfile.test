@@ -15,6 +15,7 @@ COPY pyproject.toml /workspace/pyproject.toml
 COPY uv.lock /workspace/uv.lock
 COPY README.md /workspace/README.md
 COPY src /workspace/src
+COPY packages/fastapi-identity-model /workspace/packages/fastapi-identity-model
 COPY examples/fastapi /workspace/examples/fastapi
 COPY examples/descope /workspace/examples/descope
 

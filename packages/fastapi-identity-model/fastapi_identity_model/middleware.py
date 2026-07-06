@@ -18,6 +18,7 @@ from starlette.responses import (  # type: ignore[attr-defined]
 )
 
 from py_identity_model import (
+    NetworkException,
     PyIdentityModelException,
     TokenValidationConfig,
     to_principal,
@@ -30,6 +31,11 @@ logger = logging.getLogger("fastapi_identity_model")
 # Expected number of parts in "Bearer <token>" authorization header
 _BEARER_HEADER_PART_COUNT = 2
 
+# Claims that only ever appear in an ID token (OIDC Core 1.0 §2, §3.1.3.6).
+# Their presence means an ID token was presented where an access token is
+# expected — reject it to prevent token-substitution at the resource server.
+_ID_TOKEN_ONLY_CLAIMS = ("nonce", "at_hash", "c_hash")
+
 
 class TokenValidationMiddleware(BaseHTTPMiddleware):
     """
@@ -41,8 +47,14 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
     Args:
         app: The FastAPI application
         discovery_url: The OpenID Connect discovery document URL
-        audience: Expected audience claim in the token
-        excluded_paths: List of paths that should skip token validation
+        audience: Expected audience claim in the token. Required — a ``None``
+            audience does not enforce ``aud`` for tokens that omit the claim,
+            which on a shared multi-tenant issuer accepts tokens minted for
+            other clients.
+        excluded_paths: Paths that skip token validation. A path matches if it
+            equals an entry or is a subpath of one (``/docs`` also covers
+            ``/docs/oauth2-redirect``). Pass ``[]`` to exclude nothing. When
+            omitted, defaults to ``/docs``, ``/openapi.json``, ``/health``.
         custom_claims_validator: Optional custom function to validate additional claims
     """
 
@@ -55,80 +67,104 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
         custom_claims_validator: Callable | None = None,
     ):
         super().__init__(app)
+        if not audience:
+            raise ValueError(
+                "TokenValidationMiddleware requires a non-empty 'audience'; a "
+                "None/empty audience skips aud enforcement for aud-less tokens."
+            )
         self.discovery_url = discovery_url
         self.audience = audience
-        self.excluded_paths = excluded_paths or [
-            "/docs",
-            "/openapi.json",
-            "/health",
-        ]
+        # ``is not None`` (not truthiness) so an explicit [] means "exclude
+        # nothing" instead of silently re-enabling the defaults.
+        self.excluded_paths = (
+            excluded_paths
+            if excluded_paths is not None
+            else ["/docs", "/openapi.json", "/health"]
+        )
         self.custom_claims_validator = custom_claims_validator
 
-    async def dispatch(self, request: Request, call_next) -> Response:
-        """Process the request and validate the token if required."""
+    def _is_excluded(self, path: str) -> bool:
+        """Whether *path* equals or is a subpath of an excluded entry."""
+        return any(
+            path == entry or path.startswith(entry.rstrip("/") + "/")
+            for entry in self.excluded_paths
+        )
 
-        # Skip validation for excluded paths
-        if request.url.path in self.excluded_paths:
-            return await call_next(request)
+    @staticmethod
+    def _unauthorized(detail: str) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": detail},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-        # Extract token from Authorization header
-        authorization: str | None = request.headers.get("Authorization")
-
+    def _extract_bearer_token(
+        self, request: Request
+    ) -> tuple[str | None, JSONResponse | None]:
+        """Return ``(token, None)`` or ``(None, error_response)``."""
+        authorization = request.headers.get("Authorization")
         if not authorization:
-            return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": "Missing Authorization header"},
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        # Parse Bearer token
+            return None, self._unauthorized("Missing Authorization header")
         parts = authorization.split()
         if len(parts) != _BEARER_HEADER_PART_COUNT or parts[0].lower() != "bearer":
-            return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                content={
-                    "detail": "Invalid Authorization header format. Expected: Bearer <token>",
-                },
-                headers={"WWW-Authenticate": "Bearer"},
+            return None, self._unauthorized(
+                "Invalid Authorization header format. Expected: Bearer <token>"
             )
+        return parts[1], None
 
-        token = parts[1]
-
-        # Validate token asynchronously
+    async def _authenticate(self, request: Request, token: str) -> JSONResponse | None:
+        """Validate *token* and attach claims; return an error response or None."""
         try:
-            validation_config = TokenValidationConfig(
-                perform_disco=True,
-                audience=self.audience,
-                claims_validator=self.custom_claims_validator,
-            )
-
             claims = await validate_token(
                 jwt=token,
-                token_validation_config=validation_config,
+                token_validation_config=TokenValidationConfig(
+                    perform_disco=True,
+                    audience=self.audience,
+                    claims_validator=self.custom_claims_validator,
+                ),
                 disco_doc_address=self.discovery_url,
             )
-
-            # Convert claims to ClaimsPrincipal and attach to request state
-            principal = to_principal(claims)
-            request.state.user = principal
+            # Reject an ID token presented as an access token. With audience
+            # defaulted to client_id, an ID token's aud matches, so type must
+            # be discriminated on ID-token-only claims.
+            if any(c in claims for c in _ID_TOKEN_ONLY_CLAIMS):
+                return self._unauthorized("ID token cannot be used as an access token")
+            request.state.user = to_principal(claims)
             request.state.claims = claims
             request.state.token = token
-
-        except PyIdentityModelException as e:
+            return None
+        except NetworkException:
+            # Discovery/JWKS/network fetch failure is a transient server fault,
+            # not an authentication decision — surface 5xx so callers retry
+            # instead of treating a provider outage as a bad token.
+            logger.exception("Network error during token validation")
             return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": f"Token validation failed: {e!s}"},
-                headers={"WWW-Authenticate": "Bearer"},
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"detail": "Authentication temporarily unavailable"},
             )
+        except PyIdentityModelException as e:
+            return self._unauthorized(f"Token validation failed: {e!s}")
         except Exception:
-            # An unexpected failure (e.g. transient network/JWKS error) is a
-            # server fault, not an authentication decision. Surface a 500
-            # without leaking internals rather than masking it as a 401.
+            # A genuinely unexpected (non-library) failure is a server fault,
+            # not an auth decision. Surface a 500 without leaking internals.
             logger.exception("Unexpected error during token validation")
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 content={"detail": "Internal server error during authentication"},
             )
 
-        # Continue processing the request
+    async def dispatch(self, request: Request, call_next) -> Response:
+        """Process the request and validate the token if required."""
+        # CORS preflight carries no Authorization; excluded paths skip auth.
+        if request.method == "OPTIONS" or self._is_excluded(request.url.path):
+            return await call_next(request)
+
+        token, error = self._extract_bearer_token(request)
+        if error is not None:
+            return error
+
+        auth_error = await self._authenticate(request, token)
+        if auth_error is not None:
+            return auth_error
+
         return await call_next(request)

@@ -53,6 +53,8 @@ masked as a 401).
 ## Relying party — browser login flow
 
 ```python
+import os
+
 from fastapi import FastAPI, Request
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi_identity_model import OIDCSettings, build_oidc_router
@@ -65,7 +67,15 @@ settings = OIDCSettings(
 )
 
 app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key="change-me")   # required by the router
+# Use a strong secret from the environment — never a committed literal, or
+# anyone can forge a session cookie. same_site="lax" is required so the
+# provider's redirect back to /auth/callback carries the session cookie.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.environ["SESSION_SECRET"],
+    same_site="lax",
+    https_only=True,  # behind TLS
+)
 app.include_router(build_oidc_router(settings), prefix="/auth")
 
 @app.get("/me")
@@ -74,7 +84,7 @@ async def me(request: Request):
 ```
 
 Routes added: `GET /auth/login` → provider, `GET /auth/callback` (code exchange,
-ID-token validation, **nonce check**, UserInfo `sub` verification), `GET /auth/logout`.
+ID-token validation, **nonce check**, UserInfo `sub` verification), `POST /auth/logout`.
 
 ### Session & security
 

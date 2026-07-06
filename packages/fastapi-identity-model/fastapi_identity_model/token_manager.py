@@ -7,6 +7,7 @@ it expires. It is a thin convenience layer over
 core library.
 """
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 from py_identity_model import PyIdentityModelException
@@ -60,6 +61,9 @@ class TokenManager:
         self._access_token: str | None = None
         self._refresh_token: str | None = None
         self._expires_at: datetime | None = None
+        # Serialize refreshes so concurrent callers don't each fire the grant
+        # (which, with refresh-token rotation, would invalidate the family).
+        self._refresh_lock = asyncio.Lock()
 
     def set_tokens(
         self,
@@ -70,8 +74,12 @@ class TokenManager:
         """Store the current token pair and (optionally) its expiry."""
         self._access_token = access_token
         self._refresh_token = refresh_token
+        # ``is not None`` (not truthiness) so expires_in=0 means "already
+        # expired" rather than "no expiry / never refresh".
         self._expires_at = (
-            datetime.now(UTC) + timedelta(seconds=expires_in) if expires_in else None
+            datetime.now(UTC) + timedelta(seconds=expires_in)
+            if expires_in is not None
+            else None
         )
 
     def is_token_expired(self) -> bool:
@@ -103,38 +111,45 @@ class TokenManager:
         if self._access_token and not self.is_token_expired():
             return self._access_token
 
-        if not self._refresh_token:
-            raise PyIdentityModelException(
-                "Token expired and no refresh token available",
+        async with self._refresh_lock:
+            # Re-check under the lock: a concurrent caller may have already
+            # refreshed while this one waited to acquire it.
+            if self._access_token and not self.is_token_expired():
+                return self._access_token
+
+            if not self._refresh_token:
+                raise PyIdentityModelException(
+                    "Token expired and no refresh token available",
+                )
+
+            token_endpoint = await self._resolve_token_endpoint()
+            response = await refresh_token(
+                RefreshTokenRequest(
+                    address=token_endpoint,
+                    client_id=self.client_id,
+                    refresh_token=self._refresh_token,
+                    client_secret=self.client_secret,
+                ),
             )
 
-        token_endpoint = await self._resolve_token_endpoint()
-        response = await refresh_token(
-            RefreshTokenRequest(
-                address=token_endpoint,
-                client_id=self.client_id,
-                refresh_token=self._refresh_token,
-                client_secret=self.client_secret,
-            ),
-        )
+            if not response.is_successful or not response.token:
+                raise PyIdentityModelException(
+                    f"Token refresh failed: {response.error or 'no token in response'}",
+                )
 
-        if not response.is_successful or not response.token:
-            raise PyIdentityModelException(
-                f"Token refresh failed: {response.error or 'no token in response'}",
+            new_access_token = response.token.get("access_token")
+            if not new_access_token:
+                raise PyIdentityModelException(
+                    "Token refresh succeeded but no access token returned",
+                )
+
+            self.set_tokens(
+                access_token=new_access_token,
+                refresh_token=response.token.get("refresh_token")
+                or self._refresh_token,
+                expires_in=response.token.get("expires_in"),
             )
-
-        new_access_token = response.token.get("access_token")
-        if not new_access_token:
-            raise PyIdentityModelException(
-                "Token refresh succeeded but no access token returned",
-            )
-
-        self.set_tokens(
-            access_token=new_access_token,
-            refresh_token=response.token.get("refresh_token") or self._refresh_token,
-            expires_in=response.token.get("expires_in"),
-        )
-        return self._access_token
+            return self._access_token
 
     @property
     def access_token(self) -> str | None:

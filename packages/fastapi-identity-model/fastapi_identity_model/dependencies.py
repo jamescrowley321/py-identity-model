@@ -266,17 +266,17 @@ def require_scope(scope: str) -> Callable[..., None]:
     """
 
     def _check_scope(claims: Claims) -> None:
-        # Scopes can be in 'scope' (space-separated string) or 'scp' (array)
-        scope_claim = claims.get("scope") or claims.get("scp")
-
-        if not scope_claim:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="No scope claim found in token",
-            )
-
-        # Handle space-separated string or array
-        scopes = scope_claim.split() if isinstance(scope_claim, str) else scope_claim
+        # Scopes live in 'scope' (space-separated string) or 'scp' (array).
+        raw = claims.get("scope") or claims.get("scp")
+        if isinstance(raw, str):
+            scopes: list = raw.split()
+        elif isinstance(raw, (list, tuple)):
+            scopes = [s for s in raw if isinstance(s, str)]
+        else:
+            # A dict/number/None or any unexpected type is not a usable scope
+            # claim — fail closed rather than letting `in` match dict keys or
+            # raise a TypeError.
+            scopes = []
 
         if scope not in scopes:
             raise HTTPException(
