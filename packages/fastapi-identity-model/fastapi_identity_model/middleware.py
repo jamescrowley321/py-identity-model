@@ -98,19 +98,17 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    def _extract_bearer_token(
-        self, request: Request
-    ) -> tuple[str | None, JSONResponse | None]:
-        """Return ``(token, None)`` or ``(None, error_response)``."""
+    def _extract_bearer_token(self, request: Request) -> str | JSONResponse:
+        """Return the bearer token, or an error ``JSONResponse`` if absent/malformed."""
         authorization = request.headers.get("Authorization")
         if not authorization:
-            return None, self._unauthorized("Missing Authorization header")
+            return self._unauthorized("Missing Authorization header")
         parts = authorization.split()
         if len(parts) != _BEARER_HEADER_PART_COUNT or parts[0].lower() != "bearer":
-            return None, self._unauthorized(
+            return self._unauthorized(
                 "Invalid Authorization header format. Expected: Bearer <token>"
             )
-        return parts[1], None
+        return parts[1]
 
     async def _authenticate(self, request: Request, token: str) -> JSONResponse | None:
         """Validate *token* and attach claims; return an error response or None."""
@@ -159,9 +157,9 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS" or self._is_excluded(request.url.path):
             return await call_next(request)
 
-        token, error = self._extract_bearer_token(request)
-        if error is not None:
-            return error
+        token = self._extract_bearer_token(request)
+        if isinstance(token, JSONResponse):
+            return token
 
         auth_error = await self._authenticate(request, token)
         if auth_error is not None:
