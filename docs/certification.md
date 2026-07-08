@@ -1,5 +1,17 @@
 # OpenID Connect Certification
 
+<a href="https://openid.net/certification/certified-openid-relying-parties-profiles/">
+  <img src="assets/openid-certified.png" alt="OpenID Certified" width="220">
+</a>
+
+> **Certified.** py-identity-model is [OpenID Certified<sup>®</sup>](https://openid.net/certification/certified-openid-relying-parties-profiles/)
+> by the OpenID Foundation as a Relying Party for the **Basic RP**, **Config RP**,
+> and **Form Post Basic RP** profiles — certified **2 July 2026** as
+> `py-identity-model 3.1.0`. The listing appears on the OIDF
+> [Certified OpenID Relying Parties](https://openid.net/certification/certified-openid-relying-parties-profiles/)
+> and [Certified OpenID Connect Implementations](https://openid.net/certification/certified-openid-connect-implementations/)
+> pages. *OpenID Certified is a certification mark of the OpenID Foundation.*
+
 This page documents how py-identity-model is tested for, and submitted to, the
 [OpenID Foundation conformance program](https://openid.net/certification/) as a
 certified **Relying Party (RP)** library, and how the submission artifacts are
@@ -8,12 +20,12 @@ generated from this repository.
 ## What is certified
 
 The **library itself** is the certified deployment — listed as
-`py-identity-model <version>`, the same model Roland Hedberg used for
+`py-identity-model 3.1.0`, the same model Roland Hedberg used for
 `pyoidc`/`oidcrp` and Duende used for `IdentityModel.OidcClient`. The
 `conformance/` harness is **disposable scaffolding** that drives the library
 through the OIDF conformance suite; it is not shipped, versioned, or certified.
 
-Target profiles (all passing against `certification.openid.net`):
+Certified profiles (certified 2 July 2026, all passing against `certification.openid.net`):
 
 | Profile | Plan | Result |
 |---------|------|--------|
@@ -178,12 +190,22 @@ flow is portal-based:
 
 ## Status
 
-Library code and conformance harness are complete; all three target profiles
-pass against the hosted suite, and both submission artifacts (6 zips total) are
-generated automatically. The remaining steps are owner-driven and tracked in
-#331 / #242:
+**Certified.** The submission for `py-identity-model 3.1.0` was approved and
+published by the OIDF on **2 July 2026**, covering the **Basic RP**, **Config
+RP**, and **Form Post Basic RP** profiles. The listing is live on the OIDF
+[Certified OpenID Relying Parties](https://openid.net/certification/certified-openid-relying-parties-profiles/)
+and [Certified OpenID Connect Implementations](https://openid.net/certification/certified-openid-connect-implementations/)
+pages. Tracked in #331 / #242.
 
-1. **Obtain a payment code** (fee waiver via `certification@oidf.org`) — the
-   submission form is blocked without it. This is the current gating step.
-2. Complete the portal submission and upload the 6 artifact zips.
-3. Sign the Declaration of Conformance when OIDF sends it for signature.
+The submission workflow that produced this certification (all steps complete):
+
+1. ~~**Obtain a payment code**~~ — done (fee waiver via `certification@oidf.org`).
+2. ~~Complete the portal submission and upload the 6 artifact zips.~~ — done.
+3. ~~Sign the Declaration of Conformance when OIDF sends it for signature.~~ — done.
+
+### Re-certifying a new version
+
+Certification is pinned to the certified version (`3.1.0`). A later release is
+**not** automatically certified. To certify a new version, re-run the hosted
+suite to regenerate the 6 artifacts (`make conformance-test HOSTED=1 ...`) and
+repeat the [portal submission](#submitting-to-oidf) for the new deployment name.
