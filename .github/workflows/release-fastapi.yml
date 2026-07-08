@@ -1,21 +1,20 @@
-# Independent release pipeline for the `fastapi-identity-model` sub-package.
+# Publish pipeline for the `fastapi-identity-model` sub-package.
 #
-# Deliberately decoupled from the root `release.yml` (python-semantic-release):
-# a `fastapi-identity-model-v*` tag builds, tests, validates and PUBLISHES;
+# A `fastapi-identity-model-v*` tag builds, tests, validates and PUBLISHES;
 # a manual workflow_dispatch runs the same build/test/validate as a dry run but
 # does NOT publish. The package version is owned by
 # packages/fastapi-identity-model/pyproject.toml.
-# That keeps `feat(fastapi): ...` commits from bumping the root py-identity-model
-# version. Commit package-only changes with non-releasing types (build/chore/…)
-# so the root pipeline stays quiet.
+#
+# Tags are normally cut automatically: the `release-fastapi-version` job in
+# release.yml runs python-semantic-release with the package's config, which
+# versions from `feat(fastapi)`/`fix(fastapi)` commits on main (scope routing:
+# tools/release_parsers.py) and pushes the tag that triggers this workflow.
+# A manually pushed `fastapi-identity-model-v<version>` tag works the same way
+# (the tag/version-match guard below still applies).
 #
 # One-time owner setup: register a PyPI Trusted Publisher for the project
 # `fastapi-identity-model` pointing at this repo + workflow `release-fastapi.yml`
 # + environment `pypi`. No API token is stored (publishing uses OIDC).
-#
-# Cut a release:
-#   1. bump `version` in packages/fastapi-identity-model/pyproject.toml (+ CHANGELOG)
-#   2. git tag fastapi-identity-model-v<version> && git push --tags
 name: Release fastapi-identity-model
 
 on:

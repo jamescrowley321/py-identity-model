@@ -244,14 +244,18 @@ This repo is a `uv` workspace. Besides the core `py-identity-model` library
 - **`packages/fastapi-identity-model/`** — FastAPI OIDC middleware + relying-party
   login router, built on the core library. Independently versioned and published.
   - Test + typecheck: `make test-fastapi`. Build: `make build-fastapi`.
-  - **Released independently** via `.github/workflows/release-fastapi.yml`
-    (manual dispatch or a `fastapi-identity-model-v*` tag, PyPI trusted
-    publishing). Its version lives in its own `pyproject.toml` + `CHANGELOG.md`,
-    not in the root semantic-release config.
-  - **Commit convention:** to avoid bumping the root `py-identity-model` version,
-    commit package-only changes with **non-releasing** types (`build`/`chore`/
-    `refactor`/`docs`/`test`) scoped `(fastapi)`. Only core-library `feat`/`fix`/
-    `perf` commits should drive the root semantic-release.
+  - **Released automatically** by semantic-release: `feat(fastapi)`/`fix(fastapi)`
+    commits on `main` bump the package's own version (config in the package
+    `pyproject.toml`, invoked by the `release-fastapi-version` job in
+    `release.yml`); the resulting `fastapi-identity-model-v*` tag triggers
+    `.github/workflows/release-fastapi.yml`, which publishes to PyPI via
+    trusted publishing.
+  - **Commit convention:** scope every package commit `(fastapi)` — a custom
+    scope-routed parser (`tools/release_parsers.py`) sends `(fastapi)` commits
+    to the package pipeline and everything else to the root pipeline, so
+    `feat(fastapi)` never bumps the core library. The routing is scope-based,
+    not path-based: an **unscoped** `fix:` touching only `packages/` would
+    still bump the core, so the scope is load-bearing.
 
 ## Version Management
 

@@ -130,3 +130,50 @@ jobs:
           echo "No release was created. This can happen if:" >> $GITHUB_STEP_SUMMARY
           echo "- There are no releasable commits (commits must follow conventional commit format)" >> $GITHUB_STEP_SUMMARY
           echo "- The version would not change based on the commits" >> $GITHUB_STEP_SUMMARY
+
+  # Version the fastapi-identity-model package from "(fastapi)"-scoped commits
+  # (scope routing: tools/release_parsers.py; config: the package's
+  # pyproject.toml). Runs AFTER the core release job so the two pipelines never
+  # push to main concurrently. When it cuts a version, the PAT-pushed
+  # fastapi-identity-model-v* tag triggers release-fastapi.yml, which builds
+  # and publishes to PyPI via trusted publishing. Main-only: the package config
+  # has no prerelease branch group, so other branches must not run it.
+  release-fastapi-version:
+    needs: release
+    if: ${{ (github.event.inputs.branch || github.ref_name) == 'main' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-release-fastapi-${{ github.ref_name }}
+      cancel-in-progress: false
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Sync with commits pushed by the core release job
+        run: git pull --ff-only origin main
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Version fastapi-identity-model
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GIT_COMMIT_AUTHOR: "github-actions <actions@users.noreply.github.com>"
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          uvx --from python-semantic-release==10.6.1 semantic-release \
+            -c packages/fastapi-identity-model/pyproject.toml version
