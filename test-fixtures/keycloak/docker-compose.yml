@@ -1,0 +1,36 @@
+services:
+  keycloak:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: keycloak-provider
+    command: start-dev --import-realm
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      # Keycloak 26+ bootstrap admin variable names (KEYCLOAK_ADMIN* are deprecated).
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+    healthcheck:
+      # The Keycloak ubi9 image ships bash but no wget/curl. Probe the IMPORTED
+      # realm's discovery document over bash's /dev/tcp so `--wait` (and any
+      # `depends_on: service_healthy`) only turns green AFTER --import-realm has
+      # finished. A plain TCP-on-8080 check would go healthy before the realm
+      # exists and race downstream integration tests.
+      #
+      # /dev/tcp is a bash-only feature, so invoke `bash -c` explicitly rather
+      # than relying on CMD-SHELL's /bin/sh. The status match is anchored to the
+      # HTTP status line (^HTTP/1.x 200) so it can't be fooled by a "200 OK"
+      # substring appearing elsewhere in the response body.
+      test:
+        - "CMD"
+        - "bash"
+        - "-c"
+        - >-
+          exec 3<>/dev/tcp/localhost/8080 &&
+          printf 'GET /realms/py-identity-model/.well-known/openid-configuration HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 &&
+          grep -qE '^HTTP/1\.[01] 200' <&3
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s

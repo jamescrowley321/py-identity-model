@@ -134,6 +134,7 @@ dmypy.json
 *.env*
 # Allow test fixture env files (no secrets — local Docker only)
 !.env.node-oidc
+!.env.keycloak
 *.crt
 *.key
 *.pfx

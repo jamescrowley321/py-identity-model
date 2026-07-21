@@ -1,0 +1,90 @@
+{
+  "realm": "py-identity-model",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "clients": [
+    {
+      "clientId": "py-identity-model-client",
+      "name": "py-identity-model service-account client",
+      "description": "Confidential client for client_credentials / service-account tests.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "py-identity-model-client-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": true
+    },
+    {
+      "clientId": "test-auth-code",
+      "name": "test-auth-code confidential client",
+      "description": "Confidential authorization-code client. Carries back-channel logout config for BCL/RPL/KC.5 live tests.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "test-auth-code-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:8080/callback"],
+      "webOrigins": ["+"],
+      "fullScopeAllowed": true,
+      "frontchannelLogout": false,
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:8080/*",
+        "backchannel.logout.url": "http://localhost:8080/backchannel-logout",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "false"
+      }
+    },
+    {
+      "clientId": "test-pkce-public",
+      "name": "test-pkce-public public client",
+      "description": "Public authorization-code client that requires PKCE S256.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:8080/callback"],
+      "webOrigins": ["+"],
+      "fullScopeAllowed": true,
+      "frontchannelLogout": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8080/*"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "test-user",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "test@example.com",
+      "firstName": "Test",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test-user-password",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}
