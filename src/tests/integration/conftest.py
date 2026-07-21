@@ -8,11 +8,13 @@ Includes:
 
 from contextlib import suppress
 from dataclasses import dataclass
+from html import unescape
+from html.parser import HTMLParser
 import json
 import secrets
 import time
 from types import MappingProxyType
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode, urljoin, urlparse
 
 from filelock import FileLock
 import httpx
@@ -648,6 +650,109 @@ def _follow_redirects_counted(
     return None, resp
 
 
+class _LoginFormParser(HTMLParser):
+    """Extract the HTML login ``<form>`` — the one carrying a password input.
+
+    Providers that render a server-side login page (e.g. Keycloak) return an
+    HTML ``<form action=".../login-actions/authenticate?...">`` with
+    ``username``/``password`` inputs rather than node-oidc's devInteractions
+    JSON-ish endpoint. This captures that form's action plus every input
+    name/value so hidden fields (Keycloak's ``credentialId`` etc.) round-trip.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._in_form = False
+        self._current_action: str | None = None
+        self._current_inputs: dict[str, str] = {}
+        self._current_has_password = False
+        self.action: str | None = None
+        self.inputs: dict[str, str] = {}
+        self.field_names: set[str] = set()
+
+    def handle_starttag(self, tag, attrs):
+        attrs_d = {k: (v or "") for k, v in attrs}
+        if tag == "form":
+            self._in_form = True
+            self._current_action = attrs_d.get("action")
+            self._current_inputs = {}
+            self._current_has_password = False
+        elif tag == "input" and self._in_form:
+            name = attrs_d.get("name")
+            if not name:
+                return
+            self._current_inputs[name] = attrs_d.get("value", "")
+            if attrs_d.get("type", "").lower() == "password":
+                self._current_has_password = True
+
+    def handle_endtag(self, tag):
+        if tag == "form" and self._in_form:
+            # Keep the first form that actually collects a password
+            if self._current_has_password and self.action is None:
+                self.action = self._current_action
+                self.inputs = dict(self._current_inputs)
+                self.field_names = set(self._current_inputs)
+            self._in_form = False
+
+
+def _parse_login_form(html_text: str, base_url: str):
+    """Parse an HTML login form.
+
+    Returns ``(action_url, field_names, hidden)`` where ``action_url`` is the
+    absolute, HTML-entity-unescaped POST target (``&amp;`` -> ``&``), or
+    ``None`` when no password-bearing form is present. ``hidden`` holds every
+    input except the credential fields the caller fills.
+    """
+    parser = _LoginFormParser()
+    parser.feed(html_text)
+    if not parser.field_names:
+        return None
+    action = unescape(parser.action) if parser.action else base_url
+    action_url = urljoin(base_url, action)
+    hidden = {
+        k: v
+        for k, v in parser.inputs.items()
+        if k not in {"username", "login", "password"}
+    }
+    return action_url, parser.field_names, hidden
+
+
+def _submit_login(client, resp, interaction_url, config):
+    """Submit login credentials, handling both provider login styles.
+
+    node-oidc exposes a devInteractions endpoint that dispatches on a
+    ``prompt`` field; server-rendered providers (e.g. Keycloak) return an HTML
+    ``<form>`` that must be parsed for its action and field names. Returns the
+    post-login response for the caller's redirect-following loop.
+    """
+    if "/interaction/" in interaction_url:
+        # node-oidc devInteractions: a single endpoint dispatches on the
+        # `prompt` field. Left byte-for-byte identical to preserve the
+        # existing (passing) node-oidc flow.
+        return client.post(
+            interaction_url,
+            data={
+                "prompt": "login",
+                "login": config.login_hint,
+                "password": config.login_password,
+            },
+        )
+    # Generic server-rendered HTML login form (e.g. Keycloak). Parse the
+    # returned form for its action + field names, echo back any hidden
+    # fields, and fill whichever username field the form uses.
+    form = _parse_login_form(resp.text, interaction_url)
+    if form is None:
+        pytest.fail(f"Could not locate a login form at {interaction_url}")
+    action_url, field_names, hidden = form
+    data = dict(hidden)
+    if "username" in field_names:
+        data["username"] = config.login_hint
+    if "login" in field_names:
+        data["login"] = config.login_hint
+    data["password"] = config.login_password
+    return client.post(action_url, data=data)
+
+
 @dataclass(frozen=True)
 class AuthCodeFlowConfig:
     """Optional configuration for :func:`perform_auth_code_flow`."""
@@ -721,14 +826,7 @@ def perform_auth_code_flow(
             pytest.fail(f"Auth request failed: {resp.status_code} at {resp.url}")
 
         interaction_url = str(resp.url)
-        resp = client.post(
-            interaction_url,
-            data={
-                "prompt": "login",
-                "login": config.login_hint,
-                "password": config.login_password,
-            },
-        )
+        resp = _submit_login(client, resp, interaction_url, config)
 
         callback_url, resp = _follow_redirects_counted(
             client, resp, redirect_uri, total_redirects
