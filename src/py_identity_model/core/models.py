@@ -1143,13 +1143,18 @@ class ClientRegistrationResponse(BaseResponse):
     """Response from the client registration endpoint (RFC 7591 / RFC 7592).
 
     Returned by register, read, and update operations.  Check
-    ``is_successful`` before accessing ``client_id``,
+    ``is_successful`` before accessing ``client_id``, ``client_secret``,
     ``registration_access_token`` or ``registration_client_uri``.
     ``metadata`` echoes the full client configuration returned by the server.
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset(
-        {"client_id", "registration_access_token", "registration_client_uri"}
+        {
+            "client_id",
+            "client_secret",
+            "registration_access_token",
+            "registration_client_uri",
+        }
     )
 
     client_id: str | None = None

@@ -122,7 +122,8 @@ def _extract_error_message(response: httpx.Response, operation: str) -> str:
         return error_code
     return (
         f"Client {operation} request failed with status code: "
-        f"{response.status_code}. Response Content: {response.text}"
+        f"{response.status_code}. Response Content: "
+        f"{response.text[:200] or '(empty)'}"
     )
 
 
