@@ -192,8 +192,13 @@ def build_end_session_url(  # noqa: PLR0913  # RP-Initiated Logout 1.0 §2 defin
     if not params:
         return end_session_endpoint
 
+    query_string = urlencode(params)
+    # A bare trailing "?" or "&" already introduces the query component; appending
+    # another separator would corrupt the first parameter key (e.g. "logout??a=1").
+    if end_session_endpoint.endswith(("?", "&")):
+        return f"{end_session_endpoint}{query_string}"
     separator = "&" if parsed.query else "?"
-    return f"{end_session_endpoint}{separator}{urlencode(params)}"
+    return f"{end_session_endpoint}{separator}{query_string}"
 
 
 def validate_post_logout_state(

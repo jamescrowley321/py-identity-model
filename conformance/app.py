@@ -995,7 +995,12 @@ def logout() -> RedirectResponse | JSONResponse:
         state=_expected_logout_state,
     )
 
-    logger.info("Redirecting to OP end-session endpoint: %s", end_session_url)
+    # Log only the endpoint, never the full URL: it carries id_token_hint (a
+    # complete ID Token with PII/subject claims) which must not land in logs.
+    logger.info(
+        "Redirecting to OP end-session endpoint: %s",
+        logout_context["end_session_endpoint"],
+    )
     return RedirectResponse(url=end_session_url, status_code=302)
 
 

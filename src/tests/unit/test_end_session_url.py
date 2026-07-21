@@ -108,6 +108,14 @@ class TestBuildEndSessionUrl:
         assert params["foo"] == ["bar"]
         assert params["state"] == ["s"]
 
+    def test_trailing_question_mark_not_doubled(self):
+        # LOGOUT-001: a bare trailing "?" already introduces the query — appending
+        # a second "?" would corrupt the first param key ("logout??state=...").
+        url = build_end_session_url(f"{END_SESSION_ENDPOINT}?", state="s")
+
+        assert "??" not in url
+        assert parse_qs(urlparse(url).query)["state"] == ["s"]
+
     def test_public_export_identity(self):
         # Same pure function is exported from every surface (sync/aio parity).
         assert build_end_session_url_top is build_end_session_url
