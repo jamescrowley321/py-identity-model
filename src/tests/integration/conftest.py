@@ -14,6 +14,7 @@ import json
 import secrets
 import time
 from types import MappingProxyType
+from typing import Any
 from urllib.parse import urlencode, urljoin, urlparse
 
 from filelock import FileLock
@@ -717,6 +718,53 @@ def _parse_login_form(html_text: str, base_url: str):
     return action_url, parser.field_names, hidden
 
 
+def _iter_set_cookies(response: httpx.Response):
+    """Yield ``(name, value)`` for every ``Set-Cookie`` on ``response``."""
+    for header in response.headers.get_list("set-cookie"):
+        name, sep, rest = header.partition("=")
+        if not sep:
+            continue
+        yield name.strip(), rest.split(";", 1)[0].strip()
+
+
+class _AuthFlowClient(httpx.Client):
+    """``httpx.Client`` that echoes cookies back over plain ``http``.
+
+    httpx rebuilds the cookie jar with the *default* stdlib policy on every
+    outgoing request (``BaseClient._merge_cookies`` wraps the client jar in a
+    fresh ``Cookies``, and ``Request.__init__`` wraps it again before calling
+    ``set_cookie_header``), so a custom ``CookiePolicy`` cannot survive to the
+    send path. That default policy refuses to send ``Secure`` cookies over an
+    ``http://`` connection. Keycloak marks its ``AUTH_SESSION_ID`` /
+    ``KC_RESTART`` auth-session cookies ``Secure; SameSite=None``
+    unconditionally, so a plain-http auth-code flow never gets them back and
+    every login POST fails with "Restart login cookie not found".
+
+    This client keeps its own ``name -> value`` store, captures every
+    ``Set-Cookie`` (``Secure`` included), and writes the ``Cookie`` header
+    itself. node-oidc's non-``Secure`` cookies round-trip identically through
+    the same store, so both providers share one code path.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._flow_cookies: dict[str, str] = {}
+
+    def send(self, request: httpx.Request, **kwargs: Any) -> httpx.Response:
+        if self._flow_cookies:
+            request.headers["Cookie"] = "; ".join(
+                f"{name}={value}" for name, value in self._flow_cookies.items()
+            )
+        response = super().send(request, **kwargs)
+        for name, value in _iter_set_cookies(response):
+            # An empty value is a deletion (Max-Age=0 / expired) — drop it.
+            if value:
+                self._flow_cookies[name] = value
+            else:
+                self._flow_cookies.pop(name, None)
+        return response
+
+
 def _submit_login(client, resp, interaction_url, config):
     """Submit login credentials, handling both provider login styles.
 
@@ -809,7 +857,7 @@ def perform_auth_code_flow(
     # Use a single redirect counter across the entire flow
     total_redirects = 0
 
-    with httpx.Client(follow_redirects=False, timeout=10.0) as client:
+    with _AuthFlowClient(follow_redirects=False, timeout=10.0) as client:
         resp = client.get(auth_url)
         while is_redirect(resp.status_code):
             location = _resolve_location(resp)
