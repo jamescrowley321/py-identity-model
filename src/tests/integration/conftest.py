@@ -91,16 +91,38 @@ def retry_with_backoff():
 
 
 @pytest.fixture(scope="session")
-def test_config(env_file, tmp_path_factory):
+def provider_slug(env_file) -> str:
+    """Stable per-provider slug used to namespace cross-worker cache files.
+
+    Session cache/lock files live at a stable path
+    (``tmp_path_factory.getbasetemp().parent``) that is *not* keyed by
+    provider. Running two providers against the same base tmp dir — e.g.
+    ``make test-integration-node-oidc`` then ``...-keycloak`` — would
+    otherwise reuse the first provider's cached discovery document, JWKS and
+    tokens, pointing the second run at a dead endpoint (Errno 111) and the
+    wrong signing keys. Deriving the slug from the env file
+    (``.env.keycloak`` -> ``keycloak``) isolates each provider's caches.
+    """
+    if not env_file:
+        return "default"
+    # Strip any directory component without importing os
+    name = env_file.replace("\\", "/").rsplit("/", 1)[-1]
+    if name.startswith(".env."):
+        return name[len(".env.") :] or "default"
+    return "default"
+
+
+@pytest.fixture(scope="session")
+def test_config(env_file, provider_slug, tmp_path_factory):
     """Session-scoped test configuration with file-lock for xdist safety."""
     root_tmp_dir = tmp_path_factory.getbasetemp().parent
-    lock_file = root_tmp_dir / "test_config.lock"
+    lock_file = root_tmp_dir / f"{provider_slug}_test_config.lock"
     with FileLock(str(lock_file)):
         return get_config(env_file)
 
 
 @pytest.fixture(scope="session")
-def discovery_document(test_config, tmp_path_factory):
+def discovery_document(test_config, provider_slug, tmp_path_factory):
     """Cached discovery document, shared across xdist workers.
 
     See ``client_credentials_token`` for the cross-worker FileLock +
@@ -109,8 +131,8 @@ def discovery_document(test_config, tmp_path_factory):
     rate limits.
     """
     root_tmp_dir = tmp_path_factory.getbasetemp().parent
-    cache_file = root_tmp_dir / "discovery_document.json"
-    lock_file = root_tmp_dir / "discovery_document.lock"
+    cache_file = root_tmp_dir / f"{provider_slug}_discovery_document.json"
+    lock_file = root_tmp_dir / f"{provider_slug}_discovery_document.lock"
 
     with FileLock(str(lock_file)):
         if cache_file.exists():
@@ -132,7 +154,7 @@ def discovery_document(test_config, tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
-def raw_discovery(test_config, tmp_path_factory):
+def raw_discovery(test_config, provider_slug, tmp_path_factory):
     """Raw discovery JSON for capability detection.
 
     Provides access to all RFC 8414 fields, including those not yet
@@ -141,8 +163,8 @@ def raw_discovery(test_config, tmp_path_factory):
     for the rationale.
     """
     root_tmp_dir = tmp_path_factory.getbasetemp().parent
-    cache_file = root_tmp_dir / "raw_discovery.json"
-    lock_file = root_tmp_dir / "raw_discovery.lock"
+    cache_file = root_tmp_dir / f"{provider_slug}_raw_discovery.json"
+    lock_file = root_tmp_dir / f"{provider_slug}_raw_discovery.lock"
 
     with FileLock(str(lock_file)):
         if cache_file.exists():
@@ -234,15 +256,15 @@ def provider_capabilities(raw_discovery):
 
 
 @pytest.fixture(scope="session")
-def jwks_response(test_config, tmp_path_factory):
+def jwks_response(test_config, provider_slug, tmp_path_factory):
     """Cached JWKS response, shared across xdist workers.
 
     See ``client_credentials_token`` for the cross-worker FileLock +
     JSON cache rationale.
     """
     root_tmp_dir = tmp_path_factory.getbasetemp().parent
-    cache_file = root_tmp_dir / "jwks_response.json"
-    lock_file = root_tmp_dir / "jwks_response.lock"
+    cache_file = root_tmp_dir / f"{provider_slug}_jwks_response.json"
+    lock_file = root_tmp_dir / f"{provider_slug}_jwks_response.lock"
 
     with FileLock(str(lock_file)):
         if cache_file.exists():
@@ -375,7 +397,12 @@ def _fetch_token_with_extended_backoff(
 
 
 @pytest.fixture(scope="session")
-def client_credentials_token(test_config, token_endpoint, tmp_path_factory):
+def client_credentials_token(
+    test_config,
+    token_endpoint,
+    provider_slug,
+    tmp_path_factory,
+):
     """Client credentials token, shared across xdist workers.
 
     Without cross-worker coordination, ``pytest -n auto`` fans out N
@@ -390,8 +417,8 @@ def client_credentials_token(test_config, token_endpoint, tmp_path_factory):
     the response object instead of re-fetching.
     """
     root_tmp_dir = tmp_path_factory.getbasetemp().parent
-    cache_file = root_tmp_dir / "client_credentials_token.json"
-    lock_file = root_tmp_dir / "client_credentials_token.lock"
+    cache_file = root_tmp_dir / f"{provider_slug}_client_credentials_token.json"
+    lock_file = root_tmp_dir / f"{provider_slug}_client_credentials_token.lock"
 
     with FileLock(str(lock_file)):
         if cache_file.exists():
@@ -473,7 +500,12 @@ def jwt_signing_key(jwks_response, jwt_access_token):
 
 
 @pytest.fixture(scope="session")
-def opaque_access_token(test_config, token_endpoint, tmp_path_factory):
+def opaque_access_token(
+    test_config,
+    token_endpoint,
+    provider_slug,
+    tmp_path_factory,
+):
     """Opaque access token for introspection/revocation tests.
 
     Some providers (e.g. node-oidc-provider) cannot introspect or revoke
@@ -489,8 +521,8 @@ def opaque_access_token(test_config, token_endpoint, tmp_path_factory):
         pytest.skip("TEST_OPAQUE_CLIENT_ID not configured")
 
     root_tmp_dir = tmp_path_factory.getbasetemp().parent
-    cache_file = root_tmp_dir / "opaque_access_token.json"
-    lock_file = root_tmp_dir / "opaque_access_token.lock"
+    cache_file = root_tmp_dir / f"{provider_slug}_opaque_access_token.json"
+    lock_file = root_tmp_dir / f"{provider_slug}_opaque_access_token.lock"
 
     with FileLock(str(lock_file)):
         if cache_file.exists():
