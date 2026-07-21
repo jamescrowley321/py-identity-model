@@ -3,6 +3,8 @@
 Due to the nature of the library, the tests are written as integration tests against live OIDC providers. Currently supported providers:
 - **ORY Hydra** (default for CI/CD)
 - **Descope** (optional)
+- **node-oidc-provider** (local Docker fixture, no credentials needed)
+- **Keycloak** (local Docker fixture, no credentials needed)
 - **Local identity server** (for development)
 
 All integration tests are provider-agnostic and should pass against any compliant OIDC provider.
@@ -124,6 +126,59 @@ uv run pytest src/tests -m integration -v -n auto
 **Issue**: Discovery endpoint returns 404
 - **Solution**: Verify PROJECT_ID is correct in the discovery URL
 - **Solution**: Check if using custom domain - update URL accordingly
+
+## Testing Against Keycloak
+
+Keycloak ships as a **local Docker fixture** — no cloud account or credentials
+required. The realm (`py-identity-model`) is capability-maximal: it advertises
+`end_session_endpoint`, `registration_endpoint` (RFC 7591/7592), and
+back-channel logout support, giving live-IdP coverage for the logout and
+dynamic-registration profiles.
+
+### Running Tests
+
+```bash
+make test-integration-keycloak
+```
+
+This target boots the fixture (`docker compose --build --wait`, which gates on
+realm import via the healthcheck), runs the integration suite with
+`--env-file=.env.keycloak`, and tears the fixture down afterwards.
+
+### Environment Configuration
+
+`.env.keycloak` is committed and points at the local fixture
+(`http://localhost:8080/realms/py-identity-model`). No edits are needed for the
+core suite. A few optional variables gate the live logout/registration tests:
+
+- `TEST_ADMIN_USERNAME` / `TEST_ADMIN_PASSWORD` / `TEST_ADMIN_REALM` — bootstrap
+  admin credentials (default `admin`/`admin`/`master`) used to mint a
+  client-registration initial access token via the Keycloak admin REST API for
+  the dynamic-registration CRUD test.
+- `TEST_PROVIDER_REALM` — the realm dynamic clients are registered in
+  (default `py-identity-model`).
+- `TEST_REGISTRATION_INITIAL_ACCESS_TOKEN` — a pre-issued registration initial
+  access token; when set it takes precedence over minting one via the admin API.
+- `TEST_BACKCHANNEL_LOGOUT_RECEIVER_URL` — a provider-reachable URL that
+  captures the pushed `logout_token` for the live back-channel logout test. The
+  shipped fixture binds loopback-only (no container→host route), so leave this
+  unset to skip that test cleanly.
+
+### Capability-Gated Skips
+
+All integration tests are provider-agnostic and capability-gated: features a
+provider does not advertise (or credentials that are not supplied) cause the
+relevant tests to **skip cleanly** rather than fail. Live back-channel logout
+capture, for example, skips unless a reachable receiver URL is configured.
+
+## Provider Capability Matrix
+
+`make provider-matrix` probes every configured provider (any `.env.*` file) and
+prints a live capability matrix — grant types, PKCE, DPoP, PAR, token exchange,
+introspection/revocation, and the logout/registration columns
+(`registration_endpoint`, `end_session_endpoint`, `backchannel_logout_supported`,
+`backchannel_logout_session_supported`). Use it to confirm which profiles a
+given provider (Keycloak, node-oidc, ORY, Descope) exercises live.
 
 ## Testing Against Local Identity Server
 
