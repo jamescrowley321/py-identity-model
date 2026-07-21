@@ -98,6 +98,18 @@ from .par import (
     PushedAuthorizationResponse,
     push_authorization_request,
 )
+from .registration import (
+    ClientDeleteRequest,
+    ClientDeleteResponse,
+    ClientReadRequest,
+    ClientRegistrationRequest,
+    ClientRegistrationResponse,
+    ClientUpdateRequest,
+    delete_client,
+    read_client,
+    register_client,
+    update_client,
+)
 from .revocation import (
     TokenRevocationRequest,
     TokenRevocationResponse,
@@ -143,6 +155,13 @@ __all__ = [
     # Token Client
     "ClientCredentialsTokenRequest",
     "ClientCredentialsTokenResponse",
+    # Dynamic Client Registration
+    "ClientDeleteRequest",
+    "ClientDeleteResponse",
+    "ClientReadRequest",
+    "ClientRegistrationRequest",
+    "ClientRegistrationResponse",
+    "ClientUpdateRequest",
     # DPoP
     "DPoPKey",
     # Device Authorization Grant
@@ -192,6 +211,7 @@ __all__ = [
     "compute_ath",
     "create_dpop_proof",
     "create_request_object",
+    "delete_client",
     "exchange_token",
     "generate_code_challenge",
     "generate_code_verifier",
@@ -206,11 +226,14 @@ __all__ = [
     "parse_discovery_url",
     "poll_device_token",
     "push_authorization_request",
+    "read_client",
     "refresh_token",
+    "register_client",
     "request_authorization_code_token",
     "request_client_credentials_token",
     "request_device_authorization",
     "revoke_token",
+    "update_client",
     "validate_authorize_callback_state",
     "validate_fapi_authorization_request",
     "validate_fapi_client_config",

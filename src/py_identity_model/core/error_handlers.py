@@ -12,6 +12,8 @@ from ..logging_config import logger
 from .models import (
     AuthorizationCodeTokenResponse,
     ClientCredentialsTokenResponse,
+    ClientDeleteResponse,
+    ClientRegistrationResponse,
     DiscoveryDocumentResponse,
     JwksResponse,
     PushedAuthorizationResponse,
@@ -200,6 +202,30 @@ def handle_par_error(e: Exception) -> PushedAuthorizationResponse:
     return PushedAuthorizationResponse(is_successful=False, error=error_msg)
 
 
+def handle_registration_error(e: Exception) -> ClientRegistrationResponse:
+    """Handle errors during dynamic client registration/management requests."""
+    if isinstance(e, httpx.RequestError):
+        error_msg = f"Network error during client registration: {e!s}"
+        logger.error(error_msg, exc_info=True)
+        return ClientRegistrationResponse(is_successful=False, error=error_msg)
+
+    error_msg = f"Unexpected error during client registration: {e!s}"
+    logger.error(error_msg, exc_info=True)
+    return ClientRegistrationResponse(is_successful=False, error=error_msg)
+
+
+def handle_client_delete_error(e: Exception) -> ClientDeleteResponse:
+    """Handle errors during client delete requests (RFC 7592 Section 2.3)."""
+    if isinstance(e, httpx.RequestError):
+        error_msg = f"Network error during client delete: {e!s}"
+        logger.error(error_msg, exc_info=True)
+        return ClientDeleteResponse(is_successful=False, error=error_msg)
+
+    error_msg = f"Unexpected error during client delete: {e!s}"
+    logger.error(error_msg, exc_info=True)
+    return ClientDeleteResponse(is_successful=False, error=error_msg)
+
+
 def handle_userinfo_error(e: Exception) -> UserInfoResponse:
     """
     Handle errors during UserInfo requests.
@@ -228,10 +254,12 @@ def handle_userinfo_error(e: Exception) -> UserInfoResponse:
 
 __all__ = [
     "handle_auth_code_token_error",
+    "handle_client_delete_error",
     "handle_discovery_error",
     "handle_introspection_error",
     "handle_jwks_error",
     "handle_par_error",
+    "handle_registration_error",
     "handle_revocation_error",
     "handle_token_error",
     "handle_userinfo_error",
