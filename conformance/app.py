@@ -30,6 +30,7 @@ from py_identity_model import (
     TokenValidationConfig,
     UserInfoRequest,
     build_authorization_url,
+    build_end_session_url,
     clear_jwks_cache,
     generate_pkce_pair,
     get_discovery_document,
@@ -39,10 +40,12 @@ from py_identity_model import (
     request_authorization_code_token,
     validate_authorize_callback_state,
     validate_logout_token,
+    validate_post_logout_state,
     validate_token,
 )
 from py_identity_model.exceptions import (
     ConfigurationException,
+    LogoutStateValidationException,
     LogoutTokenValidationException,
     PyIdentityModelException,
     TokenValidationException,
@@ -198,6 +201,10 @@ class AuthSession:
     client_secret: str = ""
     redirect_uri: str = ""
     skip_userinfo: bool = False
+    # RP-Initiated Logout: the id_token issued to this session (used as
+    # id_token_hint) and the OP's end-session endpoint, captured in /callback.
+    id_token: str = ""
+    end_session_endpoint: str = ""
     # Per-test RP-log routing (recovered in /callback via the session)
     test_name: str = ""
     profile: str = ""
@@ -219,6 +226,17 @@ _http_client: HTTPClient | None = None
 # carries no flow parameters, so the receiver recovers the issuer (for signature
 # + iss validation) and client_id (audience) from the last flow it drove.
 _last_flow_context: dict[str, str] | None = None
+
+# Most recent completed-login context for RP-Initiated Logout: the OP's
+# end-session endpoint, the issued id_token (used as ``id_token_hint``), and the
+# client_id. Captured in /callback on a successful login; consumed by /logout,
+# which carries no flow parameters of its own.
+_last_logout_context: dict[str, str] | None = None
+
+# The ``state`` the harness sent to the end-session endpoint on the most recent
+# /logout redirect. Checked against the value the OP returns to
+# /post-logout-callback (RP-Initiated Logout 1.0 §2 state round-trip).
+_expected_logout_state: str | None = None
 
 
 def _get_http_client() -> HTTPClient:
@@ -785,6 +803,18 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
             logger.warning("UserInfo exception: %s", exc)
             session.result["userinfo_error"] = str(exc)
 
+    # Record the id_token + end-session endpoint so a later /logout can build the
+    # RP-Initiated Logout URL. /logout carries no flow parameters of its own, so
+    # (like the back-channel receiver) it recovers them from the last flow driven.
+    session.id_token = id_token_jwt or ""
+    session.end_session_endpoint = disco.end_session_endpoint or ""
+    global _last_logout_context
+    _last_logout_context = {
+        "end_session_endpoint": session.end_session_endpoint,
+        "id_token": session.id_token,
+        "client_id": session.client_id,
+    }
+
     # Store successful result
     session.result["status"] = "success"
     session.result["id_token_claims"] = claims
@@ -931,6 +961,69 @@ async def backchannel_logout(request: Request) -> JSONResponse:
     if not isinstance(logout_token, str):
         logout_token = None
     return await run_in_threadpool(_receive_backchannel_logout, logout_token)
+
+
+@app.get("/logout", response_model=None)
+def logout() -> RedirectResponse | JSONResponse:
+    """Initiate RP-Initiated Logout (OpenID Connect RP-Initiated Logout 1.0 §2).
+
+    Builds the OP's end-session URL with the ``id_token_hint``, ``client_id``,
+    ``post_logout_redirect_uri`` and a fresh ``state`` via the library's
+    ``build_end_session_url``, remembers the ``state`` for the round-trip check,
+    and redirects the user agent to the OP. Returns 400 if no login flow has
+    completed yet (no end-session endpoint / id_token to log out with).
+    """
+    logout_context = _last_logout_context
+    if logout_context is None or not logout_context.get("end_session_endpoint"):
+        logger.error("REJECTED: /logout called before a successful login flow")
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "no_logout_context",
+                "detail": "no completed login flow with an end_session_endpoint",
+            },
+        )
+
+    global _expected_logout_state
+    _expected_logout_state = secrets.token_urlsafe(32)
+
+    end_session_url = build_end_session_url(
+        logout_context["end_session_endpoint"],
+        id_token_hint=logout_context["id_token"] or None,
+        client_id=logout_context["client_id"] or None,
+        post_logout_redirect_uri=f"{RP_BASE_URL}/post-logout-callback",
+        state=_expected_logout_state,
+    )
+
+    logger.info("Redirecting to OP end-session endpoint: %s", end_session_url)
+    return RedirectResponse(url=end_session_url, status_code=302)
+
+
+@app.get("/post-logout-callback", response_model=None)
+def post_logout_callback(state: str | None = Query(default=None)) -> HTMLResponse:
+    """Post-logout redirect target (RP-Initiated Logout 1.0 §2 state round-trip).
+
+    Validates the ``state`` the OP returns against the value sent to the
+    end-session endpoint using the library's ``validate_post_logout_state``.
+    Responds 200 on a matching round-trip and 400 on a missing/mismatched state.
+    """
+    try:
+        validate_post_logout_state(_expected_logout_state, state)
+    except LogoutStateValidationException as exc:
+        logger.error("REJECTED: post-logout state validation failed: %s", exc.message)
+        return HTMLResponse(
+            content=(
+                "<h1>Logout State Validation Failed</h1>"
+                f"<p>{html.escape(str(exc.message))}</p>"
+            ),
+            status_code=400,
+        )
+
+    logger.info("ACCEPTED: post-logout state validated by py-identity-model")
+    return HTMLResponse(
+        content="<h1>Logout Successful</h1><p>State validated.</p>",
+        status_code=200,
+    )
 
 
 @app.get("/results/{test_id}")
