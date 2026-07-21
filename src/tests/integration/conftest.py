@@ -218,6 +218,8 @@ def _detect_grant_capabilities(raw_discovery: dict, grants: set) -> set[str]:
         ("userinfo_endpoint", "userinfo"),
         ("device_authorization_endpoint", "device_authorization_endpoint"),
         ("pushed_authorization_request_endpoint", "par"),
+        ("end_session_endpoint", "end_session"),
+        ("registration_endpoint", "registration"),
     ):
         if raw_discovery.get(endpoint):
             caps.add(cap)
@@ -234,6 +236,8 @@ def _detect_feature_capabilities(raw_discovery: dict) -> set[str]:
         caps.add("dpop")
     if raw_discovery.get("request_parameter_supported"):
         caps.add("jar")
+    if raw_discovery.get("backchannel_logout_supported"):
+        caps.add("backchannel_logout")
 
     # devInteractions: only local fixtures support automated
     # browser-like auth code flows
@@ -980,6 +984,21 @@ def auth_code_result(provider_capabilities, discovery_document, test_config):
             resource="urn:test:api",
         ),
     )
+
+
+@pytest.fixture(scope="session")
+def logout_id_token(auth_code_result):
+    """The ID Token minted by the confidential auth-code flow.
+
+    Used as the ``id_token_hint`` for RP-Initiated Logout end-session
+    round-trips. Skips cleanly if the provider issued no ID Token (e.g.
+    the ``openid`` scope was not honoured).
+    """
+    token_response = auth_code_result["token_response"]
+    id_token = (token_response.token or {}).get("id_token")
+    if not id_token:
+        pytest.skip("Auth-code token response carried no id_token")
+    return id_token
 
 
 @pytest.fixture(scope="session")
