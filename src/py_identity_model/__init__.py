@@ -15,6 +15,7 @@ from .exceptions import (
     InvalidAudienceException,
     InvalidIssuerException,
     JwksException,
+    LogoutTokenValidationException,
     NetworkException,
     PyIdentityModelException,
     SignatureVerificationException,
@@ -103,6 +104,7 @@ from .sync import (
     validate_fapi_authorization_request,
     validate_fapi_client_config,
     validate_fapi_discovery,
+    validate_logout_token,
     validate_token,
 )
 
@@ -155,6 +157,7 @@ __all__ = [
     "JwksException",
     "JwksRequest",
     "JwksResponse",
+    "LogoutTokenValidationException",
     "NetworkException",
     # Client authentication (private_key_jwt)
     "PrivateKeyJwt",
@@ -219,5 +222,6 @@ __all__ = [
     "validate_fapi_authorization_request",
     "validate_fapi_client_config",
     "validate_fapi_discovery",
+    "validate_logout_token",
     "validate_token",
 ]

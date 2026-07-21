@@ -19,6 +19,7 @@ from urllib.parse import urlencode
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from jwt.exceptions import PyJWTError
 from starlette.concurrency import run_in_threadpool
 
 from py_identity_model import (
@@ -37,10 +38,12 @@ from py_identity_model import (
     parse_discovery_url,
     request_authorization_code_token,
     validate_authorize_callback_state,
+    validate_logout_token,
     validate_token,
 )
 from py_identity_model.exceptions import (
     ConfigurationException,
+    LogoutTokenValidationException,
     PyIdentityModelException,
     TokenValidationException,
 )
@@ -210,6 +213,12 @@ test_results: dict[str, AuthSession] = {}
 
 # Shared HTTP client that skips TLS verification (conformance suite uses self-signed certs)
 _http_client: HTTPClient | None = None
+
+# Most recent auth-flow context (issuer / client_id / discovery address), captured
+# in /authorize. The OP posts a Back-Channel Logout Token to a fixed URI that
+# carries no flow parameters, so the receiver recovers the issuer (for signature
+# + iss validation) and client_id (audience) from the last flow it drove.
+_last_flow_context: dict[str, str] | None = None
 
 
 def _get_http_client() -> HTTPClient:
@@ -463,6 +472,16 @@ def authorize(
     sessions[state] = session
     if test_id:
         session.result["test_id"] = test_id
+
+    # Record the flow context so the Back-Channel Logout receiver can validate a
+    # Logout Token the OP later posts to /backchannel-logout (no flow params ride
+    # along on that request).
+    global _last_flow_context
+    _last_flow_context = {
+        "issuer": issuer,
+        "client_id": client_id,
+        "disco_address": disco_endpoint.url,
+    }
 
     logger.info(
         "ACCEPTED: discovery issuer '%s' matches expected; redirecting to OP", issuer
@@ -823,6 +842,95 @@ async def callback_post(request: Request) -> HTMLResponse | JSONResponse:
     params = urlencode(list(form_data.multi_items()))
     callback_url = f"{RP_BASE_URL}/callback?{params}"
     return await run_in_threadpool(_handle_callback, callback_url)
+
+
+def _receive_backchannel_logout(logout_token: str | None) -> JSONResponse:
+    """Validate a Back-Channel Logout Token posted by the OP (sync worker).
+
+    OpenID Connect Back-Channel Logout 1.0 §2.4/§2.5: the OP POSTs a
+    ``logout_token`` to the RP's ``backchannel_logout_uri``. The RP validates it
+    and responds 200 on success or 400 on failure. Validation is delegated to
+    ``validate_logout_token`` so the harness exercises the library's public API.
+    """
+    if not logout_token:
+        logger.error("REJECTED: back-channel logout request missing logout_token")
+        return JSONResponse(
+            status_code=400,
+            content={"error": "invalid_request", "detail": "missing logout_token"},
+        )
+
+    # Snapshot the process-global flow context once. A concurrent ``/authorize``
+    # can replace ``_last_flow_context`` between the None-check and the field
+    # reads; binding the reference once ensures issuer/client_id/disco all come
+    # from a single, self-consistent flow rather than a spliced mix.
+    flow_context = _last_flow_context
+    if flow_context is None:
+        logger.error("REJECTED: back-channel logout received before any auth flow")
+        return JSONResponse(
+            status_code=400,
+            content={"error": "no_flow_context", "detail": "no prior auth flow"},
+        )
+
+    try:
+        claims = validate_logout_token(
+            logout_token,
+            TokenValidationConfig(
+                perform_disco=True,
+                audience=flow_context["client_id"],
+                issuer=flow_context["issuer"],
+                require_https=False,
+            ),
+            disco_doc_address=flow_context["disco_address"],
+        )
+    except LogoutTokenValidationException as exc:
+        logger.error("REJECTED: logout token failed logout rules: %s", exc.message)
+        return JSONResponse(
+            status_code=400,
+            content={"error": "invalid_logout_token", "detail": exc.message},
+        )
+    except TokenValidationException as exc:
+        logger.error("REJECTED: logout token failed JWT validation: %s", exc.message)
+        return JSONResponse(
+            status_code=400,
+            content={"error": "invalid_logout_token", "detail": exc.message},
+        )
+    except PyIdentityModelException as exc:
+        logger.error("REJECTED: logout token validation error: %s", exc)
+        return JSONResponse(
+            status_code=400,
+            content={"error": "invalid_logout_token", "detail": str(exc)},
+        )
+    except PyJWTError as exc:
+        # A non-empty but malformed ``logout_token`` (not a well-formed JWT)
+        # trips PyJWT's header decode inside ``validate_token`` and raises a
+        # ``PyJWTError`` — which is NOT a ``PyIdentityModelException``. Spec
+        # §2.5 mandates 400 (not an uncaught 500) for an invalid token.
+        logger.error("REJECTED: logout token is not a well-formed JWT: %s", exc)
+        return JSONResponse(
+            status_code=400,
+            content={"error": "invalid_logout_token", "detail": "malformed token"},
+        )
+
+    logger.info(
+        "ACCEPTED: back-channel logout token validated (sub=%s, sid=%s)",
+        claims.get("sub"),
+        claims.get("sid"),
+    )
+    return JSONResponse(content={"status": "ok"})
+
+
+@app.post("/backchannel-logout", response_model=None)
+async def backchannel_logout(request: Request) -> JSONResponse:
+    """Back-Channel Logout receiver (OpenID Connect Back-Channel Logout 1.0 §2.5).
+
+    Async to support ``await request.form()``; the blocking validation is
+    offloaded to a threadpool so the library owns its (thread-local) HTTP client.
+    """
+    form_data = await request.form()
+    logout_token = form_data.get("logout_token")
+    if not isinstance(logout_token, str):
+        logout_token = None
+    return await run_in_threadpool(_receive_backchannel_logout, logout_token)
 
 
 @app.get("/results/{test_id}")

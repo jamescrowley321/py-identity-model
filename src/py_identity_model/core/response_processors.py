@@ -273,6 +273,13 @@ def build_discovery_response(
         require_request_uri_registration=response_json.get(
             "require_request_uri_registration",
         ),
+        # Back-Channel Logout support (OpenID Connect Back-Channel Logout 1.0 §3)
+        backchannel_logout_supported=response_json.get(
+            "backchannel_logout_supported",
+        ),
+        backchannel_logout_session_supported=response_json.get(
+            "backchannel_logout_session_supported",
+        ),
         # Documentation and policy
         service_documentation=response_json.get("service_documentation"),
         op_policy_uri=response_json.get("op_policy_uri"),

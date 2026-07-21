@@ -66,6 +66,7 @@ from .jwks import (
     get_jwks,
     jwks_from_dict,
 )
+from .logout import validate_logout_token
 from .managed_client import HTTPClient
 from .par import (
     PushedAuthorizationRequest,
@@ -195,5 +196,6 @@ __all__ = [
     "validate_fapi_authorization_request",
     "validate_fapi_client_config",
     "validate_fapi_discovery",
+    "validate_logout_token",
     "validate_token",
 ]
