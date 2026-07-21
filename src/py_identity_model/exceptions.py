@@ -78,6 +78,15 @@ class InvalidIssuerException(TokenValidationException):
         super().__init__(message, token_part="payload", details=details)
 
 
+class LogoutTokenValidationException(TokenValidationException):
+    """Raised when Back-Channel Logout token validation fails.
+
+    Covers the Logout-Token-specific rules from OpenID Connect Back-Channel
+    Logout 1.0 §2.4 (required ``events`` member, ``sub``/``sid`` presence, and
+    the ``nonce`` prohibition) that sit on top of standard JWT validation.
+    """
+
+
 class AuthorizeCallbackException(ValidationException):
     """Raised when authorization callback validation fails."""
 
@@ -159,6 +168,7 @@ __all__ = [
     "InvalidAudienceException",
     "InvalidIssuerException",
     "JwksException",
+    "LogoutTokenValidationException",
     "NetworkException",
     "PyIdentityModelException",
     "SignatureVerificationException",

@@ -477,6 +477,8 @@ class DiscoveryDocumentResponse(BaseResponse):
             "op_tos_uri",
             "introspection_endpoint",
             "code_challenge_methods_supported",
+            "backchannel_logout_supported",
+            "backchannel_logout_session_supported",
         }
     )
 
@@ -529,6 +531,10 @@ class DiscoveryDocumentResponse(BaseResponse):
     request_parameter_supported: bool | None = None
     request_uri_parameter_supported: bool | None = None
     require_request_uri_registration: bool | None = None
+
+    # Back-Channel Logout support (OpenID Connect Back-Channel Logout 1.0 §3)
+    backchannel_logout_supported: bool | None = None
+    backchannel_logout_session_supported: bool | None = None
 
     # Documentation and policy
     service_documentation: str | None = None
