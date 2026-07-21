@@ -495,3 +495,35 @@ class TestJwksFromDict:
         assert jwk.kty == "RSA"
         assert jwk.kid is None
         assert jwk.alg is None
+
+    def test_x5t_s256_round_trips_via_as_dict(self):
+        """x5t#S256 (RFC 7517) survives as_dict / from_json / jwks_from_dict.
+
+        Providers such as Keycloak emit the ``x5t#S256`` SHA-256 thumbprint in
+        their JWKS. ``as_dict()`` must serialize it under the RFC member name so
+        the dictionary form round-trips; previously it used the ``x5t_s256``
+        Python attribute name, which ``from_json``/``jwks_from_dict`` do not read.
+        """
+        key_dict = {
+            "kty": "RSA",
+            "kid": "keycloak-sig",
+            "alg": "RS256",
+            "use": "sig",
+            "n": "modulus",
+            "e": "AQAB",
+            "x5t#S256": "abc123thumbprint",
+        }
+
+        jwk = jwks_from_dict(key_dict)
+        assert jwk.x5t_s256 == "abc123thumbprint"
+
+        # as_dict() emits the RFC member name, not the Python attribute name
+        as_dict = jwk.as_dict()
+        assert as_dict["x5t#S256"] == "abc123thumbprint"
+        assert "x5t_s256" not in as_dict
+
+        # The dictionary form round-trips back through both parse paths
+        assert jwks_from_dict(as_dict).x5t_s256 == "abc123thumbprint"
+        assert JsonWebKey.from_json(json.dumps(as_dict)).x5t_s256 == (
+            "abc123thumbprint"
+        )

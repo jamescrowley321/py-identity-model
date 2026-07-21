@@ -388,9 +388,25 @@ class JsonWebKey:
         return urlsafe_b64decode(input_str + padding)
 
     def as_dict(self):
-        """Convert the JWK to a dictionary with all available properties"""
-        # Add all non-None properties to the dictionary
-        return {key: value for key, value in self.__dict__.items() if value is not None}
+        """Convert the JWK to a dictionary with all available properties.
+
+        Python attribute names are mapped back to their RFC 7517 JWK member
+        names (e.g. ``x5t_s256`` -> ``x5t#S256``) so the result round-trips
+        through :meth:`from_json` and :func:`jwks_from_dict`. Providers such as
+        Keycloak emit ``x5t#S256`` in their JWKS; without this mapping the
+        dictionary form used ``x5t_s256`` and silently dropped the thumbprint
+        on re-parse.
+        """
+        data = {}
+        for key, value in self.__dict__.items():
+            if value is None:
+                continue
+            # Map Python field names back to JWK parameter names
+            if key == "x5t_s256":
+                data[JsonWebKeyParameterNames.X5T_S256.value] = value
+            else:
+                data[key] = value
+        return data
 
 
 # ============================================================================
