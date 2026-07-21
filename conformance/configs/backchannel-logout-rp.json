@@ -1,0 +1,14 @@
+{
+  "plan_name": "oidcc-client-backchannel-logout-certification-test-plan",
+  "variant": {
+    "client_registration": "static_client",
+    "request_type": "plain_http_request"
+  },
+  "alias": "py-identity-model-backchannel-logout-rp",
+  "client": {
+    "client_id": "conformance-rp",
+    "client_secret": "conformance-rp-secret",
+    "backchannel_logout_uri": "http://localhost:8888/backchannel-logout",
+    "backchannel_logout_session_required": true
+  }
+}
