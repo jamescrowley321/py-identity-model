@@ -49,6 +49,10 @@ FEATURES = [
     ("JAR (request param)", "request_parameter_supported", None),
     ("PAR", "pushed_authorization_request_endpoint", None),
     ("userinfo", "userinfo_endpoint", None),
+    ("registration (RFC7591)", "registration_endpoint", None),
+    ("end_session", "end_session_endpoint", None),
+    ("backchannel_logout", "backchannel_logout_supported", None),
+    ("backchannel_logout_session", "backchannel_logout_session_supported", None),
     ("devInteractions", None, None),
 ]
 
