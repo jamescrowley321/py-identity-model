@@ -159,55 +159,68 @@ class TestDynamicRegistrationLifecycle:
         assert token, "registration returned no registration_access_token"
         assert mgmt_uri, "registration returned no registration_client_uri"
 
-        # Read it back (RFC 7592 §2.1) — same client_id.
-        read = read_client(
-            ClientReadRequest(
-                address=mgmt_uri,
-                registration_access_token=token,
+        # If any assertion below fails before the delete, the finally still
+        # deregisters the client so live providers don't accumulate orphans.
+        deleted_ok = False
+        try:
+            # Read it back (RFC 7592 §2.1) — same client_id.
+            read = read_client(
+                ClientReadRequest(
+                    address=mgmt_uri,
+                    registration_access_token=token,
+                )
             )
-        )
-        assert read.is_successful, f"read failed: {read.error}"
-        assert read.client_id == registered.client_id
-        # RFC 7592 §3: the OP MAY rotate the registration access token on each
-        # management response; use the freshest one for the next request
-        # (Keycloak rotates on update, so a stale token is rejected).
-        token = read.registration_access_token or token
+            assert read.is_successful, f"read failed: {read.error}"
+            assert read.client_id == registered.client_id
+            # RFC 7592 §3: the OP MAY rotate the registration access token on
+            # each management response; use the freshest one for the next
+            # request (Keycloak rotates on update, so a stale token is rejected).
+            token = read.registration_access_token or token
 
-        # Update the client name (RFC 7592 §2.2) — client_id required in body.
-        updated = update_client(
-            ClientUpdateRequest(
-                address=mgmt_uri,
-                registration_access_token=token,
-                client_id=registered.client_id,
-                redirect_uris=REDIRECT_URIS,
-                client_name="kc5-crud-sync-renamed",
-                client_secret=registered.client_secret,
-                token_endpoint_auth_method="client_secret_basic",
+            # Update the client name (RFC 7592 §2.2) — client_id in body.
+            updated = update_client(
+                ClientUpdateRequest(
+                    address=mgmt_uri,
+                    registration_access_token=token,
+                    client_id=registered.client_id,
+                    redirect_uris=REDIRECT_URIS,
+                    client_name="kc5-crud-sync-renamed",
+                    client_secret=registered.client_secret,
+                    token_endpoint_auth_method="client_secret_basic",
+                )
             )
-        )
-        assert updated.is_successful, f"update failed: {updated.error}"
-        assert updated.client_id == registered.client_id
-        if updated.metadata is not None:
-            assert updated.metadata.get("client_name") == "kc5-crud-sync-renamed"
-        token = updated.registration_access_token or token
+            assert updated.is_successful, f"update failed: {updated.error}"
+            assert updated.client_id == registered.client_id
+            if updated.metadata is not None:
+                assert updated.metadata.get("client_name") == "kc5-crud-sync-renamed"
+            token = updated.registration_access_token or token
 
-        # Deregister (RFC 7592 §2.3) — 204 No Content.
-        deleted = delete_client(
-            ClientDeleteRequest(
-                address=mgmt_uri,
-                registration_access_token=token,
+            # Deregister (RFC 7592 §2.3) — 204 No Content.
+            deleted = delete_client(
+                ClientDeleteRequest(
+                    address=mgmt_uri,
+                    registration_access_token=token,
+                )
             )
-        )
-        assert deleted.is_successful, f"delete failed: {deleted.error}"
+            assert deleted.is_successful, f"delete failed: {deleted.error}"
+            deleted_ok = True
 
-        # Reading a deregistered client fails.
-        after = read_client(
-            ClientReadRequest(
-                address=mgmt_uri,
-                registration_access_token=token,
+            # Reading a deregistered client fails.
+            after = read_client(
+                ClientReadRequest(
+                    address=mgmt_uri,
+                    registration_access_token=token,
+                )
             )
-        )
-        assert not after.is_successful, "client still readable after delete"
+            assert not after.is_successful, "client still readable after delete"
+        finally:
+            if not deleted_ok:
+                delete_client(
+                    ClientDeleteRequest(
+                        address=mgmt_uri,
+                        registration_access_token=token,
+                    )
+                )
 
 
 @pytest.mark.integration
@@ -243,36 +256,47 @@ class TestDynamicRegistrationLifecycleAsync:
         assert token
         assert mgmt_uri
 
-        read = await aio_read_client(
-            ClientReadRequest(
-                address=mgmt_uri,
-                registration_access_token=token,
+        deleted_ok = False
+        try:
+            read = await aio_read_client(
+                ClientReadRequest(
+                    address=mgmt_uri,
+                    registration_access_token=token,
+                )
             )
-        )
-        assert read.is_successful, f"async read failed: {read.error}"
-        assert read.client_id == registered.client_id
-        # RFC 7592 §3: use the freshest rotated token for the next request.
-        token = read.registration_access_token or token
+            assert read.is_successful, f"async read failed: {read.error}"
+            assert read.client_id == registered.client_id
+            # RFC 7592 §3: use the freshest rotated token for the next request.
+            token = read.registration_access_token or token
 
-        updated = await aio_update_client(
-            ClientUpdateRequest(
-                address=mgmt_uri,
-                registration_access_token=token,
-                client_id=registered.client_id,
-                redirect_uris=REDIRECT_URIS,
-                client_name="kc5-crud-async-renamed",
-                client_secret=registered.client_secret,
-                token_endpoint_auth_method="client_secret_basic",
+            updated = await aio_update_client(
+                ClientUpdateRequest(
+                    address=mgmt_uri,
+                    registration_access_token=token,
+                    client_id=registered.client_id,
+                    redirect_uris=REDIRECT_URIS,
+                    client_name="kc5-crud-async-renamed",
+                    client_secret=registered.client_secret,
+                    token_endpoint_auth_method="client_secret_basic",
+                )
             )
-        )
-        assert updated.is_successful, f"async update failed: {updated.error}"
-        assert updated.client_id == registered.client_id
-        token = updated.registration_access_token or token
+            assert updated.is_successful, f"async update failed: {updated.error}"
+            assert updated.client_id == registered.client_id
+            token = updated.registration_access_token or token
 
-        deleted = await aio_delete_client(
-            ClientDeleteRequest(
-                address=mgmt_uri,
-                registration_access_token=token,
+            deleted = await aio_delete_client(
+                ClientDeleteRequest(
+                    address=mgmt_uri,
+                    registration_access_token=token,
+                )
             )
-        )
-        assert deleted.is_successful, f"async delete failed: {deleted.error}"
+            assert deleted.is_successful, f"async delete failed: {deleted.error}"
+            deleted_ok = True
+        finally:
+            if not deleted_ok:
+                await aio_delete_client(
+                    ClientDeleteRequest(
+                        address=mgmt_uri,
+                        registration_access_token=token,
+                    )
+                )

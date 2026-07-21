@@ -46,7 +46,10 @@ class _LogoutTokenReceiver(BaseHTTPRequestHandler):
     """Captures the ``logout_token`` from an OP's back-channel POST."""
 
     def do_POST(self):  # http.server dispatch name
-        length = int(self.headers.get("Content-Length", 0))
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except (TypeError, ValueError):
+            length = 0
         body = self.rfile.read(length).decode() if length else ""
         token = parse_qs(body).get("logout_token", [None])[0]
         if token:
@@ -96,7 +99,12 @@ class TestBackChannelLogoutLive:
         port = urlparse(receiver_url).port or DEFAULT_HTTP_PORT
         redirect_uri = test_config["TEST_AUTH_CODE_REDIRECT_URI"]
 
-        server = _start_receiver(port)
+        # Binding can fail (privileged default port, or port already in use).
+        # Skip cleanly rather than error before the try/finally is entered.
+        try:
+            server = _start_receiver(port)
+        except OSError as exc:
+            pytest.skip(f"receiver port {port} unbindable: {exc}")
         client_uri: str | None = None
         mgmt_token: str | None = None
         try:
@@ -145,8 +153,15 @@ class TestBackChannelLogoutLive:
                 id_token_hint=id_token,
                 client_id=registered.client_id,
             )
-            with httpx.Client(follow_redirects=True, timeout=10.0) as client:
-                client.get(logout_url)
+            try:
+                with httpx.Client(follow_redirects=True, timeout=10.0) as client:
+                    client.get(logout_url)
+            except httpx.RequestError:
+                # The OP processes the logout (and fires the back-channel push)
+                # before it 302s to the post-logout redirect; that redirect
+                # target may have no live listener. Swallow the unreachable
+                # redirect and let the poll below decide on the actual push.
+                pass
 
             logout_token = _await_token(server)
             if logout_token is None:
@@ -169,6 +184,7 @@ class TestBackChannelLogoutLive:
             assert claims.get("sub") or claims.get("sid")
         finally:
             server.shutdown()
+            server.server_close()
             if client_uri and mgmt_token:
                 delete_client(
                     ClientDeleteRequest(
