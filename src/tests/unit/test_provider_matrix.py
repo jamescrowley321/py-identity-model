@@ -56,7 +56,9 @@ def test_logout_registration_columns_present_when_advertised() -> None:
     }
     caps = detect_capabilities(disco)
     for label in _LOGOUT_LABELS:
-        assert caps[label] is True, label
+        # Truthiness (not ``is True``): endpoint-URL columns carry the URL
+        # string's truthiness; only the backchannel booleans are strict bools.
+        assert caps[label], label
 
 
 def test_logout_registration_columns_absent() -> None:
@@ -64,7 +66,7 @@ def test_logout_registration_columns_absent() -> None:
     disco = {"issuer": "https://example.com"}
     caps = detect_capabilities(disco)
     for label in _LOGOUT_LABELS:
-        assert caps[label] is False, label
+        assert not caps[label], label
 
 
 def test_backchannel_logout_supported_false_is_false() -> None:
@@ -87,5 +89,5 @@ def test_endpoint_url_strings_are_truthy() -> None:
         "end_session_endpoint": "https://example.com/logout",
     }
     caps = detect_capabilities(disco)
-    assert caps["registration (RFC7591)"] is True
-    assert caps["end_session"] is True
+    assert caps["registration (RFC7591)"]
+    assert caps["end_session"]
