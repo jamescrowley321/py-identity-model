@@ -154,28 +154,30 @@ class TestDynamicRegistrationLifecycle:
         )
         assert registered.client_id, "registration returned no client_id"
         # RFC 7592 management requires the token + client URI.
-        assert registered.registration_access_token, (
-            "registration returned no registration_access_token"
-        )
-        assert registered.registration_client_uri, (
-            "registration returned no registration_client_uri"
-        )
+        mgmt_uri = registered.registration_client_uri
+        token = registered.registration_access_token
+        assert token, "registration returned no registration_access_token"
+        assert mgmt_uri, "registration returned no registration_client_uri"
 
         # Read it back (RFC 7592 §2.1) — same client_id.
         read = read_client(
             ClientReadRequest(
-                address=registered.registration_client_uri,
-                registration_access_token=registered.registration_access_token,
+                address=mgmt_uri,
+                registration_access_token=token,
             )
         )
         assert read.is_successful, f"read failed: {read.error}"
         assert read.client_id == registered.client_id
+        # RFC 7592 §3: the OP MAY rotate the registration access token on each
+        # management response; use the freshest one for the next request
+        # (Keycloak rotates on update, so a stale token is rejected).
+        token = read.registration_access_token or token
 
         # Update the client name (RFC 7592 §2.2) — client_id required in body.
         updated = update_client(
             ClientUpdateRequest(
-                address=registered.registration_client_uri,
-                registration_access_token=registered.registration_access_token,
+                address=mgmt_uri,
+                registration_access_token=token,
                 client_id=registered.client_id,
                 redirect_uris=REDIRECT_URIS,
                 client_name="kc5-crud-sync-renamed",
@@ -187,12 +189,13 @@ class TestDynamicRegistrationLifecycle:
         assert updated.client_id == registered.client_id
         if updated.metadata is not None:
             assert updated.metadata.get("client_name") == "kc5-crud-sync-renamed"
+        token = updated.registration_access_token or token
 
         # Deregister (RFC 7592 §2.3) — 204 No Content.
         deleted = delete_client(
             ClientDeleteRequest(
-                address=registered.registration_client_uri,
-                registration_access_token=registered.registration_access_token,
+                address=mgmt_uri,
+                registration_access_token=token,
             )
         )
         assert deleted.is_successful, f"delete failed: {deleted.error}"
@@ -200,8 +203,8 @@ class TestDynamicRegistrationLifecycle:
         # Reading a deregistered client fails.
         after = read_client(
             ClientReadRequest(
-                address=registered.registration_client_uri,
-                registration_access_token=registered.registration_access_token,
+                address=mgmt_uri,
+                registration_access_token=token,
             )
         )
         assert not after.is_successful, "client still readable after delete"
@@ -235,22 +238,26 @@ class TestDynamicRegistrationLifecycleAsync:
         if not registered.is_successful:
             pytest.skip(f"Provider rejected dynamic registration: {registered.error}")
         assert registered.client_id
-        assert registered.registration_access_token
-        assert registered.registration_client_uri
+        mgmt_uri = registered.registration_client_uri
+        token = registered.registration_access_token
+        assert token
+        assert mgmt_uri
 
         read = await aio_read_client(
             ClientReadRequest(
-                address=registered.registration_client_uri,
-                registration_access_token=registered.registration_access_token,
+                address=mgmt_uri,
+                registration_access_token=token,
             )
         )
         assert read.is_successful, f"async read failed: {read.error}"
         assert read.client_id == registered.client_id
+        # RFC 7592 §3: use the freshest rotated token for the next request.
+        token = read.registration_access_token or token
 
         updated = await aio_update_client(
             ClientUpdateRequest(
-                address=registered.registration_client_uri,
-                registration_access_token=registered.registration_access_token,
+                address=mgmt_uri,
+                registration_access_token=token,
                 client_id=registered.client_id,
                 redirect_uris=REDIRECT_URIS,
                 client_name="kc5-crud-async-renamed",
@@ -260,11 +267,12 @@ class TestDynamicRegistrationLifecycleAsync:
         )
         assert updated.is_successful, f"async update failed: {updated.error}"
         assert updated.client_id == registered.client_id
+        token = updated.registration_access_token or token
 
         deleted = await aio_delete_client(
             ClientDeleteRequest(
-                address=registered.registration_client_uri,
-                registration_access_token=registered.registration_access_token,
+                address=mgmt_uri,
+                registration_access_token=token,
             )
         )
         assert deleted.is_successful, f"async delete failed: {deleted.error}"

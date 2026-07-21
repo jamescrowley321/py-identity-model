@@ -131,6 +131,22 @@ def get_config(env_file: str | None = None) -> dict:
         # Opaque token client for introspection/revocation tests
         "TEST_OPAQUE_CLIENT_ID": os.environ.get("TEST_OPAQUE_CLIENT_ID", ""),
         "TEST_OPAQUE_CLIENT_SECRET": os.environ.get("TEST_OPAQUE_CLIENT_SECRET", ""),
+        # Dynamic client registration CRUD test (RFC 7591/7592). Admin creds
+        # mint a one-shot client-registration initial access token via the
+        # provider's admin REST API; the provider realm locates that API.
+        "TEST_ADMIN_USERNAME": os.environ.get("TEST_ADMIN_USERNAME", ""),
+        "TEST_ADMIN_PASSWORD": os.environ.get("TEST_ADMIN_PASSWORD", ""),
+        "TEST_ADMIN_REALM": os.environ.get("TEST_ADMIN_REALM", "master"),
+        "TEST_PROVIDER_REALM": os.environ.get("TEST_PROVIDER_REALM", ""),
+        # A pre-issued initial access token takes precedence over minting one.
+        "TEST_REGISTRATION_INITIAL_ACCESS_TOKEN": os.environ.get(
+            "TEST_REGISTRATION_INITIAL_ACCESS_TOKEN", ""
+        ),
+        # Provider-reachable URL that captures a pushed back-channel logout
+        # token (live back-channel logout test); unset skips that test.
+        "TEST_BACKCHANNEL_LOGOUT_RECEIVER_URL": os.environ.get(
+            "TEST_BACKCHANNEL_LOGOUT_RECEIVER_URL", ""
+        ),
     }
 
     # Fail fast on missing required config
