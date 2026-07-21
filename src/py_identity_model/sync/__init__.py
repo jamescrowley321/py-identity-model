@@ -28,6 +28,10 @@ from ..core.fapi import (
     validate_fapi_discovery,
 )
 from ..core.jar import build_jar_authorization_url, create_request_object
+from ..core.logout_logic import (
+    build_end_session_url,
+    validate_post_logout_state,
+)
 from ..core.models import BaseRequest, BaseResponse, PrivateKeyJwt
 from ..core.pkce import (
     generate_code_challenge,
@@ -167,6 +171,7 @@ __all__ = [
     "UserInfoResponse",
     "build_authorization_url",
     "build_dpop_headers",
+    "build_end_session_url",
     "build_jar_authorization_url",
     "clear_discovery_cache",
     "clear_jwks_cache",
@@ -197,5 +202,6 @@ __all__ = [
     "validate_fapi_client_config",
     "validate_fapi_discovery",
     "validate_logout_token",
+    "validate_post_logout_state",
     "validate_token",
 ]
