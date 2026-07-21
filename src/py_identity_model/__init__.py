@@ -15,6 +15,7 @@ from .exceptions import (
     InvalidAudienceException,
     InvalidIssuerException,
     JwksException,
+    LogoutStateValidationException,
     LogoutTokenValidationException,
     NetworkException,
     PyIdentityModelException,
@@ -75,6 +76,7 @@ from .sync import (
     UserInfoResponse,
     build_authorization_url,
     build_dpop_headers,
+    build_end_session_url,
     build_jar_authorization_url,
     clear_discovery_cache,
     clear_jwks_cache,
@@ -105,6 +107,7 @@ from .sync import (
     validate_fapi_client_config,
     validate_fapi_discovery,
     validate_logout_token,
+    validate_post_logout_state,
     validate_token,
 )
 
@@ -157,6 +160,7 @@ __all__ = [
     "JwksException",
     "JwksRequest",
     "JwksResponse",
+    "LogoutStateValidationException",
     "LogoutTokenValidationException",
     "NetworkException",
     # Client authentication (private_key_jwt)
@@ -191,6 +195,7 @@ __all__ = [
     "ValidationException",
     "build_authorization_url",
     "build_dpop_headers",
+    "build_end_session_url",
     "build_jar_authorization_url",
     "clear_discovery_cache",
     "clear_jwks_cache",
@@ -223,5 +228,6 @@ __all__ = [
     "validate_fapi_client_config",
     "validate_fapi_discovery",
     "validate_logout_token",
+    "validate_post_logout_state",
     "validate_token",
 ]

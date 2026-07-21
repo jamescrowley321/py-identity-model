@@ -87,6 +87,17 @@ class LogoutTokenValidationException(TokenValidationException):
     """
 
 
+class LogoutStateValidationException(ValidationException):
+    """Raised when the ``state`` returned to the post-logout redirect URI
+    does not match the value sent to the end-session endpoint.
+
+    Covers the RP-Initiated Logout ``state`` round-trip check (OpenID Connect
+    RP-Initiated Logout 1.0 §2/§3). It is a plain callback CSRF check — not a
+    JWT/token error — so it subclasses ``ValidationException`` directly rather
+    than ``TokenValidationException``.
+    """
+
+
 class AuthorizeCallbackException(ValidationException):
     """Raised when authorization callback validation fails."""
 
@@ -168,6 +179,7 @@ __all__ = [
     "InvalidAudienceException",
     "InvalidIssuerException",
     "JwksException",
+    "LogoutStateValidationException",
     "LogoutTokenValidationException",
     "NetworkException",
     "PyIdentityModelException",
