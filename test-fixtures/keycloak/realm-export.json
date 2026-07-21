@@ -88,7 +88,8 @@
           "value": "test",
           "temporary": false
         }
-      ]
+      ],
+      "realmRoles": ["offline_access", "uma_authorization"]
     }
   ]
 }
