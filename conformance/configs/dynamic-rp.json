@@ -1,0 +1,14 @@
+{
+  "plan_name": "oidcc-dynamic-certification-test-plan",
+  "variant": {
+    "client_registration": "dynamic_client",
+    "request_type": "plain_http_request"
+  },
+  "alias": "py-identity-model-dynamic-rp",
+  "client": {
+    "client_name": "py-identity-model-dynamic-rp",
+    "redirect_uris": [
+      "http://localhost:8888/callback"
+    ]
+  }
+}

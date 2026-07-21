@@ -1040,6 +1040,142 @@ class UserInfoResponse(BaseResponse):
 
 
 # ============================================================================
+# Dynamic Client Registration Models - RFC 7591 / RFC 7592
+# ============================================================================
+
+
+@dataclass
+class ClientRegistrationRequest(BaseRequest):
+    """Request to register a client (RFC 7591 Section 3, OIDC Registration 1.0).
+
+    Attributes:
+        address: The client registration endpoint URL.
+        redirect_uris: Redirection URIs registered for the client.
+        response_types / grant_types / application_type / contacts /
+            client_name / logo_uri / client_uri / policy_uri / tos_uri /
+            token_endpoint_auth_method / scope / jwks_uri: Optional client
+            metadata (RFC 7591 Section 2).
+        extra_metadata: Additional metadata merged into the request body
+            (e.g. ``sector_identifier_uri``, ``subject_type``) so OIDC-specific
+            fields flow without a dedicated attribute.
+        initial_access_token: Optional bearer token for a protected
+            registration endpoint (RFC 7591 Section 3).
+    """
+
+    redirect_uris: list[str]
+    response_types: list[str] | None = None
+    grant_types: list[str] | None = None
+    application_type: str | None = None
+    contacts: list[str] | None = None
+    client_name: str | None = None
+    logo_uri: str | None = None
+    client_uri: str | None = None
+    policy_uri: str | None = None
+    tos_uri: str | None = None
+    token_endpoint_auth_method: str | None = None
+    scope: str | None = None
+    jwks_uri: str | None = None
+    extra_metadata: dict | None = None
+    initial_access_token: str | None = None
+
+
+@dataclass
+class ClientReadRequest(BaseRequest):
+    """Request to read a client configuration (RFC 7592 Section 2.1).
+
+    Attributes:
+        address: The client's ``registration_client_uri``.
+        registration_access_token: Bearer token issued at registration.
+    """
+
+    registration_access_token: str
+
+
+@dataclass
+class ClientUpdateRequest(BaseRequest):
+    """Request to update a client configuration (RFC 7592 Section 2.2).
+
+    The PUT body MUST include ``client_id`` and the full client metadata;
+    omitted fields are treated by the server as removed.
+
+    Attributes:
+        address: The client's ``registration_client_uri``.
+        registration_access_token: Bearer token issued at registration.
+        client_id: The registered client identifier (required in the body).
+        redirect_uris: Full redirect URI list to persist.
+        client_secret: Current client secret, echoed back when required.
+        extra_metadata: Additional metadata merged into the request body.
+    """
+
+    registration_access_token: str
+    client_id: str
+    redirect_uris: list[str]
+    response_types: list[str] | None = None
+    grant_types: list[str] | None = None
+    application_type: str | None = None
+    contacts: list[str] | None = None
+    client_name: str | None = None
+    logo_uri: str | None = None
+    client_uri: str | None = None
+    policy_uri: str | None = None
+    tos_uri: str | None = None
+    token_endpoint_auth_method: str | None = None
+    scope: str | None = None
+    jwks_uri: str | None = None
+    client_secret: str | None = None
+    extra_metadata: dict | None = None
+
+
+@dataclass
+class ClientDeleteRequest(BaseRequest):
+    """Request to deregister a client (RFC 7592 Section 2.3).
+
+    Attributes:
+        address: The client's ``registration_client_uri``.
+        registration_access_token: Bearer token issued at registration.
+    """
+
+    registration_access_token: str
+
+
+@dataclass(repr=False, eq=False)
+class ClientRegistrationResponse(BaseResponse):
+    """Response from the client registration endpoint (RFC 7591 / RFC 7592).
+
+    Returned by register, read, and update operations.  Check
+    ``is_successful`` before accessing ``client_id``, ``client_secret``,
+    ``registration_access_token`` or ``registration_client_uri``.
+    ``metadata`` echoes the full client configuration returned by the server.
+    """
+
+    _guarded_fields: ClassVar[frozenset[str]] = frozenset(
+        {
+            "client_id",
+            "client_secret",
+            "registration_access_token",
+            "registration_client_uri",
+        }
+    )
+
+    client_id: str | None = None
+    client_secret: str | None = None
+    client_id_issued_at: int | None = None
+    client_secret_expires_at: int | None = None
+    registration_access_token: str | None = None
+    registration_client_uri: str | None = None
+    metadata: dict | None = None
+
+
+@dataclass(repr=False, eq=False)
+class ClientDeleteResponse(BaseResponse):
+    """Response from deregistering a client (RFC 7592 Section 2.3).
+
+    A successful deletion returns ``is_successful=True`` with no data fields
+    (the server responds with 204 No Content).
+    """
+
+
+# ============================================================================
 # Token Validation Models
 # ============================================================================
 
@@ -1115,6 +1251,13 @@ __all__ = [
     # Token Client
     "ClientCredentialsTokenRequest",
     "ClientCredentialsTokenResponse",
+    # Dynamic Client Registration
+    "ClientDeleteRequest",
+    "ClientDeleteResponse",
+    "ClientReadRequest",
+    "ClientRegistrationRequest",
+    "ClientRegistrationResponse",
+    "ClientUpdateRequest",
     # Device Authorization Grant
     "DeviceAuthorizationRequest",
     "DeviceAuthorizationResponse",
