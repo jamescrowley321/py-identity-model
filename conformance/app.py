@@ -24,6 +24,7 @@ from starlette.concurrency import run_in_threadpool
 
 from py_identity_model import (
     AuthorizationCodeTokenRequest,
+    ClientRegistrationRequest,
     DiscoveryDocumentRequest,
     DiscoveryPolicy,
     HTTPClient,
@@ -37,6 +38,7 @@ from py_identity_model import (
     get_userinfo,
     parse_authorize_callback_response,
     parse_discovery_url,
+    register_client,
     request_authorization_code_token,
     validate_authorize_callback_state,
     validate_logout_token,
@@ -238,6 +240,11 @@ _last_logout_context: dict[str, str] | None = None
 # /post-logout-callback (RP-Initiated Logout 1.0 §2 state round-trip).
 _expected_logout_state: str | None = None
 
+# Most recent dynamically-registered client (RFC 7591): the issued client_id
+# and, for confidential clients, client_secret. Populated by /register so a
+# subsequent /authorize flow can use the freshly registered client.
+_registered_client: dict[str, str] | None = None
+
 
 def _get_http_client() -> HTTPClient:
     global _http_client
@@ -339,6 +346,83 @@ def discover(
         disco.issuer,
     )
     return JSONResponse(content={"status": "ok", "issuer": disco.issuer})
+
+
+@app.get("/register", response_model=None)
+def register(
+    issuer: str = Query(..., description="Issuer URL for this test"),
+    test_name: str = Query("", description="Test module name for RP log capture"),
+    profile: str = Query("", description="Profile/plan name for RP log capture"),
+) -> JSONResponse:
+    """Dynamically register this RP with the OP (RFC 7591, Dynamic RP profile).
+
+    Discovers the OP's ``registration_endpoint`` and registers a client with
+    minimal metadata (this RP's redirect URI) via the library's
+    ``register_client``. The issued ``client_id`` (and, for confidential
+    clients, ``client_secret``) are remembered so a subsequent /authorize flow
+    can use the freshly registered client.
+    """
+    _set_active_test(profile, test_name)
+    http_client = _get_http_client()
+    try:
+        disco_endpoint = parse_discovery_url(issuer)
+    except ConfigurationException as exc:
+        logger.error("REJECTED: invalid issuer URL: %s", exc)
+        return JSONResponse(
+            status_code=400,
+            content={"error": "invalid_issuer", "detail": "Invalid issuer URL"},
+        )
+
+    policy = DiscoveryPolicy(require_https=False, validate_issuer=True)
+    disco = get_discovery_document(
+        DiscoveryDocumentRequest(address=disco_endpoint.url, policy=policy),
+        http_client=http_client,
+    )
+    if not disco.is_successful:
+        logger.error("REJECTED: discovery fetch failed: %s", disco.error)
+        return JSONResponse(
+            status_code=502,
+            content={"error": "discovery_failed", "detail": disco.error},
+        )
+    if not disco.registration_endpoint:
+        logger.error("REJECTED: OP does not advertise a registration_endpoint")
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "registration_not_supported",
+                "detail": "OP discovery has no registration_endpoint",
+            },
+        )
+
+    response = register_client(
+        ClientRegistrationRequest(
+            address=disco.registration_endpoint,
+            redirect_uris=[f"{RP_BASE_URL}/callback"],
+            client_name="py-identity-model-dynamic-rp",
+            grant_types=["authorization_code"],
+            response_types=["code"],
+            token_endpoint_auth_method="client_secret_basic",
+        ),
+        http_client=http_client,
+    )
+    if not response.is_successful:
+        logger.error("REJECTED: dynamic registration failed: %s", response.error)
+        return JSONResponse(
+            status_code=400,
+            content={"error": "registration_failed", "detail": response.error},
+        )
+
+    global _registered_client
+    _registered_client = {
+        "client_id": response.client_id or "",
+        "client_secret": response.client_secret or "",
+    }
+    logger.info(
+        "ACCEPTED: client registered dynamically, client_id=%s",
+        response.client_id,
+    )
+    # Never return client_secret in the body; only confirm registration.
+    return JSONResponse(content={"status": "ok", "client_id": response.client_id})
 
 
 @app.get("/authorize", response_model=None)
