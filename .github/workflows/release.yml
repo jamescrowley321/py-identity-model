@@ -45,7 +45,7 @@ jobs:
           token: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: 3.13
 
@@ -161,7 +161,7 @@ jobs:
         run: git pull --ff-only origin main
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
