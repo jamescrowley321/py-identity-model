@@ -90,7 +90,7 @@ build-fastapi: ## Build the fastapi-identity-model wheel + sdist
 # ── Pre-push ────────────────────────────────────────────────────────
 
 .PHONY: pre-push
-pre-push: lint test-fastapi test-integration-node-oidc conformance-test-harness test-examples ## Full local validation before push
+pre-push: lint test-fastapi test-integration-node-oidc test-integration-keycloak conformance-test-harness test-examples ## Full local validation before push
 
 # ── Docs ─────────────────────────────────────────────────────────────
 
