@@ -53,6 +53,15 @@ test-integration-node-oidc: ## Run integration tests against node-oidc-provider
 		(docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down && exit 1)
 	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
 
+.PHONY: test-integration-keycloak
+test-integration-keycloak: ## Run integration tests against Keycloak
+	@echo "Starting Keycloak fixture..."
+	docker compose -f test-fixtures/keycloak/docker-compose.yml up -d --build --wait
+	@echo "Running integration tests against Keycloak..."
+	uv run pytest src/tests -m integration --env-file=.env.keycloak -v || \
+		(docker compose -f test-fixtures/keycloak/docker-compose.yml down && exit 1)
+	docker compose -f test-fixtures/keycloak/docker-compose.yml down
+
 .PHONY: test-benchmark
 test-benchmark: ## Run benchmarks
 	uv run pytest src/tests/benchmarks -v --benchmark-only --benchmark-sort=name
