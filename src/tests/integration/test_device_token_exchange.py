@@ -27,6 +27,10 @@ from py_identity_model.sync.token_exchange import exchange_token
 _UNSUPPORTED_GRANT_SIGNALS = (
     "unsupported_grant_type",  # RFC 6749 Section 5.2
     "grant_type field must be one of",  # Descope E011003
+    # Keycloak rejects the grant with these when standard token exchange is
+    # not permitted for the client (feature/version dependent).
+    "token exchange is not enabled",
+    "client is not allowed to exchange",
 )
 
 

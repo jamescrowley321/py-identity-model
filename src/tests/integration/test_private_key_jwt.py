@@ -13,6 +13,7 @@ provider (remote providers in the CI matrix do not register this client).
 
 import base64
 import secrets
+from urllib.parse import urlparse
 
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import (
@@ -88,14 +89,20 @@ def _is_node_oidc_fixture(raw_discovery: dict) -> bool:
     """Whether the active provider is the local private_key_jwt fixture.
 
     The static key only matches the ``test-private-key-jwt`` client in the
-    bundled node-oidc-provider fixture, which runs on localhost and
-    advertises ``private_key_jwt`` support.
+    bundled node-oidc-provider fixture, which runs on localhost, serves
+    discovery at the host root, and advertises ``private_key_jwt`` support.
+
+    The host-root check is what distinguishes node-oidc from other local
+    providers: Keycloak also runs on localhost and advertises
+    ``private_key_jwt``, but serves discovery under ``/realms/<realm>`` and
+    does not register the static test client — so it must skip these tests.
     """
     issuer = raw_discovery.get("issuer", "")
     methods = raw_discovery.get("token_endpoint_auth_methods_supported", [])
-    return issuer.startswith(("http://localhost", "http://127.0.0.1")) and (
-        "private_key_jwt" in methods
-    )
+    parsed = urlparse(issuer)
+    is_local = parsed.hostname in ("localhost", "127.0.0.1")
+    at_host_root = parsed.path in ("", "/")
+    return is_local and at_host_root and "private_key_jwt" in methods
 
 
 def _require_node_oidc(raw_discovery: dict) -> None:

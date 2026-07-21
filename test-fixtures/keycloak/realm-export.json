@@ -24,7 +24,11 @@
       "standardFlowEnabled": false,
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
-      "fullScopeAllowed": true
+      "fullScopeAllowed": true,
+      "attributes": {
+        "oauth2.device.authorization.grant.enabled": "true",
+        "standard.token.exchange.enabled": "true"
+      }
     },
     {
       "clientId": "test-auth-code",
@@ -81,10 +85,11 @@
       "credentials": [
         {
           "type": "password",
-          "value": "test-user-password",
+          "value": "test",
           "temporary": false
         }
-      ]
+      ],
+      "realmRoles": ["offline_access", "uma_authorization"]
     }
   ]
 }

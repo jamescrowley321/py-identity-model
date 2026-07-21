@@ -8,11 +8,13 @@ Includes:
 
 from contextlib import suppress
 from dataclasses import dataclass
+from html.parser import HTMLParser
 import json
 import secrets
 import time
 from types import MappingProxyType
-from urllib.parse import urlencode, urlparse
+from typing import Any
+from urllib.parse import urlencode, urljoin, urlparse
 
 from filelock import FileLock
 import httpx
@@ -91,16 +93,38 @@ def retry_with_backoff():
 
 
 @pytest.fixture(scope="session")
-def test_config(env_file, tmp_path_factory):
+def provider_slug(env_file) -> str:
+    """Stable per-provider slug used to namespace cross-worker cache files.
+
+    Session cache/lock files live at a stable path
+    (``tmp_path_factory.getbasetemp().parent``) that is *not* keyed by
+    provider. Running two providers against the same base tmp dir — e.g.
+    ``make test-integration-node-oidc`` then ``...-keycloak`` — would
+    otherwise reuse the first provider's cached discovery document, JWKS and
+    tokens, pointing the second run at a dead endpoint (Errno 111) and the
+    wrong signing keys. Deriving the slug from the env file
+    (``.env.keycloak`` -> ``keycloak``) isolates each provider's caches.
+    """
+    if not env_file:
+        return "default"
+    # Strip any directory component without importing os
+    name = env_file.replace("\\", "/").rsplit("/", 1)[-1]
+    if name.startswith(".env."):
+        return name[len(".env.") :] or "default"
+    return "default"
+
+
+@pytest.fixture(scope="session")
+def test_config(env_file, provider_slug, tmp_path_factory):
     """Session-scoped test configuration with file-lock for xdist safety."""
     root_tmp_dir = tmp_path_factory.getbasetemp().parent
-    lock_file = root_tmp_dir / "test_config.lock"
+    lock_file = root_tmp_dir / f"{provider_slug}_test_config.lock"
     with FileLock(str(lock_file)):
         return get_config(env_file)
 
 
 @pytest.fixture(scope="session")
-def discovery_document(test_config, tmp_path_factory):
+def discovery_document(test_config, provider_slug, tmp_path_factory):
     """Cached discovery document, shared across xdist workers.
 
     See ``client_credentials_token`` for the cross-worker FileLock +
@@ -109,8 +133,8 @@ def discovery_document(test_config, tmp_path_factory):
     rate limits.
     """
     root_tmp_dir = tmp_path_factory.getbasetemp().parent
-    cache_file = root_tmp_dir / "discovery_document.json"
-    lock_file = root_tmp_dir / "discovery_document.lock"
+    cache_file = root_tmp_dir / f"{provider_slug}_discovery_document.json"
+    lock_file = root_tmp_dir / f"{provider_slug}_discovery_document.lock"
 
     with FileLock(str(lock_file)):
         if cache_file.exists():
@@ -132,7 +156,7 @@ def discovery_document(test_config, tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
-def raw_discovery(test_config, tmp_path_factory):
+def raw_discovery(test_config, provider_slug, tmp_path_factory):
     """Raw discovery JSON for capability detection.
 
     Provides access to all RFC 8414 fields, including those not yet
@@ -141,8 +165,8 @@ def raw_discovery(test_config, tmp_path_factory):
     for the rationale.
     """
     root_tmp_dir = tmp_path_factory.getbasetemp().parent
-    cache_file = root_tmp_dir / "raw_discovery.json"
-    lock_file = root_tmp_dir / "raw_discovery.lock"
+    cache_file = root_tmp_dir / f"{provider_slug}_raw_discovery.json"
+    lock_file = root_tmp_dir / f"{provider_slug}_raw_discovery.lock"
 
     with FileLock(str(lock_file)):
         if cache_file.exists():
@@ -234,15 +258,15 @@ def provider_capabilities(raw_discovery):
 
 
 @pytest.fixture(scope="session")
-def jwks_response(test_config, tmp_path_factory):
+def jwks_response(test_config, provider_slug, tmp_path_factory):
     """Cached JWKS response, shared across xdist workers.
 
     See ``client_credentials_token`` for the cross-worker FileLock +
     JSON cache rationale.
     """
     root_tmp_dir = tmp_path_factory.getbasetemp().parent
-    cache_file = root_tmp_dir / "jwks_response.json"
-    lock_file = root_tmp_dir / "jwks_response.lock"
+    cache_file = root_tmp_dir / f"{provider_slug}_jwks_response.json"
+    lock_file = root_tmp_dir / f"{provider_slug}_jwks_response.lock"
 
     with FileLock(str(lock_file)):
         if cache_file.exists():
@@ -375,7 +399,12 @@ def _fetch_token_with_extended_backoff(
 
 
 @pytest.fixture(scope="session")
-def client_credentials_token(test_config, token_endpoint, tmp_path_factory):
+def client_credentials_token(
+    test_config,
+    token_endpoint,
+    provider_slug,
+    tmp_path_factory,
+):
     """Client credentials token, shared across xdist workers.
 
     Without cross-worker coordination, ``pytest -n auto`` fans out N
@@ -390,8 +419,8 @@ def client_credentials_token(test_config, token_endpoint, tmp_path_factory):
     the response object instead of re-fetching.
     """
     root_tmp_dir = tmp_path_factory.getbasetemp().parent
-    cache_file = root_tmp_dir / "client_credentials_token.json"
-    lock_file = root_tmp_dir / "client_credentials_token.lock"
+    cache_file = root_tmp_dir / f"{provider_slug}_client_credentials_token.json"
+    lock_file = root_tmp_dir / f"{provider_slug}_client_credentials_token.lock"
 
     with FileLock(str(lock_file)):
         if cache_file.exists():
@@ -473,7 +502,12 @@ def jwt_signing_key(jwks_response, jwt_access_token):
 
 
 @pytest.fixture(scope="session")
-def opaque_access_token(test_config, token_endpoint, tmp_path_factory):
+def opaque_access_token(
+    test_config,
+    token_endpoint,
+    provider_slug,
+    tmp_path_factory,
+):
     """Opaque access token for introspection/revocation tests.
 
     Some providers (e.g. node-oidc-provider) cannot introspect or revoke
@@ -489,8 +523,8 @@ def opaque_access_token(test_config, token_endpoint, tmp_path_factory):
         pytest.skip("TEST_OPAQUE_CLIENT_ID not configured")
 
     root_tmp_dir = tmp_path_factory.getbasetemp().parent
-    cache_file = root_tmp_dir / "opaque_access_token.json"
-    lock_file = root_tmp_dir / "opaque_access_token.lock"
+    cache_file = root_tmp_dir / f"{provider_slug}_opaque_access_token.json"
+    lock_file = root_tmp_dir / f"{provider_slug}_opaque_access_token.lock"
 
     with FileLock(str(lock_file)):
         if cache_file.exists():
@@ -616,6 +650,178 @@ def _follow_redirects_counted(
     return None, resp
 
 
+class _LoginFormParser(HTMLParser):
+    """Extract the HTML login ``<form>`` — the one carrying a password input.
+
+    Providers that render a server-side login page (e.g. Keycloak) return an
+    HTML ``<form action=".../login-actions/authenticate?...">`` with
+    ``username``/``password`` inputs rather than node-oidc's devInteractions
+    JSON-ish endpoint. This captures that form's action plus every input
+    name/value so hidden fields (Keycloak's ``credentialId`` etc.) round-trip.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        # Depth counter (not a bool) so a nested <form> (invalid HTML, but
+        # defensive) neither resets the outer form on its start tag nor closes
+        # it early on its end tag — only the outermost boundary opens/commits.
+        self._form_depth = 0
+        self._current_action: str | None = None
+        self._current_inputs: dict[str, str] = {}
+        self._current_has_password = False
+        self.action: str | None = None
+        self.inputs: dict[str, str] = {}
+        self.field_names: set[str] = set()
+
+    def handle_starttag(self, tag, attrs):
+        attrs_d = {k: (v or "") for k, v in attrs}
+        if tag == "form":
+            if self._form_depth == 0:
+                self._current_action = attrs_d.get("action")
+                self._current_inputs = {}
+                self._current_has_password = False
+            self._form_depth += 1
+        elif tag == "input" and self._form_depth > 0:
+            name = attrs_d.get("name")
+            if not name:
+                return
+            self._current_inputs[name] = attrs_d.get("value", "")
+            if attrs_d.get("type", "").lower() == "password":
+                self._current_has_password = True
+
+    def handle_endtag(self, tag):
+        if tag == "form" and self._form_depth > 0:
+            self._form_depth -= 1
+            if self._form_depth != 0:
+                return
+            # Outermost </form> closed: keep the first form that collects a password
+            if self._current_has_password and self.action is None:
+                self.action = self._current_action
+                self.inputs = dict(self._current_inputs)
+                self.field_names = set(self._current_inputs)
+
+
+def _parse_login_form(html_text: str, base_url: str):
+    """Parse an HTML login form.
+
+    Returns ``(action_url, field_names, hidden)`` where ``action_url`` is the
+    absolute, HTML-entity-unescaped POST target (``&amp;`` -> ``&``), or
+    ``None`` when no password-bearing form is present. ``hidden`` holds every
+    input except the credential fields the caller fills.
+    """
+    parser = _LoginFormParser()
+    parser.feed(html_text)
+    if not parser.field_names:
+        return None
+    # ``HTMLParser`` already unescapes character references in attribute
+    # values (``&amp;`` -> ``&``), so the action is used as-is; a second
+    # ``unescape`` here would double-decode (e.g. ``&amp;amp;`` -> ``&``).
+    action = parser.action if parser.action else base_url
+    action_url = urljoin(base_url, action)
+    hidden = {
+        k: v
+        for k, v in parser.inputs.items()
+        if k not in {"username", "login", "password"}
+    }
+    return action_url, parser.field_names, hidden
+
+
+def _iter_set_cookies(response: httpx.Response):
+    """Yield ``(name, value)`` for every ``Set-Cookie`` on ``response``."""
+    for header in response.headers.get_list("set-cookie"):
+        name, sep, rest = header.partition("=")
+        if not sep:
+            continue
+        yield name.strip(), rest.split(";", 1)[0].strip()
+
+
+class _AuthFlowClient(httpx.Client):
+    """``httpx.Client`` that echoes cookies back over plain ``http``.
+
+    httpx rebuilds the cookie jar with the *default* stdlib policy on every
+    outgoing request (``BaseClient._merge_cookies`` wraps the client jar in a
+    fresh ``Cookies``, and ``Request.__init__`` wraps it again before calling
+    ``set_cookie_header``), so a custom ``CookiePolicy`` cannot survive to the
+    send path. That default policy refuses to send ``Secure`` cookies over an
+    ``http://`` connection. Keycloak marks its ``AUTH_SESSION_ID`` /
+    ``KC_RESTART`` auth-session cookies ``Secure; SameSite=None``
+    unconditionally, so a plain-http auth-code flow never gets them back and
+    every login POST fails with "Restart login cookie not found".
+
+    This client keeps its own ``name -> value`` store, captures every
+    ``Set-Cookie`` (``Secure`` included), and writes the ``Cookie`` header
+    itself. node-oidc's non-``Secure`` cookies round-trip identically through
+    the same store, so both providers share one code path.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._flow_cookies: dict[str, str] = {}
+
+    def send(self, request: httpx.Request, **kwargs: Any) -> httpx.Response:
+        if self._flow_cookies:
+            request.headers["Cookie"] = "; ".join(
+                f"{name}={value}" for name, value in self._flow_cookies.items()
+            )
+        response = super().send(request, **kwargs)
+        for name, value in _iter_set_cookies(response):
+            # An empty value is a deletion (Max-Age=0 / expired) — drop it.
+            if value:
+                self._flow_cookies[name] = value
+            else:
+                self._flow_cookies.pop(name, None)
+        return response
+
+
+def _submit_login(client, resp, interaction_url, config):
+    """Submit login credentials, handling both provider login styles.
+
+    node-oidc exposes a devInteractions endpoint that dispatches on a
+    ``prompt`` field; server-rendered providers (e.g. Keycloak) return an HTML
+    ``<form>`` that must be parsed for its action and field names. Returns the
+    post-login response for the caller's redirect-following loop.
+    """
+    if "/interaction/" in interaction_url:
+        # node-oidc devInteractions: a single endpoint dispatches on the
+        # `prompt` field. Left byte-for-byte identical to preserve the
+        # existing (passing) node-oidc flow.
+        return client.post(
+            interaction_url,
+            data={
+                "prompt": "login",
+                "login": config.login_hint,
+                "password": config.login_password,
+            },
+        )
+    # Generic server-rendered HTML login form (e.g. Keycloak). Parse the
+    # returned form for its action + field names, echo back any hidden
+    # fields, and fill whichever username field the form uses.
+    form = _parse_login_form(resp.text, interaction_url)
+    if form is None:
+        pytest.fail(f"Could not locate a login form at {interaction_url}")
+    action_url, field_names, hidden = form
+    data = dict(hidden)
+    if "username" in field_names:
+        data["username"] = config.login_hint
+    if "login" in field_names:
+        data["login"] = config.login_hint
+    if "username" not in field_names and "login" not in field_names:
+        # Provider names its identifier field something else (not
+        # username/login). Fall back to the sole non-password field so the
+        # identifier is still sent rather than silently dropped; if more than
+        # one non-password field exists it is ambiguous, so fail loudly.
+        identifier_fields = field_names - {"password"}
+        if len(identifier_fields) == 1:
+            data[next(iter(identifier_fields))] = config.login_hint
+        else:
+            pytest.fail(
+                f"Could not identify the username field in the login form at "
+                f"{action_url}; fields={sorted(field_names)}"
+            )
+    data["password"] = config.login_password
+    return client.post(action_url, data=data)
+
+
 @dataclass(frozen=True)
 class AuthCodeFlowConfig:
     """Optional configuration for :func:`perform_auth_code_flow`."""
@@ -672,7 +878,7 @@ def perform_auth_code_flow(
     # Use a single redirect counter across the entire flow
     total_redirects = 0
 
-    with httpx.Client(follow_redirects=False, timeout=10.0) as client:
+    with _AuthFlowClient(follow_redirects=False, timeout=10.0) as client:
         resp = client.get(auth_url)
         while is_redirect(resp.status_code):
             location = _resolve_location(resp)
@@ -689,14 +895,7 @@ def perform_auth_code_flow(
             pytest.fail(f"Auth request failed: {resp.status_code} at {resp.url}")
 
         interaction_url = str(resp.url)
-        resp = client.post(
-            interaction_url,
-            data={
-                "prompt": "login",
-                "login": config.login_hint,
-                "password": config.login_password,
-            },
-        )
+        resp = _submit_login(client, resp, interaction_url, config)
 
         callback_url, resp = _follow_redirects_counted(
             client, resp, redirect_uri, total_redirects

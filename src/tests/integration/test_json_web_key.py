@@ -33,6 +33,10 @@ def test_jwk_deserialization(jwks_data):
 
         # Verify all fields from original are present and match
         for key, value in jwk_dict.items():
+            if key == "x5t#S256":
+                # RFC 7517 member name maps to the x5t_s256 Python attribute
+                assert jwk.x5t_s256 == value
+                continue
             attr_name = key.lower()
             assert hasattr(jwk, attr_name)
             assert getattr(jwk, attr_name) == value
@@ -121,6 +125,10 @@ def test_as_dict(jwks_data):
 
         # Verify all properties from the original JWK are in the dictionary
         for key, value in jwk_dict.items():
+            if key == "x5t#S256":
+                # as_dict() emits the RFC 7517 member name verbatim
+                assert jwk_as_dict["x5t#S256"] == value
+                continue
             attr_name = key.lower()
             assert attr_name in jwk_as_dict
             assert jwk_as_dict[attr_name] == value
@@ -128,6 +136,10 @@ def test_as_dict(jwks_data):
         # Verify that all non-None properties from the JWK object are in the dictionary
         for key, value in jwk.__dict__.items():
             if value is not None:
+                if key == "x5t_s256":
+                    # Python attr name is serialized as the JWK member name
+                    assert jwk_as_dict["x5t#S256"] == value
+                    continue
                 assert key in jwk_as_dict
                 assert jwk_as_dict[key] == value
 
