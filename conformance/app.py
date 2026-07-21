@@ -19,6 +19,7 @@ from urllib.parse import urlencode
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from jwt.exceptions import PyJWTError
 from starlette.concurrency import run_in_threadpool
 
 from py_identity_model import (
@@ -858,7 +859,12 @@ def _receive_backchannel_logout(logout_token: str | None) -> JSONResponse:
             content={"error": "invalid_request", "detail": "missing logout_token"},
         )
 
-    if _last_flow_context is None:
+    # Snapshot the process-global flow context once. A concurrent ``/authorize``
+    # can replace ``_last_flow_context`` between the None-check and the field
+    # reads; binding the reference once ensures issuer/client_id/disco all come
+    # from a single, self-consistent flow rather than a spliced mix.
+    flow_context = _last_flow_context
+    if flow_context is None:
         logger.error("REJECTED: back-channel logout received before any auth flow")
         return JSONResponse(
             status_code=400,
@@ -870,11 +876,11 @@ def _receive_backchannel_logout(logout_token: str | None) -> JSONResponse:
             logout_token,
             TokenValidationConfig(
                 perform_disco=True,
-                audience=_last_flow_context["client_id"],
-                issuer=_last_flow_context["issuer"],
+                audience=flow_context["client_id"],
+                issuer=flow_context["issuer"],
                 require_https=False,
             ),
-            disco_doc_address=_last_flow_context["disco_address"],
+            disco_doc_address=flow_context["disco_address"],
         )
     except LogoutTokenValidationException as exc:
         logger.error("REJECTED: logout token failed logout rules: %s", exc.message)
@@ -893,6 +899,16 @@ def _receive_backchannel_logout(logout_token: str | None) -> JSONResponse:
         return JSONResponse(
             status_code=400,
             content={"error": "invalid_logout_token", "detail": str(exc)},
+        )
+    except PyJWTError as exc:
+        # A non-empty but malformed ``logout_token`` (not a well-formed JWT)
+        # trips PyJWT's header decode inside ``validate_token`` and raises a
+        # ``PyJWTError`` — which is NOT a ``PyIdentityModelException``. Spec
+        # §2.5 mandates 400 (not an uncaught 500) for an invalid token.
+        logger.error("REJECTED: logout token is not a well-formed JWT: %s", exc)
+        return JSONResponse(
+            status_code=400,
+            content={"error": "invalid_logout_token", "detail": "malformed token"},
         )
 
     logger.info(
