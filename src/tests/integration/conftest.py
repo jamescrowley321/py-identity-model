@@ -8,7 +8,6 @@ Includes:
 
 from contextlib import suppress
 from dataclasses import dataclass
-from html import unescape
 from html.parser import HTMLParser
 import json
 import secrets
@@ -663,7 +662,10 @@ class _LoginFormParser(HTMLParser):
 
     def __init__(self) -> None:
         super().__init__()
-        self._in_form = False
+        # Depth counter (not a bool) so a nested <form> (invalid HTML, but
+        # defensive) neither resets the outer form on its start tag nor closes
+        # it early on its end tag — only the outermost boundary opens/commits.
+        self._form_depth = 0
         self._current_action: str | None = None
         self._current_inputs: dict[str, str] = {}
         self._current_has_password = False
@@ -674,11 +676,12 @@ class _LoginFormParser(HTMLParser):
     def handle_starttag(self, tag, attrs):
         attrs_d = {k: (v or "") for k, v in attrs}
         if tag == "form":
-            self._in_form = True
-            self._current_action = attrs_d.get("action")
-            self._current_inputs = {}
-            self._current_has_password = False
-        elif tag == "input" and self._in_form:
+            if self._form_depth == 0:
+                self._current_action = attrs_d.get("action")
+                self._current_inputs = {}
+                self._current_has_password = False
+            self._form_depth += 1
+        elif tag == "input" and self._form_depth > 0:
             name = attrs_d.get("name")
             if not name:
                 return
@@ -687,13 +690,15 @@ class _LoginFormParser(HTMLParser):
                 self._current_has_password = True
 
     def handle_endtag(self, tag):
-        if tag == "form" and self._in_form:
-            # Keep the first form that actually collects a password
+        if tag == "form" and self._form_depth > 0:
+            self._form_depth -= 1
+            if self._form_depth != 0:
+                return
+            # Outermost </form> closed: keep the first form that collects a password
             if self._current_has_password and self.action is None:
                 self.action = self._current_action
                 self.inputs = dict(self._current_inputs)
                 self.field_names = set(self._current_inputs)
-            self._in_form = False
 
 
 def _parse_login_form(html_text: str, base_url: str):
@@ -708,7 +713,10 @@ def _parse_login_form(html_text: str, base_url: str):
     parser.feed(html_text)
     if not parser.field_names:
         return None
-    action = unescape(parser.action) if parser.action else base_url
+    # ``HTMLParser`` already unescapes character references in attribute
+    # values (``&amp;`` -> ``&``), so the action is used as-is; a second
+    # ``unescape`` here would double-decode (e.g. ``&amp;amp;`` -> ``&``).
+    action = parser.action if parser.action else base_url
     action_url = urljoin(base_url, action)
     hidden = {
         k: v
@@ -797,6 +805,19 @@ def _submit_login(client, resp, interaction_url, config):
         data["username"] = config.login_hint
     if "login" in field_names:
         data["login"] = config.login_hint
+    if "username" not in field_names and "login" not in field_names:
+        # Provider names its identifier field something else (not
+        # username/login). Fall back to the sole non-password field so the
+        # identifier is still sent rather than silently dropped; if more than
+        # one non-password field exists it is ambiguous, so fail loudly.
+        identifier_fields = field_names - {"password"}
+        if len(identifier_fields) == 1:
+            data[next(iter(identifier_fields))] = config.login_hint
+        else:
+            pytest.fail(
+                f"Could not identify the username field in the login form at "
+                f"{action_url}; fields={sorted(field_names)}"
+            )
     data["password"] = config.login_password
     return client.post(action_url, data=data)
 
