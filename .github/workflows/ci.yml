@@ -220,6 +220,40 @@ jobs:
         if: always()
         run: docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
 
+  integration-tests-keycloak:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: 3.13
+
+      - name: Cache uv dependencies
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: make ci-setup
+
+      - name: Start Keycloak fixture
+        run: docker compose -f test-fixtures/keycloak/docker-compose.yml up -d --build --wait
+
+      - name: Integration Tests (Keycloak)
+        run: uv run pytest src/tests -m integration --env-file=.env.keycloak -v
+
+      - name: Tear down Keycloak fixture
+        if: always()
+        run: docker compose -f test-fixtures/keycloak/docker-compose.yml down
+
   example-tests:
     if: inputs.run-example-tests
     runs-on: ubuntu-latest
@@ -281,7 +315,7 @@ jobs:
 
   ci-complete:
     if: always()
-    needs: [lint, unit-tests, fastapi-tests, integration-tests-ory, integration-tests-descope, integration-tests-node-oidc, example-tests, build]
+    needs: [lint, unit-tests, fastapi-tests, integration-tests-ory, integration-tests-descope, integration-tests-node-oidc, integration-tests-keycloak, example-tests, build]
     runs-on: ubuntu-latest
     steps:
       - name: Check CI results
@@ -293,6 +327,7 @@ jobs:
             "${{ needs.integration-tests-ory.result }}" \
             "${{ needs.integration-tests-descope.result }}" \
             "${{ needs.integration-tests-node-oidc.result }}" \
+            "${{ needs.integration-tests-keycloak.result }}" \
             "${{ needs.example-tests.result }}" \
             "${{ needs.build.result }}" \
           )
