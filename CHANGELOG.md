@@ -2,6 +2,185 @@
 
 <!-- version list -->
 
+## v3.3.0 (2026-07-21)
+
+### Bug Fixes
+
+- Address review findings in live logout/registration tests
+  ([#454](https://github.com/jamescrowley321/py-identity-model/pull/454),
+  [`36f6e3e`](https://github.com/jamescrowley321/py-identity-model/commit/36f6e3ecf9944a7d585f31efcaf9937ab3dc1f9b))
+
+- Address review findings in live logout/registration tests
+  ([#453](https://github.com/jamescrowley321/py-identity-model/pull/453),
+  [`3fbd6e3`](https://github.com/jamescrowley321/py-identity-model/commit/3fbd6e33569e19ac1418454ec2468a5b987d3040))
+
+- Harden Keycloak fixture healthcheck (bash -c + anchored status match)
+  ([`60aada0`](https://github.com/jamescrowley321/py-identity-model/commit/60aada00f744817ca693cba10c854ea5a7157e66))
+
+- Relax over-specified identity assertions in matrix tests
+  ([`8330f21`](https://github.com/jamescrowley321/py-identity-model/commit/8330f21677aeda9ad123fc2d6f33b4cf13e5725e))
+
+- **jwks**: Serialize x5t#S256 with the RFC 7517 member name
+  ([`ff3a290`](https://github.com/jamescrowley321/py-identity-model/commit/ff3a29029cd35b1ccac0284389b634f5116ad55f))
+
+- **keycloak**: Harden login-form parser and identifier handling
+  ([`bb0f0cd`](https://github.com/jamescrowley321/py-identity-model/commit/bb0f0cdf5df350493d43896eb2663851f59ee61d))
+
+- **logout**: Address RP-initiated logout review findings
+  ([`4a55e0c`](https://github.com/jamescrowley321/py-identity-model/commit/4a55e0c8c6901fe0854ec20409a6aedae05d2d71))
+
+- **logout**: Return 400 for malformed logout tokens; snapshot flow context
+  ([`337a463`](https://github.com/jamescrowley321/py-identity-model/commit/337a4639f926005a1a006ae618fde0acf08bf325))
+
+- **registration**: Guard client_secret and truncate error-body echo
+  ([`9276901`](https://github.com/jamescrowley321/py-identity-model/commit/927690148d476d56fd3d40edf89d49b366dd7e87))
+
+### Build System
+
+- **keycloak**: Add keycloak integration tests to make pre-push
+  ([#454](https://github.com/jamescrowley321/py-identity-model/pull/454),
+  [`36f6e3e`](https://github.com/jamescrowley321/py-identity-model/commit/36f6e3ecf9944a7d585f31efcaf9937ab3dc1f9b))
+
+- **keycloak**: Add local Keycloak test fixture (docker-compose + realm + README)
+  ([`0382826`](https://github.com/jamescrowley321/py-identity-model/commit/03828266ff6498dd94d4c37069cfe9e89b8130f0))
+
+- **keycloak**: Enable device grant + token exchange; fix test-user password
+  ([`4189692`](https://github.com/jamescrowley321/py-identity-model/commit/41896927990afee034c0ad0b21d354762882dbdd))
+
+- **keycloak**: Grant test-user offline_access role
+  ([`545c898`](https://github.com/jamescrowley321/py-identity-model/commit/545c898ac09bb4cbca0330b838e28fe6685d6971))
+
+### Continuous Integration
+
+- **deps)(deps**: Bump actions/setup-python in the github-actions group
+  ([#445](https://github.com/jamescrowley321/py-identity-model/pull/445),
+  [`f68891f`](https://github.com/jamescrowley321/py-identity-model/commit/f68891f3f31c691558b00bb1220f3cf26bbce138))
+
+- **keycloak**: Add Keycloak integration CI job, pre-push, and docs
+  ([#454](https://github.com/jamescrowley321/py-identity-model/pull/454),
+  [`36f6e3e`](https://github.com/jamescrowley321/py-identity-model/commit/36f6e3ecf9944a7d585f31efcaf9937ab3dc1f9b))
+
+- **keycloak**: Add Keycloak integration job mirroring node-oidc
+  ([#454](https://github.com/jamescrowley321/py-identity-model/pull/454),
+  [`36f6e3e`](https://github.com/jamescrowley321/py-identity-model/commit/36f6e3ecf9944a7d585f31efcaf9937ab3dc1f9b))
+
+- **release**: Automate fastapi-identity-model releases with scope-routed semantic-release
+  ([#444](https://github.com/jamescrowley321/py-identity-model/pull/444),
+  [`52dfcba`](https://github.com/jamescrowley321/py-identity-model/commit/52dfcba7724798eadb5dc6b2dd4f4516b9f23571))
+
+### Documentation
+
+- **keycloak**: Document Keycloak provider + capability matrix in integration guide
+  ([#454](https://github.com/jamescrowley321/py-identity-model/pull/454),
+  [`36f6e3e`](https://github.com/jamescrowley321/py-identity-model/commit/36f6e3ecf9944a7d585f31efcaf9937ab3dc1f9b))
+
+### Features
+
+- **integration**: Detect end_session/registration/backchannel caps
+  ([#454](https://github.com/jamescrowley321/py-identity-model/pull/454),
+  [`36f6e3e`](https://github.com/jamescrowley321/py-identity-model/commit/36f6e3ecf9944a7d585f31efcaf9937ab3dc1f9b))
+
+- **integration**: Detect end_session/registration/backchannel caps
+  ([#453](https://github.com/jamescrowley321/py-identity-model/pull/453),
+  [`3fbd6e3`](https://github.com/jamescrowley321/py-identity-model/commit/3fbd6e33569e19ac1418454ec2468a5b987d3040))
+
+- **integration**: Wire Keycloak fixture into integration harness
+  ([`934c2e6`](https://github.com/jamescrowley321/py-identity-model/commit/934c2e6fb3186d814b711e83a246bf1e0507ac9f))
+
+- **integration**: Wire Keycloak fixture into integration harness
+  ([#447](https://github.com/jamescrowley321/py-identity-model/pull/447),
+  [`1c89c1e`](https://github.com/jamescrowley321/py-identity-model/commit/1c89c1edc1fb0efec5c475907aa862597fa62a80))
+
+- **logout**: Add backchannel_logout discovery fields + exception
+  ([`f4bcc2b`](https://github.com/jamescrowley321/py-identity-model/commit/f4bcc2b9d9b0ace3372681d0694edd2994d9dad7))
+
+- **logout**: Add build_end_session_url + post-logout state validation
+  ([`e044eeb`](https://github.com/jamescrowley321/py-identity-model/commit/e044eeb59f717dfb59c2091bb4317a06131cb433))
+
+- **logout**: Add end_session_endpoint discovery field
+  ([`51c24b3`](https://github.com/jamescrowley321/py-identity-model/commit/51c24b3289717f4fdb36d3da66a7e5f57d406d49))
+
+- **logout**: Add validate_logout_token (core logic + sync/aio wrappers)
+  ([`67fe9e6`](https://github.com/jamescrowley321/py-identity-model/commit/67fe9e610dae122b5ac057d385acae7a73c0105e))
+
+- **logout**: Conformance harness backchannel-logout receiver + config
+  ([`2cdc398`](https://github.com/jamescrowley321/py-identity-model/commit/2cdc3982dee4665219573744ee85d1cbb18711d8))
+
+- **logout**: Conformance harness RP-initiated logout redirect + callback + config
+  ([`4389644`](https://github.com/jamescrowley321/py-identity-model/commit/4389644fc2482ac40700c4033f785774615d3a00))
+
+- **matrix**: Add logout/registration columns to provider capability matrix
+  ([`993e9c2`](https://github.com/jamescrowley321/py-identity-model/commit/993e9c22fcbcd322afb5308f4070eba7a0fbd41a))
+
+- **registration**: Add dynamic client registration models
+  ([`e1ccb91`](https://github.com/jamescrowley321/py-identity-model/commit/e1ccb91fad0873569c6f93660daec66ffc817598))
+
+- **registration**: Conformance harness dynamic registration endpoint + config
+  ([`b57d4f7`](https://github.com/jamescrowley321/py-identity-model/commit/b57d4f7e4c64fb18f1f1e0115c8cd0eaed5215c4))
+
+- **registration**: Dynamic client registration logic + sync/async APIs
+  ([`08068ad`](https://github.com/jamescrowley321/py-identity-model/commit/08068ad1e85088d1891cb1c69e04a14b24fc3659))
+
+### Testing
+
+- **keycloak**: Gate private_key_jwt to node-oidc; skip KC token-exchange cleanly
+  ([`d74fd5e`](https://github.com/jamescrowley321/py-identity-model/commit/d74fd5ef4dc61295f92df96b4db17e988da27590))
+
+- **keycloak**: Key integration session caches by provider
+  ([`7d98170`](https://github.com/jamescrowley321/py-identity-model/commit/7d981709d02dba42c05fad62ae0d990a907f689f))
+
+- **keycloak**: Live back-channel logout token validation
+  ([#454](https://github.com/jamescrowley321/py-identity-model/pull/454),
+  [`36f6e3e`](https://github.com/jamescrowley321/py-identity-model/commit/36f6e3ecf9944a7d585f31efcaf9937ab3dc1f9b))
+
+- **keycloak**: Live back-channel logout token validation
+  ([#453](https://github.com/jamescrowley321/py-identity-model/pull/453),
+  [`3fbd6e3`](https://github.com/jamescrowley321/py-identity-model/commit/3fbd6e33569e19ac1418454ec2468a5b987d3040))
+
+- **keycloak**: Live dynamic client registration CRUD
+  ([#454](https://github.com/jamescrowley321/py-identity-model/pull/454),
+  [`36f6e3e`](https://github.com/jamescrowley321/py-identity-model/commit/36f6e3ecf9944a7d585f31efcaf9937ab3dc1f9b))
+
+- **keycloak**: Live dynamic client registration CRUD
+  ([#453](https://github.com/jamescrowley321/py-identity-model/pull/453),
+  [`3fbd6e3`](https://github.com/jamescrowley321/py-identity-model/commit/3fbd6e33569e19ac1418454ec2468a5b987d3040))
+
+- **keycloak**: Live logout + dynamic registration integration tests
+  ([#453](https://github.com/jamescrowley321/py-identity-model/pull/453),
+  [`3fbd6e3`](https://github.com/jamescrowley321/py-identity-model/commit/3fbd6e33569e19ac1418454ec2468a5b987d3040))
+
+- **keycloak**: Live RP-initiated logout end-session round-trip
+  ([#454](https://github.com/jamescrowley321/py-identity-model/pull/454),
+  [`36f6e3e`](https://github.com/jamescrowley321/py-identity-model/commit/36f6e3ecf9944a7d585f31efcaf9937ab3dc1f9b))
+
+- **keycloak**: Live RP-initiated logout end-session round-trip
+  ([#453](https://github.com/jamescrowley321/py-identity-model/pull/453),
+  [`3fbd6e3`](https://github.com/jamescrowley321/py-identity-model/commit/3fbd6e33569e19ac1418454ec2468a5b987d3040))
+
+- **keycloak**: Make live logout/registration tests exercise the flow
+  ([#454](https://github.com/jamescrowley321/py-identity-model/pull/454),
+  [`36f6e3e`](https://github.com/jamescrowley321/py-identity-model/commit/36f6e3ecf9944a7d585f31efcaf9937ab3dc1f9b))
+
+- **keycloak**: Make live logout/registration tests exercise the flow
+  ([#453](https://github.com/jamescrowley321/py-identity-model/pull/453),
+  [`3fbd6e3`](https://github.com/jamescrowley321/py-identity-model/commit/3fbd6e33569e19ac1418454ec2468a5b987d3040))
+
+- **keycloak**: Send Secure auth-session cookies over http in auth-code flow
+  ([`50eb4ce`](https://github.com/jamescrowley321/py-identity-model/commit/50eb4cec1737ea31db2d8fb5ffeabfacc1fe4a0c))
+
+- **keycloak**: Support Keycloak login form in auth-code flow helper
+  ([`d2684d9`](https://github.com/jamescrowley321/py-identity-model/commit/d2684d9ee0c10a84eafab56ac0ae89943a44165f))
+
+- **logout**: Unit tests for logout token validation + discovery fields
+  ([`c6947b5`](https://github.com/jamescrowley321/py-identity-model/commit/c6947b51a0c0fe18850643aa7c1b932bb06dfb4b))
+
+- **logout**: Unit tests for RP-initiated logout URL + state (LOGOUT-001/002/003)
+  ([`e1dd338`](https://github.com/jamescrowley321/py-identity-model/commit/e1dd3386b3b1d2fa6bc150174042238f010ff9d9))
+
+- **registration**: Unit tests for dynamic client registration CRUD
+  ([`c1f0575`](https://github.com/jamescrowley321/py-identity-model/commit/c1f05759506bd8cb7ba777cbbe01c82b31ddff9a))
+
+
 ## v3.2.0 (2026-07-06)
 
 ### Bug Fixes
