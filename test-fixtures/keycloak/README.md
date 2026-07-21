@@ -45,7 +45,7 @@ pinning a key.
 
 | clientId | Type | Secret | Flows | Notes |
 | --- | --- | --- | --- | --- |
-| `py-identity-model-client` | confidential | `py-identity-model-client-secret` | client_credentials (service account) | primary `TEST_CLIENT_ID` |
+| `py-identity-model-client` | confidential | `py-identity-model-client-secret` | client_credentials (service account), device grant, token exchange | primary `TEST_CLIENT_ID`; `oauth2.device.authorization.grant.enabled` + `standard.token.exchange.enabled` |
 | `test-auth-code` | confidential | `test-auth-code-secret` | authorization_code, direct grant | back-channel logout URL + `session.required=true` configured for logout tests |
 | `test-pkce-public` | public | — | authorization_code (PKCE **S256 required**) | redirect `http://localhost:8080/callback` |
 
@@ -55,9 +55,10 @@ login page — the auth-code test login helper is wired in KC.3.
 
 ## Test user
 
-`test-user` / `test-user-password` — email `test@example.com` (verified),
-name "Test User". Needed for the auth-code login form (Keycloak has no
-auto-login equivalent to node-oidc `devInteractions`).
+`test-user` / `test` — email `test@example.com` (verified), name "Test User".
+Needed for the auth-code login form (Keycloak has no auto-login equivalent to
+node-oidc `devInteractions`). The password matches the shared
+`AuthCodeFlowConfig` default so the login helper needs no per-provider config.
 
 ## Capabilities
 
@@ -74,6 +75,14 @@ auto-login equivalent to node-oidc `devInteractions`).
 - **Opaque tokens** — Keycloak emits JWTs, not opaque tokens, so the
   introspection / opaque-token integration tests **skip cleanly** (no
   `TEST_OPAQUE_CLIENT_ID` is configured for this provider).
+- **Device authorization grant** (RFC 8628) — enabled on
+  `py-identity-model-client` via `oauth2.device.authorization.grant.enabled`.
+- **Token exchange** (RFC 8693) — standard token exchange enabled on
+  `py-identity-model-client` via `standard.token.exchange.enabled` (a
+  supported feature in Keycloak 26.2+, no server feature flag required).
+- **private_key_jwt** — advertised in discovery, but the live
+  `private_key_jwt` tests pin the static key registered only in the node-oidc
+  fixture, so they **skip cleanly** against Keycloak.
 
 ## Wiring (added in later stories)
 
