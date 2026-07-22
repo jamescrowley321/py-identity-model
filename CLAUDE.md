@@ -142,7 +142,7 @@ uv run pytest src/tests/unit/test_discovery.py -v
 uv run pytest src/tests/unit/test_discovery.py::test_function_name -v
 ```
 
-**Coverage Requirements**: All test commands enforce 80% minimum coverage to align with SonarCloud quality gates.
+**Coverage Requirements**: All test commands enforce 80% minimum coverage (enforced by pytest + pre-commit).
 
 ### Linting
 ```bash
@@ -208,7 +208,7 @@ Format: `<type>/<short-description>` (e.g., `feat/descope-integration`, `fix/jwk
 
 - **Unit tests**: Use `respx` to mock HTTP in `src/tests/unit/`. Sync tests use `@respx.mock` decorator, async tests use `@pytest.mark.asyncio` class + `@respx.mock` on methods.
 - **Integration tests**: Test against real identity providers in `src/tests/integration/`. Session-scoped fixtures in `conftest.py` cache discovery docs, JWKS, and tokens to avoid rate limits.
-- **Coverage**: Minimum 80% coverage required (enforced by pytest, pre-commit, and SonarCloud)
+- **Coverage**: Minimum 80% coverage required (enforced by pytest and pre-commit)
 
 ### HTTP Configuration
 
