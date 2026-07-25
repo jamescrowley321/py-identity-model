@@ -122,9 +122,12 @@ def validate_authorize_callback_issuer(
     2. **Issuer present** — when the callback carries ``iss``, it MUST match
        *expected_issuer* (RFC 9207 Section 2.4: "the client MUST validate").
        This holds even when the metadata flag is unset — a present ``iss``
-       is always validated, never ignored. A missing/empty *expected_issuer*
-       yields ``ISSUER_MISMATCH`` (fail closed: we cannot confirm the
-       response's origin).
+       is always validated, never ignored. "Present" means the parameter was
+       supplied at all: a present-but-empty ``iss`` (``...&iss=``) is
+       malformed and validated (and thus rejected), not folded into the
+       "absent" branch. A missing/empty *expected_issuer* yields
+       ``ISSUER_MISMATCH`` (fail closed: we cannot confirm the response's
+       origin).
     3. **Issuer absent** — when the AS advertises support
        (*iss_parameter_supported*) or the caller opts into strict mode
        (*require*), an absent ``iss`` fails with ``MISSING_ISSUER`` (the
@@ -160,7 +163,11 @@ def validate_authorize_callback_issuer(
 
     enforce = iss_parameter_supported or require
 
-    if response.issuer:
+    # ``is not None`` (not truthiness): the parser preserves a present-but-empty
+    # ``iss=`` as "" (keep_blank_values), distinct from an absent parameter
+    # (None). An empty issuer is malformed and MUST be validated (→ mismatch),
+    # never silently downgraded to the "absent" branch.
+    if response.issuer is not None:
         if not expected_issuer or response.issuer != expected_issuer:
             return StateValidationResult(
                 is_valid=False,

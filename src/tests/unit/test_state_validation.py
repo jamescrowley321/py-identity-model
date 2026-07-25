@@ -4,6 +4,7 @@ from urllib.parse import quote
 
 import pytest
 
+from py_identity_model import aio
 from py_identity_model.core.authorize_response import (
     AuthorizeCallbackResponse,
     parse_authorize_callback_response,
@@ -256,3 +257,50 @@ class TestValidateAuthorizeCallbackIssuer:
         assert result.result is AuthorizeCallbackValidationResult.ERROR_RESPONSE
         assert result.error == "access_denied"
         assert result.error_description == "User denied"
+
+    def test_present_but_empty_issuer_is_mismatch(self):
+        """A present-but-empty iss (``&iss=``) is malformed, not absent.
+
+        The parser preserves ``iss=`` as "" (distinct from an absent param),
+        so it must be validated and rejected rather than downgraded to the
+        MISSING_ISSUER/absent branch where a non-enforcing caller would pass.
+        """
+        response = _parse("code=abc&iss=")
+        assert response.issuer == ""  # present, empty (not None)
+
+        result = validate_authorize_callback_issuer(response, ISSUER)
+
+        assert result.is_valid is False
+        assert result.result is AuthorizeCallbackValidationResult.ISSUER_MISMATCH
+
+    def test_empty_issuer_not_treated_as_absent_even_when_unenforced(self):
+        """Empty iss must not slip through the permissive absent path."""
+        result = validate_authorize_callback_issuer(
+            _parse("code=abc&iss="),
+            ISSUER,
+            iss_parameter_supported=False,
+            require=False,
+        )
+
+        assert result.is_valid is False
+        assert result.result is AuthorizeCallbackValidationResult.ISSUER_MISMATCH
+
+
+@pytest.mark.unit
+def test_issuer_validator_exported_from_async_surface():
+    """The validator is re-exported from the aio surface (async-context AC).
+
+    It is a single pure function shared across sync/aio/core; assert the aio
+    package exposes the same callable so async callers can import it there.
+    """
+    assert hasattr(aio, "validate_authorize_callback_issuer")
+    assert aio.validate_authorize_callback_issuer is validate_authorize_callback_issuer
+
+    # Exercise it through the aio-imported reference to cover the async surface.
+    result = aio.validate_authorize_callback_issuer(
+        _parse(f"code=abc&iss={quote(ISSUER, safe='')}"),
+        ISSUER,
+        iss_parameter_supported=True,
+    )
+    assert result.is_valid is True
+    assert result.result is AuthorizeCallbackValidationResult.SUCCESS
