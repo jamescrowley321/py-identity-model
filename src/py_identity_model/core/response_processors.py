@@ -274,6 +274,10 @@ def build_discovery_response(
         require_request_uri_registration=response_json.get(
             "require_request_uri_registration",
         ),
+        # Authorization-response issuer parameter support (RFC 9207 §3)
+        authorization_response_iss_parameter_supported=response_json.get(
+            "authorization_response_iss_parameter_supported",
+        ),
         # RP-Initiated Logout support (OpenID Connect RP-Initiated Logout 1.0 §2)
         end_session_endpoint=response_json.get("end_session_endpoint"),
         # Back-Channel Logout support (OpenID Connect Back-Channel Logout 1.0 §3)

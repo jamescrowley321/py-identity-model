@@ -62,6 +62,7 @@ from ..core.pkce import (
 from ..core.state_validation import (
     AuthorizeCallbackValidationResult,
     StateValidationResult,
+    validate_authorize_callback_issuer,
     validate_authorize_callback_state,
 )
 from .device_auth import (
@@ -234,6 +235,7 @@ __all__ = [
     "request_device_authorization",
     "revoke_token",
     "update_client",
+    "validate_authorize_callback_issuer",
     "validate_authorize_callback_state",
     "validate_fapi_authorization_request",
     "validate_fapi_client_config",

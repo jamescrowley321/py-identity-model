@@ -44,6 +44,7 @@ from .pkce import (
 from .state_validation import (
     AuthorizeCallbackValidationResult,
     StateValidationResult,
+    validate_authorize_callback_issuer,
     validate_authorize_callback_state,
 )
 from .validators import (
@@ -91,6 +92,7 @@ __all__ = [
     # From parsers
     "jwks_from_dict",
     "parse_authorize_callback_response",
+    "validate_authorize_callback_issuer",
     "validate_authorize_callback_state",
     # From validators
     "validate_https_url",
