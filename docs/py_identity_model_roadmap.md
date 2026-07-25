@@ -68,7 +68,7 @@
 - [ ] Discovery Cache with configurable TTL ([#219](https://github.com/jamescrowley321/py-identity-model/issues/219))
 - [ ] RP-Initiated Logout ([#214](https://github.com/jamescrowley321/py-identity-model/issues/214))
 - [ ] JWT Client Authentication — private_key_jwt / client_secret_jwt ([#213](https://github.com/jamescrowley321/py-identity-model/issues/213))
-- [ ] AS Issuer Identification — RFC 9207 ([#221](https://github.com/jamescrowley321/py-identity-model/issues/221))
+- [x] AS Issuer Identification — RFC 9207 ([#221](https://github.com/jamescrowley321/py-identity-model/issues/221))
 - [ ] CIBA — Client-Initiated Backchannel Authentication ([#217](https://github.com/jamescrowley321/py-identity-model/issues/217))
 - [ ] Rich Authorization Requests — RFC 9396 ([#220](https://github.com/jamescrowley321/py-identity-model/issues/220))
 - [ ] Dynamic Client Registration — RFC 7591 ([#216](https://github.com/jamescrowley321/py-identity-model/issues/216))
