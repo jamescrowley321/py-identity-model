@@ -14,6 +14,7 @@ from py_identity_model.core.authorize_response import (
 )
 from py_identity_model.core.state_validation import (
     AuthorizeCallbackValidationResult,
+    validate_authorize_callback_issuer,
     validate_authorize_callback_state,
 )
 
@@ -58,6 +59,41 @@ class TestAuthorizeCallbackWithDiscovery:
                 ("https://", "http://")
             )
 
+    def test_issuer_validation_with_discovery_metadata(self, discovery_document):
+        """RFC 9207: a matching iss validates against the real discovery issuer.
+
+        Drives enforcement from the live
+        ``authorization_response_iss_parameter_supported`` metadata flag.
+        """
+        issuer = discovery_document.issuer
+        state = secrets.token_urlsafe(32)
+        params = urlencode({"code": "abc", "state": state, "iss": issuer})
+        callback = parse_authorize_callback_response(f"{CALLBACK_URI}?{params}")
+
+        result = validate_authorize_callback_issuer(
+            callback,
+            issuer,
+            iss_parameter_supported=bool(
+                discovery_document.authorization_response_iss_parameter_supported
+            ),
+        )
+
+        assert result.is_valid is True
+        assert result.result is AuthorizeCallbackValidationResult.SUCCESS
+
+    def test_issuer_mismatch_with_discovery_metadata(self, discovery_document):
+        """A mismatched iss is rejected against the real issuer (mix-up defense)."""
+        state = secrets.token_urlsafe(32)
+        params = urlencode(
+            {"code": "abc", "state": state, "iss": "https://attacker.example.com"}
+        )
+        callback = parse_authorize_callback_response(f"{CALLBACK_URI}?{params}")
+
+        result = validate_authorize_callback_issuer(callback, discovery_document.issuer)
+
+        assert result.is_valid is False
+        assert result.result is AuthorizeCallbackValidationResult.ISSUER_MISMATCH
+
 
 @pytest.mark.integration
 class TestLiveAuthorizeCallback:
@@ -79,3 +115,35 @@ class TestLiveAuthorizeCallback:
         state_result = validate_authorize_callback_state(callback, wrong_state)
         assert not state_result.is_valid
         assert state_result.result == AuthorizeCallbackValidationResult.STATE_MISMATCH
+
+    def test_live_issuer_validation(self, auth_code_result, discovery_document):
+        """RFC 9207: validate the live callback's iss against the expected issuer.
+
+        When the AS emits ``iss`` (node-oidc-provider does), the validated path
+        is exercised and must SUCCEED against the real issuer. When it does not,
+        an absent-and-not-required iss also SUCCEEDS.
+        """
+        callback = auth_code_result["callback"]
+        result = validate_authorize_callback_issuer(
+            callback,
+            discovery_document.issuer,
+            iss_parameter_supported=bool(
+                discovery_document.authorization_response_iss_parameter_supported
+            ),
+        )
+
+        assert result.is_valid is True
+        assert result.result is AuthorizeCallbackValidationResult.SUCCESS
+
+    def test_live_issuer_mismatch_detected(self, auth_code_result):
+        """A wrong expected issuer is rejected against the live callback's iss."""
+        callback = auth_code_result["callback"]
+        if not callback.issuer:
+            pytest.skip("Provider did not return iss in the authorization response")
+
+        result = validate_authorize_callback_issuer(
+            callback, "https://attacker.example.com"
+        )
+
+        assert result.is_valid is False
+        assert result.result is AuthorizeCallbackValidationResult.ISSUER_MISMATCH

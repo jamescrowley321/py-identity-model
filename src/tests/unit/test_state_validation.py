@@ -10,6 +10,7 @@ from py_identity_model.core.authorize_response import (
 )
 from py_identity_model.core.state_validation import (
     AuthorizeCallbackValidationResult,
+    validate_authorize_callback_issuer,
     validate_authorize_callback_state,
 )
 
@@ -145,3 +146,113 @@ class TestValidateAuthorizeCallbackState:
 
         assert result.is_valid is False
         assert result.result is AuthorizeCallbackValidationResult.MISSING_STATE
+
+
+ISSUER = "https://as.example.com"
+
+
+@pytest.mark.unit
+class TestValidateAuthorizeCallbackIssuer:
+    """Tests for validate_authorize_callback_issuer (RFC 9207)."""
+
+    def test_issuer_match(self):
+        """A present iss matching the expected issuer passes."""
+        result = validate_authorize_callback_issuer(
+            _parse(f"code=abc&iss={quote(ISSUER, safe='')}"),
+            ISSUER,
+        )
+
+        assert result.is_valid is True
+        assert result.result is AuthorizeCallbackValidationResult.SUCCESS
+        assert result.error is None
+
+    def test_issuer_match_when_advertised(self):
+        """Match still succeeds when the AS advertises iss support."""
+        result = validate_authorize_callback_issuer(
+            _parse(f"code=abc&iss={quote(ISSUER, safe='')}"),
+            ISSUER,
+            iss_parameter_supported=True,
+        )
+
+        assert result.is_valid is True
+        assert result.result is AuthorizeCallbackValidationResult.SUCCESS
+
+    def test_issuer_mismatch(self):
+        """A present iss that differs from expected fails (mix-up defense)."""
+        result = validate_authorize_callback_issuer(
+            _parse(f"code=abc&iss={quote('https://evil.example.com', safe='')}"),
+            ISSUER,
+        )
+
+        assert result.is_valid is False
+        assert result.result is AuthorizeCallbackValidationResult.ISSUER_MISMATCH
+        assert result.error == "issuer_mismatch"
+        assert result.error_description is not None
+
+    def test_issuer_present_validated_even_when_not_advertised(self):
+        """A present iss is ALWAYS validated, regardless of metadata flag."""
+        result = validate_authorize_callback_issuer(
+            _parse(f"code=abc&iss={quote('https://evil.example.com', safe='')}"),
+            ISSUER,
+            iss_parameter_supported=False,
+        )
+
+        assert result.is_valid is False
+        assert result.result is AuthorizeCallbackValidationResult.ISSUER_MISMATCH
+
+    def test_issuer_present_but_expected_none_fails_closed(self):
+        """iss present but no expected issuer known -> mismatch (cannot verify)."""
+        result = validate_authorize_callback_issuer(
+            _parse(f"code=abc&iss={quote(ISSUER, safe='')}"),
+            None,
+        )
+
+        assert result.is_valid is False
+        assert result.result is AuthorizeCallbackValidationResult.ISSUER_MISMATCH
+
+    def test_missing_issuer_when_advertised(self):
+        """Absent iss fails when the AS advertised iss support."""
+        result = validate_authorize_callback_issuer(
+            _parse("code=abc"),
+            ISSUER,
+            iss_parameter_supported=True,
+        )
+
+        assert result.is_valid is False
+        assert result.result is AuthorizeCallbackValidationResult.MISSING_ISSUER
+        assert result.error == "missing_issuer"
+        assert result.error_description is not None
+
+    def test_missing_issuer_when_required(self):
+        """Absent iss fails when the caller opts into strict mode."""
+        result = validate_authorize_callback_issuer(
+            _parse("code=abc"),
+            ISSUER,
+            require=True,
+        )
+
+        assert result.is_valid is False
+        assert result.result is AuthorizeCallbackValidationResult.MISSING_ISSUER
+
+    def test_missing_issuer_not_advertised_not_required_ok(self):
+        """Absent iss passes when neither advertised nor required (no downgrade surprise)."""
+        result = validate_authorize_callback_issuer(
+            _parse("code=abc"),
+            ISSUER,
+        )
+
+        assert result.is_valid is True
+        assert result.result is AuthorizeCallbackValidationResult.SUCCESS
+
+    def test_error_response_takes_precedence_over_issuer(self):
+        """Error detection runs before issuer checks."""
+        result = validate_authorize_callback_issuer(
+            _parse("error=access_denied&error_description=User+denied"),
+            ISSUER,
+            require=True,
+        )
+
+        assert result.is_valid is False
+        assert result.result is AuthorizeCallbackValidationResult.ERROR_RESPONSE
+        assert result.error == "access_denied"
+        assert result.error_description == "User denied"
