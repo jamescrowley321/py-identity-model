@@ -1012,7 +1012,7 @@ def _receive_backchannel_logout(logout_token: str | None) -> JSONResponse:
         logger.error("REJECTED: logout token validation error: %s", exc)
         return JSONResponse(
             status_code=400,
-            content={"error": "invalid_logout_token", "detail": str(exc)},
+            content={"error": "invalid_logout_token", "detail": exc.message},
         )
     except PyJWTError as exc:
         # A non-empty but malformed ``logout_token`` (not a well-formed JWT)
