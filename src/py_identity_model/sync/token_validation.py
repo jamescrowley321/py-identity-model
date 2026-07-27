@@ -18,6 +18,7 @@ from ..core.jwks_cache import (
     JwksCacheEntry,
     apply_disco_cache_outcome,
     apply_jwks_cache_outcome,
+    clear_cache_locked,
     is_cache_expired,
     should_attempt_kid_miss_refresh,
     touch_cache_entry,
@@ -122,7 +123,7 @@ def _get_disco_response(
 def clear_discovery_cache() -> None:
     """Clear the discovery cache."""
     with _disco_cache_write_lock:
-        _disco_cache.clear()
+        clear_cache_locked(_disco_cache)
 
 
 # ============================================================================
@@ -247,7 +248,7 @@ def _refresh_jwks(
 def clear_jwks_cache() -> None:
     """Clear the JWKS cache. Useful for testing."""
     with _jwks_cache_write_lock:
-        _jwks_cache.clear()
+        clear_cache_locked(_jwks_cache)
         _kid_miss_last_attempt.clear()
 
 

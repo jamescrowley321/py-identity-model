@@ -244,6 +244,24 @@ def touch_cache_entry(cache: OrderedDict, key: object) -> None:
             cache.move_to_end(key)
 
 
+def clear_cache_locked(cache: dict) -> None:
+    """Empty a shared cache under ``_CACHE_STRUCTURE_LOCK``.
+
+    ``clear_jwks_cache`` / ``clear_discovery_cache`` hold their per-domain write
+    lock, but that lock is per-event-loop on the async side while the cache is
+    process-global — so it does not serialize the structural ``clear()`` against
+    a read-hit :func:`touch_cache_entry` or the eviction scan in
+    :func:`_enforce_size_limit` running on another loop/thread. Routing the
+    ``clear()`` through this leaf lock keeps the "every structural mutation
+    holds the structure lock" invariant intact (#397): a concurrent ``clear()``
+    can no longer race ``next(iter(cache))`` (``RuntimeError``) or ``move_to_end``
+    (``KeyError``). Sidecar dicts (e.g. ``_kid_miss_last_attempt``) are cleared
+    separately by the caller — they are never touched under the structure lock.
+    """
+    with _CACHE_STRUCTURE_LOCK:
+        cache.clear()
+
+
 def _enforce_size_limit(cache: dict) -> list:
     """Evict least-recently-used entries until the cache fits.
 
@@ -585,6 +603,7 @@ __all__ = [
     "JwksCacheEntry",
     "apply_disco_cache_outcome",
     "apply_jwks_cache_outcome",
+    "clear_cache_locked",
     "get_kid_miss_cooldown",
     "get_max_cache_entries",
     "is_cache_expired",

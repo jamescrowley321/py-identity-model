@@ -17,6 +17,7 @@ from ..core.jwks_cache import (
     JwksCacheEntry,
     apply_disco_cache_outcome,
     apply_jwks_cache_outcome,
+    clear_cache_locked,
     is_cache_expired,
     should_attempt_kid_miss_refresh,
     touch_cache_entry,
@@ -170,7 +171,7 @@ async def clear_discovery_cache() -> None:
     per-loop lock plumbing for #399.
     """
     async with _get_disco_cache_write_lock():
-        _disco_cache.clear()
+        clear_cache_locked(_disco_cache)
 
 
 # ============================================================================
@@ -310,7 +311,7 @@ async def clear_jwks_cache() -> None:
     for the cross-loop semantics added in the #399 per-loop lock plumbing.
     """
     async with _get_jwks_cache_write_lock():
-        _jwks_cache.clear()
+        clear_cache_locked(_jwks_cache)
         _kid_miss_last_attempt.clear()
 
 
