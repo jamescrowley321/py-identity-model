@@ -51,6 +51,7 @@ uv add py-identity-model
 | FAPI 2.0 Security Profile | FAPI 2.0 | Done |
 | UserInfo Endpoint | OIDC Core | Done |
 | OAuth Callback State Validation | RFC 6749 | Done |
+| AS Issuer Identification (Mix-Up Defense) | RFC 9207 | Done |
 | Policy-Based Configuration | — | Done |
 
 ### Architecture
