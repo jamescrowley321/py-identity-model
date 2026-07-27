@@ -56,6 +56,7 @@ from py_identity_model.core.models import JsonWebKey, JwksResponse
 from py_identity_model.sync import token_validation as sync_tv
 from py_identity_model.sync.token_validation import (
     _get_cached_jwks,
+    _get_disco_response,
     clear_discovery_cache,
     clear_jwks_cache,
 )
@@ -424,3 +425,58 @@ class TestLruReadHitEviction:
         assert urls[0] in sync_tv._jwks_cache
         assert urls[1] not in sync_tv._jwks_cache
         assert set(sync_tv._jwks_cache.keys()) == {urls[0], urls[2], urls[3], urls[4]}
+
+    @respx.mock
+    def test_read_hit_protects_hot_disco_entry_from_eviction(self, monkeypatch):
+        """The discovery cache is LRU too (#397 calls out "same for the
+        discovery cache"). End-to-end via ``_get_disco_response``: an attacker
+        driving distinct ``disco_doc_address`` reads must NOT evict a discovery
+        entry that was just read.
+
+        Mirrors the JWKS end-to-end test but through the disco read path, so a
+        regression that adds the read-hit touch to only one of the two caches is
+        caught. The cache key is ``(address, require_https)`` — a tuple, exactly
+        the shape a multi-tenant gateway attacker influences."""
+        monkeypatch.setenv("JWKS_CACHE_MAX_ENTRIES", "4")
+        _reset_env_for_testing()
+
+        bases = [f"https://op-{i}.example" for i in range(5)]
+        addresses = [f"{b}/.well-known/openid-configuration" for b in bases]
+        for base, address in zip(bases, addresses, strict=True):
+            respx.get(address).mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "issuer": base,
+                        "authorization_endpoint": f"{base}/authorize",
+                        "token_endpoint": f"{base}/token",
+                        "jwks_uri": f"{base}/jwks",
+                        "response_types_supported": ["code"],
+                        "subject_types_supported": ["public"],
+                        "id_token_signing_alg_values_supported": ["RS256"],
+                    },
+                )
+            )
+
+        keys = [(addr, True) for addr in addresses]
+
+        # Fill to capacity: op-0 (oldest) .. op-3 (newest).
+        for address in addresses[:4]:
+            _get_disco_response(address)
+        assert list(sync_tv._disco_cache.keys()) == keys[:4]
+
+        # Re-read op-0 — a cache hit (no network) that must refresh recency.
+        _get_disco_response(addresses[0])
+        assert list(sync_tv._disco_cache.keys()) == [
+            keys[1],
+            keys[2],
+            keys[3],
+            keys[0],
+        ]
+
+        # A fifth distinct address overflows the cache; eviction targets op-1
+        # (oldest unread), NOT the recently-read op-0.
+        _get_disco_response(addresses[4])
+        assert keys[0] in sync_tv._disco_cache
+        assert keys[1] not in sync_tv._disco_cache
+        assert set(sync_tv._disco_cache.keys()) == {keys[0], keys[2], keys[3], keys[4]}
