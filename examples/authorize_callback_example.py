@@ -12,6 +12,7 @@ import secrets
 from py_identity_model import (
     AuthorizeCallbackValidationResult,
     parse_authorize_callback_response,
+    validate_authorize_callback_issuer,
     validate_authorize_callback_state,
 )
 
@@ -247,6 +248,75 @@ def web_framework_pattern():
 
 
 # =============================================================================
+# Example 7: RFC 9207 Issuer Validation (Mix-Up Attack Defense)
+# =============================================================================
+
+
+def issuer_validation_example():
+    """Demonstrate RFC 9207 ``iss`` validation to defend against mix-up attacks.
+
+    In a mix-up attack the client is tricked into sending an authorization
+    request to an honest AS but receives a response minted by an attacker-
+    controlled AS (or vice versa). RFC 9207 adds an ``iss`` parameter to the
+    authorization response so the client can bind the response to the AS that
+    issued it. The client rejects the callback when ``iss`` does not match the
+    issuer it expected.
+    """
+    print("\n" + "=" * 60)
+    print("Example 7: RFC 9207 Issuer Validation")
+    print("=" * 60)
+
+    # The issuer of the AS the client sent the request to. In practice this is
+    # DiscoveryDocumentResponse.issuer for the selected authorization server.
+    expected_issuer = "https://honest-as.example.com"
+
+    # --- Legitimate callback: iss matches the expected issuer -----------------
+    good_callback = (
+        "https://app.example.com/callback"
+        "?code=SplxlOBeZQQYbYS6WxSbIA"
+        "&state=af0ifjsldkj"
+        f"&iss={expected_issuer}"
+    )
+    response = parse_authorize_callback_response(good_callback)
+
+    # Drive enforcement from AS metadata:
+    # discovery.authorization_response_iss_parameter_supported.
+    # When the AS advertises support, an absent iss is treated as a failure.
+    result = validate_authorize_callback_issuer(
+        response,
+        expected_issuer,
+        iss_parameter_supported=True,
+    )
+    print(f"  Legitimate callback issuer: {response.issuer}")
+    print(f"  Valid: {result.is_valid} ({result.result.value})")
+
+    # --- Mix-up attack: iss belongs to a different (attacker) AS --------------
+    malicious_callback = (
+        "https://app.example.com/callback"
+        "?code=attacker_minted_code"
+        "&state=af0ifjsldkj"
+        "&iss=https://attacker-as.example.com"
+    )
+    attack_response = parse_authorize_callback_response(malicious_callback)
+    attack_result = validate_authorize_callback_issuer(
+        attack_response,
+        expected_issuer,
+        iss_parameter_supported=True,
+    )
+
+    if not attack_result.is_valid:
+        if attack_result.result is AuthorizeCallbackValidationResult.ISSUER_MISMATCH:
+            print("  Mix-up attack detected! Response issuer does not match.")
+            print("  Action: Reject this callback and abort the login.")
+        else:
+            print(f"  Validation failed: {attack_result.error}")
+    else:
+        print("  Unexpected: attacker callback passed validation")
+
+    return result, attack_result
+
+
+# =============================================================================
 # Main: Run All Examples
 # =============================================================================
 
@@ -267,6 +337,7 @@ def main():
     detect_csrf_attack()
     parse_implicit_flow_callback()
     web_framework_pattern()
+    issuer_validation_example()
 
     print("\n" + "=" * 60)
     print("All authorization callback examples completed!")

@@ -480,6 +480,7 @@ class DiscoveryDocumentResponse(BaseResponse):
             "end_session_endpoint",
             "backchannel_logout_supported",
             "backchannel_logout_session_supported",
+            "authorization_response_iss_parameter_supported",
         }
     )
 
@@ -532,6 +533,9 @@ class DiscoveryDocumentResponse(BaseResponse):
     request_parameter_supported: bool | None = None
     request_uri_parameter_supported: bool | None = None
     require_request_uri_registration: bool | None = None
+
+    # Authorization-response issuer parameter support (RFC 9207 §3)
+    authorization_response_iss_parameter_supported: bool | None = None
 
     # RP-Initiated Logout support (OpenID Connect RP-Initiated Logout 1.0 §2)
     end_session_endpoint: str | None = None

@@ -94,6 +94,7 @@ nav:
       - Token Client: api/token-client.md
       - Token Validation: api/token-validation.md
       - UserInfo: api/userinfo.md
+      - Authorize Callback: api/authorize-callback.md
       - Identity & Claims: api/identity.md
       - Exceptions: api/exceptions.md
   - Roadmap: py_identity_model_roadmap.md
