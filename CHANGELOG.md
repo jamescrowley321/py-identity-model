@@ -2,6 +2,37 @@
 
 <!-- version list -->
 
+## v3.4.0 (2026-07-27)
+
+### Bug Fixes
+
+- Address review findings for RFC 9207 issuer validation
+  ([#457](https://github.com/jamescrowley321/py-identity-model/pull/457),
+  [`5c2fed7`](https://github.com/jamescrowley321/py-identity-model/commit/5c2fed70008a9a9c4fbdd25bb38ac3850b54cfb0))
+
+### Documentation
+
+- Surface RFC 9207 issuer identification in README and API nav
+  ([#457](https://github.com/jamescrowley321/py-identity-model/pull/457),
+  [`5c2fed7`](https://github.com/jamescrowley321/py-identity-model/commit/5c2fed70008a9a9c4fbdd25bb38ac3850b54cfb0))
+
+- Surface RFC 9207 issuer validator in API reference
+  ([#457](https://github.com/jamescrowley321/py-identity-model/pull/457),
+  [`5c2fed7`](https://github.com/jamescrowley321/py-identity-model/commit/5c2fed70008a9a9c4fbdd25bb38ac3850b54cfb0))
+
+### Features
+
+- **state-validation**: Add RFC 9207 authorization-response issuer validation
+  ([#457](https://github.com/jamescrowley321/py-identity-model/pull/457),
+  [`5c2fed7`](https://github.com/jamescrowley321/py-identity-model/commit/5c2fed70008a9a9c4fbdd25bb38ac3850b54cfb0))
+
+### Testing
+
+- **state-validation**: Cover RFC 9207 issuer validation + iss discovery field
+  ([#457](https://github.com/jamescrowley321/py-identity-model/pull/457),
+  [`5c2fed7`](https://github.com/jamescrowley321/py-identity-model/commit/5c2fed70008a9a9c4fbdd25bb38ac3850b54cfb0))
+
+
 ## v3.3.0 (2026-07-21)
 
 ### Bug Fixes
