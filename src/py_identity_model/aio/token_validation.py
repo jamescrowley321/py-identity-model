@@ -127,18 +127,19 @@ async def _get_disco_response(
     cache_key = (disco_doc_address, require_https)
     entry = _disco_cache.get(cache_key)
     if entry is not None and not is_cache_expired(entry):
-        # Refresh LRU recency under the write lock — move_to_end mutates order
-        # and must serialize against _enforce_size_limit's iteration (#397).
-        async with _get_disco_cache_write_lock():
-            touch_cache_entry(_disco_cache, cache_key)
+        # Refresh LRU recency — touch_cache_entry serializes the reorder against
+        # _enforce_size_limit via the process-wide structure lock. The async
+        # write locks are keyed per event loop, so they cannot guard reordering
+        # against an eviction on another loop sharing this module-global cache;
+        # the process-wide lock inside touch_cache_entry does (#397).
+        touch_cache_entry(_disco_cache, cache_key)
         return entry.response
 
     fetch_lock = _get_disco_fetch_lock(cache_key)
     async with fetch_lock:
         entry = _disco_cache.get(cache_key)
         if entry is not None and not is_cache_expired(entry):
-            async with _get_disco_cache_write_lock():
-                touch_cache_entry(_disco_cache, cache_key)
+            touch_cache_entry(_disco_cache, cache_key)
             return entry.response
 
         policy = DiscoveryPolicy(require_https=require_https)
@@ -214,17 +215,16 @@ async def _get_cached_jwks(jwks_uri: str, require_https: bool = True) -> JwksRes
     """
     entry = _jwks_cache.get(jwks_uri)
     if entry is not None and not is_cache_expired(entry):
-        # Refresh LRU recency under the write lock (see _get_disco_response).
-        async with _get_jwks_cache_write_lock():
-            touch_cache_entry(_jwks_cache, jwks_uri)
+        # Refresh LRU recency (see _get_disco_response) — self-serializing via
+        # the process-wide structure lock, no per-loop write lock needed.
+        touch_cache_entry(_jwks_cache, jwks_uri)
         return entry.response
 
     fetch_lock = _get_jwks_fetch_lock(jwks_uri)
     async with fetch_lock:
         entry = _jwks_cache.get(jwks_uri)
         if entry is not None and not is_cache_expired(entry):
-            async with _get_jwks_cache_write_lock():
-                touch_cache_entry(_jwks_cache, jwks_uri)
+            touch_cache_entry(_jwks_cache, jwks_uri)
             return entry.response
 
         # The jwks_uri was already vetted against this policy when the

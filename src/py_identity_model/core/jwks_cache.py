@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 import math
 import os
 import re
+import threading
 import time
 from typing import TYPE_CHECKING
 
@@ -196,6 +197,22 @@ def get_max_cache_entries() -> int:
     return _max_cache_entries
 
 
+# Serializes structural reordering (:func:`touch_cache_entry`) against the
+# eviction scan (:func:`_enforce_size_limit`) for the process-shared JWKS and
+# discovery ``OrderedDict``s. A single *process-wide* ``threading.Lock`` is used
+# deliberately rather than the callers' per-domain locks: the sync path guards
+# writes with a global ``threading.Lock`` while the async path uses a lock keyed
+# per event loop, but both concurrency domains mutate the *same* module-global
+# cache objects. A per-loop async lock cannot serialize a reorder on loop A
+# against an eviction on loop B (nor against a sync thread), so the read-hit
+# ``move_to_end`` would race ``next(iter(cache))``/``pop`` and evict the wrong
+# (possibly hot) entry. Holding this leaf lock around both operations closes
+# that cross-loop/cross-thread race (#397). It is always acquired last (inside
+# any caller-held write lock), never wraps I/O, and guards only O(1)/O(overflow)
+# dict operations, so it adds no deadlock risk and negligible contention.
+_CACHE_STRUCTURE_LOCK = threading.Lock()
+
+
 def touch_cache_entry(cache: OrderedDict, key: object) -> None:
     """Refresh an entry's LRU recency by moving it to the end (most-recent).
 
@@ -205,13 +222,18 @@ def touch_cache_entry(cache: OrderedDict, key: object) -> None:
     least recently *inserted* one — the FIFO→LRU switch that closes #397.
 
     No-op when ``key`` is absent: the entry may have been evicted between the
-    lock-free ``.get()`` on the read hot-path and acquiring the write lock, so
-    ``move_to_end`` would otherwise raise ``KeyError``. Must be called while
-    holding the same write lock as :func:`_enforce_size_limit` so the reorder
-    cannot race the eviction iteration.
+    lock-free ``.get()`` on the read hot-path and this call, so ``move_to_end``
+    would otherwise raise ``KeyError``.
+
+    Self-serializing: the reorder runs under the process-wide
+    ``_CACHE_STRUCTURE_LOCK`` so it cannot race :func:`_enforce_size_limit`'s
+    eviction iteration on any thread or event loop. Callers therefore need not
+    (and should not) hold a write lock solely to call this — that would only add
+    contention to the read hot-path.
     """
-    if key in cache:
-        cache.move_to_end(key)
+    with _CACHE_STRUCTURE_LOCK:
+        if key in cache:
+            cache.move_to_end(key)
 
 
 def _enforce_size_limit(cache: dict) -> list:
@@ -221,6 +243,11 @@ def _enforce_size_limit(cache: dict) -> list:
     :func:`touch_cache_entry`) and every write, ``next(iter(cache))`` is the
     least recently *used* entry, so this evicts LRU rather than FIFO.
 
+    The eviction scan holds ``_CACHE_STRUCTURE_LOCK`` so it is mutually
+    exclusive with concurrent read-hit reorders across all threads and event
+    loops — otherwise a ``move_to_end`` on another loop could shift the order
+    mid-scan and evict a recently-used entry (#397).
+
     Returns the list of evicted keys (in eviction order, LRU first) so
     callers can clean up sidecar state keyed by the same identifiers — e.g.,
     ``_kid_miss_last_attempt`` in the token_validation modules, which would
@@ -228,15 +255,16 @@ def _enforce_size_limit(cache: dict) -> list:
     """
     max_size = get_max_cache_entries()
     evicted: list = []
-    while len(cache) > max_size:
-        oldest_key = next(iter(cache))
-        cache.pop(oldest_key)
-        evicted.append(oldest_key)
-        logger.debug(
-            "Cache size %d exceeds max %d; evicted least-recently-used entry",
-            len(cache) + 1,
-            max_size,
-        )
+    with _CACHE_STRUCTURE_LOCK:
+        while len(cache) > max_size:
+            oldest_key = next(iter(cache))
+            cache.pop(oldest_key)
+            evicted.append(oldest_key)
+            logger.debug(
+                "Cache size %d exceeds max %d; evicted least-recently-used entry",
+                len(cache) + 1,
+                max_size,
+            )
     return evicted
 
 

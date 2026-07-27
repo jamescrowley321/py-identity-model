@@ -93,10 +93,10 @@ def _get_disco_response(
     # Cheap atomic dict read — no lock required for a single .get() in CPython.
     entry = _disco_cache.get(cache_key)
     if entry is not None and not is_cache_expired(entry):
-        # Refresh LRU recency under the write lock — move_to_end mutates order
-        # and must serialize against _enforce_size_limit's iteration (#397).
-        with _disco_cache_write_lock:
-            touch_cache_entry(_disco_cache, cache_key)
+        # Refresh LRU recency — touch_cache_entry self-serializes the reorder
+        # against _enforce_size_limit via the process-wide structure lock, so
+        # the read hot-path takes no write lock (#397).
+        touch_cache_entry(_disco_cache, cache_key)
         return entry.response
 
     fetch_lock = _get_disco_fetch_lock(cache_key)
@@ -105,8 +105,7 @@ def _get_disco_response(
         # the entry while we waited.
         entry = _disco_cache.get(cache_key)
         if entry is not None and not is_cache_expired(entry):
-            with _disco_cache_write_lock:
-                touch_cache_entry(_disco_cache, cache_key)
+            touch_cache_entry(_disco_cache, cache_key)
             return entry.response
 
         policy = DiscoveryPolicy(require_https=require_https)
@@ -157,17 +156,16 @@ def _get_cached_jwks(jwks_uri: str, require_https: bool = True) -> JwksResponse:
     """
     entry = _jwks_cache.get(jwks_uri)
     if entry is not None and not is_cache_expired(entry):
-        # Refresh LRU recency under the write lock (see _get_disco_response).
-        with _jwks_cache_write_lock:
-            touch_cache_entry(_jwks_cache, jwks_uri)
+        # Refresh LRU recency (see _get_disco_response) — self-serializing, no
+        # write lock on the read hot-path.
+        touch_cache_entry(_jwks_cache, jwks_uri)
         return entry.response
 
     fetch_lock = _get_jwks_fetch_lock(jwks_uri)
     with fetch_lock:
         entry = _jwks_cache.get(jwks_uri)
         if entry is not None and not is_cache_expired(entry):
-            with _jwks_cache_write_lock:
-                touch_cache_entry(_jwks_cache, jwks_uri)
+            touch_cache_entry(_jwks_cache, jwks_uri)
             return entry.response
 
         # The jwks_uri was already vetted against this policy when the
