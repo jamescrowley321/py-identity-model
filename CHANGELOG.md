@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v3.4.1 (2026-07-27)
+
+### Bug Fixes
+
+- **conformance**: Surface exc.message instead of str(exc) in logout error
+  ([#459](https://github.com/jamescrowley321/py-identity-model/pull/459),
+  [`edce8ca`](https://github.com/jamescrowley321/py-identity-model/commit/edce8ca3485574efcaed1b2f2b2601404c5043a5))
+
+
 ## v3.4.0 (2026-07-27)
 
 ### Bug Fixes
