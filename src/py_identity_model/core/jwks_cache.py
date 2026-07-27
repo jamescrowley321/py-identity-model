@@ -31,6 +31,8 @@ from ..logging_config import logger
 
 
 if TYPE_CHECKING:
+    from collections import OrderedDict
+
     from ..core.models import DiscoveryDocumentResponse, JwksResponse
 
 DEFAULT_JWKS_CACHE_TTL_SECONDS: float = 86400.0  # 24 hours
@@ -64,9 +66,13 @@ DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS: float = 5.0
 # attacker-supplied issuer headers) accumulate cache entries forever — at
 # ~5KB per DiscoveryDocumentResponse, a few thousand unique entries is tens
 # of MB of memory leak. Default 64 covers any realistic multi-IdP deployment
-# while keeping worst-case memory bounded. Eviction is FIFO by insertion
-# order (Python dicts preserve insertion order since 3.7) — adequate for a
-# JWKS cache where all entries are roughly equally "hot."
+# while keeping worst-case memory bounded. Eviction is LRU by access order:
+# the cache is an ``OrderedDict`` whose entries are moved to the end on every
+# read hit (see ``touch_cache_entry``) and on every write, so the least
+# *recently used* entry sorts first and is evicted first. FIFO would let an
+# attacker who controls the discovery address (multi-tenant gateway,
+# attacker-supplied issuer header) evict a legitimately-hot JWKS entry merely
+# by reading distinct addresses in insertion order (issue #397).
 DEFAULT_MAX_CACHE_ENTRIES: int = 64
 
 _env_ttl: float | None = None
@@ -190,10 +196,32 @@ def get_max_cache_entries() -> int:
     return _max_cache_entries
 
 
-def _enforce_size_limit(cache: dict) -> list:
-    """Evict oldest entries (by insertion order) until the cache fits.
+def touch_cache_entry(cache: OrderedDict, key: object) -> None:
+    """Refresh an entry's LRU recency by moving it to the end (most-recent).
 
-    Returns the list of evicted keys (in eviction order, oldest first) so
+    Called on read cache hits so a fresh lookup counts as "recently used" and
+    is therefore evicted last. ``next(iter(cache))`` in :func:`_enforce_size_limit`
+    then always points at the *least recently used* entry rather than the
+    least recently *inserted* one — the FIFO→LRU switch that closes #397.
+
+    No-op when ``key`` is absent: the entry may have been evicted between the
+    lock-free ``.get()`` on the read hot-path and acquiring the write lock, so
+    ``move_to_end`` would otherwise raise ``KeyError``. Must be called while
+    holding the same write lock as :func:`_enforce_size_limit` so the reorder
+    cannot race the eviction iteration.
+    """
+    if key in cache:
+        cache.move_to_end(key)
+
+
+def _enforce_size_limit(cache: dict) -> list:
+    """Evict least-recently-used entries until the cache fits.
+
+    With an ``OrderedDict`` reordered on every read hit (see
+    :func:`touch_cache_entry`) and every write, ``next(iter(cache))`` is the
+    least recently *used* entry, so this evicts LRU rather than FIFO.
+
+    Returns the list of evicted keys (in eviction order, LRU first) so
     callers can clean up sidecar state keyed by the same identifiers — e.g.,
     ``_kid_miss_last_attempt`` in the token_validation modules, which would
     otherwise grow unbounded even though the JWKS cache itself is bounded.
@@ -205,7 +233,7 @@ def _enforce_size_limit(cache: dict) -> list:
         cache.pop(oldest_key)
         evicted.append(oldest_key)
         logger.debug(
-            "Cache size %d exceeds max %d; evicted oldest entry",
+            "Cache size %d exceeds max %d; evicted least-recently-used entry",
             len(cache) + 1,
             max_size,
         )
@@ -459,8 +487,8 @@ def apply_jwks_cache_outcome(
         if cooldown is not None:
             cooldown.pop(jwks_uri, None)
         return
-    # Pop-and-reinsert so a refreshed URI moves to the end of insertion order
-    # (FIFO eviction will not target it next when the cache is under pressure).
+    # Pop-and-reinsert so a refreshed URI moves to the most-recently-used end
+    # (LRU eviction will not target it next when the cache is under pressure).
     cache.pop(jwks_uri, None)
     cache[jwks_uri] = JwksCacheEntry(
         response=response,
@@ -521,4 +549,5 @@ __all__ = [
     "resolve_disco_ttl",
     "resolve_ttl",
     "should_attempt_kid_miss_refresh",
+    "touch_cache_entry",
 ]
