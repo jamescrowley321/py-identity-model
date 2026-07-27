@@ -197,20 +197,28 @@ def get_max_cache_entries() -> int:
     return _max_cache_entries
 
 
-# Serializes structural reordering (:func:`touch_cache_entry`) against the
-# eviction scan (:func:`_enforce_size_limit`) for the process-shared JWKS and
-# discovery ``OrderedDict``s. A single *process-wide* ``threading.Lock`` is used
-# deliberately rather than the callers' per-domain locks: the sync path guards
-# writes with a global ``threading.Lock`` while the async path uses a lock keyed
-# per event loop, but both concurrency domains mutate the *same* module-global
-# cache objects. A per-loop async lock cannot serialize a reorder on loop A
-# against an eviction on loop B (nor against a sync thread), so the read-hit
-# ``move_to_end`` would race ``next(iter(cache))``/``pop`` and evict the wrong
-# (possibly hot) entry. Holding this leaf lock around both operations closes
-# that cross-loop/cross-thread race (#397). It is always acquired last (inside
-# any caller-held write lock), never wraps I/O, and guards only O(1)/O(overflow)
+# Serializes ALL structural mutation of the process-shared JWKS and discovery
+# ``OrderedDict``s — the read-hit reorder (:func:`touch_cache_entry`), the write
+# reinsert/pop (:func:`apply_jwks_cache_outcome` / :func:`apply_disco_cache_outcome`),
+# and the eviction scan (:func:`_enforce_size_limit`) — against each other.
+#
+# A single *process-wide* lock is used deliberately rather than the callers'
+# per-domain locks: the sync path guards writes with a global ``threading.Lock``
+# while the async path uses a lock keyed per event loop, but both concurrency
+# domains mutate the *same* module-global cache objects. A per-loop async lock
+# cannot serialize a mutation on loop A against the eviction scan on loop B (nor
+# against a sync thread), so without this lock a read-hit ``move_to_end`` or a
+# write reinsert on one loop could race ``next(iter(cache))``/``pop`` on another
+# — evicting the wrong (possibly hot) entry or raising ``RuntimeError:
+# OrderedDict mutated during iteration``, and a concurrent write ``pop`` could
+# turn a read-hit ``move_to_end`` into a ``KeyError``. Holding this lock around
+# every structural mutation closes those cross-loop/cross-thread races (#397).
+#
+# It is reentrant so a write can hold it across its reinsert *and* the nested
+# :func:`_enforce_size_limit` call. It is always acquired last (inside any
+# caller-held write lock), never wraps I/O, and guards only O(1)/O(overflow)
 # dict operations, so it adds no deadlock risk and negligible contention.
-_CACHE_STRUCTURE_LOCK = threading.Lock()
+_CACHE_STRUCTURE_LOCK = threading.RLock()
 
 
 def touch_cache_entry(cache: OrderedDict, key: object) -> None:
@@ -511,19 +519,24 @@ def apply_jwks_cache_outcome(
     if not response.keys:
         return
     if is_uncacheable_for_jwks(response.cache_control):
-        cache.pop(jwks_uri, None)
+        with _CACHE_STRUCTURE_LOCK:
+            cache.pop(jwks_uri, None)
         if cooldown is not None:
             cooldown.pop(jwks_uri, None)
         return
     # Pop-and-reinsert so a refreshed URI moves to the most-recently-used end
     # (LRU eviction will not target it next when the cache is under pressure).
-    cache.pop(jwks_uri, None)
-    cache[jwks_uri] = JwksCacheEntry(
-        response=response,
-        cached_at=now,
-        ttl=resolve_ttl(response.cache_control),
-    )
-    evicted = _enforce_size_limit(cache)
+    # The whole structural transaction (reinsert + eviction scan) runs under
+    # _CACHE_STRUCTURE_LOCK so it is atomic w.r.t. read-hit reorders and the
+    # eviction scan on any other thread/event loop (#397).
+    with _CACHE_STRUCTURE_LOCK:
+        cache.pop(jwks_uri, None)
+        cache[jwks_uri] = JwksCacheEntry(
+            response=response,
+            cached_at=now,
+            ttl=resolve_ttl(response.cache_control),
+        )
+        evicted = _enforce_size_limit(cache)
     if cooldown is not None:
         for key in evicted:
             cooldown.pop(key, None)
@@ -544,15 +557,19 @@ def apply_disco_cache_outcome(
     if not response.is_successful:
         return
     if is_uncacheable(response.cache_control):
-        cache.pop(cache_key, None)
+        with _CACHE_STRUCTURE_LOCK:
+            cache.pop(cache_key, None)
         return
-    cache.pop(cache_key, None)
-    cache[cache_key] = DiscoCacheEntry(
-        response=response,
-        cached_at=now,
-        ttl=resolve_disco_ttl(response.cache_control),
-    )
-    _enforce_size_limit(cache)
+    # Structural transaction under _CACHE_STRUCTURE_LOCK — see
+    # apply_jwks_cache_outcome for the cross-loop/cross-thread rationale (#397).
+    with _CACHE_STRUCTURE_LOCK:
+        cache.pop(cache_key, None)
+        cache[cache_key] = DiscoCacheEntry(
+            response=response,
+            cached_at=now,
+            ttl=resolve_disco_ttl(response.cache_control),
+        )
+        _enforce_size_limit(cache)
 
 
 __all__ = [
