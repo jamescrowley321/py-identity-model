@@ -13,6 +13,7 @@ import httpx
 import pytest
 import respx
 
+from py_identity_model.aio import token_validation as aio_tv
 from py_identity_model.aio.managed_client import AsyncHTTPClient
 from py_identity_model.aio.token_validation import (
     _get_cached_jwks,
@@ -20,6 +21,7 @@ from py_identity_model.aio.token_validation import (
     clear_jwks_cache,
     validate_token,
 )
+from py_identity_model.core.jwks_cache import _reset_env_for_testing
 from py_identity_model.core.models import TokenValidationConfig
 from py_identity_model.exceptions import (
     ConfigurationException,
@@ -666,3 +668,54 @@ class TestAsyncSubjectValidation:
 
         decoded = await validate_token(jwt=token, token_validation_config=config)
         assert decoded["sub"] == "anyone"
+
+
+class TestAsyncLruReadHitEviction:
+    """Async twin of the sync LRU eviction test (#397): a read cache hit on
+    the async ``_get_cached_jwks`` refreshes recency so an attacker driving
+    distinct-address reads cannot evict a legitimately-hot entry."""
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_read_hit_protects_hot_entry_from_eviction(self, monkeypatch):
+        monkeypatch.setenv("JWKS_CACHE_MAX_ENTRIES", "4")
+        _reset_env_for_testing()
+        try:
+            urls = [f"https://op-{i}.example/jwks" for i in range(5)]
+            key_dict = generate_rsa_keypair()[0]
+            for url in urls:
+                respx.get(url).mock(
+                    return_value=httpx.Response(
+                        200,
+                        json={"keys": [key_dict]},
+                        headers={"Cache-Control": "max-age=3600"},
+                    )
+                )
+
+            # Fill to capacity: op-0 (oldest) .. op-3 (newest).
+            for url in urls[:4]:
+                await _get_cached_jwks(url)
+            assert list(aio_tv._jwks_cache.keys()) == urls[:4]
+
+            # Re-read op-0 — a cache hit (no network) that refreshes recency.
+            await _get_cached_jwks(urls[0])
+            assert list(aio_tv._jwks_cache.keys()) == [
+                urls[1],
+                urls[2],
+                urls[3],
+                urls[0],
+            ]
+
+            # A fifth distinct URI overflows; eviction targets op-1 (oldest
+            # unread), NOT the recently-read op-0.
+            await _get_cached_jwks(urls[4])
+            assert urls[0] in aio_tv._jwks_cache
+            assert urls[1] not in aio_tv._jwks_cache
+            assert set(aio_tv._jwks_cache.keys()) == {
+                urls[0],
+                urls[2],
+                urls[3],
+                urls[4],
+            }
+        finally:
+            _reset_env_for_testing()

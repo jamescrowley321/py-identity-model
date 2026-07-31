@@ -8,6 +8,7 @@ with automatic cache expiry and forced JWKS refresh on key rotation.
 # ============================================================================
 # Discovery TTL cache
 # ============================================================================
+from collections import OrderedDict
 import threading
 import time
 
@@ -17,8 +18,10 @@ from ..core.jwks_cache import (
     JwksCacheEntry,
     apply_disco_cache_outcome,
     apply_jwks_cache_outcome,
+    clear_cache_locked,
     is_cache_expired,
     should_attempt_kid_miss_refresh,
+    touch_cache_entry,
 )
 from ..core.models import (
     DiscoveryDocumentRequest,
@@ -50,8 +53,10 @@ from .jwks import get_jwks
 from .managed_client import HTTPClient
 
 
-# Discovery TTL cache — keyed by (address, require_https) to prevent policy bypass
-_disco_cache: dict[tuple[str, bool], DiscoCacheEntry] = {}
+# Discovery TTL cache — keyed by (address, require_https) to prevent policy bypass.
+# OrderedDict (not a plain dict) so read hits can refresh LRU recency via
+# ``touch_cache_entry``; eviction targets the least recently *used* entry (#397).
+_disco_cache: OrderedDict[tuple[str, bool], DiscoCacheEntry] = OrderedDict()
 # Global lock used only for the brief cache write + eviction critical section.
 # It does NOT span the upstream HTTP fetch — see ``_get_disco_response`` for
 # the cache-aside pattern that lets fetches for distinct addresses proceed in
@@ -89,6 +94,10 @@ def _get_disco_response(
     # Cheap atomic dict read — no lock required for a single .get() in CPython.
     entry = _disco_cache.get(cache_key)
     if entry is not None and not is_cache_expired(entry):
+        # Refresh LRU recency — touch_cache_entry self-serializes the reorder
+        # against _enforce_size_limit via the process-wide structure lock, so
+        # the read hot-path takes no write lock (#397).
+        touch_cache_entry(_disco_cache, cache_key)
         return entry.response
 
     fetch_lock = _get_disco_fetch_lock(cache_key)
@@ -97,6 +106,7 @@ def _get_disco_response(
         # the entry while we waited.
         entry = _disco_cache.get(cache_key)
         if entry is not None and not is_cache_expired(entry):
+            touch_cache_entry(_disco_cache, cache_key)
             return entry.response
 
         policy = DiscoveryPolicy(require_https=require_https)
@@ -113,14 +123,14 @@ def _get_disco_response(
 def clear_discovery_cache() -> None:
     """Clear the discovery cache."""
     with _disco_cache_write_lock:
-        _disco_cache.clear()
+        clear_cache_locked(_disco_cache)
 
 
 # ============================================================================
 # TTL-aware JWKS cache (replaces @lru_cache for JWKS)
 # ============================================================================
 
-_jwks_cache: dict[str, JwksCacheEntry] = {}
+_jwks_cache: OrderedDict[str, JwksCacheEntry] = OrderedDict()
 # See _disco_cache_write_lock — same factoring: brief CPU-only write lock,
 # per-URI fetch locks for the actual single-flight semantics.
 _jwks_cache_write_lock = threading.Lock()
@@ -147,12 +157,16 @@ def _get_cached_jwks(jwks_uri: str, require_https: bool = True) -> JwksResponse:
     """
     entry = _jwks_cache.get(jwks_uri)
     if entry is not None and not is_cache_expired(entry):
+        # Refresh LRU recency (see _get_disco_response) — self-serializing, no
+        # write lock on the read hot-path.
+        touch_cache_entry(_jwks_cache, jwks_uri)
         return entry.response
 
     fetch_lock = _get_jwks_fetch_lock(jwks_uri)
     with fetch_lock:
         entry = _jwks_cache.get(jwks_uri)
         if entry is not None and not is_cache_expired(entry):
+            touch_cache_entry(_jwks_cache, jwks_uri)
             return entry.response
 
         # The jwks_uri was already vetted against this policy when the
@@ -234,7 +248,7 @@ def _refresh_jwks(
 def clear_jwks_cache() -> None:
     """Clear the JWKS cache. Useful for testing."""
     with _jwks_cache_write_lock:
-        _jwks_cache.clear()
+        clear_cache_locked(_jwks_cache)
         _kid_miss_last_attempt.clear()
 
 

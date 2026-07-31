@@ -18,11 +18,15 @@ Two pre-existing structural bugs the cache primitive shipped with:
 These tests pin the fixes:
 - TTL env values clamped to [MIN, MAX]; garbage falls back to default.
 - Cache size capped at ``JWKS_CACHE_MAX_ENTRIES`` (default 64).
-- FIFO eviction targets the oldest entry, not the newest or a random one.
+- LRU eviction targets the least recently *used* entry, not the newest or a
+  random one.
 - Re-storing a URI (refresh) moves it to "newest" so subsequent eviction
   doesn't target a just-refreshed entry.
+- A read cache hit refreshes recency (``touch_cache_entry``) so an attacker
+  driving distinct-address reads cannot evict a legitimately-hot entry (#397).
 """
 
+from collections import OrderedDict
 import time
 
 import httpx
@@ -39,17 +43,20 @@ from py_identity_model.core.jwks_cache import (
     MIN_CACHE_TTL_SECONDS,
     MIN_KID_MISS_COOLDOWN_SECONDS,
     JwksCacheEntry,
+    _enforce_size_limit,
     _reset_env_for_testing,
     apply_jwks_cache_outcome,
     get_kid_miss_cooldown,
     get_max_cache_entries,
     resolve_disco_ttl,
     resolve_ttl,
+    touch_cache_entry,
 )
 from py_identity_model.core.models import JsonWebKey, JwksResponse
 from py_identity_model.sync import token_validation as sync_tv
 from py_identity_model.sync.token_validation import (
     _get_cached_jwks,
+    _get_disco_response,
     clear_discovery_cache,
     clear_jwks_cache,
 )
@@ -326,3 +333,150 @@ class TestBoundedCacheSize:
         assert len(sync_tv._jwks_cache) == 4  # noqa: PLR2004
         # Newest four URIs are the survivors.
         assert set(sync_tv._jwks_cache.keys()) == set(urls_to_visit[-4:])
+
+
+# ============================================================================
+# LRU eviction: a read cache hit refreshes recency so an attacker driving
+# distinct-address reads cannot evict a legitimately-hot entry (#397).
+# ============================================================================
+
+
+class TestLruReadHitEviction:
+    def test_touch_cache_entry_moves_key_to_most_recent(self):
+        """The shared helper reorders an OrderedDict so the touched key sorts
+        last (most-recently-used); ``_enforce_size_limit`` then evicts what
+        sorts first. Deterministic — OrderedDict order is access/insertion
+        order, independent of PYTHONHASHSEED."""
+        cache: OrderedDict[str, int] = OrderedDict((f"k{i}", i) for i in range(3))
+        assert list(cache.keys()) == ["k0", "k1", "k2"]
+
+        touch_cache_entry(cache, "k0")
+        assert list(cache.keys()) == ["k1", "k2", "k0"]
+
+    def test_touch_cache_entry_absent_key_is_noop(self):
+        """The read hot-path does a lock-free ``.get()`` then touches under the
+        write lock; the entry may have been evicted in between, so touching an
+        absent key must be a silent no-op, not a KeyError."""
+        cache: OrderedDict[str, int] = OrderedDict((("k0", 0), ("k1", 1)))
+        touch_cache_entry(cache, "missing")
+        assert list(cache.keys()) == ["k0", "k1"]
+
+    def test_lru_evicts_least_recently_used_not_least_recently_inserted(
+        self, monkeypatch
+    ):
+        """After a touch, ``_enforce_size_limit`` evicts the untouched-oldest
+        entry, proving eviction is by *use* not by *insertion* (tuple keys,
+        mirroring the discovery cache)."""
+        monkeypatch.setenv("JWKS_CACHE_MAX_ENTRIES", "4")
+        _reset_env_for_testing()
+        cache: OrderedDict[tuple[str, bool], int] = OrderedDict()
+        for i in range(4):
+            cache[(f"https://op-{i}.example", True)] = i
+
+        # op-0 is oldest by insertion; a read hit touches it to most-recent.
+        touch_cache_entry(cache, ("https://op-0.example", True))
+        # A fifth distinct address arrives (attacker-controlled tenant).
+        cache[("https://op-4.example", True)] = 4
+
+        evicted = _enforce_size_limit(cache)
+        # LRU evicts op-1 (oldest *untouched*), NOT the recently-read op-0.
+        assert evicted == [("https://op-1.example", True)]
+        assert ("https://op-0.example", True) in cache
+
+    @respx.mock
+    def test_read_hit_protects_hot_entry_from_eviction(self, monkeypatch):
+        """End-to-end via ``_get_cached_jwks``: an attacker driving distinct
+        JWKS-URI reads must NOT evict a JWKS entry that was just read.
+
+        Fill the cache to capacity, re-read the oldest-by-insertion entry (a
+        cache hit → LRU touch), then push one more distinct URI. FIFO would
+        evict the just-read entry; LRU evicts the oldest *unread* one."""
+        monkeypatch.setenv("JWKS_CACHE_MAX_ENTRIES", "4")
+        _reset_env_for_testing()
+
+        urls = [f"https://op-{i}.example/jwks" for i in range(5)]
+        key_dict, _ = generate_rsa_keypair()
+        for url in urls:
+            respx.get(url).mock(
+                return_value=httpx.Response(
+                    200,
+                    json={"keys": [key_dict]},
+                    headers={"Cache-Control": "max-age=3600"},
+                )
+            )
+
+        # Fill to capacity: op-0 (oldest) .. op-3 (newest).
+        for url in urls[:4]:
+            _get_cached_jwks(url)
+        assert list(sync_tv._jwks_cache.keys()) == urls[:4]
+
+        # Re-read op-0 — a cache hit (no network) that must refresh recency.
+        _get_cached_jwks(urls[0])
+        assert list(sync_tv._jwks_cache.keys()) == [
+            urls[1],
+            urls[2],
+            urls[3],
+            urls[0],
+        ]
+
+        # A fifth distinct URI overflows the cache; eviction targets op-1
+        # (oldest unread), NOT the recently-read op-0.
+        _get_cached_jwks(urls[4])
+        assert urls[0] in sync_tv._jwks_cache
+        assert urls[1] not in sync_tv._jwks_cache
+        assert set(sync_tv._jwks_cache.keys()) == {urls[0], urls[2], urls[3], urls[4]}
+
+    @respx.mock
+    def test_read_hit_protects_hot_disco_entry_from_eviction(self, monkeypatch):
+        """The discovery cache is LRU too (#397 calls out "same for the
+        discovery cache"). End-to-end via ``_get_disco_response``: an attacker
+        driving distinct ``disco_doc_address`` reads must NOT evict a discovery
+        entry that was just read.
+
+        Mirrors the JWKS end-to-end test but through the disco read path, so a
+        regression that adds the read-hit touch to only one of the two caches is
+        caught. The cache key is ``(address, require_https)`` — a tuple, exactly
+        the shape a multi-tenant gateway attacker influences."""
+        monkeypatch.setenv("JWKS_CACHE_MAX_ENTRIES", "4")
+        _reset_env_for_testing()
+
+        bases = [f"https://op-{i}.example" for i in range(5)]
+        addresses = [f"{b}/.well-known/openid-configuration" for b in bases]
+        for base, address in zip(bases, addresses, strict=True):
+            respx.get(address).mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "issuer": base,
+                        "authorization_endpoint": f"{base}/authorize",
+                        "token_endpoint": f"{base}/token",
+                        "jwks_uri": f"{base}/jwks",
+                        "response_types_supported": ["code"],
+                        "subject_types_supported": ["public"],
+                        "id_token_signing_alg_values_supported": ["RS256"],
+                    },
+                )
+            )
+
+        keys = [(addr, True) for addr in addresses]
+
+        # Fill to capacity: op-0 (oldest) .. op-3 (newest).
+        for address in addresses[:4]:
+            _get_disco_response(address)
+        assert list(sync_tv._disco_cache.keys()) == keys[:4]
+
+        # Re-read op-0 — a cache hit (no network) that must refresh recency.
+        _get_disco_response(addresses[0])
+        assert list(sync_tv._disco_cache.keys()) == [
+            keys[1],
+            keys[2],
+            keys[3],
+            keys[0],
+        ]
+
+        # A fifth distinct address overflows the cache; eviction targets op-1
+        # (oldest unread), NOT the recently-read op-0.
+        _get_disco_response(addresses[4])
+        assert keys[0] in sync_tv._disco_cache
+        assert keys[1] not in sync_tv._disco_cache
+        assert set(sync_tv._disco_cache.keys()) == {keys[0], keys[2], keys[3], keys[4]}
