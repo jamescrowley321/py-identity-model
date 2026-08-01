@@ -1,8 +1,8 @@
 {
-  "plan_name": "oidcc-client-rpinitiated-logout-certification-test-plan",
+  "plan_name": "oidcc-rp-initiated-logout-certification-test-plan",
   "variant": {
-    "client_registration": "static_client",
-    "request_type": "plain_http_request"
+    "response_type": "code",
+    "client_registration": "static_client"
   },
   "alias": "py-identity-model-rpinitiated-logout-rp",
   "client": {

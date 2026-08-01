@@ -821,6 +821,12 @@ def main() -> None:
             "basic-rp",
             "config-rp",
             "form-post-basic-rp",
+            # New RP certification profiles being driven to green locally before
+            # a hosted run (Dynamic #216, RP-Initiated Logout #214,
+            # Back-Channel Logout #442). See conformance/README.md.
+            "dynamic-rp",
+            "rpinitiated-logout-rp",
+            "backchannel-logout-rp",
             # fastapi-identity-model package regression plans (same suite
             # plans, driven against the rp-fastapi harness on :8889)
             "fastapi-basic-rp",
