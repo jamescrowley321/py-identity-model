@@ -481,6 +481,9 @@ class DiscoveryDocumentResponse(BaseResponse):
             "backchannel_logout_supported",
             "backchannel_logout_session_supported",
             "authorization_response_iss_parameter_supported",
+            "authorization_signing_alg_values_supported",
+            "authorization_encryption_alg_values_supported",
+            "authorization_encryption_enc_values_supported",
         }
     )
 
@@ -536,6 +539,11 @@ class DiscoveryDocumentResponse(BaseResponse):
 
     # Authorization-response issuer parameter support (RFC 9207 §3)
     authorization_response_iss_parameter_supported: bool | None = None
+
+    # JWT-Secured Authorization Response Mode (JARM §5) algorithm support
+    authorization_signing_alg_values_supported: list[str] | None = None
+    authorization_encryption_alg_values_supported: list[str] | None = None
+    authorization_encryption_enc_values_supported: list[str] | None = None
 
     # RP-Initiated Logout support (OpenID Connect RP-Initiated Logout 1.0 §2)
     end_session_endpoint: str | None = None

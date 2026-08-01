@@ -278,6 +278,16 @@ def build_discovery_response(
         authorization_response_iss_parameter_supported=response_json.get(
             "authorization_response_iss_parameter_supported",
         ),
+        # JWT-Secured Authorization Response Mode (JARM §5) algorithm support
+        authorization_signing_alg_values_supported=response_json.get(
+            "authorization_signing_alg_values_supported",
+        ),
+        authorization_encryption_alg_values_supported=response_json.get(
+            "authorization_encryption_alg_values_supported",
+        ),
+        authorization_encryption_enc_values_supported=response_json.get(
+            "authorization_encryption_enc_values_supported",
+        ),
         # RP-Initiated Logout support (OpenID Connect RP-Initiated Logout 1.0 §2)
         end_session_endpoint=response_json.get("end_session_endpoint"),
         # Back-Channel Logout support (OpenID Connect Back-Channel Logout 1.0 §3)

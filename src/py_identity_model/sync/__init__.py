@@ -28,6 +28,10 @@ from ..core.fapi import (
     validate_fapi_discovery,
 )
 from ..core.jar import build_jar_authorization_url, create_request_object
+from ..core.jarm import (
+    extract_jarm_response_jwt,
+    is_jarm_response,
+)
 from ..core.logout_logic import (
     build_end_session_url,
     validate_post_logout_state,
@@ -62,6 +66,7 @@ from .introspection import (
     TokenIntrospectionResponse,
     introspect_token,
 )
+from .jarm import process_jarm_response
 from .jwks import (
     JsonWebAlgorithmsKeyTypes,
     JsonWebKey,
@@ -200,6 +205,7 @@ __all__ = [
     "create_request_object",
     "delete_client",
     "exchange_token",
+    "extract_jarm_response_jwt",
     "generate_code_challenge",
     "generate_code_verifier",
     "generate_dpop_key",
@@ -208,10 +214,12 @@ __all__ = [
     "get_jwks",
     "get_userinfo",
     "introspect_token",
+    "is_jarm_response",
     "jwks_from_dict",
     "parse_authorize_callback_response",
     "parse_discovery_url",
     "poll_device_token",
+    "process_jarm_response",
     "push_authorization_request",
     "read_client",
     "refresh_token",
