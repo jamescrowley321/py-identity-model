@@ -1,0 +1,100 @@
+{
+  "plan": "dynamic-rp",
+  "plan_id": "PW4LfFNUp2K6X",
+  "suite_url": "https://localhost.emobix.co.uk:8443",
+  "results": [
+    {
+      "test": "oidcc-client-test-discovery-webfinger-acct",
+      "status": "PASSED",
+      "test_id": "r4Mp4evYKXCcu8W",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=r4Mp4evYKXCcu8W",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-discovery-webfinger-url",
+      "status": "PASSED",
+      "test_id": "O3rIfQ4tbvMLvXR",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=O3rIfQ4tbvMLvXR",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-discovery-openid-config",
+      "status": "PASSED",
+      "test_id": "kNHWvC2oSdWT2mD",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=kNHWvC2oSdWT2mD",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-discovery-jwks-uri-keys",
+      "status": "INTERRUPTED",
+      "test_id": "wwwIfHo3hm9AO7O",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=wwwIfHo3hm9AO7O",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-discovery-issuer-mismatch",
+      "status": "PASSED",
+      "test_id": "U85QYuYLJnAH4ZK",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=U85QYuYLJnAH4ZK",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-dynamic-registration",
+      "status": "PASSED",
+      "test_id": "fkOekmwcTkqZiRi",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=fkOekmwcTkqZiRi",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-request-uri-signed-rs256",
+      "status": "INTERRUPTED",
+      "test_id": "pwtnkCXKn88hCSU",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=pwtnkCXKn88hCSU",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-request-uri-signed-none",
+      "status": "INTERRUPTED",
+      "test_id": "XVnJA7KmgKGKco5",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=XVnJA7KmgKGKco5",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-idtoken-sig-none",
+      "status": "INTERRUPTED",
+      "test_id": "8mwUJuEPIc3yKIy",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=8mwUJuEPIc3yKIy",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-signing-key-rotation-just-before-signing",
+      "status": "INTERRUPTED",
+      "test_id": "w0E39RTngci6qio",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=w0E39RTngci6qio",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-signing-key-rotation",
+      "status": "INTERRUPTED",
+      "test_id": "wDlaIR9QCOSFEGR",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=wDlaIR9QCOSFEGR",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-userinfo-signed",
+      "status": "INTERRUPTED",
+      "test_id": "vw3NtS30sbgAeUB",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=vw3NtS30sbgAeUB",
+      "detail": ""
+    }
+  ],
+  "summary": {
+    "total": 12,
+    "passed": 5,
+    "warning": 0,
+    "failed": 7,
+    "review": 0,
+    "skipped": 0
+  },
+  "all_passed": false
+}

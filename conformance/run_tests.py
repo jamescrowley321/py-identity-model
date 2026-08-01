@@ -112,6 +112,7 @@ class ConformanceSuiteClient:
         alias: str,
         rp_base_url: str = RP_BASE_URL,
         publish: str = "",
+        client_overrides: dict | None = None,
     ) -> dict:
         """Create a test plan.
 
@@ -119,6 +120,14 @@ class ConformanceSuiteClient:
         visible on the published-tests list: "" (default) keeps it private,
         "summary" / "everything" publish it. The downloadable plan export is
         available regardless of this setting.
+
+        ``client_overrides`` is the config file's ``client`` block, merged over
+        the default client registration the OP applies for static-client plans.
+        The logout profiles rely on this to register a
+        ``backchannel_logout_uri`` / ``post_logout_redirect_uris`` with the OP —
+        without them the OP cannot post a Back-Channel Logout Token or accept an
+        RP-Initiated Logout redirect. For the certified non-logout plans the
+        block is just ``{client_id, client_secret}``, so the merge is a no-op.
 
         Returns the plan response including plan ID and list of test modules.
         """
@@ -140,6 +149,8 @@ class ConformanceSuiteClient:
                 "client_secret": "conformance-rp-2-secret",
             },
         }
+        if client_overrides:
+            plan_config["client"].update(client_overrides)
 
         # Variant is a single JSON-encoded query parameter (per official conformance.py)
         params: dict[str, str] = {"planName": plan_name}
@@ -284,6 +295,28 @@ DYNAMIC_AUTH_TESTS = frozenset(
 DYNAMIC_REGISTER_ONLY_TESTS = frozenset(
     {
         "oidcc-client-test-dynamic-registration",
+    }
+)
+
+# Logout profiles (the RP-side certification plans oidcc-client-rp-initiated-
+# logout-rp-basic and oidcc-client-back-channel-logout-rp-basic). Every module
+# in these plans is driven the same way: a normal login, then an RP-Initiated
+# Logout. For RP-Initiated Logout the OP redirects to /post-logout-callback; for
+# Back-Channel Logout the OP additionally posts a Logout Token to the RP's
+# registered /backchannel-logout while it processes the end-session request.
+LOGOUT_PROFILES = frozenset(
+    {
+        "rpinitiated-logout-rp",
+        "backchannel-logout-rp",
+    }
+)
+
+# RP-Initiated Logout modules that must be driven WITHOUT a ``state`` on the
+# logout request (state is optional per RP-Initiated Logout 1.0 §2). The rest
+# send a state and verify the OP echoes it back unchanged.
+NO_STATE_LOGOUT_TESTS = frozenset(
+    {
+        "oidcc-client-test-rp-init-logout-no-state",
     }
 )
 
@@ -476,6 +509,62 @@ def drive_rp_authorize(
             logger.warning("RP flow HTTP error (may be expected): %s", exc)
 
 
+def drive_rp_logout(
+    rp_base_url: str,
+    issuer: str,
+    client_id: str,
+    client_secret: str,
+    test_id: str,
+    send_state: bool = True,
+    test_name: str = "",
+    profile: str = "",
+) -> None:
+    """Drive a login followed by an RP-Initiated Logout for a logout profile.
+
+    Both logout profiles (RP-Initiated and Back-Channel) start the same way: the
+    RP must have a live login before it can log out, so this first drives a full
+    auth flow (which the RP records as ``_last_logout_context``), then hits the
+    RP's ``/logout`` endpoint. ``/logout`` redirects the user agent to the OP's
+    end-session endpoint; following the redirects carries the flow through the
+    OP back to ``/post-logout-callback`` (RP-Initiated Logout state round-trip).
+
+    For the Back-Channel profile the OP additionally posts a Logout Token to the
+    RP's registered ``backchannel_logout_uri`` while it processes the end-session
+    request — that is a server-to-server call the RP handles on its own, so no
+    extra driving is needed here.
+
+    ``send_state=False`` tells the RP to omit ``state`` from the logout request
+    (the -no-state module); the default sends a state and expects it echoed.
+    """
+    # Step 1: log in so the RP has an id_token_hint + end_session endpoint.
+    drive_rp_authorize(
+        rp_base_url=rp_base_url,
+        issuer=issuer,
+        client_id=client_id,
+        client_secret=client_secret,
+        test_id=test_id,
+        test_name=test_name,
+        profile=profile,
+    )
+
+    # Step 2: initiate RP-Initiated Logout and follow the redirect chain.
+    params = {
+        "test_name": test_name,
+        "profile": profile,
+        "send_state": str(send_state).lower(),
+    }
+    with httpx.Client(verify=False, timeout=30.0, follow_redirects=True) as client:
+        try:
+            response = client.get(f"{rp_base_url}/logout", params=params)
+            logger.info(
+                "RP logout flow completed: status=%d, url=%s",
+                response.status_code,
+                response.url,
+            )
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
+            logger.warning("RP logout HTTP error (may be expected): %s", exc)
+
+
 # ---------------------------------------------------------------------------
 # Test execution
 # ---------------------------------------------------------------------------
@@ -559,71 +648,87 @@ def run_test_module(
     test_type = _get_test_type(test_name)
     logger.info("Test type: %s", test_type)
 
-    # Dynamic RP plan: the OP has no pre-configured client, so the RP registers
-    # (RFC 7591) before it can authenticate. Some modules are satisfied by the
-    # registration alone; the rest register, then run their auth flow with the
-    # freshly issued client_id (the RP fills the secret from its registration).
-    # Discovery/webfinger modules need neither and keep their normal flow.
-    register_only = dynamic and test_name in DYNAMIC_REGISTER_ONLY_TESTS
-    if dynamic and (register_only or test_name in DYNAMIC_AUTH_TESTS):
-        registered_id = drive_rp_register(
-            rp_base_url=rp_base_url,
-            issuer=issuer,
-            test_name=test_name,
-            profile=profile,
-        )
-        if registered_id:
-            client_id = registered_id
-            client_secret = ""
-
-    if register_only:
-        # Registration is the whole test — no auth flow to drive.
-        pass
-    elif test_type == "discovery_only":
-        # Discovery-only tests: just fetch discovery, no auth flow
-        drive_rp_discover(
-            rp_base_url=rp_base_url,
-            issuer=issuer,
-            test_id=module_id,
-            test_name=test_name,
-            profile=profile,
-        )
-    elif test_type == "auth_double":
-        # Double-flow tests (key rotation): drive two sequential auth flows
-        logger.info("Driving first auth flow...")
-        drive_rp_authorize(
+    if profile in LOGOUT_PROFILES:
+        # Logout profiles: log in, then drive an RP-Initiated Logout. For the
+        # Back-Channel profile the OP posts a Logout Token to the RP's
+        # /backchannel-logout on its own while processing the end-session.
+        drive_rp_logout(
             rp_base_url=rp_base_url,
             issuer=issuer,
             client_id=client_id,
             client_secret=client_secret,
             test_id=module_id,
-            test_name=test_name,
-            profile=profile,
-        )
-        # Wait briefly for the suite to rotate keys
-        time.sleep(1)
-        logger.info("Driving second auth flow...")
-        drive_rp_authorize(
-            rp_base_url=rp_base_url,
-            issuer=issuer,
-            client_id=client_id,
-            client_secret=client_secret,
-            test_id=module_id,
+            send_state=test_name not in NO_STATE_LOGOUT_TESTS,
             test_name=test_name,
             profile=profile,
         )
     else:
-        # Standard auth flow (with optional userinfo skip)
-        drive_rp_authorize(
-            rp_base_url=rp_base_url,
-            issuer=issuer,
-            client_id=client_id,
-            client_secret=client_secret,
-            test_id=module_id,
-            skip_userinfo=(test_type == "auth_no_userinfo"),
-            test_name=test_name,
-            profile=profile,
-        )
+        # Dynamic RP plan: the OP has no pre-configured client, so the RP
+        # registers (RFC 7591) before it can authenticate. Some modules are
+        # satisfied by the registration alone; the rest register, then run their
+        # auth flow with the freshly issued client_id (the RP fills the secret
+        # from its registration). Discovery/webfinger modules need neither and
+        # keep their normal flow.
+        register_only = dynamic and test_name in DYNAMIC_REGISTER_ONLY_TESTS
+        if dynamic and (register_only or test_name in DYNAMIC_AUTH_TESTS):
+            registered_id = drive_rp_register(
+                rp_base_url=rp_base_url,
+                issuer=issuer,
+                test_name=test_name,
+                profile=profile,
+            )
+            if registered_id:
+                client_id = registered_id
+                client_secret = ""
+
+        if register_only:
+            # Registration is the whole test — no auth flow to drive.
+            pass
+        elif test_type == "discovery_only":
+            # Discovery-only tests: just fetch discovery, no auth flow
+            drive_rp_discover(
+                rp_base_url=rp_base_url,
+                issuer=issuer,
+                test_id=module_id,
+                test_name=test_name,
+                profile=profile,
+            )
+        elif test_type == "auth_double":
+            # Double-flow tests (key rotation): drive two sequential auth flows
+            logger.info("Driving first auth flow...")
+            drive_rp_authorize(
+                rp_base_url=rp_base_url,
+                issuer=issuer,
+                client_id=client_id,
+                client_secret=client_secret,
+                test_id=module_id,
+                test_name=test_name,
+                profile=profile,
+            )
+            # Wait briefly for the suite to rotate keys
+            time.sleep(1)
+            logger.info("Driving second auth flow...")
+            drive_rp_authorize(
+                rp_base_url=rp_base_url,
+                issuer=issuer,
+                client_id=client_id,
+                client_secret=client_secret,
+                test_id=module_id,
+                test_name=test_name,
+                profile=profile,
+            )
+        else:
+            # Standard auth flow (with optional userinfo skip)
+            drive_rp_authorize(
+                rp_base_url=rp_base_url,
+                issuer=issuer,
+                client_id=client_id,
+                client_secret=client_secret,
+                test_id=module_id,
+                skip_userinfo=(test_type == "auth_no_userinfo"),
+                test_name=test_name,
+                profile=profile,
+            )
 
     # Poll until the test finishes
     logger.info("Polling test status...")
@@ -699,10 +804,17 @@ def run_plan(
 
     suite = ConformanceSuiteClient(suite_base_url, token=token)
 
-    # Create the test plan
+    # Create the test plan. The config's client block is merged into the plan's
+    # client registration so logout profiles register their
+    # backchannel_logout_uri / post_logout_redirect_uris with the OP.
     logger.info("Creating test plan...")
     plan_response = suite.create_plan(
-        plan_name, variant, alias, rp_base_url=rp_base_url, publish=publish
+        plan_name,
+        variant,
+        alias,
+        rp_base_url=rp_base_url,
+        publish=publish,
+        client_overrides=config.get("client"),
     )
     plan_id = plan_response.get("id", "")
     modules = plan_response.get("modules", [])

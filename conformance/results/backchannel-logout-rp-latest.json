@@ -1,0 +1,72 @@
+{
+  "plan": "backchannel-logout-rp",
+  "plan_id": "ZvCxWudCePTNu",
+  "suite_url": "https://localhost.emobix.co.uk:8443",
+  "results": [
+    {
+      "test": "oidcc-client-test-rp-backchannel-rpinitlogout",
+      "status": "PASSED",
+      "test_id": "dMz7qqJv61IaJm1",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=dMz7qqJv61IaJm1",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-rp-backchannel-rpinitlogout-alg-none",
+      "status": "PASSED",
+      "test_id": "peNxUuwY9lgR6j8",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=peNxUuwY9lgR6j8",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-rp-backchannel-rpinitlogout-no-event",
+      "status": "PASSED",
+      "test_id": "W0PpU6ajozQqCk8",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=W0PpU6ajozQqCk8",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-rp-backchannel-rpinitlogout-with-nonce",
+      "status": "PASSED",
+      "test_id": "djtVXlfY9RNfLoX",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=djtVXlfY9RNfLoX",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-rp-backchannel-rpinitlogout-wrong-alg",
+      "status": "PASSED",
+      "test_id": "JE0CzfsUvxrr2FS",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=JE0CzfsUvxrr2FS",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-rp-backchannel-rpinitlogout-wrong-aud",
+      "status": "PASSED",
+      "test_id": "qXsHpwJqpTpesIO",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=qXsHpwJqpTpesIO",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-rp-backchannel-rpinitlogout-wrong-event",
+      "status": "PASSED",
+      "test_id": "2SazWpHcYnN1wcI",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=2SazWpHcYnN1wcI",
+      "detail": ""
+    },
+    {
+      "test": "oidcc-client-test-rp-backchannel-rpinitlogout-wrong-iss",
+      "status": "PASSED",
+      "test_id": "YGO2OlSVxeBZ1mp",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=YGO2OlSVxeBZ1mp",
+      "detail": ""
+    }
+  ],
+  "summary": {
+    "total": 8,
+    "passed": 8,
+    "warning": 0,
+    "failed": 0,
+    "review": 0,
+    "skipped": 0
+  },
+  "all_passed": true
+}

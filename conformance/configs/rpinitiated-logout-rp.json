@@ -1,13 +1,16 @@
 {
-  "plan_name": "oidcc-rp-initiated-logout-certification-test-plan",
+  "plan_name": "oidcc-client-rp-initiated-logout-rp-basic",
   "variant": {
-    "response_type": "code",
-    "client_registration": "static_client"
+    "client_auth_type": "client_secret_basic",
+    "request_type": "plain_http_request",
+    "client_registration": "static_client",
+    "response_mode": "default"
   },
   "alias": "py-identity-model-rpinitiated-logout-rp",
   "client": {
     "client_id": "conformance-rp",
     "client_secret": "conformance-rp-secret",
+    "backchannel_logout_uri": "http://rp:8888/backchannel-logout",
     "post_logout_redirect_uris": [
       "http://localhost:8888/post-logout-callback"
     ]

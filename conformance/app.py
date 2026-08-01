@@ -1050,19 +1050,37 @@ async def backchannel_logout(request: Request) -> JSONResponse:
     logout_token = form_data.get("logout_token")
     if not isinstance(logout_token, str):
         logout_token = None
-    return await run_in_threadpool(_receive_backchannel_logout, logout_token)
+    response = await run_in_threadpool(_receive_backchannel_logout, logout_token)
+    # Back-Channel Logout 1.0 §2.8: the RP's response SHOULD carry no-store cache
+    # headers so a logout is never served from cache. Set on every response
+    # (success and error) since the OP posts to this fixed URI.
+    response.headers["Cache-Control"] = "no-cache, no-store"
+    response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @app.get("/logout", response_model=None)
-def logout() -> RedirectResponse | JSONResponse:
+def logout(
+    test_name: str = Query("", description="Test module name for RP log capture"),
+    profile: str = Query("", description="Profile/plan name for RP log capture"),
+    send_state: str = Query(
+        "true", description="Whether to include a state on the logout request"
+    ),
+) -> RedirectResponse | JSONResponse:
     """Initiate RP-Initiated Logout (OpenID Connect RP-Initiated Logout 1.0 §2).
 
     Builds the OP's end-session URL with the ``id_token_hint``, ``client_id``,
-    ``post_logout_redirect_uri`` and a fresh ``state`` via the library's
-    ``build_end_session_url``, remembers the ``state`` for the round-trip check,
-    and redirects the user agent to the OP. Returns 400 if no login flow has
-    completed yet (no end-session endpoint / id_token to log out with).
+    ``post_logout_redirect_uri`` and (optionally) a fresh ``state`` via the
+    library's ``build_end_session_url``, remembers the ``state`` for the
+    round-trip check, and redirects the user agent to the OP. Returns 400 if no
+    login flow has completed yet (no end-session endpoint / id_token to log out
+    with).
+
+    ``state`` is OPTIONAL in RP-Initiated Logout 1.0 §2. ``send_state=false``
+    omits it (the -no-state module); the round-trip check then expects the OP to
+    return no state either.
     """
+    _set_active_test(profile, test_name)
     logout_context = _last_logout_context
     if logout_context is None or not logout_context.get("end_session_endpoint"):
         logger.error("REJECTED: /logout called before a successful login flow")
@@ -1075,7 +1093,9 @@ def logout() -> RedirectResponse | JSONResponse:
         )
 
     global _expected_logout_state
-    _expected_logout_state = secrets.token_urlsafe(32)
+    _expected_logout_state = (
+        secrets.token_urlsafe(32) if send_state.lower() == "true" else None
+    )
 
     end_session_url = build_end_session_url(
         logout_context["end_session_endpoint"],
