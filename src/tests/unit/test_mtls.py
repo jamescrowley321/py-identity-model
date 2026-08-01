@@ -43,6 +43,8 @@ from py_identity_model import (
 from py_identity_model.aio import (
     request_client_credentials_token as async_request_client_credentials_token,
 )
+import py_identity_model.aio.http_client as aio_http
+from py_identity_model.aio.managed_client import AsyncHTTPClient
 from py_identity_model.core.device_auth_logic import (
     prepare_device_auth_request_data,
     prepare_device_token_request_data,
@@ -67,6 +69,7 @@ from py_identity_model.core.token_exchange_logic import (
     prepare_token_exchange_request_data,
 )
 import py_identity_model.sync.http_client as sync_http
+from py_identity_model.sync.managed_client import HTTPClient
 
 
 ADDR = "https://as.example.com/endpoint"
@@ -229,6 +232,13 @@ class TestValidateCertificateBinding:
     def test_x5t_not_string_raises(self, cert_pem):
         with pytest.raises(CertificateBindingError, match="x5t#S256"):
             validate_certificate_binding({"cnf": {"x5t#S256": 123}}, cert_pem)
+
+    def test_non_ascii_x5t_raises_binding_error_not_typeerror(self, cert_pem):
+        """A crafted non-ASCII thumbprint must fail closed as a
+        CertificateBindingError, not escape as a TypeError from
+        hmac.compare_digest (which cannot compare non-ASCII str)."""
+        with pytest.raises(CertificateBindingError, match="base64url"):
+            validate_certificate_binding({"cnf": {"x5t#S256": "abcé"}}, cert_pem)
 
 
 @pytest.mark.unit
@@ -589,3 +599,50 @@ class TestEndToEndMtls:
 
         assert len(created) == 1
         assert created[0].is_closed
+
+
+@pytest.mark.unit
+class TestResolveClientMtlsConflict:
+    """A managed http_client cannot be guaranteed to present the mTLS client
+    certificate, and prepare_*() has already dropped client_secret/Basic for the
+    mTLS branch — so supplying both must fail loudly, not silently downgrade to
+    an unauthenticated request (RFC 8705 §2)."""
+
+    def test_sync_both_mtls_and_managed_client_raises(self, mtls):
+        managed = HTTPClient()
+        try:
+            with pytest.raises(ValueError, match="Cannot combine"):
+                sync_http.resolve_http_client(mtls, managed)
+        finally:
+            managed.close()
+
+    def test_sync_mtls_only_builds_owned_client(self, mtls):
+        client, owned = sync_http.resolve_http_client(mtls, None)
+        try:
+            assert owned is client  # caller must close it
+        finally:
+            client.close()
+
+    def test_sync_managed_only_passes_through(self):
+        managed = HTTPClient()
+        try:
+            client, owned = sync_http.resolve_http_client(None, managed)
+            assert client is managed.client
+            assert owned is None  # caller must NOT close a managed client
+        finally:
+            managed.close()
+
+    async def test_async_both_mtls_and_managed_client_raises(self, mtls):
+        managed = AsyncHTTPClient()
+        try:
+            with pytest.raises(ValueError, match="Cannot combine"):
+                aio_http.resolve_async_http_client(mtls, managed)
+        finally:
+            await managed.close()
+
+    async def test_async_mtls_only_builds_owned_client(self, mtls):
+        client, owned = aio_http.resolve_async_http_client(mtls, None)
+        try:
+            assert owned is client
+        finally:
+            await client.aclose()

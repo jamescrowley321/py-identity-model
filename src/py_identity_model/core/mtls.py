@@ -140,6 +140,17 @@ def validate_certificate_binding(claims: dict, cert: str | bytes) -> None:
             "thumbprint (RFC 8705 Section 3.1)"
         )
 
+    # A genuine base64url-no-pad thumbprint is always ASCII. Reject non-ASCII
+    # values explicitly so the fail-closed contract holds: without this guard a
+    # crafted token whose thumbprint contains non-ASCII characters makes
+    # ``hmac.compare_digest`` raise ``TypeError`` instead of the documented
+    # ``CertificateBindingError``, escaping callers that catch only the latter.
+    if not bound_thumbprint.isascii():
+        raise CertificateBindingError(
+            "Access token 'cnf[x5t#S256]' is not a valid base64url thumbprint "
+            "(non-ASCII characters) (RFC 8705 Section 3.1)"
+        )
+
     presented_thumbprint = compute_certificate_thumbprint(cert)
     if not hmac.compare_digest(bound_thumbprint, presented_thumbprint):
         raise CertificateBindingError(

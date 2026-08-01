@@ -214,9 +214,16 @@ def resolve_async_http_client(
 ) -> tuple[httpx.AsyncClient, httpx.AsyncClient | None]:
     """Resolve the async HTTP client to use for a client-authenticating request.
 
-    Precedence: an explicit managed *http_client* wins; otherwise, when *mtls*
-    is configured, a short-lived cert-configured client is built (RFC 8705);
-    otherwise the shared singleton client is used.
+    At most one of *mtls* / *http_client* may be supplied. When *mtls* is
+    configured, a short-lived cert-configured client is built (RFC 8705); a
+    managed *http_client* is used as-is; otherwise the shared singleton client
+    is used.
+
+    A managed *http_client* cannot be guaranteed to present the requested
+    client certificate at the TLS layer, and the ``prepare_*`` body branch has
+    already dropped ``client_secret``/Basic auth for the mTLS case — so
+    supplying both would silently emit an unauthenticated request. Reject that
+    combination explicitly rather than downgrading.
 
     Args:
         mtls: The request's mTLS configuration, or ``None``.
@@ -226,7 +233,16 @@ def resolve_async_http_client(
         ``(client, owned)`` — *client* is the client to use; *owned* is the
         same object when the caller must ``aclose()`` it afterwards (mTLS),
         else ``None`` for shared/managed clients that must not be closed here.
+
+    Raises:
+        ValueError: If both *mtls* and *http_client* are supplied.
     """
+    if mtls is not None and http_client is not None:
+        raise ValueError(
+            "Cannot combine a managed http_client with mtls: a managed client "
+            "cannot be guaranteed to present the mTLS client certificate. Pass "
+            "one or the other."
+        )
     if http_client is not None:
         return http_client.client, None
     if mtls is not None:
