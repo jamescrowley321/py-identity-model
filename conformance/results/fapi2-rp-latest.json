@@ -1,0 +1,170 @@
+{
+  "plan": "fapi2-rp",
+  "plan_id": "B7J5uAP0fYEuP",
+  "suite_url": "https://localhost.emobix.co.uk:8443",
+  "results": [
+    {
+      "test": "fapi2-security-profile-final-client-test-happy-path",
+      "status": "WARNING",
+      "test_id": "kUkNqI2uKFbrcQt",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=kUkNqI2uKFbrcQt",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-discovery-issuer-mismatch",
+      "status": "WARNING",
+      "test_id": "S6EDoM7i6nAyd7J",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=S6EDoM7i6nAyd7J",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-invalid-iss",
+      "status": "WARNING",
+      "test_id": "EZrRmdZ8HkazE2p",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=EZrRmdZ8HkazE2p",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-invalid-aud",
+      "status": "WARNING",
+      "test_id": "FpYGEVoQ2ieJR25",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=FpYGEVoQ2ieJR25",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-invalid-secondary-aud",
+      "status": "WARNING",
+      "test_id": "QrTBZwEcvoaRCrB",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=QrTBZwEcvoaRCrB",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-invalid-null-alg",
+      "status": "WARNING",
+      "test_id": "eqohs4Jf8KUALjO",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=eqohs4Jf8KUALjO",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-invalid-alternate-alg",
+      "status": "WARNING",
+      "test_id": "zWkabqFGUQuCxPc",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=zWkabqFGUQuCxPc",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-invalid-expired-exp",
+      "status": "WARNING",
+      "test_id": "kTbU81axFkyiE2E",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=kTbU81axFkyiE2E",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-invalid-missing-exp",
+      "status": "WARNING",
+      "test_id": "qFwJI7KUcxN9692",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=qFwJI7KUcxN9692",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-invalid-missing-aud",
+      "status": "WARNING",
+      "test_id": "Kmj2fm9TK1maaVY",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=Kmj2fm9TK1maaVY",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-invalid-missing-iss",
+      "status": "WARNING",
+      "test_id": "fV9Hp7XBiO9nqbV",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=fV9Hp7XBiO9nqbV",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-valid-aud-as-array",
+      "status": "WARNING",
+      "test_id": "fJh0NJ9fzplJDrP",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=fJh0NJ9fzplJDrP",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-invalid-nonce",
+      "status": "WARNING",
+      "test_id": "5zZCs62vGGvHGPA",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=5zZCs62vGGvHGPA",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-invalid-missing-nonce",
+      "status": "WARNING",
+      "test_id": "tIfYSKzX7dojtsF",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=tIfYSKzX7dojtsF",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-invalid-authorization-response-iss",
+      "status": "WARNING",
+      "test_id": "7eguNcJdpEIKoLy",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=7eguNcJdpEIKoLy",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-remove-authorization-response-iss",
+      "status": "WARNING",
+      "test_id": "I3TmuE32gYiO3mq",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=I3TmuE32gYiO3mq",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-ensure-authorization-response-with-invalid-state-fails",
+      "status": "WARNING",
+      "test_id": "xeabZ8jTx0DnWpH",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=xeabZ8jTx0DnWpH",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-ensure-authorization-response-with-invalid-missing-state-fails",
+      "status": "WARNING",
+      "test_id": "rhCKYWGJnHmTZ21",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=rhCKYWGJnHmTZ21",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-token-endpoint-response-without-expires_in",
+      "status": "WARNING",
+      "test_id": "FAAbdHjMdgx1HP5",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=FAAbdHjMdgx1HP5",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-token-type-case-insensitivity",
+      "status": "WARNING",
+      "test_id": "MbNAndeuLP4jSyc",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=MbNAndeuLP4jSyc",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-rs-dpop-auth-scheme-case-insensitivity",
+      "status": "WARNING",
+      "test_id": "4l7Hu3f27vzDZGT",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=4l7Hu3f27vzDZGT",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    },
+    {
+      "test": "fapi2-security-profile-final-client-test-happy-path-no-dpop-nonce",
+      "status": "WARNING",
+      "test_id": "mCumPrbkWWKtx1k",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=mCumPrbkWWKtx1k",
+      "detail": "EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy; EnsureIncomingTls12WithBCP195SecureCipherOrTls13: TLS Protocol not found; this header should have been set by the apache proxy"
+    }
+  ],
+  "summary": {
+    "total": 22,
+    "passed": 0,
+    "warning": 22,
+    "failed": 0,
+    "review": 0,
+    "skipped": 0
+  },
+  "all_passed": true
+}
