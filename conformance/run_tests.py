@@ -266,6 +266,26 @@ DOUBLE_FLOW_TESTS = frozenset(
         "oidcc-client-test-signing-key-rotation",
     }
 )
+# Dynamic RP: modules whose auth flow needs a dynamically-registered client
+# (the plan has no pre-configured client_id).
+DYNAMIC_AUTH_TESTS = frozenset(
+    {
+        "oidcc-client-test-discovery-jwks-uri-keys",
+        "oidcc-client-test-idtoken-sig-none",
+        "oidcc-client-test-signing-key-rotation",
+        "oidcc-client-test-signing-key-rotation-just-before-signing",
+        "oidcc-client-test-userinfo-signed",
+        "oidcc-client-test-request-uri-signed-rs256",
+        "oidcc-client-test-request-uri-signed-none",
+    }
+)
+# Dynamic RP: modules satisfied by the registration step alone (no auth flow),
+# so driving an auth flow afterwards would be an illegal FINISHED -> RUNNING.
+DYNAMIC_REGISTER_ONLY_TESTS = frozenset(
+    {
+        "oidcc-client-test-dynamic-registration",
+    }
+)
 
 
 def _get_test_type(test_name: str) -> str:
@@ -310,6 +330,34 @@ def drive_rp_discover(
             )
         except httpx.HTTPError as exc:
             logger.warning("RP discover HTTP error (may be expected): %s", exc)
+
+
+def drive_rp_register(
+    rp_base_url: str,
+    issuer: str,
+    test_name: str = "",
+    profile: str = "",
+) -> str | None:
+    """Register the RP dynamically (RFC 7591) for a Dynamic RP test module.
+
+    The Dynamic RP plan has no pre-configured client, so the RP must register
+    itself with each per-test OP before the auth flow. Returns the issued
+    client_id (which the runner passes to /authorize; the RP fills the matching
+    secret from its remembered registration), or None if registration did not
+    complete.
+    """
+    params = {"issuer": issuer, "test_name": test_name, "profile": profile}
+    with httpx.Client(verify=False, timeout=30.0) as client:
+        try:
+            response = client.get(f"{rp_base_url}/register", params=params)
+            if response.is_success:
+                client_id = response.json().get("client_id")
+                logger.info("RP registered dynamically: client_id=%s", client_id)
+                return client_id
+            logger.warning("RP register returned status=%d", response.status_code)
+        except httpx.HTTPError as exc:
+            logger.warning("RP register HTTP error (may be expected): %s", exc)
+    return None
 
 
 class _FormPostParser(HTMLParser):
@@ -457,6 +505,7 @@ def run_test_module(
     client_id: str,
     client_secret: str,
     profile: str = "",
+    dynamic: bool = False,
 ) -> TestResult:
     """Execute a single conformance test module."""
     logger.info("=" * 60)
@@ -510,7 +559,27 @@ def run_test_module(
     test_type = _get_test_type(test_name)
     logger.info("Test type: %s", test_type)
 
-    if test_type == "discovery_only":
+    # Dynamic RP plan: the OP has no pre-configured client, so the RP registers
+    # (RFC 7591) before it can authenticate. Some modules are satisfied by the
+    # registration alone; the rest register, then run their auth flow with the
+    # freshly issued client_id (the RP fills the secret from its registration).
+    # Discovery/webfinger modules need neither and keep their normal flow.
+    register_only = dynamic and test_name in DYNAMIC_REGISTER_ONLY_TESTS
+    if dynamic and (register_only or test_name in DYNAMIC_AUTH_TESTS):
+        registered_id = drive_rp_register(
+            rp_base_url=rp_base_url,
+            issuer=issuer,
+            test_name=test_name,
+            profile=profile,
+        )
+        if registered_id:
+            client_id = registered_id
+            client_secret = ""
+
+    if register_only:
+        # Registration is the whole test — no auth flow to drive.
+        pass
+    elif test_type == "discovery_only":
         # Discovery-only tests: just fetch discovery, no auth flow
         drive_rp_discover(
             rp_base_url=rp_base_url,
@@ -663,6 +732,10 @@ def run_plan(
     client_id = client_config.get("client_id", "conformance-rp")
     client_secret = client_config.get("client_secret", "conformance-rp-secret")
 
+    # Dynamic RP plans register a client per test module (no pre-configured
+    # client_id); flag it so run_test_module drives /register first.
+    is_dynamic = "dynamic" in plan_name
+
     # Run each test
     results: list[TestResult] = []
     for test_name in test_names:
@@ -674,6 +747,7 @@ def run_plan(
             client_id=client_id,
             client_secret=client_secret,
             profile=profile,
+            dynamic=is_dynamic,
         )
         results.append(result)
 

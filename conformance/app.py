@@ -448,6 +448,12 @@ def authorize(
     _set_active_test(profile, test_name)
     http_client = _get_http_client()
 
+    # Dynamic RP: the runner registers a client (RFC 7591) and passes back its
+    # client_id, but cannot know the secret (/register never returns it). Fill
+    # the secret from the remembered registration when the client_id matches.
+    if _registered_client and client_id == _registered_client.get("client_id"):
+        client_secret = _registered_client.get("client_secret", "") or client_secret
+
     # Fetch discovery document for this issuer
     try:
         disco_endpoint = parse_discovery_url(issuer)
