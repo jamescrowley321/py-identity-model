@@ -6,10 +6,12 @@ the request_client_credentials_token function.
 """
 
 import httpx
+import pytest
 import respx
 
 from py_identity_model.core.models import (
     ClientCredentialsTokenRequest,
+    ClientCredentialsTokenResponse,
 )
 from py_identity_model.sync.token_client import (
     request_client_credentials_token,
@@ -141,3 +143,53 @@ class TestSyncTokenClient:
 
         # Verify the mock was called
         assert mock_route.called
+
+
+SECRET_TOKEN = {
+    "access_token": "CC_SECRET_AT",
+    "token_type": "Bearer",
+}
+
+
+@pytest.mark.unit
+class TestClientCredentialsTokenResponseReprRedaction:
+    """#431: the ``token`` dict is a secret and must not leak via repr/str."""
+
+    def test_repr_redacts_token_value(self):
+        response = ClientCredentialsTokenResponse(
+            is_successful=True, token=SECRET_TOKEN
+        )
+
+        rendered = repr(response)
+        assert "ClientCredentialsTokenResponse" in rendered
+        assert "[REDACTED]" in rendered
+        assert "CC_SECRET_AT" not in rendered
+
+    def test_str_redacts_token_value(self):
+        response = ClientCredentialsTokenResponse(
+            is_successful=True, token=SECRET_TOKEN
+        )
+
+        assert "CC_SECRET_AT" not in str(response)
+        assert "[REDACTED]" in str(response)
+
+    def test_repr_of_failed_response_does_not_crash_or_leak(self):
+        response = ClientCredentialsTokenResponse(
+            is_successful=False, error="invalid_client", token=None
+        )
+
+        rendered = repr(response)
+        assert "invalid_client" in rendered
+        assert "[REDACTED]" not in rendered
+        assert "token=None" in rendered
+
+    def test_equality_still_behaves(self):
+        a = ClientCredentialsTokenResponse(is_successful=True, token=SECRET_TOKEN)
+        b = ClientCredentialsTokenResponse(is_successful=True, token=dict(SECRET_TOKEN))
+        c = ClientCredentialsTokenResponse(
+            is_successful=True, token={"access_token": "other"}
+        )
+
+        assert a == b
+        assert a != c
+        assert a != "not-a-response"

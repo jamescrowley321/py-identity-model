@@ -658,6 +658,7 @@ class ClientCredentialsTokenResponse(BaseResponse):
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
+    _secret_fields: ClassVar[frozenset[str]] = frozenset({"token"})
 
     token: dict | None = None
 
@@ -700,6 +701,7 @@ class AuthorizationCodeTokenResponse(BaseResponse):
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
+    _secret_fields: ClassVar[frozenset[str]] = frozenset({"token"})
 
     token: dict | None = None
 
@@ -902,7 +904,7 @@ class DeviceTokenRequest(BaseRequest):
     private_key_jwt: PrivateKeyJwt | None = None
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class DeviceTokenResponse(BaseResponse):
     """Response from a device token poll (RFC 8628).
 
@@ -919,6 +921,7 @@ class DeviceTokenResponse(BaseResponse):
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
+    _secret_fields: ClassVar[frozenset[str]] = frozenset({"token"})
 
     token: dict | None = None
     error_code: str | None = None
@@ -963,7 +966,7 @@ class TokenExchangeRequest(BaseRequest):
     private_key_jwt: PrivateKeyJwt | None = None
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class TokenExchangeResponse(BaseResponse):
     """Response from a token exchange request (RFC 8693).
 
@@ -975,6 +978,7 @@ class TokenExchangeResponse(BaseResponse):
     _guarded_fields: ClassVar[frozenset[str]] = frozenset(
         {"token", "issued_token_type"}
     )
+    _secret_fields: ClassVar[frozenset[str]] = frozenset({"token"})
 
     token: dict | None = None
     issued_token_type: str | None = None
@@ -1165,6 +1169,9 @@ class ClientRegistrationResponse(BaseResponse):
             "registration_access_token",
             "registration_client_uri",
         }
+    )
+    _secret_fields: ClassVar[frozenset[str]] = frozenset(
+        {"client_secret", "registration_access_token"}
     )
 
     client_id: str | None = None
