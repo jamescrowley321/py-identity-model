@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from .discovery_policy import DiscoveryPolicy
+    from .dpop import DPoPKey
 
 
 # ============================================================================
@@ -680,6 +681,12 @@ class AuthorizationCodeTokenRequest(BaseRequest):
         code_verifier: PKCE code verifier (required when PKCE was used).
         client_secret: Client secret (optional for public clients per RFC 7636).
         scope: Space-delimited list of requested scopes (optional).
+        private_key_jwt: ``private_key_jwt`` authentication parameters.  When
+            set, takes precedence over ``client_secret`` (RFC 7523).
+        dpop_key: When set, the token request is DPoP-bound (RFC 9449): a DPoP
+            proof for the token endpoint is attached and the ``use_dpop_nonce``
+            challenge is honored with a single retry.  FAPI 2.0 sender
+            constraining.
     """
 
     client_id: str
@@ -689,6 +696,7 @@ class AuthorizationCodeTokenRequest(BaseRequest):
     client_secret: str | None = None
     scope: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    dpop_key: DPoPKey | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -808,6 +816,11 @@ class PushedAuthorizationRequest(BaseRequest):
         code_challenge: PKCE code challenge.
         code_challenge_method: PKCE method (``"S256"`` or ``"plain"``).
         client_secret: Client secret (optional for public clients).
+        private_key_jwt: ``private_key_jwt`` authentication parameters.  When
+            set, takes precedence over ``client_secret`` (RFC 7523).
+        dpop_key: When set, the PAR is DPoP-bound (RFC 9449): a DPoP proof for
+            the PAR endpoint is attached and the ``use_dpop_nonce`` challenge is
+            honored with a single retry.  FAPI 2.0 sender constraining.
     """
 
     client_id: str
@@ -820,6 +833,7 @@ class PushedAuthorizationRequest(BaseRequest):
     code_challenge_method: str | None = None
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    dpop_key: DPoPKey | None = None
 
 
 @dataclass(repr=False, eq=False)

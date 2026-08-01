@@ -12,6 +12,7 @@ import hashlib
 import json
 import time
 import types
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse, urlunparse
 import uuid
 
@@ -22,6 +23,10 @@ from cryptography.hazmat.primitives.serialization import (
     PrivateFormat,
 )
 import jwt as pyjwt
+
+
+if TYPE_CHECKING:
+    import httpx
 
 
 # Mapping from JWT algorithm to EC curve (immutable to prevent curve confusion)
@@ -265,10 +270,45 @@ def build_dpop_headers(
     return headers
 
 
+def extract_dpop_nonce(response: httpx.Response) -> str | None:
+    """Return the server DPoP nonce when a response demands a nonced retry.
+
+    Implements the RFC 9449 §8 ``use_dpop_nonce`` challenge: an authorization
+    server (token/PAR endpoint, ``400``) or resource server (``401``) may reject
+    a DPoP proof that lacks a server-chosen nonce, supplying the nonce in the
+    ``DPoP-Nonce`` response header. The caller should re-mint the proof with the
+    returned nonce and retry the request **once**.
+
+    Args:
+        response: The HTTP response to inspect.
+
+    Returns:
+        The ``DPoP-Nonce`` header value if this is a ``use_dpop_nonce`` error and
+        a nonce is present, otherwise ``None``.
+    """
+    nonce = response.headers.get("DPoP-Nonce")
+    if not nonce:
+        return None
+    if response.status_code not in (400, 401):
+        return None
+    # Token/PAR endpoints signal via the JSON error body (RFC 9449 §8.1);
+    # resource servers signal via WWW-Authenticate (§8.2).
+    try:
+        body = response.json()
+    except (json.JSONDecodeError, ValueError):
+        body = None
+    if isinstance(body, dict) and body.get("error") == "use_dpop_nonce":
+        return nonce
+    if "use_dpop_nonce" in response.headers.get("WWW-Authenticate", ""):
+        return nonce
+    return None
+
+
 __all__ = [
     "DPoPKey",
     "build_dpop_headers",
     "compute_ath",
     "create_dpop_proof",
+    "extract_dpop_nonce",
     "generate_dpop_key",
 ]

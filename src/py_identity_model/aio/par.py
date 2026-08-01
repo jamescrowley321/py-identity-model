@@ -4,6 +4,7 @@ Pushed Authorization Requests (asynchronous implementation, RFC 9126).
 
 import httpx
 
+from ..core.dpop import extract_dpop_nonce
 from ..core.error_handlers import handle_par_error
 from ..core.models import (
     PushedAuthorizationRequest,
@@ -50,11 +51,23 @@ async def push_authorization_request(
 
     response = None
     try:
-        params, headers, auth = prepare_par_request_data(request)
         client = http_client.client if http_client else get_async_http_client()
+        params, headers, auth = prepare_par_request_data(request)
         response = await _push_authorization_request(
             client, request.address, params, headers, auth
         )
+        if request.dpop_key is not None:
+            # RFC 9449 §8: honor a single ``use_dpop_nonce`` challenge by
+            # re-minting the proof with the server nonce and retrying once.
+            nonce = extract_dpop_nonce(response)
+            if nonce is not None:
+                await response.aclose()
+                params, headers, auth = prepare_par_request_data(
+                    request, dpop_nonce=nonce
+                )
+                response = await _push_authorization_request(
+                    client, request.address, params, headers, auth
+                )
         return process_par_response(response)
     except Exception as e:
         return handle_par_error(e)
