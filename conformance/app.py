@@ -281,6 +281,11 @@ def _get_http_client() -> HTTPClient:
 _FAPI2_CLIENT_KID = "fapi2-rp-key-1"
 _FAPI2_CLIENT_KEY: DPoPKey = generate_dpop_key("ES256")
 
+# FAPI 2.0 requests a minimal scope: the profile's OP only advertises ``openid``
+# and the conformance client is registered for exactly that, so the requested
+# scope must equal it (EnsureRequestedScopeIsEqualToConfiguredScope).
+_FAPI2_SCOPE = "openid"
+
 
 def _fapi2_public_jwk() -> dict:
     """Public JWK for the RP's private_key_jwt signing key (with kid/use/alg)."""
@@ -593,7 +598,7 @@ def authorize(
             disco_address=disco_endpoint.url,
             issuer=issuer,
             client_id=client_id,
-            scope=scope,
+            scope=_FAPI2_SCOPE,
             test_id=test_id,
             test_name=test_name,
             profile=profile,
@@ -732,7 +737,7 @@ def _authorize_fapi2(
             nonce=nonce,
             code_challenge=code_challenge,
             code_challenge_method="S256",
-            private_key_jwt=_fapi2_private_key_jwt(par_endpoint),
+            private_key_jwt=_fapi2_private_key_jwt(disco.issuer or issuer),
             dpop_key=dpop_key,
         ),
         http_client=http_client,
@@ -758,8 +763,12 @@ def _authorize_fapi2(
         {"client_id": client_id, "request_uri": par_response.request_uri}
     )
 
+    # Persist the OP's canonical discovery issuer (FAPI 2.0 requires the
+    # private_key_jwt ``aud`` at BOTH PAR and token endpoints to be the issuer
+    # URL as a string, not the endpoint URL — ValidateClientAssertionAudClaimIs
+    # IssuerAsString).
     session = AuthSession(
-        issuer=issuer,
+        issuer=disco.issuer or issuer,
         state=state,
         nonce=nonce,
         code_verifier=code_verifier,
@@ -901,7 +910,7 @@ def _build_auth_code_token_request(
             code=code,
             redirect_uri=session.redirect_uri,
             code_verifier=session.code_verifier,
-            private_key_jwt=_fapi2_private_key_jwt(token_endpoint),
+            private_key_jwt=_fapi2_private_key_jwt(session.issuer),
             dpop_key=session.dpop_key,
         )
     return AuthorizationCodeTokenRequest(

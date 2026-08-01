@@ -22,6 +22,7 @@ import pytest
 import respx
 from run_tests import (
     ConformanceSuiteClient,
+    _generate_server_signing_jwks,
     _parse_content_disposition_filename,
     _should_download_export,
     print_summary,
@@ -222,6 +223,57 @@ def test_create_plan_defaults_publish_to_empty() -> None:
 
     body = json.loads(route.calls.last.request.content)
     assert body["publish"] == ""
+
+
+@respx.mock
+def test_create_plan_injects_server_jwks_when_supplied() -> None:
+    """FAPI 2.0 plans must pass the OP signing key set under ``server.jwks``."""
+    route = respx.post(f"{HOSTED_URL}/api/plan").mock(
+        return_value=httpx.Response(200, json={"id": "p1", "modules": []})
+    )
+    server_jwks = {"keys": [{"kty": "EC", "kid": "srv"}]}
+
+    client = ConformanceSuiteClient(HOSTED_URL, token="tok")
+    client.create_plan("plan", {}, "alias", server_jwks=server_jwks)
+
+    body = json.loads(route.calls.last.request.content)
+    assert body["server"]["jwks"] == server_jwks
+
+
+@respx.mock
+def test_create_plan_omits_server_jwks_by_default() -> None:
+    """Certified OIDC-client plans auto-generate OP keys — no server.jwks sent."""
+    route = respx.post(f"{HOSTED_URL}/api/plan").mock(
+        return_value=httpx.Response(200, json={"id": "p1", "modules": []})
+    )
+
+    client = ConformanceSuiteClient(HOSTED_URL, token="tok")
+    client.create_plan("plan", {}, "alias")
+
+    body = json.loads(route.calls.last.request.content)
+    assert "jwks" not in body["server"]
+
+
+def test_generate_server_signing_jwks_is_single_es256_private_key() -> None:
+    """The generated OP key set is exactly one ES256 P-256 private JWK.
+
+    The FAPI 2.0 client plan's ``AugmentRealJwksWithDecoys`` step requires a
+    single signing key of a supported variant; ES256 satisfies the PS256/ES256
+    allow-list, and the private half (``d``) must be present so the suite can
+    sign as the OP.
+    """
+    jwks = _generate_server_signing_jwks()
+
+    keys = jwks["keys"]
+    assert len(keys) == 1
+    key = keys[0]
+    assert key["kty"] == "EC"
+    assert key["crv"] == "P-256"
+    assert key["alg"] == "ES256"
+    assert key["use"] == "sig"
+    # Public + private material present and non-empty.
+    for field in ("x", "y", "d", "kid"):
+        assert key.get(field)
 
 
 # ---------------------------------------------------------------------------

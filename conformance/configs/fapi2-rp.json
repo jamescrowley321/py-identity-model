@@ -4,8 +4,7 @@
     "client_auth_type": "private_key_jwt",
     "sender_constrain": "dpop",
     "fapi_client_type": "oidc",
-    "fapi_request_method": "unsigned",
-    "fapi_response_mode": "plain_response"
+    "fapi_profile": "plain_fapi"
   },
   "alias": "py-identity-model-fapi2-rp",
   "fapi2": true,

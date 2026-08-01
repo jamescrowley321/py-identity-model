@@ -8,6 +8,7 @@ conformance suite, driving the RP harness through each test module.
 from __future__ import annotations
 
 import argparse
+import base64
 from dataclasses import dataclass
 from email.message import Message
 from html.parser import HTMLParser
@@ -21,6 +22,7 @@ import time
 from urllib.parse import urljoin, urlparse
 import zipfile
 
+from cryptography.hazmat.primitives.asymmetric import ec
 import httpx
 
 
@@ -113,6 +115,7 @@ class ConformanceSuiteClient:
         rp_base_url: str = RP_BASE_URL,
         publish: str = "",
         client_overrides: dict | None = None,
+        server_jwks: dict | None = None,
     ) -> dict:
         """Create a test plan.
 
@@ -126,6 +129,10 @@ class ConformanceSuiteClient:
         verification) and set ``token_endpoint_auth_method``, replacing the
         client_secret the certified profiles use.
 
+        ``server_jwks`` supplies the OP's own signing key set — required by the
+        FAPI 2.0 client plan's ``LoadServerJWKs`` step (the certified OIDC-client
+        plans auto-generate theirs, so they pass ``None``).
+
         Returns the plan response including plan ID and list of test modules.
         """
         # Build the plan configuration
@@ -136,13 +143,14 @@ class ConformanceSuiteClient:
         }
         if client_overrides:
             client_config.update(client_overrides)
+        server_config: dict = {"discoveryUrl": ""}
+        if server_jwks:
+            server_config["jwks"] = server_jwks
         plan_config = {
             "alias": alias,
             "description": f"py-identity-model conformance: {alias}",
             "publish": publish,
-            "server": {
-                "discoveryUrl": "",
-            },
+            "server": server_config,
             "client": client_config,
             "client2": {
                 "client_id": "conformance-rp-2",
@@ -476,6 +484,40 @@ def _fetch_rp_jwks(rp_base_url: str) -> dict:
     return jwks
 
 
+def _b64u_uint(value: int) -> str:
+    """base64url-encode an unsigned integer as a JWK field (RFC 7518 §6)."""
+    raw = value.to_bytes((value.bit_length() + 7) // 8 or 1, "big")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _generate_server_signing_jwks() -> dict:
+    """Generate an ephemeral server signing JWKS for the FAPI 2.0 client plan.
+
+    Unlike the certified OIDC-client plans (whose ``GenerateServerConfiguration``
+    step auto-mints the OP's keys), the FAPI 2.0 client plan uses
+    ``GenerateServerConfigurationMTLS`` + ``LoadServerJWKs``, which require the
+    plan config to *supply* the OP's own signing key set under ``server.jwks``.
+    The suite then adds decoy keys, so the set must contain exactly one signing
+    key of a supported variant — a single ES256 (P-256) key satisfies the FAPI
+    2.0 PS256/ES256 allow-list. These keys are the *test OP's*, ephemeral per run;
+    the RP never holds their private half.
+    """
+    key = ec.generate_private_key(ec.SECP256R1())
+    numbers = key.private_numbers()
+    public = numbers.public_numbers
+    private_jwk = {
+        "kty": "EC",
+        "crv": "P-256",
+        "use": "sig",
+        "alg": "ES256",
+        "kid": "py-idm-conformance-server-es256",
+        "x": _b64u_uint(public.x),
+        "y": _b64u_uint(public.y),
+        "d": _b64u_uint(numbers.private_value),
+    }
+    return {"keys": [private_jwk]}
+
+
 def run_test_module(
     suite: ConformanceSuiteClient,
     test_name: str,
@@ -666,11 +708,19 @@ def run_plan(
     # harness at /fapi2-jwks) as the client's keys so the suite can verify the
     # RP's client-authentication assertions. The private half never leaves the RP.
     client_overrides: dict | None = None
+    server_jwks: dict | None = None
     if fapi2:
         client_overrides = {
             "jwks": _fetch_rp_jwks(rp_base_url),
             "token_endpoint_auth_method": "private_key_jwt",
+            # The RP requests the minimal ``openid`` scope; the suite requires the
+            # registered client scope to match it exactly
+            # (EnsureRequestedScopeIsEqualToConfiguredScope).
+            "scope": "openid",
         }
+        # The FAPI 2.0 client plan requires the OP's own signing key set
+        # (LoadServerJWKs); mint an ephemeral one for this run.
+        server_jwks = _generate_server_signing_jwks()
 
     # Create the test plan
     logger.info("Creating test plan...")
@@ -681,6 +731,7 @@ def run_plan(
         rp_base_url=rp_base_url,
         publish=publish,
         client_overrides=client_overrides,
+        server_jwks=server_jwks,
     )
     plan_id = plan_response.get("id", "")
     modules = plan_response.get("modules", [])
