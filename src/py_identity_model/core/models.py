@@ -482,6 +482,8 @@ class DiscoveryDocumentResponse(BaseResponse):
             "op_tos_uri",
             "introspection_endpoint",
             "code_challenge_methods_supported",
+            "pushed_authorization_request_endpoint",
+            "require_pushed_authorization_requests",
             "end_session_endpoint",
             "backchannel_logout_supported",
             "backchannel_logout_session_supported",
@@ -532,6 +534,10 @@ class DiscoveryDocumentResponse(BaseResponse):
 
     # PKCE support (RFC 8414)
     code_challenge_methods_supported: list[str] | None = None
+
+    # Pushed Authorization Requests (RFC 9126 §5)
+    pushed_authorization_request_endpoint: str | None = None
+    require_pushed_authorization_requests: bool | None = None
 
     # Feature support flags
     claims_parameter_supported: bool | None = None

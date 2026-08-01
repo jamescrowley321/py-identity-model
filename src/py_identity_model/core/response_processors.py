@@ -274,6 +274,13 @@ def build_discovery_response(
         require_request_uri_registration=response_json.get(
             "require_request_uri_registration",
         ),
+        # Pushed Authorization Requests (RFC 9126 §5)
+        pushed_authorization_request_endpoint=response_json.get(
+            "pushed_authorization_request_endpoint",
+        ),
+        require_pushed_authorization_requests=response_json.get(
+            "require_pushed_authorization_requests",
+        ),
         # Authorization-response issuer parameter support (RFC 9207 §3)
         authorization_response_iss_parameter_supported=response_json.get(
             "authorization_response_iss_parameter_supported",
