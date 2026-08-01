@@ -859,7 +859,7 @@ class DeviceAuthorizationRequest(BaseRequest):
     private_key_jwt: PrivateKeyJwt | None = None
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class DeviceAuthorizationResponse(BaseResponse):
     """Response from the device authorization endpoint (RFC 8628).
 
@@ -878,6 +878,10 @@ class DeviceAuthorizationResponse(BaseResponse):
             "interval",
         }
     )
+    # ``device_code`` is the RFC 8628 polling credential; ``user_code`` /
+    # ``verification_uri`` are meant to be shown to the user, so only the
+    # device_code is redacted.
+    _secret_fields: ClassVar[frozenset[str]] = frozenset({"device_code"})
 
     device_code: str | None = None
     user_code: str | None = None

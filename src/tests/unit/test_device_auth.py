@@ -529,3 +529,51 @@ class TestDeviceTokenResponseReprRedaction:
         assert a == b
         assert a != c
         assert a != "not-a-response"
+
+
+@pytest.mark.unit
+class TestDeviceAuthorizationResponseReprRedaction:
+    """#431: repr must not crash and must redact the device_code polling credential."""
+
+    def test_repr_success_no_crash_and_redacts_device_code(self):
+        response = DeviceAuthorizationResponse(
+            is_successful=True,
+            device_code="DA_SECRET_DC",
+            user_code="WDJB-MJHT",
+            verification_uri="https://example.com/device",
+        )
+
+        rendered = repr(response)
+        assert "DeviceAuthorizationResponse" in rendered
+        assert "[REDACTED]" in rendered
+        assert "DA_SECRET_DC" not in rendered
+        # user-facing fields stay visible
+        assert "WDJB-MJHT" in rendered
+        assert "https://example.com/device" in rendered
+
+    def test_str_redacts_device_code(self):
+        response = DeviceAuthorizationResponse(
+            is_successful=True, device_code="DA_SECRET_DC"
+        )
+
+        assert "DA_SECRET_DC" not in str(response)
+        assert "[REDACTED]" in str(response)
+
+    def test_repr_of_failed_response_does_not_crash_or_leak(self):
+        response = DeviceAuthorizationResponse(
+            is_successful=False, error="access_denied"
+        )
+
+        rendered = repr(response)
+        assert "access_denied" in rendered
+        assert "[REDACTED]" not in rendered
+        assert "device_code=None" in rendered
+
+    def test_equality_still_behaves(self):
+        a = DeviceAuthorizationResponse(is_successful=True, device_code="DA_SECRET_DC")
+        b = DeviceAuthorizationResponse(is_successful=True, device_code="DA_SECRET_DC")
+        c = DeviceAuthorizationResponse(is_successful=True, device_code="other")
+
+        assert a == b
+        assert a != c
+        assert a != "not-a-response"
