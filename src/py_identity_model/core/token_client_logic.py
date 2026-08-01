@@ -10,6 +10,7 @@ import httpx
 from ..logging_config import logger
 from ..logging_utils import redact_url
 from .client_assertion import apply_private_key_jwt
+from .client_auth import basic_auth_credentials
 from .dpop import create_dpop_proof
 from .error_handlers import (
     handle_auth_code_token_error,
@@ -81,7 +82,7 @@ def prepare_token_request_data(
     elif request.client_secret is not None:
         # ``is not None`` (not truthiness) mirrors the auth-code/refresh
         # branches so an empty-string secret is handled identically here.
-        auth = (request.client_id, request.client_secret)
+        auth = basic_auth_credentials(request.client_id, request.client_secret)
     else:
         params["client_id"] = request.client_id
 
@@ -173,7 +174,7 @@ def prepare_auth_code_token_request_data(
     elif request.client_secret is not None:
         # RFC 6749 §2.3.1: use Basic auth for confidential clients;
         # client_id is carried in the auth header, not the body.
-        auth = (request.client_id, request.client_secret)
+        auth = basic_auth_credentials(request.client_id, request.client_secret)
     else:
         # Public client: include client_id in the request body
         params["client_id"] = request.client_id
@@ -232,7 +233,7 @@ def prepare_refresh_token_request_data(
     elif request.client_secret is not None:
         # RFC 6749 §2.3.1: use Basic auth for confidential clients;
         # client_id is carried in the auth header, not the body.
-        auth = (request.client_id, request.client_secret)
+        auth = basic_auth_credentials(request.client_id, request.client_secret)
     else:
         # Public client: include client_id in the request body
         params["client_id"] = request.client_id

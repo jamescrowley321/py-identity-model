@@ -11,6 +11,7 @@ import httpx
 from ..logging_config import logger
 from ..logging_utils import redact_url
 from .client_assertion import apply_private_key_jwt
+from .client_auth import basic_auth_credentials
 from .dpop import create_dpop_proof
 from .models import PushedAuthorizationRequest, PushedAuthorizationResponse
 
@@ -76,7 +77,7 @@ def prepare_par_request_data(
             default_audience=request.address,
         )
     elif request.client_secret:
-        auth = (request.client_id, request.client_secret)
+        auth = basic_auth_credentials(request.client_id, request.client_secret)
 
     return params, headers, auth
 
