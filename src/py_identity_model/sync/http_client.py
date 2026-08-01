@@ -10,9 +10,12 @@ Environment Variables:
     HTTP_TIMEOUT: Request timeout in seconds (default: 30.0)
 """
 
+from __future__ import annotations
+
 from functools import wraps
 import threading
 import time
+from typing import TYPE_CHECKING
 
 import httpx
 
@@ -24,8 +27,14 @@ from ..core.http_utils import (
     resolve_retry_delay,
     should_retry_response,
 )
+from ..core.mtls import build_httpx_cert
 from ..logging_config import logger
 from ..ssl_config import get_ssl_verify
+
+
+if TYPE_CHECKING:
+    from ..core.models import MtlsClientAuth
+    from .managed_client import HTTPClient
 
 
 # Thread-local storage for sync HTTP client
@@ -153,6 +162,55 @@ def get_http_client() -> httpx.Client:
     return _thread_local.client
 
 
+def build_mtls_client(mtls: MtlsClientAuth) -> httpx.Client:
+    """Build a short-lived HTTP client presenting a client certificate (mTLS).
+
+    Used for RFC 8705 mutual-TLS client authentication: the certificate is
+    presented at the TLS layer, so a dedicated client is required (httpx has
+    no per-request ``cert=``). The caller **owns** the returned client and
+    must close it once the request completes.
+
+    Args:
+        mtls: The mTLS client-authentication configuration.
+
+    Returns:
+        A new ``httpx.Client`` configured with the client certificate.
+    """
+    return httpx.Client(
+        verify=get_ssl_verify(),
+        cert=build_httpx_cert(mtls),
+        timeout=get_timeout(),
+        follow_redirects=False,
+    )
+
+
+def resolve_http_client(
+    mtls: MtlsClientAuth | None,
+    http_client: HTTPClient | None,
+) -> tuple[httpx.Client, httpx.Client | None]:
+    """Resolve the HTTP client to use for a client-authenticating request.
+
+    Precedence: an explicit managed *http_client* wins; otherwise, when *mtls*
+    is configured, a short-lived cert-configured client is built (RFC 8705);
+    otherwise the shared thread-local client is used.
+
+    Args:
+        mtls: The request's mTLS configuration, or ``None``.
+        http_client: An optional managed ``HTTPClient`` wrapper.
+
+    Returns:
+        ``(client, owned)`` — *client* is the client to use; *owned* is the
+        same object when the caller must close it afterwards (mTLS), else
+        ``None`` for shared/managed clients that must not be closed here.
+    """
+    if http_client is not None:
+        return http_client.client, None
+    if mtls is not None:
+        client = build_mtls_client(mtls)
+        return client, client
+    return get_http_client(), None
+
+
 def close_http_client() -> None:
     """
     Close the HTTP client for the current thread.
@@ -184,7 +242,9 @@ def _reset_http_client() -> None:
 
 
 __all__ = [
+    "build_mtls_client",
     "close_http_client",
     "get_http_client",
+    "resolve_http_client",
     "retry_with_backoff",
 ]

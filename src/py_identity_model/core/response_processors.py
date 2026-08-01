@@ -278,6 +278,11 @@ def build_discovery_response(
         authorization_response_iss_parameter_supported=response_json.get(
             "authorization_response_iss_parameter_supported",
         ),
+        # Mutual-TLS support (RFC 8705 §3.3 / §5)
+        mtls_endpoint_aliases=response_json.get("mtls_endpoint_aliases"),
+        tls_client_certificate_bound_access_tokens=response_json.get(
+            "tls_client_certificate_bound_access_tokens",
+        ),
         # RP-Initiated Logout support (OpenID Connect RP-Initiated Logout 1.0 §2)
         end_session_endpoint=response_json.get("end_session_endpoint"),
         # Back-Channel Logout support (OpenID Connect Back-Channel Logout 1.0 §3)

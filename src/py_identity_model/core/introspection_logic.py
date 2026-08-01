@@ -12,6 +12,7 @@ from ..logging_utils import redact_url
 from .client_assertion import apply_private_key_jwt
 from .error_handlers import handle_introspection_error
 from .models import TokenIntrospectionRequest, TokenIntrospectionResponse
+from .mtls import apply_mtls_client_auth
 from .response_processors import parse_introspection_response
 
 
@@ -46,6 +47,10 @@ def prepare_introspection_request_data(
             client_id=request.client_id,
             default_audience=request.address,
         )
+    elif request.mtls is not None:
+        # RFC 8705 §2: mTLS client auth — certificate is presented at the TLS
+        # layer, client_id goes in the body, no Authorization header.
+        apply_mtls_client_auth(params, client_id=request.client_id)
     elif request.client_secret is not None:
         auth = (request.client_id, request.client_secret)
     else:
