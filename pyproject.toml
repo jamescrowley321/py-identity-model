@@ -251,6 +251,12 @@ filterwarnings = [
     "error", # treat warnings as errors
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
+    # Starlette's TestClient emits a UserWarning-based deprecation ("install
+    # httpx2 instead") on import; it is third-party churn unrelated to our code
+    # and does not subclass DeprecationWarning, so it slips past the filters
+    # above. Matched by message so the core pytest env (no Starlette installed)
+    # need not import the category.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:UserWarning",
 ]
 
 [tool.coverage.run]

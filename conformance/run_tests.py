@@ -112,6 +112,7 @@ class ConformanceSuiteClient:
         alias: str,
         rp_base_url: str = RP_BASE_URL,
         publish: str = "",
+        client_overrides: dict | None = None,
     ) -> dict:
         """Create a test plan.
 
@@ -120,9 +121,21 @@ class ConformanceSuiteClient:
         "summary" / "everything" publish it. The downloadable plan export is
         available regardless of this setting.
 
+        ``client_overrides`` is merged into the ``client`` block — FAPI 2.0 uses
+        it to register the RP's public ``jwks`` (for ``private_key_jwt`` assertion
+        verification) and set ``token_endpoint_auth_method``, replacing the
+        client_secret the certified profiles use.
+
         Returns the plan response including plan ID and list of test modules.
         """
         # Build the plan configuration
+        client_config = {
+            "client_id": "conformance-rp",
+            "client_secret": "conformance-rp-secret",
+            "redirect_uri": f"{rp_base_url}/callback",
+        }
+        if client_overrides:
+            client_config.update(client_overrides)
         plan_config = {
             "alias": alias,
             "description": f"py-identity-model conformance: {alias}",
@@ -130,11 +143,7 @@ class ConformanceSuiteClient:
             "server": {
                 "discoveryUrl": "",
             },
-            "client": {
-                "client_id": "conformance-rp",
-                "client_secret": "conformance-rp-secret",
-                "redirect_uri": f"{rp_base_url}/callback",
-            },
+            "client": client_config,
             "client2": {
                 "client_id": "conformance-rp-2",
                 "client_secret": "conformance-rp-2-secret",
@@ -356,6 +365,7 @@ def drive_rp_authorize(
     skip_userinfo: bool = False,
     test_name: str = "",
     profile: str = "",
+    fapi2: bool = False,
 ) -> None:
     """Hit the RP's /authorize endpoint to start an auth flow.
 
@@ -376,6 +386,7 @@ def drive_rp_authorize(
         "profile": profile,
         "use_pkce": str(use_pkce).lower(),
         "skip_userinfo": str(skip_userinfo).lower(),
+        "fapi2": str(fapi2).lower(),
     }
 
     # Follow all redirects through the full auth flow
@@ -449,6 +460,22 @@ def _clear_rp_cache(rp_base_url: str) -> None:
         logger.warning("Failed to clear RP caches (continuing): %s", exc)
 
 
+def _fetch_rp_jwks(rp_base_url: str) -> dict:
+    """Fetch the RP's public JWKS (FAPI 2.0 private_key_jwt) from the harness.
+
+    The harness generates its client-authentication key at startup and exposes
+    the public half at ``/fapi2-jwks``. Registering it with the suite lets the
+    suite verify the RP's ``private_key_jwt`` assertions. Raises if unreachable —
+    a FAPI2 plan without a registered client key cannot pass.
+    """
+    with httpx.Client(verify=False, timeout=10.0) as client:
+        response = client.get(f"{rp_base_url}/fapi2-jwks")
+        response.raise_for_status()
+        jwks = response.json()
+    logger.info("Fetched RP FAPI2 JWKS (%d key(s))", len(jwks.get("keys", [])))
+    return jwks
+
+
 def run_test_module(
     suite: ConformanceSuiteClient,
     test_name: str,
@@ -457,6 +484,7 @@ def run_test_module(
     client_id: str,
     client_secret: str,
     profile: str = "",
+    fapi2: bool = False,
 ) -> TestResult:
     """Execute a single conformance test module."""
     logger.info("=" * 60)
@@ -530,6 +558,7 @@ def run_test_module(
             test_id=module_id,
             test_name=test_name,
             profile=profile,
+            fapi2=fapi2,
         )
         # Wait briefly for the suite to rotate keys
         time.sleep(1)
@@ -542,6 +571,7 @@ def run_test_module(
             test_id=module_id,
             test_name=test_name,
             profile=profile,
+            fapi2=fapi2,
         )
     else:
         # Standard auth flow (with optional userinfo skip)
@@ -554,6 +584,7 @@ def run_test_module(
             skip_userinfo=(test_type == "auth_no_userinfo"),
             test_name=test_name,
             profile=profile,
+            fapi2=fapi2,
         )
 
     # Poll until the test finishes
@@ -622,6 +653,7 @@ def run_plan(
     plan_name = config["plan_name"]
     variant = config["variant"]
     alias = config["alias"]
+    fapi2 = bool(config.get("fapi2", False))
 
     logger.info("Plan: %s (%s)", plan_name, alias)
     logger.info("Variant: %s", variant)
@@ -630,10 +662,25 @@ def run_plan(
 
     suite = ConformanceSuiteClient(suite_base_url, token=token)
 
+    # FAPI 2.0 uses private_key_jwt: register the RP's public JWKS (served by the
+    # harness at /fapi2-jwks) as the client's keys so the suite can verify the
+    # RP's client-authentication assertions. The private half never leaves the RP.
+    client_overrides: dict | None = None
+    if fapi2:
+        client_overrides = {
+            "jwks": _fetch_rp_jwks(rp_base_url),
+            "token_endpoint_auth_method": "private_key_jwt",
+        }
+
     # Create the test plan
     logger.info("Creating test plan...")
     plan_response = suite.create_plan(
-        plan_name, variant, alias, rp_base_url=rp_base_url, publish=publish
+        plan_name,
+        variant,
+        alias,
+        rp_base_url=rp_base_url,
+        publish=publish,
+        client_overrides=client_overrides,
     )
     plan_id = plan_response.get("id", "")
     modules = plan_response.get("modules", [])
@@ -674,6 +721,7 @@ def run_plan(
             client_id=client_id,
             client_secret=client_secret,
             profile=profile,
+            fapi2=fapi2,
         )
         results.append(result)
 
@@ -821,6 +869,9 @@ def main() -> None:
             "basic-rp",
             "config-rp",
             "form-post-basic-rp",
+            # FAPI 2.0 Security Profile RP plan (PAR + PKCE S256 +
+            # private_key_jwt + DPoP-bound tokens + RFC 9207 iss)
+            "fapi2-rp",
             # fastapi-identity-model package regression plans (same suite
             # plans, driven against the rp-fastapi harness on :8889)
             "fastapi-basic-rp",

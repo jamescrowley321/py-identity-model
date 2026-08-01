@@ -1,0 +1,15 @@
+{
+  "plan_name": "fapi2-security-profile-final-client-test-plan",
+  "variant": {
+    "client_auth_type": "private_key_jwt",
+    "sender_constrain": "dpop",
+    "fapi_client_type": "oidc",
+    "fapi_request_method": "unsigned",
+    "fapi_response_mode": "plain_response"
+  },
+  "alias": "py-identity-model-fapi2-rp",
+  "fapi2": true,
+  "client": {
+    "client_id": "conformance-rp"
+  }
+}
