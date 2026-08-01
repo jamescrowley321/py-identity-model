@@ -320,6 +320,19 @@ NO_STATE_LOGOUT_TESTS = frozenset(
     }
 )
 
+# Modules for an OPTIONAL feature the library deliberately does not support, so
+# the RP declares non-support rather than driving a doomed flow.
+# request-uri-signed-none requires an UNSIGNED (alg=none) request object, but
+# py-identity-model excludes ``none`` from SUPPORTED_SIGNING_ALGORITHMS by design
+# (unsigned request objects are a security downgrade). This is a legitimate
+# declared non-support for OIDF certification, not a masked failure — recorded
+# SKIPPED with the reason and never sent to the suite.
+DECLARED_UNSUPPORTED_TESTS = frozenset(
+    {
+        "oidcc-client-test-request-uri-signed-none",
+    }
+)
+
 
 def _get_test_type(test_name: str) -> str:
     """Determine the flow type for a given test module."""
@@ -435,6 +448,7 @@ def drive_rp_authorize(
     test_id: str,
     use_pkce: bool = False,
     skip_userinfo: bool = False,
+    use_request_uri: bool = False,
     test_name: str = "",
     profile: str = "",
 ) -> None:
@@ -457,6 +471,7 @@ def drive_rp_authorize(
         "profile": profile,
         "use_pkce": str(use_pkce).lower(),
         "skip_userinfo": str(skip_userinfo).lower(),
+        "use_request_uri": str(use_request_uri).lower(),
     }
 
     # Follow all redirects through the full auth flow
@@ -601,6 +616,21 @@ def run_test_module(
     logger.info("Running test: %s", test_name)
     logger.info("=" * 60)
 
+    # Declared non-support: record SKIPPED without touching the suite.
+    if test_name in DECLARED_UNSUPPORTED_TESTS:
+        reason = (
+            "declared unsupported: py-identity-model does not create unsigned "
+            "(alg=none) request objects (SUPPORTED_SIGNING_ALGORITHMS excludes "
+            "'none' by design)"
+        )
+        logger.info("[SKIP] %s — %s", test_name, reason)
+        return TestResult(
+            test_name=test_name,
+            test_id="",
+            status="SKIPPED",
+            detail=reason,
+        )
+
     # Clear RP caches before each test to avoid stale JWKS/discovery
     _clear_rp_cache(rp_base_url)
 
@@ -681,6 +711,10 @@ def run_test_module(
                 client_id = registered_id
                 client_secret = ""
 
+        # Dynamic auth modules use request_type=request_uri (JAR): the RP must
+        # authorize with a signed request object referenced by request_uri.
+        use_request_uri = dynamic and test_name in DYNAMIC_AUTH_TESTS
+
         if register_only:
             # Registration is the whole test — no auth flow to drive.
             pass
@@ -694,7 +728,9 @@ def run_test_module(
                 profile=profile,
             )
         elif test_type == "auth_double":
-            # Double-flow tests (key rotation): drive two sequential auth flows
+            # Double-flow tests (key rotation): drive two sequential auth flows.
+            # The client is registered once (above) and reused across both flows;
+            # the OP rotates its signing keys between them.
             logger.info("Driving first auth flow...")
             drive_rp_authorize(
                 rp_base_url=rp_base_url,
@@ -702,6 +738,7 @@ def run_test_module(
                 client_id=client_id,
                 client_secret=client_secret,
                 test_id=module_id,
+                use_request_uri=use_request_uri,
                 test_name=test_name,
                 profile=profile,
             )
@@ -714,6 +751,7 @@ def run_test_module(
                 client_id=client_id,
                 client_secret=client_secret,
                 test_id=module_id,
+                use_request_uri=use_request_uri,
                 test_name=test_name,
                 profile=profile,
             )
@@ -726,6 +764,7 @@ def run_test_module(
                 client_secret=client_secret,
                 test_id=module_id,
                 skip_userinfo=(test_type == "auth_no_userinfo"),
+                use_request_uri=use_request_uri,
                 test_name=test_name,
                 profile=profile,
             )

@@ -65,6 +65,9 @@ services:
       - RP_HOST=0.0.0.0
       - RP_PORT=8888
       - CONFORMANCE_SUITE_BASE_URL=https://localhost.emobix.co.uk:8443
+      # OP-facing address for request_uri (JAR): the OP fetches request objects
+      # server-to-server, so it must reach the RP by compose service name.
+      - RP_INTERNAL_BASE_URL=http://rp:8888
       - SSL_CERT_FILE=/certs/nginx-selfsigned.crt
     volumes:
       - certs:/certs:ro

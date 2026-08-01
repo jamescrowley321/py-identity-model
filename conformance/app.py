@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextvars
 from dataclasses import dataclass, field
 import html
+import json
 import logging
 import os
 from pathlib import Path
@@ -17,8 +18,11 @@ import secrets
 import sys
 from urllib.parse import urlencode
 
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from jwt.algorithms import RSAAlgorithm
 from jwt.exceptions import PyJWTError
 from starlette.concurrency import run_in_threadpool
 
@@ -33,6 +37,7 @@ from py_identity_model import (
     build_authorization_url,
     build_end_session_url,
     clear_jwks_cache,
+    create_request_object,
     generate_pkce_pair,
     get_discovery_document,
     get_userinfo,
@@ -184,7 +189,43 @@ _install_rp_log_router()
 SUITE_BASE_URL = os.environ.get(
     "CONFORMANCE_SUITE_BASE_URL", "https://localhost.emobix.co.uk:8443"
 )
+# Browser-facing base URL: used for redirect_uri / post_logout_redirect_uri,
+# which the user agent (the runner, on the host) follows.
 RP_BASE_URL = os.environ.get("RP_BASE_URL", "http://localhost:8888")
+# OP-facing base URL: used for request_uri, which the OP fetches server-to-server.
+# Inside docker the OP reaches the RP by its compose service name, not localhost;
+# defaults to RP_BASE_URL for non-docker runs.
+RP_INTERNAL_BASE_URL = os.environ.get("RP_INTERNAL_BASE_URL", RP_BASE_URL)
+
+# ---------------------------------------------------------------------------
+# RP signing key for JWT Secured Authorization Requests (JAR, RFC 9101)
+# ---------------------------------------------------------------------------
+#
+# The Dynamic RP plan bakes in request_type=request_uri: the RP must send a
+# signed request object referenced by a request_uri the OP fetches. We generate
+# one RSA key at startup, register its public half as the client's ``jwks`` (so
+# the OP can verify the request object), and sign request objects with RS256 via
+# the library's create_request_object.
+
+
+def _generate_rp_signing_key() -> tuple[bytes, dict, str]:
+    """Generate an RSA signing key and its public JWK set (with a kid)."""
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    )
+    public_jwk = json.loads(RSAAlgorithm.to_jwk(key.public_key()))
+    kid = secrets.token_hex(8)
+    public_jwk.update({"kid": kid, "use": "sig", "alg": "RS256"})
+    return private_pem, {"keys": [public_jwk]}, kid
+
+
+_rp_private_key_pem, _rp_jwks, _rp_kid = _generate_rp_signing_key()
+
+# Signed request objects the OP will fetch by request_uri, keyed by a random id.
+request_objects: dict[str, str] = {}
 
 # ---------------------------------------------------------------------------
 # Session store — in-memory, keyed by state parameter
@@ -402,6 +443,13 @@ def register(
             grant_types=["authorization_code"],
             response_types=["code"],
             token_endpoint_auth_method="client_secret_basic",
+            # The Dynamic plan authorizes via request_uri (JAR): register the
+            # RP's public key and RS256 as the request-object signing alg so the
+            # OP can verify the signed request objects it fetches.
+            extra_metadata={
+                "jwks": _rp_jwks,
+                "request_object_signing_alg": "RS256",
+            },
         ),
         http_client=http_client,
     )
@@ -425,6 +473,20 @@ def register(
     return JSONResponse(content={"status": "ok", "client_id": response.client_id})
 
 
+@app.get("/request-object/{obj_id}", response_model=None)
+def request_object(obj_id: str) -> Response:
+    """Serve a signed request object for the OP to fetch via request_uri (JAR).
+
+    /authorize stores the signed JWT under a random id and points the OP here
+    with ``request_uri``. RFC 9101 §10.3 defines the media type
+    ``application/oauth-authz-req+jwt`` for the fetched request object.
+    """
+    jwt_str = request_objects.get(obj_id)
+    if not jwt_str:
+        return Response(status_code=404, content="not found")
+    return Response(content=jwt_str, media_type="application/oauth-authz-req+jwt")
+
+
 @app.get("/authorize", response_model=None)
 def authorize(
     issuer: str = Query(..., description="Issuer URL for this test"),
@@ -436,6 +498,11 @@ def authorize(
     use_pkce: str = Query("false", description="Whether to use PKCE"),
     skip_userinfo: str = Query(
         "false", description="Skip UserInfo fetch after token validation"
+    ),
+    use_request_uri: str = Query(
+        "false",
+        description="Send authorization params as a signed request object via "
+        "request_uri (JAR, RFC 9101) instead of plain query params",
     ),
     scope: str = Query(
         "openid profile email address phone", description="Requested scopes"
@@ -552,17 +619,50 @@ def authorize(
                 "detail": "Discovery document missing authorization_endpoint",
             },
         )
-    auth_url = build_authorization_url(
-        authorization_endpoint=disco.authorization_endpoint,
-        client_id=client_id,
-        redirect_uri=redirect_uri,
-        scope=scope,
-        response_type="code",
-        state=state,
-        nonce=nonce,
-        code_challenge=code_challenge,
-        code_challenge_method=code_challenge_method,
-    )
+    if use_request_uri.lower() == "true":
+        # JAR (RFC 9101): sign the authorization params into a request object,
+        # host it, and reference it by request_uri the OP fetches and verifies
+        # against the RP's registered jwks. The library's create_request_object
+        # produces the signed JWT; we build the request_uri form of the auth URL
+        # ourselves (build_jar_authorization_url uses the inline ``request``
+        # param, but the Dynamic plan requires request_uri).
+        request_object = create_request_object(
+            private_key=_rp_private_key_pem,
+            algorithm="RS256",
+            client_id=client_id,
+            audience=disco.issuer,
+            redirect_uri=redirect_uri,
+            scope=scope,
+            response_type="code",
+            state=state,
+            nonce=nonce,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+            kid=_rp_kid,
+        )
+        obj_id = secrets.token_urlsafe(16)
+        request_objects[obj_id] = request_object
+        request_uri = f"{RP_INTERNAL_BASE_URL}/request-object/{obj_id}"
+        auth_params = {
+            "client_id": client_id,
+            "request_uri": request_uri,
+            "scope": scope,
+            "response_type": "code",
+        }
+        separator = "&" if "?" in disco.authorization_endpoint else "?"
+        auth_url = f"{disco.authorization_endpoint}{separator}{urlencode(auth_params)}"
+    else:
+        auth_url = build_authorization_url(
+            authorization_endpoint=disco.authorization_endpoint,
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            scope=scope,
+            response_type="code",
+            state=state,
+            nonce=nonce,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+        )
 
     # Store session
     session = AuthSession(
