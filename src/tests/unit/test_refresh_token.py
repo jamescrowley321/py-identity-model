@@ -6,6 +6,7 @@ import respx
 
 from py_identity_model import (
     RefreshTokenRequest,
+    RefreshTokenResponse,
 )
 from py_identity_model.exceptions import FailedResponseAccessError
 from py_identity_model.sync.token_client import refresh_token
@@ -150,3 +151,50 @@ class TestRefreshToken:
         assert response.is_successful is False
         assert response.error is not None
         assert "Connection refused" in response.error
+
+
+SECRET_TOKEN = {
+    "access_token": "SUPER_SECRET_AT",
+    "refresh_token": "SUPER_SECRET_RT",
+}
+
+
+@pytest.mark.unit
+class TestRefreshTokenResponseReprRedaction:
+    """#431: the ``token`` dict is a secret and must not leak via repr/str."""
+
+    def test_repr_redacts_token_value(self):
+        response = RefreshTokenResponse(is_successful=True, token=SECRET_TOKEN)
+
+        rendered = repr(response)
+        assert "RefreshTokenResponse" in rendered
+        assert "[REDACTED]" in rendered
+        assert "SUPER_SECRET_AT" not in rendered
+        assert "SUPER_SECRET_RT" not in rendered
+
+    def test_str_redacts_token_value(self):
+        # str() falls back to __repr__ for dataclasses, so it must redact too.
+        response = RefreshTokenResponse(is_successful=True, token=SECRET_TOKEN)
+
+        assert "SUPER_SECRET_AT" not in str(response)
+        assert "[REDACTED]" in str(response)
+
+    def test_repr_of_failed_response_does_not_crash_or_leak(self):
+        # token is None on failure -> printed as None, guard not tripped, no leak.
+        response = RefreshTokenResponse(
+            is_successful=False, error="invalid_grant", token=None
+        )
+
+        rendered = repr(response)
+        assert "invalid_grant" in rendered
+        assert "[REDACTED]" not in rendered
+        assert "token=None" in rendered
+
+    def test_equality_still_behaves(self):
+        a = RefreshTokenResponse(is_successful=True, token=SECRET_TOKEN)
+        b = RefreshTokenResponse(is_successful=True, token=dict(SECRET_TOKEN))
+        c = RefreshTokenResponse(is_successful=True, token={"access_token": "other"})
+
+        assert a == b
+        assert a != c
+        assert a != "not-a-response"
