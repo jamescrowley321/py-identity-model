@@ -90,6 +90,7 @@ class BaseResponse(_GuardedResponseMixin):
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset()
+    _secret_fields: ClassVar[frozenset[str]] = frozenset()
 
     is_successful: bool
     error: str | None = None
@@ -97,12 +98,15 @@ class BaseResponse(_GuardedResponseMixin):
     __hash__ = None  # type: ignore[assignment]  # mutable dataclass
 
     def __repr__(self) -> str:
-        """Safe repr that bypasses field-access guards."""
+        """Safe repr that bypasses field-access guards and redacts secrets."""
         cls_name = type(self).__name__
         parts: list[str] = []
         for f in fields(self):
             val = object.__getattribute__(self, f.name)
-            parts.append(f"{f.name}={val!r}")
+            if f.name in self._secret_fields and val is not None:
+                parts.append(f"{f.name}='[REDACTED]'")
+            else:
+                parts.append(f"{f.name}={val!r}")
         return f"{cls_name}({', '.join(parts)})"
 
     def __eq__(self, other: object) -> bool:
@@ -724,7 +728,7 @@ class RefreshTokenRequest(BaseRequest):
     private_key_jwt: PrivateKeyJwt | None = None
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class RefreshTokenResponse(BaseResponse):
     """Response from a refresh token grant.
 
@@ -734,6 +738,7 @@ class RefreshTokenResponse(BaseResponse):
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
+    _secret_fields: ClassVar[frozenset[str]] = frozenset({"token"})
 
     token: dict | None = None
 
@@ -815,7 +820,7 @@ class PushedAuthorizationRequest(BaseRequest):
     private_key_jwt: PrivateKeyJwt | None = None
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class PushedAuthorizationResponse(BaseResponse):
     """Response from a pushed authorization request endpoint (RFC 9126).
 
@@ -824,6 +829,7 @@ class PushedAuthorizationResponse(BaseResponse):
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"request_uri", "expires_in"})
+    _secret_fields: ClassVar[frozenset[str]] = frozenset({"request_uri"})
 
     request_uri: str | None = None
     expires_in: int | None = None
