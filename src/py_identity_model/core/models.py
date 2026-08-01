@@ -1058,10 +1058,17 @@ class UserInfoRequest(BaseRequest):
             verification per OIDC Core 1.0 Section 5.3.4.  When provided,
             the ``sub`` in the UserInfo response is compared against this
             value and a mismatch produces an error response.
+        dpop_key: When set, the UserInfo request is DPoP-bound (RFC 9449): the
+            access token is presented with ``Authorization: DPoP <token>`` and
+            a resource-request DPoP proof (carrying the ``ath`` access-token
+            hash) is attached, honoring the ``use_dpop_nonce`` challenge with a
+            single retry.  Required to use a sender-constrained access token at
+            the resource server (FAPI 2.0).
     """
 
     token: str
     expected_sub: str | None = None
+    dpop_key: DPoPKey | None = None
 
 
 @dataclass(repr=False, eq=False)
