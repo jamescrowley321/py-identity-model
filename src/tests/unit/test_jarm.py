@@ -144,6 +144,15 @@ class TestIsJarmResponse:
     def test_blank_response_param_is_not_jarm(self):
         assert is_jarm_response(f"{CALLBACK}?response=") is False
 
+    def test_duplicate_response_param_still_detected(self, signing):
+        # Parameter pollution is a (malformed) JARM response — detection reports
+        # it so extraction can fail closed downstream.
+        private_key, _, _ = signing
+        good = _sign(private_key, _base_claims())
+        forged = _sign(private_key, _base_claims(code="forged"))
+        url = f"{CALLBACK}?response={good}&response={forged}"
+        assert is_jarm_response(url) is True
+
 
 @pytest.mark.unit
 class TestExtractJarmResponseJwt:
@@ -171,6 +180,14 @@ class TestExtractJarmResponseJwt:
     def test_empty_string_raises(self):
         with pytest.raises(JarmValidationException, match="non-empty string"):
             extract_jarm_response_jwt("")
+
+    def test_duplicate_response_param_raises(self, signing):
+        private_key, _, _ = signing
+        good = _sign(private_key, _base_claims())
+        forged = _sign(private_key, _base_claims(code="forged"))
+        url = f"{CALLBACK}?response={good}&response={forged}"
+        with pytest.raises(JarmValidationException, match="parameter pollution"):
+            extract_jarm_response_jwt(url)
 
 
 @pytest.mark.unit
@@ -362,6 +379,25 @@ class TestProcessJarmResponseOffline:
     def test_missing_response_param_rejected(self, signing):
         with pytest.raises(JarmValidationException, match="no JARM 'response'"):
             self._process(signing, f"{CALLBACK}?code=abc")
+
+    def test_non_jwt_response_raises_jarm_exception(self, signing):
+        # A non-JWT ``?response=`` value must surface as the contracted
+        # JarmValidationException, not a raw PyJWT DecodeError.
+        with pytest.raises(JarmValidationException, match="not a well-formed JWT"):
+            self._process(signing, _query_url("not-a-jwt"))
+
+    def test_non_jwt_raw_body_raises_jarm_exception(self, signing):
+        # Same guard on the form_post.jwt raw-body (is_jwt) path.
+        with pytest.raises(JarmValidationException, match="not a well-formed JWT"):
+            self._process(signing, "garbage", is_jwt=True)
+
+    def test_duplicate_response_param_rejected(self, signing):
+        private_key, _, _ = signing
+        good = _sign(private_key, _base_claims())
+        forged = _sign(private_key, _base_claims(code="forged"))
+        url = f"{CALLBACK}?response={good}&response={forged}"
+        with pytest.raises(JarmValidationException, match="parameter pollution"):
+            self._process(signing, url)
 
 
 @pytest.mark.unit

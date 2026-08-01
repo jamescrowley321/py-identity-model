@@ -34,9 +34,28 @@ from py_identity_model.exceptions import TokenValidationException
 class TestJarmDiscoveryMetadata:
     """The real provider advertises JARM metadata and the model parses it."""
 
-    def test_discovery_advertises_jarm_capability(self, provider_capabilities):
+    def test_discovery_advertises_jarm_capability(
+        self, provider_capabilities, discovery_document
+    ):
         if "jarm" not in provider_capabilities:
             pytest.skip("Provider does not advertise JARM (jwtResponseModes)")
+
+        # Assert an INDEPENDENT property from the capability probe: the probe is
+        # derived from the raw discovery dict, so re-checking that dict would be
+        # tautological. Instead assert the *parsed typed model* surfaces the JARM
+        # markers — this exercises the RFC 8414 §2 parse (the code under test).
+        # If the parse dropped these fields the capability would still be True
+        # (raw-derived) while the typed model came back empty → this fails.
+        modes = discovery_document.response_modes_supported or []
+        has_jwt_mode = any(m.endswith(".jwt") or m == "jwt" for m in modes)
+        has_signing_algs = bool(
+            discovery_document.authorization_signing_alg_values_supported
+        )
+        assert has_signing_algs or has_jwt_mode, (
+            "jarm capability detected but the parsed discovery model surfaces "
+            "neither authorization_signing_alg_values_supported nor a *.jwt "
+            "response mode"
+        )
 
     def test_signing_alg_values_parsed(
         self, provider_capabilities, discovery_document, raw_discovery

@@ -23,6 +23,8 @@ OAuth 2.0 (JARM)".
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from jwt import PyJWTError
+
 from ..exceptions import JarmValidationException
 from ..oidc_constants import AuthorizeResponse as AuthorizeResponseParams
 from .authorize_response import (
@@ -50,11 +52,24 @@ _ERROR_CLAIM = AuthorizeResponseParams.ERROR.value
 
 
 def _extract_response_param(params_str: str) -> str | None:
-    """Return the ``response`` value from a query/fragment string, or None."""
+    """Return the sole ``response`` value from a query/fragment string, or None.
+
+    Rejects duplicate ``response`` parameters: parameter pollution such as
+    ``?response=<good>&response=<forged>`` is a security-sensitive ambiguity and
+    is refused rather than resolved by position.
+
+    Raises:
+        JarmValidationException: If more than one ``response`` parameter is present.
+    """
     parsed = parse_qs(params_str, keep_blank_values=True)
     values = parsed.get(JARM_RESPONSE_PARAM)
     if not values:
         return None
+    if len(values) > 1:
+        raise JarmValidationException(
+            "callback carries multiple 'response' parameters; refusing to resolve "
+            "JARM parameter pollution by position"
+        )
     return values[0]
 
 
@@ -75,7 +90,14 @@ def is_jarm_response(redirect_uri: str) -> bool:
 
     parsed = urlparse(redirect_uri)
     for params_str in (parsed.fragment, parsed.query):
-        if params_str and _extract_response_param(params_str):
+        if not params_str:
+            continue
+        try:
+            if _extract_response_param(params_str):
+                return True
+        except JarmValidationException:
+            # Duplicate 'response' params: still a (malformed) JARM response —
+            # detection reports it so extraction can fail closed downstream.
             return True
     return False
 
@@ -171,8 +193,20 @@ def select_jarm_algorithm(
 
 
 def extract_jarm_header(response_jwt: str) -> tuple[str | None, str | None]:
-    """Return ``(kid, alg)`` from the unverified JARM response JWT header."""
-    return extract_jwt_header_fields(response_jwt)
+    """Return ``(kid, alg)`` from the unverified JARM response JWT header.
+
+    Raises:
+        JarmValidationException: If *response_jwt* is not a well-formed JWT.  The
+            ``response`` value arrives from an untrusted redirect, so a non-JWT
+            payload must surface as the contracted JARM error rather than a raw
+            PyJWT ``DecodeError``.
+    """
+    try:
+        return extract_jwt_header_fields(response_jwt)
+    except PyJWTError as exc:
+        raise JarmValidationException(
+            "JARM 'response' value is not a well-formed JWT"
+        ) from exc
 
 
 def decode_jarm_claims(  # noqa: PLR0913  # JARM §4.1 validation requires these params
@@ -264,7 +298,10 @@ def build_authorize_response_from_claims(
         if param in claims and claims[param] is not None
     }
 
-    has_error = _ERROR_CLAIM in field_values
+    # ``_ERROR_CLAIM`` is a raw *parameter* name, so test it against ``values``
+    # (keyed by parameter name) rather than ``field_values`` (keyed by dataclass
+    # field name) — the two only coincide because ``error`` maps 1:1.
+    has_error = _ERROR_CLAIM in values
 
     return AuthorizeCallbackResponse(
         is_successful=not has_error,

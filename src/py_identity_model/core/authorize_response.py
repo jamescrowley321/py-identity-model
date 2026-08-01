@@ -203,6 +203,5 @@ def parse_authorize_callback_response(
 
 __all__ = [
     "AuthorizeCallbackResponse",
-    "_map_params_to_fields",
     "parse_authorize_callback_response",
 ]
