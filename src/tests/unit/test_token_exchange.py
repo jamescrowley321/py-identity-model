@@ -575,3 +575,53 @@ class TestPrepareTokenExchangeData:
         assert data["audience"] == "api-service"
         assert data["scope"] == "read write"
         assert data["requested_token_type"] == token_type.ID_TOKEN
+
+
+EXCHANGE_SECRET_TOKEN = {
+    "access_token": "EXCHANGE_SECRET_AT",
+    "token_type": "Bearer",
+}
+
+
+@pytest.mark.unit
+class TestTokenExchangeResponseReprRedaction:
+    """#431: the ``token`` dict is a secret and must not leak via repr/str."""
+
+    def test_repr_redacts_token_value(self):
+        response = TokenExchangeResponse(
+            is_successful=True,
+            token=EXCHANGE_SECRET_TOKEN,
+            issued_token_type=ACCESS_TOKEN,
+        )
+
+        rendered = repr(response)
+        assert "TokenExchangeResponse" in rendered
+        assert "[REDACTED]" in rendered
+        assert "EXCHANGE_SECRET_AT" not in rendered
+
+    def test_str_redacts_token_value(self):
+        response = TokenExchangeResponse(
+            is_successful=True, token=EXCHANGE_SECRET_TOKEN
+        )
+
+        assert "EXCHANGE_SECRET_AT" not in str(response)
+        assert "[REDACTED]" in str(response)
+
+    def test_repr_of_failed_response_does_not_crash_or_leak(self):
+        response = TokenExchangeResponse(
+            is_successful=False, error="invalid_request", token=None
+        )
+
+        rendered = repr(response)
+        assert "invalid_request" in rendered
+        assert "[REDACTED]" not in rendered
+        assert "token=None" in rendered
+
+    def test_equality_still_behaves(self):
+        a = TokenExchangeResponse(is_successful=True, token=EXCHANGE_SECRET_TOKEN)
+        b = TokenExchangeResponse(is_successful=True, token=dict(EXCHANGE_SECRET_TOKEN))
+        c = TokenExchangeResponse(is_successful=True, token={"access_token": "x"})
+
+        assert a == b
+        assert a != c
+        assert a != "not-a-response"

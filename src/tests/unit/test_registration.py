@@ -370,3 +370,58 @@ class TestAsyncRegisterClient:
         assert response.is_successful is False
         assert response.error is not None
         assert "Connection refused" in response.error
+
+
+@pytest.mark.unit
+class TestClientRegistrationResponseReprRedaction:
+    """#431: client_secret and registration_access_token must not leak via repr/str."""
+
+    def test_repr_redacts_secrets(self):
+        response = ClientRegistrationResponse(
+            is_successful=True,
+            client_id="public_client_id",
+            client_secret="REG_SECRET_CS",
+            registration_access_token="REG_SECRET_RAT",
+        )
+
+        rendered = repr(response)
+        assert "ClientRegistrationResponse" in rendered
+        assert "[REDACTED]" in rendered
+        assert "REG_SECRET_CS" not in rendered
+        assert "REG_SECRET_RAT" not in rendered
+        # Non-secret identifier stays visible for debugging.
+        assert "public_client_id" in rendered
+
+    def test_str_redacts_secrets(self):
+        response = ClientRegistrationResponse(
+            is_successful=True,
+            client_secret="REG_SECRET_CS",
+            registration_access_token="REG_SECRET_RAT",
+        )
+
+        rendered = str(response)
+        assert "REG_SECRET_CS" not in rendered
+        assert "REG_SECRET_RAT" not in rendered
+        assert "[REDACTED]" in rendered
+
+    def test_repr_of_failed_response_does_not_crash_or_leak(self):
+        response = ClientRegistrationResponse(
+            is_successful=False, error="invalid_client_metadata"
+        )
+
+        rendered = repr(response)
+        assert "invalid_client_metadata" in rendered
+        assert "[REDACTED]" not in rendered
+
+    def test_equality_still_behaves(self):
+        a = ClientRegistrationResponse(
+            is_successful=True, client_secret="REG_SECRET_CS"
+        )
+        b = ClientRegistrationResponse(
+            is_successful=True, client_secret="REG_SECRET_CS"
+        )
+        c = ClientRegistrationResponse(is_successful=True, client_secret="other")
+
+        assert a == b
+        assert a != c
+        assert a != "not-a-response"
