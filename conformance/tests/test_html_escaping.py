@@ -69,6 +69,7 @@ class _Disco:
     userinfo_endpoint = "https://op.example.com/userinfo"
     authorization_endpoint = "https://op.example.com/auth"
     jwks_uri = "https://op.example.com/jwks"
+    end_session_endpoint = "https://op.example.com/end-session"
 
 
 class _DiscoEndpoint:

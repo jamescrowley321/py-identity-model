@@ -51,6 +51,7 @@ The conformance suite uses `localhost.emobix.co.uk` which resolves to `127.0.0.1
 | `basic-rp` | `configs/basic-rp.json` | Basic RP certification (code flow, client_secret_basic) |
 | `config-rp` | `configs/config-rp.json` | Config RP certification (discovery-based config) |
 | `form-post-basic-rp` | `configs/form-post-basic-rp.json` | Basic RP with `form_post` response mode |
+| `fapi2-rp` | `configs/fapi2-rp.json` | FAPI 2.0 Security Profile RP (PAR + PKCE S256 + private_key_jwt + DPoP + RFC 9207 `iss`) |
 | `fastapi-basic-rp` | `configs/fastapi-basic-rp.json` | Basic RP regression for the fastapi-identity-model router (`--rp-url http://localhost:8889`) |
 | `fastapi-config-rp` | `configs/fastapi-config-rp.json` | Config RP regression for the fastapi-identity-model router |
 | `fastapi-form-post-basic-rp` | `configs/fastapi-form-post-basic-rp.json` | Form Post Basic RP regression for the fastapi-identity-model router |
@@ -58,6 +59,59 @@ The conformance suite uses `localhost.emobix.co.uk` which resolves to `127.0.0.1
 The `fastapi-*` plans run the identical suite plans against the package harness
 (`make conformance-test-fastapi`). They are a CI regression shield for the
 package — the core library remains the OIDF certification target (#242).
+
+## FAPI 2.0 Security Profile RP
+
+The `fapi2-rp` plan drives the OIDF **`fapi2-security-profile-final`** client
+test plan against the harness's FAPI 2.0 flow (#475). It exercises the FAPI 2.0
+sender-constrained (DPoP) path end-to-end through the library's public API:
+
+- **PAR** (RFC 9126) — every authorization request is pushed; the front channel
+  carries only `client_id` + `request_uri`.
+- **PKCE `S256`** — mandatory.
+- **`private_key_jwt`** client authentication (RFC 7523) — the RP's ES256 signing
+  key. The harness serves the **public** JWKS at `GET /fapi2-jwks`; `run_tests.py`
+  fetches it and registers it as the client's `jwks` when creating the plan
+  (`token_endpoint_auth_method=private_key_jwt`). The private key never leaves the
+  RP.
+- **DPoP** (RFC 9449) — a per-flow key binds the PAR, token, and UserInfo
+  requests. The token-endpoint proof carries no `ath`; the resource (UserInfo)
+  proof does. The RFC 9449 §8 `use_dpop_nonce` challenge is honoured with a
+  single retry.
+- **RFC 9207 `iss`** — the authorization-response issuer is validated
+  (`require=True`) to close the mix-up attack class.
+- **PS256 / ES256 only** — enforced by the library's FAPI validators.
+
+### Library seams this profile depends on
+
+The FAPI 2.0 DPoP path required threading DPoP through request execution (the
+building blocks previously only *produced* proofs):
+
+- `PushedAuthorizationRequest.dpop_key` / `AuthorizationCodeTokenRequest.dpop_key`
+  / `UserInfoRequest.dpop_key` — attach a DPoP proof and honour the nonce retry.
+- `DiscoveryDocumentResponse.pushed_authorization_request_endpoint` — discover the
+  PAR endpoint (RFC 9126 §5) through the typed model.
+
+### Running
+
+```bash
+# Local suite (brings up the OP + RP harness):
+python run_tests.py --plan fapi2-rp
+
+# Hosted suite (evidence run — requires CONFORMANCE_TOKEN):
+python run_tests.py --plan fapi2-rp \
+  --suite-url https://www.certification.openid.net \
+  --export-zip results/hosted/fapi2-rp-export.zip \
+  --rp-logs-zip results/hosted/fapi2-rp-rp-logs.zip
+```
+
+> **Variant confirmation:** `configs/fapi2-rp.json` pins the plan name and variant
+> (`client_auth_type=private_key_jwt`, `sender_constrain=dpop`,
+> `fapi_client_type=oidc`, `fapi_request_method=unsigned`,
+> `fapi_response_mode=plain_response`). The exact variant keys and plan name must
+> be reconciled against the live suite's plan metadata on the first evidence run —
+> the suite is the source of truth. mTLS (`sender_constrain=mtls`, #215) is a
+> separate future path; this profile certifies on DPoP.
 
 ## Profile Test Counts
 

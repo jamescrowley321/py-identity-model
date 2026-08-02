@@ -8,6 +8,7 @@ conformance suite, driving the RP harness through each test module.
 from __future__ import annotations
 
 import argparse
+import base64
 from dataclasses import dataclass
 from email.message import Message
 from html.parser import HTMLParser
@@ -17,10 +18,12 @@ import os
 from pathlib import Path
 import shutil
 import sys
+import textwrap
 import time
 from urllib.parse import urljoin, urlparse
 import zipfile
 
+from cryptography.hazmat.primitives.asymmetric import ec
 import httpx
 
 
@@ -112,6 +115,8 @@ class ConformanceSuiteClient:
         alias: str,
         rp_base_url: str = RP_BASE_URL,
         publish: str = "",
+        client_overrides: dict | None = None,
+        server_jwks: dict | None = None,
     ) -> dict:
         """Create a test plan.
 
@@ -120,21 +125,38 @@ class ConformanceSuiteClient:
         "summary" / "everything" publish it. The downloadable plan export is
         available regardless of this setting.
 
+        ``client_overrides`` is the config file's ``client`` block, merged over
+        the default client registration. The logout profiles use it to register a
+        ``backchannel_logout_uri`` / ``post_logout_redirect_uris`` (without which
+        the OP cannot post a Back-Channel Logout Token or accept an RP-Initiated
+        Logout redirect); FAPI 2.0 uses it to register the RP's public ``jwks``
+        (for ``private_key_jwt`` assertion verification) and set
+        ``token_endpoint_auth_method``. For the certified OIDC-client profiles the
+        block is just ``{client_id, client_secret}``, so the merge is a no-op.
+
+        ``server_jwks`` supplies the OP's own signing key set — required by the
+        FAPI 2.0 client plan's ``LoadServerJWKs`` step (the certified OIDC-client
+        plans auto-generate theirs, so they pass ``None``).
+
         Returns the plan response including plan ID and list of test modules.
         """
         # Build the plan configuration
+        client_config = {
+            "client_id": "conformance-rp",
+            "client_secret": "conformance-rp-secret",
+            "redirect_uri": f"{rp_base_url}/callback",
+        }
+        if client_overrides:
+            client_config.update(client_overrides)
+        server_config: dict = {"discoveryUrl": ""}
+        if server_jwks:
+            server_config["jwks"] = server_jwks
         plan_config = {
             "alias": alias,
             "description": f"py-identity-model conformance: {alias}",
             "publish": publish,
-            "server": {
-                "discoveryUrl": "",
-            },
-            "client": {
-                "client_id": "conformance-rp",
-                "client_secret": "conformance-rp-secret",
-                "redirect_uri": f"{rp_base_url}/callback",
-            },
+            "server": server_config,
+            "client": client_config,
             "client2": {
                 "client_id": "conformance-rp-2",
                 "client_secret": "conformance-rp-2-secret",
@@ -266,6 +288,61 @@ DOUBLE_FLOW_TESTS = frozenset(
         "oidcc-client-test-signing-key-rotation",
     }
 )
+# Dynamic RP: modules whose auth flow needs a dynamically-registered client
+# (the plan has no pre-configured client_id).
+DYNAMIC_AUTH_TESTS = frozenset(
+    {
+        "oidcc-client-test-discovery-jwks-uri-keys",
+        "oidcc-client-test-idtoken-sig-none",
+        "oidcc-client-test-signing-key-rotation",
+        "oidcc-client-test-signing-key-rotation-just-before-signing",
+        "oidcc-client-test-userinfo-signed",
+        "oidcc-client-test-request-uri-signed-rs256",
+        "oidcc-client-test-request-uri-signed-none",
+    }
+)
+# Dynamic RP: modules satisfied by the registration step alone (no auth flow),
+# so driving an auth flow afterwards would be an illegal FINISHED -> RUNNING.
+DYNAMIC_REGISTER_ONLY_TESTS = frozenset(
+    {
+        "oidcc-client-test-dynamic-registration",
+    }
+)
+
+# Logout profiles (the RP-side certification plans oidcc-client-rp-initiated-
+# logout-rp-basic and oidcc-client-back-channel-logout-rp-basic). Every module
+# in these plans is driven the same way: a normal login, then an RP-Initiated
+# Logout. For RP-Initiated Logout the OP redirects to /post-logout-callback; for
+# Back-Channel Logout the OP additionally posts a Logout Token to the RP's
+# registered /backchannel-logout while it processes the end-session request.
+LOGOUT_PROFILES = frozenset(
+    {
+        "rpinitiated-logout-rp",
+        "backchannel-logout-rp",
+    }
+)
+
+# RP-Initiated Logout modules that must be driven WITHOUT a ``state`` on the
+# logout request (state is optional per RP-Initiated Logout 1.0 §2). The rest
+# send a state and verify the OP echoes it back unchanged.
+NO_STATE_LOGOUT_TESTS = frozenset(
+    {
+        "oidcc-client-test-rp-init-logout-no-state",
+    }
+)
+
+# Modules for an OPTIONAL feature the library deliberately does not support, so
+# the RP declares non-support rather than driving a doomed flow.
+# request-uri-signed-none requires an UNSIGNED (alg=none) request object, but
+# py-identity-model excludes ``none`` from SUPPORTED_SIGNING_ALGORITHMS by design
+# (unsigned request objects are a security downgrade). This is a legitimate
+# declared non-support for OIDF certification, not a masked failure — recorded
+# SKIPPED with the reason and never sent to the suite.
+DECLARED_UNSUPPORTED_TESTS = frozenset(
+    {
+        "oidcc-client-test-request-uri-signed-none",
+    }
+)
 
 
 def _get_test_type(test_name: str) -> str:
@@ -312,6 +389,34 @@ def drive_rp_discover(
             logger.warning("RP discover HTTP error (may be expected): %s", exc)
 
 
+def drive_rp_register(
+    rp_base_url: str,
+    issuer: str,
+    test_name: str = "",
+    profile: str = "",
+) -> str | None:
+    """Register the RP dynamically (RFC 7591) for a Dynamic RP test module.
+
+    The Dynamic RP plan has no pre-configured client, so the RP must register
+    itself with each per-test OP before the auth flow. Returns the issued
+    client_id (which the runner passes to /authorize; the RP fills the matching
+    secret from its remembered registration), or None if registration did not
+    complete.
+    """
+    params = {"issuer": issuer, "test_name": test_name, "profile": profile}
+    with httpx.Client(verify=False, timeout=30.0) as client:
+        try:
+            response = client.get(f"{rp_base_url}/register", params=params)
+            if response.is_success:
+                client_id = response.json().get("client_id")
+                logger.info("RP registered dynamically: client_id=%s", client_id)
+                return client_id
+            logger.warning("RP register returned status=%d", response.status_code)
+        except httpx.HTTPError as exc:
+            logger.warning("RP register HTTP error (may be expected): %s", exc)
+    return None
+
+
 class _FormPostParser(HTMLParser):
     """Parse an HTML form_post response to extract the action URL and fields."""
 
@@ -354,8 +459,12 @@ def drive_rp_authorize(
     test_id: str,
     use_pkce: bool = False,
     skip_userinfo: bool = False,
+    use_request_uri: bool = False,
     test_name: str = "",
     profile: str = "",
+    fapi2: bool = False,
+    jarm: bool = False,
+    mtls: bool = False,
 ) -> None:
     """Hit the RP's /authorize endpoint to start an auth flow.
 
@@ -376,6 +485,10 @@ def drive_rp_authorize(
         "profile": profile,
         "use_pkce": str(use_pkce).lower(),
         "skip_userinfo": str(skip_userinfo).lower(),
+        "use_request_uri": str(use_request_uri).lower(),
+        "fapi2": str(fapi2).lower(),
+        "jarm": str(jarm).lower(),
+        "mtls": str(mtls).lower(),
     }
 
     # Follow all redirects through the full auth flow
@@ -428,6 +541,62 @@ def drive_rp_authorize(
             logger.warning("RP flow HTTP error (may be expected): %s", exc)
 
 
+def drive_rp_logout(
+    rp_base_url: str,
+    issuer: str,
+    client_id: str,
+    client_secret: str,
+    test_id: str,
+    send_state: bool = True,
+    test_name: str = "",
+    profile: str = "",
+) -> None:
+    """Drive a login followed by an RP-Initiated Logout for a logout profile.
+
+    Both logout profiles (RP-Initiated and Back-Channel) start the same way: the
+    RP must have a live login before it can log out, so this first drives a full
+    auth flow (which the RP records as ``_last_logout_context``), then hits the
+    RP's ``/logout`` endpoint. ``/logout`` redirects the user agent to the OP's
+    end-session endpoint; following the redirects carries the flow through the
+    OP back to ``/post-logout-callback`` (RP-Initiated Logout state round-trip).
+
+    For the Back-Channel profile the OP additionally posts a Logout Token to the
+    RP's registered ``backchannel_logout_uri`` while it processes the end-session
+    request — that is a server-to-server call the RP handles on its own, so no
+    extra driving is needed here.
+
+    ``send_state=False`` tells the RP to omit ``state`` from the logout request
+    (the -no-state module); the default sends a state and expects it echoed.
+    """
+    # Step 1: log in so the RP has an id_token_hint + end_session endpoint.
+    drive_rp_authorize(
+        rp_base_url=rp_base_url,
+        issuer=issuer,
+        client_id=client_id,
+        client_secret=client_secret,
+        test_id=test_id,
+        test_name=test_name,
+        profile=profile,
+    )
+
+    # Step 2: initiate RP-Initiated Logout and follow the redirect chain.
+    params = {
+        "test_name": test_name,
+        "profile": profile,
+        "send_state": str(send_state).lower(),
+    }
+    with httpx.Client(verify=False, timeout=30.0, follow_redirects=True) as client:
+        try:
+            response = client.get(f"{rp_base_url}/logout", params=params)
+            logger.info(
+                "RP logout flow completed: status=%d, url=%s",
+                response.status_code,
+                response.url,
+            )
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
+            logger.warning("RP logout HTTP error (may be expected): %s", exc)
+
+
 # ---------------------------------------------------------------------------
 # Test execution
 # ---------------------------------------------------------------------------
@@ -449,6 +618,58 @@ def _clear_rp_cache(rp_base_url: str) -> None:
         logger.warning("Failed to clear RP caches (continuing): %s", exc)
 
 
+def _fetch_rp_jwks(rp_base_url: str, path: str = "/fapi2-jwks") -> dict:
+    """Fetch one of the RP's public JWKS endpoints from the harness.
+
+    The harness generates its client key material at startup and exposes the
+    public half at ``/fapi2-jwks`` (private_key_jwt signing key) and
+    ``/fapi2-mtls-jwks`` (the mTLS client certificate, with x5c). Registering the
+    right one with the suite lets the OP verify the RP's ``private_key_jwt``
+    assertions or match its TLS-presented certificate. Raises if unreachable —
+    a FAPI2 plan without a registered client key cannot pass.
+    """
+    with httpx.Client(verify=False, timeout=10.0) as client:
+        response = client.get(f"{rp_base_url}{path}")
+        response.raise_for_status()
+        jwks = response.json()
+    logger.info("Fetched RP JWKS from %s (%d key(s))", path, len(jwks.get("keys", [])))
+    return jwks
+
+
+def _b64u_uint(value: int) -> str:
+    """base64url-encode an unsigned integer as a JWK field (RFC 7518 §6)."""
+    raw = value.to_bytes((value.bit_length() + 7) // 8 or 1, "big")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _generate_server_signing_jwks() -> dict:
+    """Generate an ephemeral server signing JWKS for the FAPI 2.0 client plan.
+
+    Unlike the certified OIDC-client plans (whose ``GenerateServerConfiguration``
+    step auto-mints the OP's keys), the FAPI 2.0 client plan uses
+    ``GenerateServerConfigurationMTLS`` + ``LoadServerJWKs``, which require the
+    plan config to *supply* the OP's own signing key set under ``server.jwks``.
+    The suite then adds decoy keys, so the set must contain exactly one signing
+    key of a supported variant — a single ES256 (P-256) key satisfies the FAPI
+    2.0 PS256/ES256 allow-list. These keys are the *test OP's*, ephemeral per run;
+    the RP never holds their private half.
+    """
+    key = ec.generate_private_key(ec.SECP256R1())
+    numbers = key.private_numbers()
+    public = numbers.public_numbers
+    private_jwk = {
+        "kty": "EC",
+        "crv": "P-256",
+        "use": "sig",
+        "alg": "ES256",
+        "kid": "py-idm-conformance-server-es256",
+        "x": _b64u_uint(public.x),
+        "y": _b64u_uint(public.y),
+        "d": _b64u_uint(numbers.private_value),
+    }
+    return {"keys": [private_jwk]}
+
+
 def run_test_module(
     suite: ConformanceSuiteClient,
     test_name: str,
@@ -457,11 +678,30 @@ def run_test_module(
     client_id: str,
     client_secret: str,
     profile: str = "",
+    dynamic: bool = False,
+    fapi2: bool = False,
+    jarm: bool = False,
+    mtls: bool = False,
 ) -> TestResult:
     """Execute a single conformance test module."""
     logger.info("=" * 60)
     logger.info("Running test: %s", test_name)
     logger.info("=" * 60)
+
+    # Declared non-support: record SKIPPED without touching the suite.
+    if test_name in DECLARED_UNSUPPORTED_TESTS:
+        reason = (
+            "declared unsupported: py-identity-model does not create unsigned "
+            "(alg=none) request objects (SUPPORTED_SIGNING_ALGORITHMS excludes "
+            "'none' by design)"
+        )
+        logger.info("[SKIP] %s — %s", test_name, reason)
+        return TestResult(
+            test_name=test_name,
+            test_id="",
+            status="SKIPPED",
+            detail=reason,
+        )
 
     # Clear RP caches before each test to avoid stale JWKS/discovery
     _clear_rp_cache(rp_base_url)
@@ -510,51 +750,105 @@ def run_test_module(
     test_type = _get_test_type(test_name)
     logger.info("Test type: %s", test_type)
 
-    if test_type == "discovery_only":
-        # Discovery-only tests: just fetch discovery, no auth flow
-        drive_rp_discover(
-            rp_base_url=rp_base_url,
-            issuer=issuer,
-            test_id=module_id,
-            test_name=test_name,
-            profile=profile,
-        )
-    elif test_type == "auth_double":
-        # Double-flow tests (key rotation): drive two sequential auth flows
-        logger.info("Driving first auth flow...")
-        drive_rp_authorize(
+    if profile in LOGOUT_PROFILES:
+        # Logout profiles: log in, then drive an RP-Initiated Logout. For the
+        # Back-Channel profile the OP posts a Logout Token to the RP's
+        # /backchannel-logout on its own while processing the end-session.
+        drive_rp_logout(
             rp_base_url=rp_base_url,
             issuer=issuer,
             client_id=client_id,
             client_secret=client_secret,
             test_id=module_id,
-            test_name=test_name,
-            profile=profile,
-        )
-        # Wait briefly for the suite to rotate keys
-        time.sleep(1)
-        logger.info("Driving second auth flow...")
-        drive_rp_authorize(
-            rp_base_url=rp_base_url,
-            issuer=issuer,
-            client_id=client_id,
-            client_secret=client_secret,
-            test_id=module_id,
+            send_state=test_name not in NO_STATE_LOGOUT_TESTS,
             test_name=test_name,
             profile=profile,
         )
     else:
-        # Standard auth flow (with optional userinfo skip)
-        drive_rp_authorize(
-            rp_base_url=rp_base_url,
-            issuer=issuer,
-            client_id=client_id,
-            client_secret=client_secret,
-            test_id=module_id,
-            skip_userinfo=(test_type == "auth_no_userinfo"),
-            test_name=test_name,
-            profile=profile,
-        )
+        # Dynamic RP plan: the OP has no pre-configured client, so the RP
+        # registers (RFC 7591) before it can authenticate. Some modules are
+        # satisfied by the registration alone; the rest register, then run their
+        # auth flow with the freshly issued client_id (the RP fills the secret
+        # from its registration). Discovery/webfinger modules need neither and
+        # keep their normal flow.
+        register_only = dynamic and test_name in DYNAMIC_REGISTER_ONLY_TESTS
+        if dynamic and (register_only or test_name in DYNAMIC_AUTH_TESTS):
+            registered_id = drive_rp_register(
+                rp_base_url=rp_base_url,
+                issuer=issuer,
+                test_name=test_name,
+                profile=profile,
+            )
+            if registered_id:
+                client_id = registered_id
+                client_secret = ""
+
+        # Dynamic auth modules use request_type=request_uri (JAR): the RP must
+        # authorize with a signed request object referenced by request_uri.
+        use_request_uri = dynamic and test_name in DYNAMIC_AUTH_TESTS
+
+        if register_only:
+            # Registration is the whole test — no auth flow to drive.
+            pass
+        elif test_type == "discovery_only":
+            # Discovery-only tests: just fetch discovery, no auth flow
+            drive_rp_discover(
+                rp_base_url=rp_base_url,
+                issuer=issuer,
+                test_id=module_id,
+                test_name=test_name,
+                profile=profile,
+            )
+        elif test_type == "auth_double":
+            # Double-flow tests (key rotation): drive two sequential auth flows.
+            # The client is registered once (above) and reused across both flows;
+            # the OP rotates its signing keys between them.
+            logger.info("Driving first auth flow...")
+            drive_rp_authorize(
+                rp_base_url=rp_base_url,
+                issuer=issuer,
+                client_id=client_id,
+                client_secret=client_secret,
+                test_id=module_id,
+                use_request_uri=use_request_uri,
+                test_name=test_name,
+                profile=profile,
+                fapi2=fapi2,
+                jarm=jarm,
+                mtls=mtls,
+            )
+            # Wait briefly for the suite to rotate keys
+            time.sleep(1)
+            logger.info("Driving second auth flow...")
+            drive_rp_authorize(
+                rp_base_url=rp_base_url,
+                issuer=issuer,
+                client_id=client_id,
+                client_secret=client_secret,
+                test_id=module_id,
+                use_request_uri=use_request_uri,
+                test_name=test_name,
+                profile=profile,
+                fapi2=fapi2,
+                jarm=jarm,
+                mtls=mtls,
+            )
+        else:
+            # Standard auth flow (with optional userinfo skip)
+            drive_rp_authorize(
+                rp_base_url=rp_base_url,
+                issuer=issuer,
+                client_id=client_id,
+                client_secret=client_secret,
+                test_id=module_id,
+                skip_userinfo=(test_type == "auth_no_userinfo"),
+                use_request_uri=use_request_uri,
+                test_name=test_name,
+                profile=profile,
+                fapi2=fapi2,
+                jarm=jarm,
+                mtls=mtls,
+            )
 
     # Poll until the test finishes
     logger.info("Polling test status...")
@@ -622,6 +916,9 @@ def run_plan(
     plan_name = config["plan_name"]
     variant = config["variant"]
     alias = config["alias"]
+    fapi2 = bool(config.get("fapi2", False))
+    jarm = bool(config.get("jarm", False))
+    mtls = bool(config.get("mtls", False))
 
     logger.info("Plan: %s (%s)", plan_name, alias)
     logger.info("Variant: %s", variant)
@@ -630,10 +927,62 @@ def run_plan(
 
     suite = ConformanceSuiteClient(suite_base_url, token=token)
 
-    # Create the test plan
+    # Create the test plan. The config's client block is merged into the plan's
+    # client registration so logout profiles register their backchannel_logout_uri
+    # / post_logout_redirect_uris (and Dynamic its jwks) with the OP. FAPI 2.0
+    # instead registers the RP's public JWKS (served at /fapi2-jwks) so the suite
+    # can verify its private_key_jwt assertions, and supplies the OP's own signing
+    # keys (LoadServerJWKs). The private half never leaves the RP.
+    client_overrides: dict | None = config.get("client")
+    server_jwks: dict | None = None
+    if fapi2:
+        if mtls:
+            # mTLS: register the RP's client certificate for
+            # self_signed_tls_client_auth and request cert-bound access tokens.
+            # The suite's EnsureClientCertificateMatches compares the presented
+            # TLS cert against a registered PEM ``certificate``, so supply that
+            # (reconstructed from the jwks x5c) alongside the jwks.
+            mtls_jwks = _fetch_rp_jwks(rp_base_url, "/fapi2-mtls-jwks")
+            x5c = mtls_jwks["keys"][0]["x5c"][0]
+            cert_pem = (
+                "-----BEGIN CERTIFICATE-----\n"
+                + "\n".join(textwrap.wrap(x5c, 64))
+                + "\n-----END CERTIFICATE-----\n"
+            )
+            client_overrides = {
+                "jwks": mtls_jwks,
+                "certificate": cert_pem,
+                "token_endpoint_auth_method": "self_signed_tls_client_auth",
+                "tls_client_certificate_bound_access_tokens": True,
+                "scope": "openid",
+            }
+        else:
+            client_overrides = {
+                "jwks": _fetch_rp_jwks(rp_base_url),
+                "token_endpoint_auth_method": "private_key_jwt",
+                # The RP requests the minimal ``openid`` scope; the suite requires
+                # the registered client scope to match it exactly
+                # (EnsureRequestedScopeIsEqualToConfiguredScope).
+                "scope": "openid",
+            }
+        if jarm:
+            # JARM: register the alg the OP must sign the authorization response
+            # with. It must match the OP's supplied signing key (ES256, see
+            # _generate_server_signing_jwks) so the RP can verify the response.
+            client_overrides["authorization_signed_response_alg"] = "ES256"
+        # The FAPI 2.0 client plan requires the OP's own signing key set
+        # (LoadServerJWKs); mint an ephemeral one for this run.
+        server_jwks = _generate_server_signing_jwks()
+
     logger.info("Creating test plan...")
     plan_response = suite.create_plan(
-        plan_name, variant, alias, rp_base_url=rp_base_url, publish=publish
+        plan_name,
+        variant,
+        alias,
+        rp_base_url=rp_base_url,
+        publish=publish,
+        client_overrides=client_overrides,
+        server_jwks=server_jwks,
     )
     plan_id = plan_response.get("id", "")
     modules = plan_response.get("modules", [])
@@ -663,6 +1012,10 @@ def run_plan(
     client_id = client_config.get("client_id", "conformance-rp")
     client_secret = client_config.get("client_secret", "conformance-rp-secret")
 
+    # Dynamic RP plans register a client per test module (no pre-configured
+    # client_id); flag it so run_test_module drives /register first.
+    is_dynamic = "dynamic" in plan_name
+
     # Run each test
     results: list[TestResult] = []
     for test_name in test_names:
@@ -674,6 +1027,10 @@ def run_plan(
             client_id=client_id,
             client_secret=client_secret,
             profile=profile,
+            dynamic=is_dynamic,
+            fapi2=fapi2,
+            jarm=jarm,
+            mtls=mtls,
         )
         results.append(result)
 
@@ -821,6 +1178,21 @@ def main() -> None:
             "basic-rp",
             "config-rp",
             "form-post-basic-rp",
+            # New RP certification profiles being driven to green locally before
+            # a hosted run (Dynamic #216, RP-Initiated Logout #214,
+            # Back-Channel Logout #442). See conformance/README.md.
+            "dynamic-rp",
+            "rpinitiated-logout-rp",
+            "backchannel-logout-rp",
+            # FAPI 2.0 Security Profile RP plan (PAR + PKCE S256 +
+            # private_key_jwt + DPoP-bound tokens + RFC 9207 iss)
+            "fapi2-rp",
+            # FAPI 2.0 Message Signing RP plan (adds JARM signed authorization
+            # responses on top of the security profile)
+            "fapi2-message-signing-rp",
+            # FAPI 2.0 Security Profile RP, mTLS variant (client_auth_type=mtls +
+            # sender_constrain=mtls: cert-bound tokens over RFC 8705 mutual TLS)
+            "fapi2-mtls-rp",
             # fastapi-identity-model package regression plans (same suite
             # plans, driven against the rp-fastapi harness on :8889)
             "fastapi-basic-rp",

@@ -1,8 +1,8 @@
 {
-  "plan_name": "oidcc-dynamic-certification-test-plan",
+  "plan_name": "oidcc-client-dynamic-certification-test-plan",
   "variant": {
-    "client_registration": "dynamic_client",
-    "request_type": "plain_http_request"
+    "client_auth_type": "client_secret_basic",
+    "response_mode": "default"
   },
   "alias": "py-identity-model-dynamic-rp",
   "client": {
