@@ -2,6 +2,36 @@
 
 <!-- version list -->
 
+## v3.7.0 (2026-08-02)
+
+### Bug Fixes
+
+- **jarm**: Harden response parsing per review findings
+  ([#218](https://github.com/jamescrowley321/py-identity-model/pull/218),
+  [`91697b8`](https://github.com/jamescrowley321/py-identity-model/commit/91697b8c812670f7a3d8fe541aee36cea906eca4))
+
+### Documentation
+
+- Document JARM support in feature tables and examples
+  ([`8def841`](https://github.com/jamescrowley321/py-identity-model/commit/8def841d6f03663435cfc29d98e4f34689cf35a5))
+
+- **conformance**: Add repeatable process for adding new profiles
+  ([`e70b358`](https://github.com/jamescrowley321/py-identity-model/commit/e70b3587b76073a8b23ed726152bd31ceb918fab))
+
+### Features
+
+- **jarm**: Add JWT-secured authorization response mode (JARM)
+  ([`333b82d`](https://github.com/jamescrowley321/py-identity-model/commit/333b82d8d7ce388753868741cafb22df8e513716))
+
+- **jarm**: Thread response_mode through the PAR request path
+  ([`4e2f9c2`](https://github.com/jamescrowley321/py-identity-model/commit/4e2f9c2c8a16dc656fa5912b4018cbe7771de204))
+
+### Testing
+
+- **jarm**: Add unit + integration tests for JARM response mode
+  ([`7b2bd97`](https://github.com/jamescrowley321/py-identity-model/commit/7b2bd97ef962d87522ebf4f3fe66cad9f8710fdf))
+
+
 ## v3.6.0 (2026-08-02)
 
 ### Bug Fixes
