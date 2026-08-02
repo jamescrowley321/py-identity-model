@@ -491,6 +491,8 @@ class DiscoveryDocumentResponse(BaseResponse):
             "authorization_signing_alg_values_supported",
             "authorization_encryption_alg_values_supported",
             "authorization_encryption_enc_values_supported",
+            "mtls_endpoint_aliases",
+            "tls_client_certificate_bound_access_tokens",
         }
     )
 
@@ -555,6 +557,10 @@ class DiscoveryDocumentResponse(BaseResponse):
     authorization_signing_alg_values_supported: list[str] | None = None
     authorization_encryption_alg_values_supported: list[str] | None = None
     authorization_encryption_enc_values_supported: list[str] | None = None
+
+    # Mutual-TLS support (RFC 8705 §3.3 / §5)
+    mtls_endpoint_aliases: dict | None = None
+    tls_client_certificate_bound_access_tokens: bool | None = None
 
     # RP-Initiated Logout support (OpenID Connect RP-Initiated Logout 1.0 §2)
     end_session_endpoint: str | None = None
@@ -640,6 +646,38 @@ class PrivateKeyJwt:
     lifetime: int = 300
 
 
+@dataclass
+class MtlsClientAuth:
+    """Mutual-TLS client authentication parameters (RFC 8705).
+
+    When supplied on a client-authenticating request, the client is
+    authenticated by presenting an X.509 certificate at the TLS layer
+    (``tls_client_auth`` or ``self_signed_tls_client_auth``) instead of a
+    client secret. ``client_id`` is carried in the request body and no
+    ``Authorization`` header is sent (RFC 8705 §2). It takes precedence over
+    ``client_secret`` but sits below ``private_key_jwt`` when both are present.
+
+    The certificate is presented at the TLS layer, so the sync/async HTTP
+    wrappers build a short-lived, cert-configured client for the request.
+
+    Attributes:
+        certificate: Filesystem path to the PEM-encoded client certificate.
+        private_key: Filesystem path to the PEM-encoded private key. ``repr``
+            is suppressed so the key path never leaks into logs or crash
+            reports, mirroring the ``private_key`` treatment on
+            :class:`PrivateKeyJwt`.
+        password: Optional password for an encrypted private key. Secret —
+            ``repr`` suppressed.
+        auth_method: The RFC 8705 §2 method name — ``"tls_client_auth"``
+            (default, PKI-based) or ``"self_signed_tls_client_auth"``.
+    """
+
+    certificate: str
+    private_key: str = field(repr=False)
+    password: str | None = field(default=None, repr=False)
+    auth_method: str = "tls_client_auth"
+
+
 # ============================================================================
 # Token Client Models
 # ============================================================================
@@ -663,6 +701,7 @@ class ClientCredentialsTokenRequest(BaseRequest):
     client_secret: str | None = None
     scope: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -711,6 +750,7 @@ class AuthorizationCodeTokenRequest(BaseRequest):
     scope: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
     dpop_key: DPoPKey | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -750,6 +790,7 @@ class RefreshTokenRequest(BaseRequest):
     scope: str | None = None
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -789,6 +830,7 @@ class TokenIntrospectionRequest(BaseRequest):
     token_type_hint: str | None = None
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -848,6 +890,7 @@ class PushedAuthorizationRequest(BaseRequest):
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
     dpop_key: DPoPKey | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -885,6 +928,7 @@ class DeviceAuthorizationRequest(BaseRequest):
     scope: str = "openid"
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -934,6 +978,7 @@ class DeviceTokenRequest(BaseRequest):
     device_code: str
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -996,6 +1041,7 @@ class TokenExchangeRequest(BaseRequest):
     requested_token_type: str | None = None
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -1038,6 +1084,7 @@ class TokenRevocationRequest(BaseRequest):
     token_type_hint: str | None = None
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)

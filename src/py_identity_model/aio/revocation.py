@@ -14,7 +14,7 @@ from ..core.revocation_logic import (
     prepare_revocation_request_data,
     process_revocation_response,
 )
-from .http_client import get_async_http_client, retry_with_backoff_async
+from .http_client import resolve_async_http_client, retry_with_backoff_async
 from .managed_client import AsyncHTTPClient
 
 
@@ -49,9 +49,10 @@ async def revoke_token(
     log_revocation_request(request)
 
     response = None
+    owned_client = None
     try:
         params, headers, auth = prepare_revocation_request_data(request)
-        client = http_client.client if http_client else get_async_http_client()
+        client, owned_client = resolve_async_http_client(request.mtls, http_client)
         response = await _revoke_token(client, request.address, params, headers, auth)
         return process_revocation_response(response)
     except Exception as e:
@@ -59,6 +60,8 @@ async def revoke_token(
     finally:
         if response is not None:
             await response.aclose()
+        if owned_client is not None:
+            await owned_client.aclose()
 
 
 __all__ = [

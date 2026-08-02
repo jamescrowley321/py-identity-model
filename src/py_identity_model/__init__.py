@@ -9,6 +9,7 @@ from . import ssl_config  # noqa: F401
 # Backward compatible sync exports (default)
 from .exceptions import (
     AuthorizeCallbackException,
+    CertificateBindingError,
     ConfigurationException,
     DiscoveryException,
     FailedResponseAccessError,
@@ -66,6 +67,7 @@ from .sync import (
     JsonWebKeyParameterNames,
     JwksRequest,
     JwksResponse,
+    MtlsClientAuth,
     PrivateKeyJwt,
     PushedAuthorizationRequest,
     PushedAuthorizationResponse,
@@ -85,9 +87,11 @@ from .sync import (
     build_dpop_headers,
     build_end_session_url,
     build_jar_authorization_url,
+    certificate_thumbprint_from_file,
     clear_discovery_cache,
     clear_jwks_cache,
     compute_ath,
+    compute_certificate_thumbprint,
     create_dpop_proof,
     create_request_object,
     delete_client,
@@ -119,6 +123,7 @@ from .sync import (
     update_client,
     validate_authorize_callback_issuer,
     validate_authorize_callback_state,
+    validate_certificate_binding,
     validate_fapi_authorization_request,
     validate_fapi_client_config,
     validate_fapi_discovery,
@@ -144,6 +149,8 @@ __all__ = [
     # Base Classes
     "BaseRequest",
     "BaseResponse",
+    # mTLS (RFC 8705)
+    "CertificateBindingError",
     # Identity models
     "Claim",
     "ClaimsIdentity",
@@ -186,6 +193,7 @@ __all__ = [
     "JwksResponse",
     "LogoutStateValidationException",
     "LogoutTokenValidationException",
+    "MtlsClientAuth",
     "NetworkException",
     # Client authentication (private_key_jwt)
     "PrivateKeyJwt",
@@ -221,9 +229,11 @@ __all__ = [
     "build_dpop_headers",
     "build_end_session_url",
     "build_jar_authorization_url",
+    "certificate_thumbprint_from_file",
     "clear_discovery_cache",
     "clear_jwks_cache",
     "compute_ath",
+    "compute_certificate_thumbprint",
     "create_dpop_proof",
     "create_request_object",
     "delete_client",
@@ -257,6 +267,7 @@ __all__ = [
     "update_client",
     "validate_authorize_callback_issuer",
     "validate_authorize_callback_state",
+    "validate_certificate_binding",
     "validate_fapi_authorization_request",
     "validate_fapi_client_config",
     "validate_fapi_discovery",

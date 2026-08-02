@@ -18,7 +18,7 @@ from ..core.models import (
     DeviceTokenRequest,
     DeviceTokenResponse,
 )
-from .http_client import get_async_http_client, retry_with_backoff_async
+from .http_client import resolve_async_http_client, retry_with_backoff_async
 from .managed_client import AsyncHTTPClient
 
 
@@ -48,9 +48,10 @@ async def request_device_authorization(
     log_device_auth_request(request)
 
     response = None
+    owned_client = None
     try:
         params, headers, auth = prepare_device_auth_request_data(request)
-        client = http_client.client if http_client else get_async_http_client()
+        client, owned_client = resolve_async_http_client(request.mtls, http_client)
         response = await _request_device_auth(
             client, request.address, params, headers, auth
         )
@@ -60,6 +61,8 @@ async def request_device_authorization(
     finally:
         if response is not None:
             await response.aclose()
+        if owned_client is not None:
+            await owned_client.aclose()
 
 
 @retry_with_backoff_async()
@@ -91,9 +94,10 @@ async def poll_device_token(
     log_device_token_request(request)
 
     response = None
+    owned_client = None
     try:
         params, headers, auth = prepare_device_token_request_data(request)
-        client = http_client.client if http_client else get_async_http_client()
+        client, owned_client = resolve_async_http_client(request.mtls, http_client)
         response = await _poll_device_token(
             client, request.address, params, headers, auth
         )
@@ -103,6 +107,8 @@ async def poll_device_token(
     finally:
         if response is not None:
             await response.aclose()
+        if owned_client is not None:
+            await owned_client.aclose()
 
 
 __all__ = [
