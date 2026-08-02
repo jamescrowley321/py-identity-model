@@ -15,7 +15,7 @@ from ..core.par_logic import (
     prepare_par_request_data,
     process_par_response,
 )
-from .http_client import get_async_http_client, retry_with_backoff_async
+from .http_client import resolve_async_http_client, retry_with_backoff_async
 from .managed_client import AsyncHTTPClient
 
 
@@ -50,9 +50,10 @@ async def push_authorization_request(
     log_par_request(request)
 
     response = None
+    owned_client = None
     try:
-        client = http_client.client if http_client else get_async_http_client()
         params, headers, auth = prepare_par_request_data(request)
+        client, owned_client = resolve_async_http_client(request.mtls, http_client)
         response = await _push_authorization_request(
             client, request.address, params, headers, auth
         )
@@ -74,6 +75,8 @@ async def push_authorization_request(
     finally:
         if response is not None:
             await response.aclose()
+        if owned_client is not None:
+            await owned_client.aclose()
 
 
 __all__ = [

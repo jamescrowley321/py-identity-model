@@ -54,7 +54,18 @@ from ..core.logout_logic import (
     build_end_session_url,
     validate_post_logout_state,
 )
-from ..core.models import BaseRequest, BaseResponse, PrivateKeyJwt
+from ..core.models import (
+    BaseRequest,
+    BaseResponse,
+    MtlsClientAuth,
+    PrivateKeyJwt,
+)
+from ..core.mtls import (
+    certificate_thumbprint_from_file,
+    compute_certificate_thumbprint,
+    resolve_mtls_endpoint,
+    validate_certificate_binding,
+)
 from ..core.pkce import (
     generate_code_challenge,
     generate_code_verifier,
@@ -184,6 +195,8 @@ __all__ = [
     "JsonWebKeyParameterNames",
     "JwksRequest",
     "JwksResponse",
+    # mTLS (RFC 8705)
+    "MtlsClientAuth",
     # PAR
     "PrivateKeyJwt",
     "PushedAuthorizationRequest",
@@ -210,7 +223,9 @@ __all__ = [
     "build_dpop_headers",
     "build_end_session_url",
     "build_jar_authorization_url",
+    "certificate_thumbprint_from_file",
     "compute_ath",
+    "compute_certificate_thumbprint",
     "create_dpop_proof",
     "create_request_object",
     "delete_client",
@@ -235,10 +250,12 @@ __all__ = [
     "request_authorization_code_token",
     "request_client_credentials_token",
     "request_device_authorization",
+    "resolve_mtls_endpoint",
     "revoke_token",
     "update_client",
     "validate_authorize_callback_issuer",
     "validate_authorize_callback_state",
+    "validate_certificate_binding",
     "validate_fapi_authorization_request",
     "validate_fapi_client_config",
     "validate_fapi_discovery",

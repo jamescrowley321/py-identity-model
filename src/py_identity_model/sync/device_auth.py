@@ -18,7 +18,7 @@ from ..core.models import (
     DeviceTokenRequest,
     DeviceTokenResponse,
 )
-from .http_client import get_http_client, retry_with_backoff
+from .http_client import resolve_http_client, retry_with_backoff
 from .managed_client import HTTPClient
 
 
@@ -48,9 +48,10 @@ def request_device_authorization(
     log_device_auth_request(request)
 
     response = None
+    owned_client = None
     try:
         params, headers, auth = prepare_device_auth_request_data(request)
-        client = http_client.client if http_client else get_http_client()
+        client, owned_client = resolve_http_client(request.mtls, http_client)
         response = _request_device_auth(client, request.address, params, headers, auth)
         return process_device_auth_response(response)
     except Exception as e:
@@ -58,6 +59,8 @@ def request_device_authorization(
     finally:
         if response is not None:
             response.close()
+        if owned_client is not None:
+            owned_client.close()
 
 
 @retry_with_backoff()
@@ -93,9 +96,10 @@ def poll_device_token(
     log_device_token_request(request)
 
     response = None
+    owned_client = None
     try:
         params, headers, auth = prepare_device_token_request_data(request)
-        client = http_client.client if http_client else get_http_client()
+        client, owned_client = resolve_http_client(request.mtls, http_client)
         response = _poll_device_token(client, request.address, params, headers, auth)
         return process_device_token_response(response)
     except Exception as e:
@@ -103,6 +107,8 @@ def poll_device_token(
     finally:
         if response is not None:
             response.close()
+        if owned_client is not None:
+            owned_client.close()
 
 
 __all__ = [

@@ -102,6 +102,16 @@ class AuthorizeCallbackException(ValidationException):
     """Raised when authorization callback validation fails."""
 
 
+class CertificateBindingError(ValidationException):
+    """Raised when mTLS certificate-bound access token validation fails.
+
+    Covers the RFC 8705 §3 confirmation-method check: the token's
+    ``cnf["x5t#S256"]`` thumbprint must match the client certificate
+    presented at the TLS layer. Absent ``cnf``/``x5t#S256`` or a thumbprint
+    mismatch raises this error.
+    """
+
+
 class NetworkException(PyIdentityModelException):
     """Raised when network operations fail."""
 
@@ -173,6 +183,7 @@ class SuccessfulResponseAccessError(PyIdentityModelException):
 
 __all__ = [
     "AuthorizeCallbackException",
+    "CertificateBindingError",
     "ConfigurationException",
     "DiscoveryException",
     "FailedResponseAccessError",
