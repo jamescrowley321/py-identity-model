@@ -47,6 +47,10 @@ def prepare_par_request_data(
         params["code_challenge"] = request.code_challenge
     if request.code_challenge_method:
         params["code_challenge_method"] = request.code_challenge_method
+    if request.response_mode:
+        # JARM (JWT-Secured Authorization Response Mode): request a signed
+        # authorization response, e.g. "jwt" / "query.jwt".
+        params["response_mode"] = request.response_mode
 
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 

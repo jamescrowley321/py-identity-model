@@ -809,6 +809,10 @@ class PushedAuthorizationRequest(BaseRequest):
         code_challenge: PKCE code challenge.
         code_challenge_method: PKCE method (``"S256"`` or ``"plain"``).
         client_secret: Client secret (optional for public clients).
+        private_key_jwt: ``private_key_jwt`` authentication parameters (RFC 7523).
+        response_mode: OAuth 2.0 ``response_mode`` to push (e.g. ``"jwt"`` /
+            ``"query.jwt"`` for JWT-Secured Authorization Response Mode, JARM).
+            Omitted from the pushed parameters when ``None``.
     """
 
     client_id: str
@@ -821,6 +825,7 @@ class PushedAuthorizationRequest(BaseRequest):
     code_challenge_method: str | None = None
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    response_mode: str | None = None
 
 
 @dataclass
