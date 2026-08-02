@@ -11,6 +11,7 @@ import httpx
 from ..logging_config import logger
 from ..logging_utils import redact_url
 from .client_assertion import apply_private_key_jwt
+from .client_auth import basic_auth_credentials
 from .models import TokenExchangeRequest, TokenExchangeResponse
 from .mtls import apply_mtls_client_auth
 
@@ -117,7 +118,7 @@ def prepare_token_exchange_request_data(
         # layer, client_id goes in the body, no Authorization header.
         apply_mtls_client_auth(params, client_id=request.client_id)
     elif request.client_secret:
-        auth = (request.client_id, request.client_secret)
+        auth = basic_auth_credentials(request.client_id, request.client_secret)
     else:
         params["client_id"] = request.client_id
 

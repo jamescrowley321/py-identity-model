@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from .discovery_policy import DiscoveryPolicy
+    from .dpop import DPoPKey
 
 
 # ============================================================================
@@ -90,6 +91,7 @@ class BaseResponse(_GuardedResponseMixin):
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset()
+    _secret_fields: ClassVar[frozenset[str]] = frozenset()
 
     is_successful: bool
     error: str | None = None
@@ -97,12 +99,15 @@ class BaseResponse(_GuardedResponseMixin):
     __hash__ = None  # type: ignore[assignment]  # mutable dataclass
 
     def __repr__(self) -> str:
-        """Safe repr that bypasses field-access guards."""
+        """Safe repr that bypasses field-access guards and redacts secrets."""
         cls_name = type(self).__name__
         parts: list[str] = []
         for f in fields(self):
             val = object.__getattribute__(self, f.name)
-            parts.append(f"{f.name}={val!r}")
+            if f.name in self._secret_fields and val is not None:
+                parts.append(f"{f.name}='[REDACTED]'")
+            else:
+                parts.append(f"{f.name}={val!r}")
         return f"{cls_name}({', '.join(parts)})"
 
     def __eq__(self, other: object) -> bool:
@@ -477,6 +482,8 @@ class DiscoveryDocumentResponse(BaseResponse):
             "op_tos_uri",
             "introspection_endpoint",
             "code_challenge_methods_supported",
+            "pushed_authorization_request_endpoint",
+            "require_pushed_authorization_requests",
             "end_session_endpoint",
             "backchannel_logout_supported",
             "backchannel_logout_session_supported",
@@ -529,6 +536,10 @@ class DiscoveryDocumentResponse(BaseResponse):
 
     # PKCE support (RFC 8414)
     code_challenge_methods_supported: list[str] | None = None
+
+    # Pushed Authorization Requests (RFC 9126 §5)
+    pushed_authorization_request_endpoint: str | None = None
+    require_pushed_authorization_requests: bool | None = None
 
     # Feature support flags
     claims_parameter_supported: bool | None = None
@@ -693,6 +704,7 @@ class ClientCredentialsTokenResponse(BaseResponse):
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
+    _secret_fields: ClassVar[frozenset[str]] = frozenset({"token"})
 
     token: dict | None = None
 
@@ -714,6 +726,12 @@ class AuthorizationCodeTokenRequest(BaseRequest):
         code_verifier: PKCE code verifier (required when PKCE was used).
         client_secret: Client secret (optional for public clients per RFC 7636).
         scope: Space-delimited list of requested scopes (optional).
+        private_key_jwt: ``private_key_jwt`` authentication parameters.  When
+            set, takes precedence over ``client_secret`` (RFC 7523).
+        dpop_key: When set, the token request is DPoP-bound (RFC 9449): a DPoP
+            proof for the token endpoint is attached and the ``use_dpop_nonce``
+            challenge is honored with a single retry.  FAPI 2.0 sender
+            constraining.
     """
 
     client_id: str
@@ -723,6 +741,7 @@ class AuthorizationCodeTokenRequest(BaseRequest):
     client_secret: str | None = None
     scope: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    dpop_key: DPoPKey | None = None
     mtls: MtlsClientAuth | None = None
 
 
@@ -736,6 +755,7 @@ class AuthorizationCodeTokenResponse(BaseResponse):
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
+    _secret_fields: ClassVar[frozenset[str]] = frozenset({"token"})
 
     token: dict | None = None
 
@@ -765,7 +785,7 @@ class RefreshTokenRequest(BaseRequest):
     mtls: MtlsClientAuth | None = None
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class RefreshTokenResponse(BaseResponse):
     """Response from a refresh token grant.
 
@@ -775,6 +795,7 @@ class RefreshTokenResponse(BaseResponse):
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
+    _secret_fields: ClassVar[frozenset[str]] = frozenset({"token"})
 
     token: dict | None = None
 
@@ -843,6 +864,11 @@ class PushedAuthorizationRequest(BaseRequest):
         code_challenge: PKCE code challenge.
         code_challenge_method: PKCE method (``"S256"`` or ``"plain"``).
         client_secret: Client secret (optional for public clients).
+        private_key_jwt: ``private_key_jwt`` authentication parameters.  When
+            set, takes precedence over ``client_secret`` (RFC 7523).
+        dpop_key: When set, the PAR is DPoP-bound (RFC 9449): a DPoP proof for
+            the PAR endpoint is attached and the ``use_dpop_nonce`` challenge is
+            honored with a single retry.  FAPI 2.0 sender constraining.
     """
 
     client_id: str
@@ -855,10 +881,11 @@ class PushedAuthorizationRequest(BaseRequest):
     code_challenge_method: str | None = None
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    dpop_key: DPoPKey | None = None
     mtls: MtlsClientAuth | None = None
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class PushedAuthorizationResponse(BaseResponse):
     """Response from a pushed authorization request endpoint (RFC 9126).
 
@@ -867,6 +894,7 @@ class PushedAuthorizationResponse(BaseResponse):
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"request_uri", "expires_in"})
+    _secret_fields: ClassVar[frozenset[str]] = frozenset({"request_uri"})
 
     request_uri: str | None = None
     expires_in: int | None = None
@@ -895,7 +923,7 @@ class DeviceAuthorizationRequest(BaseRequest):
     mtls: MtlsClientAuth | None = None
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class DeviceAuthorizationResponse(BaseResponse):
     """Response from the device authorization endpoint (RFC 8628).
 
@@ -914,6 +942,10 @@ class DeviceAuthorizationResponse(BaseResponse):
             "interval",
         }
     )
+    # ``device_code`` is the RFC 8628 polling credential; ``user_code`` /
+    # ``verification_uri`` are meant to be shown to the user, so only the
+    # device_code is redacted.
+    _secret_fields: ClassVar[frozenset[str]] = frozenset({"device_code"})
 
     device_code: str | None = None
     user_code: str | None = None
@@ -941,7 +973,7 @@ class DeviceTokenRequest(BaseRequest):
     mtls: MtlsClientAuth | None = None
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class DeviceTokenResponse(BaseResponse):
     """Response from a device token poll (RFC 8628).
 
@@ -958,6 +990,7 @@ class DeviceTokenResponse(BaseResponse):
     """
 
     _guarded_fields: ClassVar[frozenset[str]] = frozenset({"token"})
+    _secret_fields: ClassVar[frozenset[str]] = frozenset({"token"})
 
     token: dict | None = None
     error_code: str | None = None
@@ -1003,7 +1036,7 @@ class TokenExchangeRequest(BaseRequest):
     mtls: MtlsClientAuth | None = None
 
 
-@dataclass
+@dataclass(repr=False, eq=False)
 class TokenExchangeResponse(BaseResponse):
     """Response from a token exchange request (RFC 8693).
 
@@ -1015,6 +1048,7 @@ class TokenExchangeResponse(BaseResponse):
     _guarded_fields: ClassVar[frozenset[str]] = frozenset(
         {"token", "issued_token_type"}
     )
+    _secret_fields: ClassVar[frozenset[str]] = frozenset({"token"})
 
     token: dict | None = None
     issued_token_type: str | None = None
@@ -1071,6 +1105,12 @@ class UserInfoRequest(BaseRequest):
             verification per OIDC Core 1.0 Section 5.3.4.  When provided,
             the ``sub`` in the UserInfo response is compared against this
             value and a mismatch produces an error response.
+        dpop_key: When set, the UserInfo request is DPoP-bound (RFC 9449): the
+            access token is presented with ``Authorization: DPoP <token>`` and
+            a resource-request DPoP proof (carrying the ``ath`` access-token
+            hash) is attached, honoring the ``use_dpop_nonce`` challenge with a
+            single retry.  Required to use a sender-constrained access token at
+            the resource server (FAPI 2.0).
         mtls: When set, the UserInfo/resource request presents this client
             certificate at the TLS layer (RFC 8705) — required to use an mTLS
             certificate-bound access token at the resource server.
@@ -1078,6 +1118,7 @@ class UserInfoRequest(BaseRequest):
 
     token: str
     expected_sub: str | None = None
+    dpop_key: DPoPKey | None = None
     mtls: MtlsClientAuth | None = None
 
 
@@ -1210,6 +1251,9 @@ class ClientRegistrationResponse(BaseResponse):
             "registration_access_token",
             "registration_client_uri",
         }
+    )
+    _secret_fields: ClassVar[frozenset[str]] = frozenset(
+        {"client_secret", "registration_access_token"}
     )
 
     client_id: str | None = None

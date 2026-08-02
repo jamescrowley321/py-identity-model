@@ -2,6 +2,33 @@
 
 <!-- version list -->
 
+## v3.4.3 (2026-08-02)
+
+### Bug Fixes
+
+- **models**: Guard DeviceAuthorizationResponse repr + redact device_code
+  ([#479](https://github.com/jamescrowley321/py-identity-model/pull/479),
+  [`392794a`](https://github.com/jamescrowley321/py-identity-model/commit/392794ac65e96dbfbd9a13c1f0aaa169bd4f4139))
+
+- **models**: Redact secrets in all token/credential response reprs
+  ([#479](https://github.com/jamescrowley321/py-identity-model/pull/479),
+  [`392794a`](https://github.com/jamescrowley321/py-identity-model/commit/392794ac65e96dbfbd9a13c1f0aaa169bd4f4139))
+
+- **models**: Redact secrets in RefreshTokenResponse/PushedAuthorizationResponse repr
+  ([#479](https://github.com/jamescrowley321/py-identity-model/pull/479),
+  [`392794a`](https://github.com/jamescrowley321/py-identity-model/commit/392794ac65e96dbfbd9a13c1f0aaa169bd4f4139))
+
+- **models**: Redact secrets in response repr (#431)
+  ([#479](https://github.com/jamescrowley321/py-identity-model/pull/479),
+  [`392794a`](https://github.com/jamescrowley321/py-identity-model/commit/392794ac65e96dbfbd9a13c1f0aaa169bd4f4139))
+
+### Testing
+
+- **models**: Assert repr/str redaction for RefreshTokenResponse + PushedAuthorizationResponse
+  ([#479](https://github.com/jamescrowley321/py-identity-model/pull/479),
+  [`392794a`](https://github.com/jamescrowley321/py-identity-model/commit/392794ac65e96dbfbd9a13c1f0aaa169bd4f4139))
+
+
 ## v3.4.2 (2026-07-31)
 
 ### Bug Fixes
