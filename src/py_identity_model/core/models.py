@@ -1071,10 +1071,14 @@ class UserInfoRequest(BaseRequest):
             verification per OIDC Core 1.0 Section 5.3.4.  When provided,
             the ``sub`` in the UserInfo response is compared against this
             value and a mismatch produces an error response.
+        mtls: When set, the UserInfo/resource request presents this client
+            certificate at the TLS layer (RFC 8705) — required to use an mTLS
+            certificate-bound access token at the resource server.
     """
 
     token: str
     expected_sub: str | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)

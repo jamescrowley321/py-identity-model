@@ -25,6 +25,7 @@ from __future__ import annotations
 from base64 import urlsafe_b64encode
 import hmac
 from pathlib import Path
+import ssl
 from typing import TYPE_CHECKING
 
 from cryptography import x509
@@ -33,6 +34,7 @@ from cryptography.hazmat.primitives import hashes
 from ..exceptions import CertificateBindingError
 from ..jwt_claim_types import ConfirmationMethods, JwtClaimTypes
 from ..oidc_constants import TokenRequest
+from ..ssl_config import get_ssl_verify
 
 
 if TYPE_CHECKING:
@@ -189,6 +191,34 @@ def build_httpx_cert(mtls: MtlsClientAuth) -> tuple[str, str] | tuple[str, str, 
     return (mtls.certificate, mtls.private_key)
 
 
+def build_mtls_ssl_context(mtls: MtlsClientAuth) -> ssl.SSLContext:
+    """Build an ``ssl.SSLContext`` that presents the client certificate.
+
+    httpx 0.28 no longer reliably applies a ``cert=`` argument when ``verify``
+    is a CA-bundle *path* (only when it is ``False`` or an ``SSLContext``), so an
+    mTLS client that also verifies the server against a custom CA would silently
+    fail to present its certificate. Build the context explicitly instead: honor
+    :func:`get_ssl_verify` for server verification (``bool`` or CA file/dir path)
+    and load the client certificate for RFC 8705 mutual-TLS authentication.
+    """
+    verify = get_ssl_verify()
+    if verify is False:
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+    elif isinstance(verify, str) and Path(verify).is_dir():
+        context = ssl.create_default_context(capath=verify)
+    elif isinstance(verify, str):
+        context = ssl.create_default_context(cafile=verify)
+    else:
+        context = ssl.create_default_context()
+    if mtls.password is not None:
+        context.load_cert_chain(mtls.certificate, mtls.private_key, mtls.password)
+    else:
+        context.load_cert_chain(mtls.certificate, mtls.private_key)
+    return context
+
+
 def resolve_mtls_endpoint(
     disco: DiscoveryDocumentResponse,
     endpoint: str,
@@ -218,6 +248,7 @@ def resolve_mtls_endpoint(
 __all__ = [
     "apply_mtls_client_auth",
     "build_httpx_cert",
+    "build_mtls_ssl_context",
     "certificate_thumbprint_from_file",
     "compute_certificate_thumbprint",
     "resolve_mtls_endpoint",
