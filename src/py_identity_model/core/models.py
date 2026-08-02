@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from .discovery_policy import DiscoveryPolicy
+    from .dpop import DPoPKey
 
 
 # ============================================================================
@@ -477,6 +478,8 @@ class DiscoveryDocumentResponse(BaseResponse):
             "op_tos_uri",
             "introspection_endpoint",
             "code_challenge_methods_supported",
+            "pushed_authorization_request_endpoint",
+            "require_pushed_authorization_requests",
             "end_session_endpoint",
             "backchannel_logout_supported",
             "backchannel_logout_session_supported",
@@ -527,6 +530,10 @@ class DiscoveryDocumentResponse(BaseResponse):
 
     # PKCE support (RFC 8414)
     code_challenge_methods_supported: list[str] | None = None
+
+    # Pushed Authorization Requests (RFC 9126 §5)
+    pushed_authorization_request_endpoint: str | None = None
+    require_pushed_authorization_requests: bool | None = None
 
     # Feature support flags
     claims_parameter_supported: bool | None = None
@@ -675,6 +682,12 @@ class AuthorizationCodeTokenRequest(BaseRequest):
         code_verifier: PKCE code verifier (required when PKCE was used).
         client_secret: Client secret (optional for public clients per RFC 7636).
         scope: Space-delimited list of requested scopes (optional).
+        private_key_jwt: ``private_key_jwt`` authentication parameters.  When
+            set, takes precedence over ``client_secret`` (RFC 7523).
+        dpop_key: When set, the token request is DPoP-bound (RFC 9449): a DPoP
+            proof for the token endpoint is attached and the ``use_dpop_nonce``
+            challenge is honored with a single retry.  FAPI 2.0 sender
+            constraining.
     """
 
     client_id: str
@@ -684,6 +697,7 @@ class AuthorizationCodeTokenRequest(BaseRequest):
     client_secret: str | None = None
     scope: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    dpop_key: DPoPKey | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -801,6 +815,11 @@ class PushedAuthorizationRequest(BaseRequest):
         code_challenge: PKCE code challenge.
         code_challenge_method: PKCE method (``"S256"`` or ``"plain"``).
         client_secret: Client secret (optional for public clients).
+        private_key_jwt: ``private_key_jwt`` authentication parameters.  When
+            set, takes precedence over ``client_secret`` (RFC 7523).
+        dpop_key: When set, the PAR is DPoP-bound (RFC 9449): a DPoP proof for
+            the PAR endpoint is attached and the ``use_dpop_nonce`` challenge is
+            honored with a single retry.  FAPI 2.0 sender constraining.
     """
 
     client_id: str
@@ -813,6 +832,7 @@ class PushedAuthorizationRequest(BaseRequest):
     code_challenge_method: str | None = None
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    dpop_key: DPoPKey | None = None
 
 
 @dataclass
@@ -1024,10 +1044,17 @@ class UserInfoRequest(BaseRequest):
             verification per OIDC Core 1.0 Section 5.3.4.  When provided,
             the ``sub`` in the UserInfo response is compared against this
             value and a mismatch produces an error response.
+        dpop_key: When set, the UserInfo request is DPoP-bound (RFC 9449): the
+            access token is presented with ``Authorization: DPoP <token>`` and
+            a resource-request DPoP proof (carrying the ``ath`` access-token
+            hash) is attached, honoring the ``use_dpop_nonce`` challenge with a
+            single retry.  Required to use a sender-constrained access token at
+            the resource server (FAPI 2.0).
     """
 
     token: str
     expected_sub: str | None = None
+    dpop_key: DPoPKey | None = None
 
 
 @dataclass(repr=False, eq=False)

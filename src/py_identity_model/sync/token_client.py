@@ -6,6 +6,7 @@ This module provides synchronous HTTP layer for OAuth 2.0 token requests.
 
 import httpx
 
+from ..core.dpop import extract_dpop_nonce
 from ..core.error_handlers import (
     handle_auth_code_token_error,
     handle_refresh_token_error,
@@ -101,9 +102,21 @@ def request_authorization_code_token(
 
     response = None
     try:
-        params, headers, auth = prepare_auth_code_token_request_data(request)
         client = http_client.client if http_client else get_http_client()
+        params, headers, auth = prepare_auth_code_token_request_data(request)
         response = _request_token(client, request.address, params, headers, auth)
+        if request.dpop_key is not None:
+            # RFC 9449 §8: honor a single ``use_dpop_nonce`` challenge by
+            # re-minting the proof with the server nonce and retrying once.
+            nonce = extract_dpop_nonce(response)
+            if nonce is not None:
+                response.close()
+                params, headers, auth = prepare_auth_code_token_request_data(
+                    request, dpop_nonce=nonce
+                )
+                response = _request_token(
+                    client, request.address, params, headers, auth
+                )
         return process_auth_code_token_response(response)
     except Exception as e:
         return handle_auth_code_token_error(e)

@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 import math
 import os
 import re
+import threading
 import time
 from typing import TYPE_CHECKING
 
@@ -31,6 +32,8 @@ from ..logging_config import logger
 
 
 if TYPE_CHECKING:
+    from collections import OrderedDict
+
     from ..core.models import DiscoveryDocumentResponse, JwksResponse
 
 DEFAULT_JWKS_CACHE_TTL_SECONDS: float = 86400.0  # 24 hours
@@ -64,9 +67,13 @@ DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS: float = 5.0
 # attacker-supplied issuer headers) accumulate cache entries forever — at
 # ~5KB per DiscoveryDocumentResponse, a few thousand unique entries is tens
 # of MB of memory leak. Default 64 covers any realistic multi-IdP deployment
-# while keeping worst-case memory bounded. Eviction is FIFO by insertion
-# order (Python dicts preserve insertion order since 3.7) — adequate for a
-# JWKS cache where all entries are roughly equally "hot."
+# while keeping worst-case memory bounded. Eviction is LRU by access order:
+# the cache is an ``OrderedDict`` whose entries are moved to the end on every
+# read hit (see ``touch_cache_entry``) and on every write, so the least
+# *recently used* entry sorts first and is evicted first. FIFO would let an
+# attacker who controls the discovery address (multi-tenant gateway,
+# attacker-supplied issuer header) evict a legitimately-hot JWKS entry merely
+# by reading distinct addresses in insertion order (issue #397).
 DEFAULT_MAX_CACHE_ENTRIES: int = 64
 
 _env_ttl: float | None = None
@@ -190,25 +197,100 @@ def get_max_cache_entries() -> int:
     return _max_cache_entries
 
 
-def _enforce_size_limit(cache: dict) -> list:
-    """Evict oldest entries (by insertion order) until the cache fits.
+# Serializes ALL structural mutation of the process-shared JWKS and discovery
+# ``OrderedDict``s — the read-hit reorder (:func:`touch_cache_entry`), the write
+# reinsert/pop (:func:`apply_jwks_cache_outcome` / :func:`apply_disco_cache_outcome`),
+# and the eviction scan (:func:`_enforce_size_limit`) — against each other.
+#
+# A single *process-wide* lock is used deliberately rather than the callers'
+# per-domain locks: the sync path guards writes with a global ``threading.Lock``
+# while the async path uses a lock keyed per event loop, but both concurrency
+# domains mutate the *same* module-global cache objects. A per-loop async lock
+# cannot serialize a mutation on loop A against the eviction scan on loop B (nor
+# against a sync thread), so without this lock a read-hit ``move_to_end`` or a
+# write reinsert on one loop could race ``next(iter(cache))``/``pop`` on another
+# — evicting the wrong (possibly hot) entry or raising ``RuntimeError:
+# OrderedDict mutated during iteration``, and a concurrent write ``pop`` could
+# turn a read-hit ``move_to_end`` into a ``KeyError``. Holding this lock around
+# every structural mutation closes those cross-loop/cross-thread races (#397).
+#
+# It is reentrant so a write can hold it across its reinsert *and* the nested
+# :func:`_enforce_size_limit` call. It is always acquired last (inside any
+# caller-held write lock), never wraps I/O, and guards only O(1)/O(overflow)
+# dict operations, so it adds no deadlock risk and negligible contention.
+_CACHE_STRUCTURE_LOCK = threading.RLock()
 
-    Returns the list of evicted keys (in eviction order, oldest first) so
+
+def touch_cache_entry(cache: OrderedDict, key: object) -> None:
+    """Refresh an entry's LRU recency by moving it to the end (most-recent).
+
+    Called on read cache hits so a fresh lookup counts as "recently used" and
+    is therefore evicted last. ``next(iter(cache))`` in :func:`_enforce_size_limit`
+    then always points at the *least recently used* entry rather than the
+    least recently *inserted* one — the FIFO→LRU switch that closes #397.
+
+    No-op when ``key`` is absent: the entry may have been evicted between the
+    lock-free ``.get()`` on the read hot-path and this call, so ``move_to_end``
+    would otherwise raise ``KeyError``.
+
+    Self-serializing: the reorder runs under the process-wide
+    ``_CACHE_STRUCTURE_LOCK`` so it cannot race :func:`_enforce_size_limit`'s
+    eviction iteration on any thread or event loop. Callers therefore need not
+    (and should not) hold a write lock solely to call this — that would only add
+    contention to the read hot-path.
+    """
+    with _CACHE_STRUCTURE_LOCK:
+        if key in cache:
+            cache.move_to_end(key)
+
+
+def clear_cache_locked(cache: dict) -> None:
+    """Empty a shared cache under ``_CACHE_STRUCTURE_LOCK``.
+
+    ``clear_jwks_cache`` / ``clear_discovery_cache`` hold their per-domain write
+    lock, but that lock is per-event-loop on the async side while the cache is
+    process-global — so it does not serialize the structural ``clear()`` against
+    a read-hit :func:`touch_cache_entry` or the eviction scan in
+    :func:`_enforce_size_limit` running on another loop/thread. Routing the
+    ``clear()`` through this leaf lock keeps the "every structural mutation
+    holds the structure lock" invariant intact (#397): a concurrent ``clear()``
+    can no longer race ``next(iter(cache))`` (``RuntimeError``) or ``move_to_end``
+    (``KeyError``). Sidecar dicts (e.g. ``_kid_miss_last_attempt``) are cleared
+    separately by the caller — they are never touched under the structure lock.
+    """
+    with _CACHE_STRUCTURE_LOCK:
+        cache.clear()
+
+
+def _enforce_size_limit(cache: dict) -> list:
+    """Evict least-recently-used entries until the cache fits.
+
+    With an ``OrderedDict`` reordered on every read hit (see
+    :func:`touch_cache_entry`) and every write, ``next(iter(cache))`` is the
+    least recently *used* entry, so this evicts LRU rather than FIFO.
+
+    The eviction scan holds ``_CACHE_STRUCTURE_LOCK`` so it is mutually
+    exclusive with concurrent read-hit reorders across all threads and event
+    loops — otherwise a ``move_to_end`` on another loop could shift the order
+    mid-scan and evict a recently-used entry (#397).
+
+    Returns the list of evicted keys (in eviction order, LRU first) so
     callers can clean up sidecar state keyed by the same identifiers — e.g.,
     ``_kid_miss_last_attempt`` in the token_validation modules, which would
     otherwise grow unbounded even though the JWKS cache itself is bounded.
     """
     max_size = get_max_cache_entries()
     evicted: list = []
-    while len(cache) > max_size:
-        oldest_key = next(iter(cache))
-        cache.pop(oldest_key)
-        evicted.append(oldest_key)
-        logger.debug(
-            "Cache size %d exceeds max %d; evicted oldest entry",
-            len(cache) + 1,
-            max_size,
-        )
+    with _CACHE_STRUCTURE_LOCK:
+        while len(cache) > max_size:
+            oldest_key = next(iter(cache))
+            cache.pop(oldest_key)
+            evicted.append(oldest_key)
+            logger.debug(
+                "Cache size %d exceeds max %d; evicted least-recently-used entry",
+                len(cache) + 1,
+                max_size,
+            )
     return evicted
 
 
@@ -455,19 +537,24 @@ def apply_jwks_cache_outcome(
     if not response.keys:
         return
     if is_uncacheable_for_jwks(response.cache_control):
-        cache.pop(jwks_uri, None)
+        with _CACHE_STRUCTURE_LOCK:
+            cache.pop(jwks_uri, None)
         if cooldown is not None:
             cooldown.pop(jwks_uri, None)
         return
-    # Pop-and-reinsert so a refreshed URI moves to the end of insertion order
-    # (FIFO eviction will not target it next when the cache is under pressure).
-    cache.pop(jwks_uri, None)
-    cache[jwks_uri] = JwksCacheEntry(
-        response=response,
-        cached_at=now,
-        ttl=resolve_ttl(response.cache_control),
-    )
-    evicted = _enforce_size_limit(cache)
+    # Pop-and-reinsert so a refreshed URI moves to the most-recently-used end
+    # (LRU eviction will not target it next when the cache is under pressure).
+    # The whole structural transaction (reinsert + eviction scan) runs under
+    # _CACHE_STRUCTURE_LOCK so it is atomic w.r.t. read-hit reorders and the
+    # eviction scan on any other thread/event loop (#397).
+    with _CACHE_STRUCTURE_LOCK:
+        cache.pop(jwks_uri, None)
+        cache[jwks_uri] = JwksCacheEntry(
+            response=response,
+            cached_at=now,
+            ttl=resolve_ttl(response.cache_control),
+        )
+        evicted = _enforce_size_limit(cache)
     if cooldown is not None:
         for key in evicted:
             cooldown.pop(key, None)
@@ -488,15 +575,19 @@ def apply_disco_cache_outcome(
     if not response.is_successful:
         return
     if is_uncacheable(response.cache_control):
-        cache.pop(cache_key, None)
+        with _CACHE_STRUCTURE_LOCK:
+            cache.pop(cache_key, None)
         return
-    cache.pop(cache_key, None)
-    cache[cache_key] = DiscoCacheEntry(
-        response=response,
-        cached_at=now,
-        ttl=resolve_disco_ttl(response.cache_control),
-    )
-    _enforce_size_limit(cache)
+    # Structural transaction under _CACHE_STRUCTURE_LOCK — see
+    # apply_jwks_cache_outcome for the cross-loop/cross-thread rationale (#397).
+    with _CACHE_STRUCTURE_LOCK:
+        cache.pop(cache_key, None)
+        cache[cache_key] = DiscoCacheEntry(
+            response=response,
+            cached_at=now,
+            ttl=resolve_disco_ttl(response.cache_control),
+        )
+        _enforce_size_limit(cache)
 
 
 __all__ = [
@@ -512,6 +603,7 @@ __all__ = [
     "JwksCacheEntry",
     "apply_disco_cache_outcome",
     "apply_jwks_cache_outcome",
+    "clear_cache_locked",
     "get_kid_miss_cooldown",
     "get_max_cache_entries",
     "is_cache_expired",
@@ -521,4 +613,5 @@ __all__ = [
     "resolve_disco_ttl",
     "resolve_ttl",
     "should_attempt_kid_miss_refresh",
+    "touch_cache_entry",
 ]

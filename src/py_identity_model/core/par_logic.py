@@ -12,6 +12,7 @@ from ..logging_config import logger
 from ..logging_utils import redact_url
 from .client_assertion import apply_private_key_jwt
 from .client_auth import basic_auth_credentials
+from .dpop import create_dpop_proof
 from .models import PushedAuthorizationRequest, PushedAuthorizationResponse
 
 
@@ -23,8 +24,15 @@ def log_par_request(request: PushedAuthorizationRequest) -> None:
 
 def prepare_par_request_data(
     request: PushedAuthorizationRequest,
+    dpop_nonce: str | None = None,
 ) -> tuple[dict, dict, tuple[str, str] | None]:
     """Prepare request data, headers, and optional auth for PAR.
+
+    Args:
+        request: The pushed authorization request.
+        dpop_nonce: Server-provided DPoP nonce to embed in the proof when the
+            PAR is DPoP-bound and a prior ``use_dpop_nonce`` challenge was
+            returned (RFC 9449 §8).
 
     Returns:
         ``(data, headers, auth)`` where *auth* is ``None`` for public clients.
@@ -50,6 +58,13 @@ def prepare_par_request_data(
         params["code_challenge_method"] = request.code_challenge_method
 
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
+    if request.dpop_key is not None:
+        # RFC 9449: bind the PAR to the client's key. The PAR-endpoint proof
+        # carries no ``ath`` (that is reserved for resource-server requests).
+        headers["DPoP"] = create_dpop_proof(
+            request.dpop_key, "POST", request.address, nonce=dpop_nonce
+        )
 
     auth: tuple[str, str] | None = None
     if request.private_key_jwt is not None:

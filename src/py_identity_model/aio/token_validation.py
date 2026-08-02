@@ -6,6 +6,7 @@ with automatic cache expiry and forced JWKS refresh on key rotation.
 """
 
 import asyncio
+from collections import OrderedDict
 import threading
 import time
 from weakref import WeakKeyDictionary
@@ -16,8 +17,10 @@ from ..core.jwks_cache import (
     JwksCacheEntry,
     apply_disco_cache_outcome,
     apply_jwks_cache_outcome,
+    clear_cache_locked,
     is_cache_expired,
     should_attempt_kid_miss_refresh,
+    touch_cache_entry,
 )
 from ..core.models import (
     DiscoveryDocumentRequest,
@@ -53,8 +56,10 @@ from .managed_client import AsyncHTTPClient
 # Discovery TTL cache
 # ============================================================================
 
-# Discovery TTL cache — keyed by (address, require_https) to prevent policy bypass
-_disco_cache: dict[tuple[str, bool], DiscoCacheEntry] = {}
+# Discovery TTL cache — keyed by (address, require_https) to prevent policy bypass.
+# OrderedDict (not a plain dict) so read hits can refresh LRU recency via
+# ``touch_cache_entry``; eviction targets the least recently *used* entry (#397).
+_disco_cache: OrderedDict[tuple[str, bool], DiscoCacheEntry] = OrderedDict()
 
 # Per-event-loop lock storage. Module-level ``asyncio.Lock()`` instances bind
 # to whichever event loop first calls ``.acquire()`` (Python 3.10+), so any
@@ -123,12 +128,19 @@ async def _get_disco_response(
     cache_key = (disco_doc_address, require_https)
     entry = _disco_cache.get(cache_key)
     if entry is not None and not is_cache_expired(entry):
+        # Refresh LRU recency — touch_cache_entry serializes the reorder against
+        # _enforce_size_limit via the process-wide structure lock. The async
+        # write locks are keyed per event loop, so they cannot guard reordering
+        # against an eviction on another loop sharing this module-global cache;
+        # the process-wide lock inside touch_cache_entry does (#397).
+        touch_cache_entry(_disco_cache, cache_key)
         return entry.response
 
     fetch_lock = _get_disco_fetch_lock(cache_key)
     async with fetch_lock:
         entry = _disco_cache.get(cache_key)
         if entry is not None and not is_cache_expired(entry):
+            touch_cache_entry(_disco_cache, cache_key)
             return entry.response
 
         policy = DiscoveryPolicy(require_https=require_https)
@@ -159,14 +171,14 @@ async def clear_discovery_cache() -> None:
     per-loop lock plumbing for #399.
     """
     async with _get_disco_cache_write_lock():
-        _disco_cache.clear()
+        clear_cache_locked(_disco_cache)
 
 
 # ============================================================================
 # TTL-aware JWKS cache (replaces @alru_cache for JWKS)
 # ============================================================================
 
-_jwks_cache: dict[str, JwksCacheEntry] = {}
+_jwks_cache: OrderedDict[str, JwksCacheEntry] = OrderedDict()
 
 # See sync._kid_miss_last_attempt for rationale. Guarded by the per-loop
 # JWKS cache write lock.
@@ -204,12 +216,16 @@ async def _get_cached_jwks(jwks_uri: str, require_https: bool = True) -> JwksRes
     """
     entry = _jwks_cache.get(jwks_uri)
     if entry is not None and not is_cache_expired(entry):
+        # Refresh LRU recency (see _get_disco_response) — self-serializing via
+        # the process-wide structure lock, no per-loop write lock needed.
+        touch_cache_entry(_jwks_cache, jwks_uri)
         return entry.response
 
     fetch_lock = _get_jwks_fetch_lock(jwks_uri)
     async with fetch_lock:
         entry = _jwks_cache.get(jwks_uri)
         if entry is not None and not is_cache_expired(entry):
+            touch_cache_entry(_jwks_cache, jwks_uri)
             return entry.response
 
         # The jwks_uri was already vetted against this policy when the
@@ -295,7 +311,7 @@ async def clear_jwks_cache() -> None:
     for the cross-loop semantics added in the #399 per-loop lock plumbing.
     """
     async with _get_jwks_cache_write_lock():
-        _jwks_cache.clear()
+        clear_cache_locked(_jwks_cache)
         _kid_miss_last_attempt.clear()
 
 

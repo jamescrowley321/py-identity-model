@@ -2,6 +2,37 @@
 
 <!-- version list -->
 
+## v3.4.2 (2026-07-31)
+
+### Bug Fixes
+
+- **jwks-cache**: Guard write-path reinsert with the structure lock too
+  ([#461](https://github.com/jamescrowley321/py-identity-model/pull/461),
+  [`4627094`](https://github.com/jamescrowley321/py-identity-model/commit/4627094452275516cefa168d71579e48fc5a1db7))
+
+- **jwks-cache**: LRU eviction — refresh recency on read hits
+  ([#461](https://github.com/jamescrowley321/py-identity-model/pull/461),
+  [`4627094`](https://github.com/jamescrowley321/py-identity-model/commit/4627094452275516cefa168d71579e48fc5a1db7))
+
+- **jwks-cache**: Serialize cache clear() under the structure lock too
+  ([#461](https://github.com/jamescrowley321/py-identity-model/pull/461),
+  [`4627094`](https://github.com/jamescrowley321/py-identity-model/commit/4627094452275516cefa168d71579e48fc5a1db7))
+
+- **jwks-cache**: Serialize LRU reorder vs eviction with a process-wide lock
+  ([#461](https://github.com/jamescrowley321/py-identity-model/pull/461),
+  [`4627094`](https://github.com/jamescrowley321/py-identity-model/commit/4627094452275516cefa168d71579e48fc5a1db7))
+
+- **jwks-cache**: Switch JWKS/disco caches to LRU eviction (T236, #397)
+  ([#461](https://github.com/jamescrowley321/py-identity-model/pull/461),
+  [`4627094`](https://github.com/jamescrowley321/py-identity-model/commit/4627094452275516cefa168d71579e48fc5a1db7))
+
+### Testing
+
+- **jwks-cache**: Add end-to-end discovery-cache LRU eviction test
+  ([#461](https://github.com/jamescrowley321/py-identity-model/pull/461),
+  [`4627094`](https://github.com/jamescrowley321/py-identity-model/commit/4627094452275516cefa168d71579e48fc5a1db7))
+
+
 ## v3.4.1 (2026-07-27)
 
 ### Bug Fixes

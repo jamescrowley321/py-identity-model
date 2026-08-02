@@ -16,6 +16,7 @@ from py_identity_model.core.models import (
     TokenValidationConfig,
 )
 from py_identity_model.core.token_validation_logic import (
+    build_resolved_config,
     decode_with_config,
     log_validation_success,
     validate_config_for_manual_validation,
@@ -279,6 +280,37 @@ class TestDecodeWithConfig:
             match="Token validation configuration must have key and algorithms set",
         ):
             decode_with_config("fake.jwt.token", config)
+
+    def test_build_resolved_config_none_algorithms_pins_jwks_alg(self):
+        """When the caller does not restrict algorithms, the JWKS alg is used as-is."""
+        original = TokenValidationConfig(perform_disco=True, audience="client-1")
+        key = {"kty": "EC", "crv": "P-256", "x": "x", "y": "y"}
+        resolved = build_resolved_config(original, key, "ES256")
+        assert resolved.algorithms == ["ES256"]
+        assert resolved.key == key
+
+    def test_build_resolved_config_allowed_algorithm_accepted(self):
+        """A JWKS alg inside the caller's allow-list is accepted."""
+        original = TokenValidationConfig(
+            perform_disco=True,
+            algorithms=["PS256", "ES256", "EdDSA"],
+        )
+        resolved = build_resolved_config(original, {"kty": "EC"}, "ES256")
+        assert resolved.algorithms == ["ES256"]
+
+    def test_build_resolved_config_disallowed_algorithm_rejected(self):
+        """A JWKS alg outside the caller's allow-list fails closed (no downgrade).
+
+        Regression for FAPI 2.0: restricting ``algorithms`` in discovery mode must
+        actually refuse an RS256-signed token even when the RS256 key is published
+        in the JWKS (the resolved config previously discarded the restriction).
+        """
+        original = TokenValidationConfig(
+            perform_disco=True,
+            algorithms=["PS256", "ES256", "EdDSA"],
+        )
+        with pytest.raises(TokenValidationException, match="not in the allowed"):
+            build_resolved_config(original, {"kty": "RSA"}, "RS256")
 
     def test_empty_string_issuer_not_replaced_by_config(self):
         """Empty-string discovery issuer must be passed through, not replaced by config issuer."""

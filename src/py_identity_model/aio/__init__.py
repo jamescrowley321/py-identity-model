@@ -36,6 +36,7 @@ from ..core.dpop import (
     build_dpop_headers,
     compute_ath,
     create_dpop_proof,
+    extract_dpop_nonce,
     generate_dpop_key,
 )
 from ..core.fapi import (
@@ -214,6 +215,7 @@ __all__ = [
     "create_request_object",
     "delete_client",
     "exchange_token",
+    "extract_dpop_nonce",
     "generate_code_challenge",
     "generate_code_verifier",
     "generate_dpop_key",

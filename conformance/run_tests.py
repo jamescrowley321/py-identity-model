@@ -8,6 +8,7 @@ conformance suite, driving the RP harness through each test module.
 from __future__ import annotations
 
 import argparse
+import base64
 from dataclasses import dataclass
 from email.message import Message
 from html.parser import HTMLParser
@@ -21,6 +22,7 @@ import time
 from urllib.parse import urljoin, urlparse
 import zipfile
 
+from cryptography.hazmat.primitives.asymmetric import ec
 import httpx
 
 
@@ -113,6 +115,7 @@ class ConformanceSuiteClient:
         rp_base_url: str = RP_BASE_URL,
         publish: str = "",
         client_overrides: dict | None = None,
+        server_jwks: dict | None = None,
     ) -> dict:
         """Create a test plan.
 
@@ -122,35 +125,42 @@ class ConformanceSuiteClient:
         available regardless of this setting.
 
         ``client_overrides`` is the config file's ``client`` block, merged over
-        the default client registration the OP applies for static-client plans.
-        The logout profiles rely on this to register a
-        ``backchannel_logout_uri`` / ``post_logout_redirect_uris`` with the OP —
-        without them the OP cannot post a Back-Channel Logout Token or accept an
-        RP-Initiated Logout redirect. For the certified non-logout plans the
+        the default client registration. The logout profiles use it to register a
+        ``backchannel_logout_uri`` / ``post_logout_redirect_uris`` (without which
+        the OP cannot post a Back-Channel Logout Token or accept an RP-Initiated
+        Logout redirect); FAPI 2.0 uses it to register the RP's public ``jwks``
+        (for ``private_key_jwt`` assertion verification) and set
+        ``token_endpoint_auth_method``. For the certified OIDC-client profiles the
         block is just ``{client_id, client_secret}``, so the merge is a no-op.
+
+        ``server_jwks`` supplies the OP's own signing key set — required by the
+        FAPI 2.0 client plan's ``LoadServerJWKs`` step (the certified OIDC-client
+        plans auto-generate theirs, so they pass ``None``).
 
         Returns the plan response including plan ID and list of test modules.
         """
         # Build the plan configuration
+        client_config = {
+            "client_id": "conformance-rp",
+            "client_secret": "conformance-rp-secret",
+            "redirect_uri": f"{rp_base_url}/callback",
+        }
+        if client_overrides:
+            client_config.update(client_overrides)
+        server_config: dict = {"discoveryUrl": ""}
+        if server_jwks:
+            server_config["jwks"] = server_jwks
         plan_config = {
             "alias": alias,
             "description": f"py-identity-model conformance: {alias}",
             "publish": publish,
-            "server": {
-                "discoveryUrl": "",
-            },
-            "client": {
-                "client_id": "conformance-rp",
-                "client_secret": "conformance-rp-secret",
-                "redirect_uri": f"{rp_base_url}/callback",
-            },
+            "server": server_config,
+            "client": client_config,
             "client2": {
                 "client_id": "conformance-rp-2",
                 "client_secret": "conformance-rp-2-secret",
             },
         }
-        if client_overrides:
-            plan_config["client"].update(client_overrides)
 
         # Variant is a single JSON-encoded query parameter (per official conformance.py)
         params: dict[str, str] = {"planName": plan_name}
@@ -451,6 +461,7 @@ def drive_rp_authorize(
     use_request_uri: bool = False,
     test_name: str = "",
     profile: str = "",
+    fapi2: bool = False,
 ) -> None:
     """Hit the RP's /authorize endpoint to start an auth flow.
 
@@ -472,6 +483,7 @@ def drive_rp_authorize(
         "use_pkce": str(use_pkce).lower(),
         "skip_userinfo": str(skip_userinfo).lower(),
         "use_request_uri": str(use_request_uri).lower(),
+        "fapi2": str(fapi2).lower(),
     }
 
     # Follow all redirects through the full auth flow
@@ -601,6 +613,56 @@ def _clear_rp_cache(rp_base_url: str) -> None:
         logger.warning("Failed to clear RP caches (continuing): %s", exc)
 
 
+def _fetch_rp_jwks(rp_base_url: str) -> dict:
+    """Fetch the RP's public JWKS (FAPI 2.0 private_key_jwt) from the harness.
+
+    The harness generates its client-authentication key at startup and exposes
+    the public half at ``/fapi2-jwks``. Registering it with the suite lets the
+    suite verify the RP's ``private_key_jwt`` assertions. Raises if unreachable —
+    a FAPI2 plan without a registered client key cannot pass.
+    """
+    with httpx.Client(verify=False, timeout=10.0) as client:
+        response = client.get(f"{rp_base_url}/fapi2-jwks")
+        response.raise_for_status()
+        jwks = response.json()
+    logger.info("Fetched RP FAPI2 JWKS (%d key(s))", len(jwks.get("keys", [])))
+    return jwks
+
+
+def _b64u_uint(value: int) -> str:
+    """base64url-encode an unsigned integer as a JWK field (RFC 7518 §6)."""
+    raw = value.to_bytes((value.bit_length() + 7) // 8 or 1, "big")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _generate_server_signing_jwks() -> dict:
+    """Generate an ephemeral server signing JWKS for the FAPI 2.0 client plan.
+
+    Unlike the certified OIDC-client plans (whose ``GenerateServerConfiguration``
+    step auto-mints the OP's keys), the FAPI 2.0 client plan uses
+    ``GenerateServerConfigurationMTLS`` + ``LoadServerJWKs``, which require the
+    plan config to *supply* the OP's own signing key set under ``server.jwks``.
+    The suite then adds decoy keys, so the set must contain exactly one signing
+    key of a supported variant — a single ES256 (P-256) key satisfies the FAPI
+    2.0 PS256/ES256 allow-list. These keys are the *test OP's*, ephemeral per run;
+    the RP never holds their private half.
+    """
+    key = ec.generate_private_key(ec.SECP256R1())
+    numbers = key.private_numbers()
+    public = numbers.public_numbers
+    private_jwk = {
+        "kty": "EC",
+        "crv": "P-256",
+        "use": "sig",
+        "alg": "ES256",
+        "kid": "py-idm-conformance-server-es256",
+        "x": _b64u_uint(public.x),
+        "y": _b64u_uint(public.y),
+        "d": _b64u_uint(numbers.private_value),
+    }
+    return {"keys": [private_jwk]}
+
+
 def run_test_module(
     suite: ConformanceSuiteClient,
     test_name: str,
@@ -610,6 +672,7 @@ def run_test_module(
     client_secret: str,
     profile: str = "",
     dynamic: bool = False,
+    fapi2: bool = False,
 ) -> TestResult:
     """Execute a single conformance test module."""
     logger.info("=" * 60)
@@ -741,6 +804,7 @@ def run_test_module(
                 use_request_uri=use_request_uri,
                 test_name=test_name,
                 profile=profile,
+                fapi2=fapi2,
             )
             # Wait briefly for the suite to rotate keys
             time.sleep(1)
@@ -754,6 +818,7 @@ def run_test_module(
                 use_request_uri=use_request_uri,
                 test_name=test_name,
                 profile=profile,
+                fapi2=fapi2,
             )
         else:
             # Standard auth flow (with optional userinfo skip)
@@ -767,6 +832,7 @@ def run_test_module(
                 use_request_uri=use_request_uri,
                 test_name=test_name,
                 profile=profile,
+                fapi2=fapi2,
             )
 
     # Poll until the test finishes
@@ -835,6 +901,7 @@ def run_plan(
     plan_name = config["plan_name"]
     variant = config["variant"]
     alias = config["alias"]
+    fapi2 = bool(config.get("fapi2", False))
 
     logger.info("Plan: %s (%s)", plan_name, alias)
     logger.info("Variant: %s", variant)
@@ -844,8 +911,26 @@ def run_plan(
     suite = ConformanceSuiteClient(suite_base_url, token=token)
 
     # Create the test plan. The config's client block is merged into the plan's
-    # client registration so logout profiles register their
-    # backchannel_logout_uri / post_logout_redirect_uris with the OP.
+    # client registration so logout profiles register their backchannel_logout_uri
+    # / post_logout_redirect_uris (and Dynamic its jwks) with the OP. FAPI 2.0
+    # instead registers the RP's public JWKS (served at /fapi2-jwks) so the suite
+    # can verify its private_key_jwt assertions, and supplies the OP's own signing
+    # keys (LoadServerJWKs). The private half never leaves the RP.
+    client_overrides: dict | None = config.get("client")
+    server_jwks: dict | None = None
+    if fapi2:
+        client_overrides = {
+            "jwks": _fetch_rp_jwks(rp_base_url),
+            "token_endpoint_auth_method": "private_key_jwt",
+            # The RP requests the minimal ``openid`` scope; the suite requires the
+            # registered client scope to match it exactly
+            # (EnsureRequestedScopeIsEqualToConfiguredScope).
+            "scope": "openid",
+        }
+        # The FAPI 2.0 client plan requires the OP's own signing key set
+        # (LoadServerJWKs); mint an ephemeral one for this run.
+        server_jwks = _generate_server_signing_jwks()
+
     logger.info("Creating test plan...")
     plan_response = suite.create_plan(
         plan_name,
@@ -853,7 +938,8 @@ def run_plan(
         alias,
         rp_base_url=rp_base_url,
         publish=publish,
-        client_overrides=config.get("client"),
+        client_overrides=client_overrides,
+        server_jwks=server_jwks,
     )
     plan_id = plan_response.get("id", "")
     modules = plan_response.get("modules", [])
@@ -899,6 +985,7 @@ def run_plan(
             client_secret=client_secret,
             profile=profile,
             dynamic=is_dynamic,
+            fapi2=fapi2,
         )
         results.append(result)
 
@@ -1052,6 +1139,9 @@ def main() -> None:
             "dynamic-rp",
             "rpinitiated-logout-rp",
             "backchannel-logout-rp",
+            # FAPI 2.0 Security Profile RP plan (PAR + PKCE S256 +
+            # private_key_jwt + DPoP-bound tokens + RFC 9207 iss)
+            "fapi2-rp",
             # fastapi-identity-model package regression plans (same suite
             # plans, driven against the rp-fastapi harness on :8889)
             "fastapi-basic-rp",

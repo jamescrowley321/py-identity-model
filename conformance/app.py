@@ -28,23 +28,31 @@ from starlette.concurrency import run_in_threadpool
 
 from py_identity_model import (
     AuthorizationCodeTokenRequest,
+    AuthorizeCallbackResponse,
     ClientRegistrationRequest,
     DiscoveryDocumentRequest,
+    DiscoveryDocumentResponse,
     DiscoveryPolicy,
+    DPoPKey,
     HTTPClient,
+    PrivateKeyJwt,
+    PushedAuthorizationRequest,
     TokenValidationConfig,
     UserInfoRequest,
     build_authorization_url,
     build_end_session_url,
     clear_jwks_cache,
     create_request_object,
+    generate_dpop_key,
     generate_pkce_pair,
     get_discovery_document,
     get_userinfo,
     parse_authorize_callback_response,
     parse_discovery_url,
+    push_authorization_request,
     register_client,
     request_authorization_code_token,
+    validate_authorize_callback_issuer,
     validate_authorize_callback_state,
     validate_logout_token,
     validate_post_logout_state,
@@ -251,6 +259,12 @@ class AuthSession:
     # Per-test RP-log routing (recovered in /callback via the session)
     test_name: str = ""
     profile: str = ""
+    # FAPI 2.0 flow: when set, the callback exchanges the code with
+    # private_key_jwt + a DPoP-bound token request (RFC 9449) and validates the
+    # RFC 9207 ``iss`` authorization-response parameter. ``dpop_key`` is the
+    # per-flow key the PAR + token + userinfo requests are bound to.
+    fapi2: bool = False
+    dpop_key: DPoPKey | None = None
     # Results populated after callback
     result: dict = field(default_factory=dict)
 
@@ -295,6 +309,58 @@ def _get_http_client() -> HTTPClient:
 
 
 # ---------------------------------------------------------------------------
+# FAPI 2.0 client authentication key (private_key_jwt, RFC 7523)
+# ---------------------------------------------------------------------------
+#
+# FAPI 2.0 requires an asymmetric client-authentication method. The RP holds one
+# long-lived ES256 signing key for its ``private_key_jwt`` assertions; the public
+# half is served at ``/fapi2-jwks`` so the runner can register it with the suite
+# as the client's JWKS before creating the plan (the suite verifies the assertion
+# signature against it). ES256 satisfies the FAPI 2.0 PS256/ES256 allow-list.
+# The DPoP key is separate and minted per-flow in /authorize.
+
+_FAPI2_CLIENT_KID = "fapi2-rp-key-1"
+_FAPI2_CLIENT_KEY: DPoPKey = generate_dpop_key("ES256")
+
+# FAPI 2.0 requests a minimal scope: the profile's OP only advertises ``openid``
+# and the conformance client is registered for exactly that, so the requested
+# scope must equal it (EnsureRequestedScopeIsEqualToConfiguredScope).
+_FAPI2_SCOPE = "openid"
+
+# FAPI 2.0 permits only strong asymmetric ID token signing algorithms; RS256 in
+# particular is forbidden. Restricting the RP's accepted set here makes the
+# library reject an ID token signed with a disallowed alg (the OIDF
+# ``invalid-alternate-alg`` module forces RS256 and expects rejection).
+_FAPI2_ID_TOKEN_ALGS = ["PS256", "ES256", "EdDSA"]
+
+# For the ``plain_fapi`` profile the OIDF client test treats a dedicated resource
+# ("accounts") endpoint — NOT userinfo — as the resource server; the happy-path
+# module only transitions to FINISHED once the RP makes a (DPoP-bound) resource
+# request there (AbstractFAPI2SPFinalClientTest#userinfoEndpoint leaves the test
+# WAITING because PlainFAPIClientProfileBehavior.userInfoIsResourceEndpoint()
+# is false, whereas accountsEndpoint() calls resourceEndpointCallComplete()).
+# The path is fixed by the suite (AbstractFAPI2SPFinalClientTest.ACCOUNTS_PATH).
+_FAPI2_RESOURCE_PATH = "open-banking/v1.1/accounts"
+
+
+def _fapi2_public_jwk() -> dict:
+    """Public JWK for the RP's private_key_jwt signing key (with kid/use/alg)."""
+    jwk = dict(_FAPI2_CLIENT_KEY.public_jwk)
+    jwk.update({"kid": _FAPI2_CLIENT_KID, "use": "sig", "alg": "ES256"})
+    return jwk
+
+
+def _fapi2_private_key_jwt(audience: str) -> PrivateKeyJwt:
+    """Build the private_key_jwt assertion params for ``audience`` (RFC 7523)."""
+    return PrivateKeyJwt(
+        private_key=_FAPI2_CLIENT_KEY.private_key_pem,
+        algorithm="ES256",
+        kid=_FAPI2_CLIENT_KID,
+        audience=audience,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
@@ -319,6 +385,17 @@ def clear_cache() -> dict:
     clear_jwks_cache()
     logger.info("Cleared discovery and JWKS caches")
     return {"status": "ok", "cleared": ["discovery", "jwks"]}
+
+
+@app.get("/fapi2-jwks", response_model=None)
+def fapi2_jwks() -> JSONResponse:
+    """Public JWKS for the RP's private_key_jwt signing key (FAPI 2.0).
+
+    The runner fetches this and registers it as the client's ``jwks`` with the
+    conformance suite so the suite can verify the RP's ``private_key_jwt`` client
+    assertions. Only public key material is exposed.
+    """
+    return JSONResponse(content={"keys": [_fapi2_public_jwk()]})
 
 
 @app.get("/discover", response_model=None)
@@ -507,6 +584,13 @@ def authorize(
     scope: str = Query(
         "openid profile email address phone", description="Requested scopes"
     ),
+    fapi2: str = Query(
+        "false",
+        description=(
+            "Drive the FAPI 2.0 flow: PAR + PKCE S256 + private_key_jwt + "
+            "DPoP-bound token request, with RFC 9207 iss validation in /callback"
+        ),
+    ),
 ) -> RedirectResponse | JSONResponse:
     """Build an authorization URL and redirect to the OP.
 
@@ -594,6 +678,20 @@ def authorize(
         return JSONResponse(
             status_code=502,
             content={"error": "issuer_mismatch", "detail": error_msg},
+        )
+
+    if fapi2.lower() == "true":
+        return _authorize_fapi2(
+            disco=disco,
+            disco_address=disco_endpoint.url,
+            issuer=issuer,
+            client_id=client_id,
+            scope=_FAPI2_SCOPE,
+            test_id=test_id,
+            test_name=test_name,
+            profile=profile,
+            skip_userinfo=skip_userinfo.lower() == "true",
+            http_client=http_client,
         )
 
     # Generate per-flow state and nonce
@@ -698,6 +796,129 @@ def authorize(
     return RedirectResponse(url=auth_url, status_code=302)
 
 
+def _authorize_fapi2(
+    disco: DiscoveryDocumentResponse,
+    disco_address: str,
+    issuer: str,
+    client_id: str,
+    scope: str,
+    test_id: str,
+    test_name: str,
+    profile: str,
+    skip_userinfo: bool,
+    http_client: HTTPClient,
+) -> RedirectResponse | JSONResponse:
+    """Drive the FAPI 2.0 authorization request via PAR + DPoP.
+
+    Pushes the authorization parameters to the PAR endpoint using
+    ``private_key_jwt`` client authentication (RFC 7523), PKCE ``S256`` and a
+    per-flow DPoP proof (RFC 9449), then redirects to the authorization endpoint
+    with only ``client_id`` + ``request_uri`` (RFC 9126 §4). The DPoP key and the
+    FAPI2 flag are persisted on the session so /callback can complete the flow
+    with a DPoP-bound, private_key_jwt token exchange and RFC 9207 ``iss`` checks.
+    """
+    par_endpoint = disco.pushed_authorization_request_endpoint
+    if not par_endpoint:
+        error_msg = "OP does not advertise a pushed_authorization_request_endpoint"
+        logger.error("REJECTED: %s", error_msg)
+        if test_id:
+            error_session = AuthSession(issuer=issuer, state="", nonce="")
+            error_session.result = {
+                "test_id": test_id,
+                "status": "error",
+                "error": f"par_not_supported: {error_msg}",
+            }
+            test_results[test_id] = error_session
+        return JSONResponse(
+            status_code=400,
+            content={"error": "par_not_supported", "detail": error_msg},
+        )
+    if disco.authorization_endpoint is None:
+        return JSONResponse(
+            status_code=502,
+            content={
+                "error": "missing_endpoint",
+                "detail": "Discovery document missing authorization_endpoint",
+            },
+        )
+
+    state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(32)
+    code_verifier, code_challenge = generate_pkce_pair()
+    dpop_key = generate_dpop_key("ES256")
+    redirect_uri = f"{RP_BASE_URL}/callback"
+
+    par_response = push_authorization_request(
+        PushedAuthorizationRequest(
+            address=par_endpoint,
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            scope=scope,
+            state=state,
+            nonce=nonce,
+            code_challenge=code_challenge,
+            code_challenge_method="S256",
+            private_key_jwt=_fapi2_private_key_jwt(disco.issuer or issuer),
+            dpop_key=dpop_key,
+        ),
+        http_client=http_client,
+    )
+    if not par_response.is_successful or not par_response.request_uri:
+        logger.error("REJECTED: PAR request failed: %s", par_response.error)
+        if test_id:
+            error_session = AuthSession(issuer=issuer, state="", nonce="")
+            error_session.result = {
+                "test_id": test_id,
+                "status": "error",
+                "error": f"par_failed: {par_response.error}",
+            }
+            test_results[test_id] = error_session
+        return JSONResponse(
+            status_code=400,
+            content={"error": "par_failed", "detail": par_response.error},
+        )
+
+    # RFC 9126 §4: the authorization request carries ONLY client_id + request_uri;
+    # every other parameter was pushed and MUST NOT be repeated on the front channel.
+    auth_url = f"{disco.authorization_endpoint}?" + urlencode(
+        {"client_id": client_id, "request_uri": par_response.request_uri}
+    )
+
+    # Persist the OP's canonical discovery issuer (FAPI 2.0 requires the
+    # private_key_jwt ``aud`` at BOTH PAR and token endpoints to be the issuer
+    # URL as a string, not the endpoint URL — ValidateClientAssertionAudClaimIs
+    # IssuerAsString).
+    session = AuthSession(
+        issuer=disco.issuer or issuer,
+        state=state,
+        nonce=nonce,
+        code_verifier=code_verifier,
+        client_id=client_id,
+        redirect_uri=redirect_uri,
+        skip_userinfo=skip_userinfo,
+        test_name=test_name,
+        profile=profile,
+        fapi2=True,
+        dpop_key=dpop_key,
+    )
+    sessions[state] = session
+    if test_id:
+        session.result["test_id"] = test_id
+
+    global _last_flow_context
+    _last_flow_context = {
+        "issuer": issuer,
+        "client_id": client_id,
+        "disco_address": disco_address,
+    }
+
+    logger.info(
+        "ACCEPTED: FAPI2 PAR pushed (private_key_jwt + DPoP + PKCE S256); "
+        "redirecting to OP with request_uri"
+    )
+    return RedirectResponse(url=auth_url, status_code=302)
+
+
 def _fetch_and_validate_discovery(
     issuer: str, http_client: HTTPClient, session: AuthSession
 ) -> HTMLResponse | tuple:
@@ -759,6 +980,206 @@ def _fetch_and_validate_discovery(
         )
 
     return disco, disco_endpoint
+
+
+def _validate_fapi2_callback_issuer(
+    cb_response: AuthorizeCallbackResponse,
+    disco: DiscoveryDocumentResponse,
+    session: AuthSession,
+) -> HTMLResponse | None:
+    """RFC 9207 ``iss`` validation for a FAPI 2.0 callback (mix-up defense).
+
+    FAPI 2.0 mandates the ``iss`` authorization-response parameter, so it is
+    required regardless of advertised metadata support. Returns an error
+    ``HTMLResponse`` on failure, or ``None`` when the flow may proceed (including
+    for non-FAPI2 sessions, which skip the check).
+    """
+    if not session.fapi2:
+        return None
+    iss_result = validate_authorize_callback_issuer(
+        cb_response, disco.issuer, require=True
+    )
+    if iss_result.is_valid:
+        return None
+    session.result["status"] = "error"
+    session.result["error"] = f"iss_validation: {iss_result.result.value}"
+    logger.error(
+        "REJECTED: RFC 9207 iss validation failed: %s", iss_result.result.value
+    )
+    _store_test_result(session)
+    return HTMLResponse(
+        content=(
+            "<h1>Issuer (RFC 9207) Validation Failed</h1>"
+            f"<p>{html.escape(iss_result.result.value)}</p>"
+        ),
+        status_code=400,
+    )
+
+
+def _build_auth_code_token_request(
+    session: AuthSession, token_endpoint: str, code: str
+) -> AuthorizationCodeTokenRequest:
+    """Build the auth-code token exchange request for a session.
+
+    FAPI 2.0 sessions authenticate with ``private_key_jwt`` and bind the token
+    request with DPoP; other sessions use the (optional) client secret.
+    """
+    if session.fapi2:
+        return AuthorizationCodeTokenRequest(
+            address=token_endpoint,
+            client_id=session.client_id,
+            code=code,
+            redirect_uri=session.redirect_uri,
+            code_verifier=session.code_verifier,
+            private_key_jwt=_fapi2_private_key_jwt(session.issuer),
+            dpop_key=session.dpop_key,
+        )
+    return AuthorizationCodeTokenRequest(
+        address=token_endpoint,
+        client_id=session.client_id,
+        code=code,
+        redirect_uri=session.redirect_uri,
+        code_verifier=session.code_verifier,
+        client_secret=session.client_secret if session.client_secret else None,
+    )
+
+
+def _fetch_userinfo(
+    session: AuthSession,
+    disco: DiscoveryDocumentResponse,
+    access_token: str | None,
+    expected_sub: str | None,
+    http_client: HTTPClient,
+) -> dict | HTMLResponse:
+    """Fetch + validate UserInfo, returning claims or an error ``HTMLResponse``.
+
+    Skipped (returns ``{}``) when there is no access token, no userinfo endpoint,
+    or the flow opted out. FAPI 2.0 sessions present the DPoP-bound access token
+    with a DPoP proof (RFC 9449); a ``sub`` mismatch is fatal (OIDC Core §5.3.4).
+    """
+    if not (access_token and disco.userinfo_endpoint and not session.skip_userinfo):
+        return {}
+    try:
+        userinfo_response = get_userinfo(
+            UserInfoRequest(
+                address=disco.userinfo_endpoint,
+                token=access_token,
+                expected_sub=expected_sub,
+                # FAPI 2.0: a DPoP-bound access token must be presented to the
+                # resource server with a DPoP proof, not as a Bearer.
+                dpop_key=session.dpop_key if session.fapi2 else None,
+            ),
+            http_client=http_client,
+        )
+    except PyIdentityModelException as exc:
+        logger.warning("UserInfo exception: %s", exc)
+        session.result["userinfo_error"] = str(exc)
+        return {}
+
+    if userinfo_response.is_successful:
+        return userinfo_response.claims or {}
+
+    # OIDC Core 1.0 §5.3.4: a sub mismatch is fatal — the RP MUST reject the
+    # UserInfo response if sub differs from the ID token sub.
+    error_msg = userinfo_response.error
+    logger.error(
+        "REJECTED: UserInfo validation failed (sub mismatch per OIDC Core §5.3.4): %s",
+        error_msg,
+    )
+    session.result["status"] = "error"
+    session.result["error"] = f"userinfo_validation: {error_msg}"
+    _store_test_result(session)
+    return HTMLResponse(
+        content=(
+            f"<h1>UserInfo Validation Failed</h1><p>{html.escape(str(error_msg))}</p>"
+        ),
+        status_code=400,
+    )
+
+
+def _id_token_validation_params(
+    session: AuthSession,
+) -> tuple[dict, list[str] | None]:
+    """Return ``(options, algorithms)`` for ID token validation.
+
+    FAPI 2.0 hardens validation: require ``exp``/``aud`` and restrict the
+    accepted signature algorithms to the strong asymmetric set (rejecting
+    RS256), so the library fails closed on the OIDF negative modules
+    (invalid-alternate-alg, invalid-missing-exp) instead of accepting the token
+    and calling userinfo. Basic/Config/Form-Post profiles keep the looser
+    OIDC-Core defaults.
+    """
+    if session.fapi2:
+        return (
+            {"verify_exp": True, "require": ["sub", "iat", "exp", "aud"]},
+            _FAPI2_ID_TOKEN_ALGS,
+        )
+    return {"verify_exp": True, "require": ["sub", "iat"]}, None
+
+
+def _validate_fapi2_audience(session: AuthSession, claims: dict) -> HTMLResponse | None:
+    """Reject an ID token that carries an audience other than this client.
+
+    PyJWT's ``audience`` check only verifies the client_id is *present* (set
+    intersection), so an extra untrusted audience slips through. FAPI 2.0 / OIDC
+    Core 1.0 §3.1.3.7 require the RP to reject it; the OIDF
+    ``invalid-secondary-aud`` module adds one and expects rejection. Returns an
+    error ``HTMLResponse`` when rejecting, else ``None``.
+    """
+    if not session.fapi2:
+        return None
+    aud_claim = claims.get("aud")
+    aud_values = aud_claim if isinstance(aud_claim, list) else [aud_claim]
+    untrusted = [a for a in aud_values if a != session.client_id]
+    if not untrusted:
+        return None
+    session.result["status"] = "error"
+    session.result["error"] = f"untrusted_audience: {untrusted}"
+    logger.error("REJECTED: id_token contains untrusted audience(s): %s", untrusted)
+    _store_test_result(session)
+    return HTMLResponse(
+        content=f"<h1>Untrusted Audience</h1><p>{html.escape(str(untrusted))}</p>",
+        status_code=400,
+    )
+
+
+def _fetch_fapi2_resource(
+    session: AuthSession,
+    access_token: str | None,
+    http_client: HTTPClient,
+) -> None:
+    """Make the FAPI 2.0 DPoP-bound resource ("accounts") request.
+
+    For the ``plain_fapi`` profile the OIDF client test treats a dedicated
+    resource endpoint — not userinfo — as the resource server, and the
+    happy-path module only reaches FINISHED once the RP calls it (see
+    ``_FAPI2_RESOURCE_PATH``). We reuse ``get_userinfo`` (with
+    ``expected_sub=None`` so no OIDC sub check runs) purely as a DPoP-bound
+    GET: it presents the cnf-bound access token as ``Authorization: DPoP`` with
+    a resource proof (``ath``) and honors the RFC 9449 §8 ``use_dpop_nonce``
+    retry. Best-effort — the suite fires ``resourceEndpointCallComplete`` when
+    the request arrives, so a non-JSON accounts body on our side is harmless.
+    """
+    if not (session.fapi2 and access_token and session.dpop_key):
+        return
+    accounts_url = session.issuer.rstrip("/") + "/" + _FAPI2_RESOURCE_PATH
+    try:
+        resource_response = get_userinfo(
+            UserInfoRequest(
+                address=accounts_url,
+                token=access_token,
+                expected_sub=None,
+                dpop_key=session.dpop_key,
+            ),
+            http_client=http_client,
+        )
+    except PyIdentityModelException as exc:
+        logger.info("FAPI2 accounts request completed with exception: %s", exc)
+        return
+    logger.info(
+        "FAPI2 resource (accounts) request done: success=%s",
+        resource_response.is_successful,
+    )
 
 
 def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
@@ -829,6 +1250,11 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
         return disco_result
     disco, disco_endpoint = disco_result
 
+    # FAPI 2.0: validate the RFC 9207 ``iss`` authorization-response parameter.
+    fapi2_iss_error = _validate_fapi2_callback_issuer(cb_response, disco, session)
+    if fapi2_iss_error is not None:
+        return fapi2_iss_error
+
     # Exchange authorization code for tokens
     if disco.token_endpoint is None:
         session.result["status"] = "error"
@@ -847,14 +1273,7 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
             status_code=400,
         )
     token_response = request_authorization_code_token(
-        AuthorizationCodeTokenRequest(
-            address=disco.token_endpoint,
-            client_id=session.client_id,
-            code=cb_response.code,
-            redirect_uri=session.redirect_uri,
-            code_verifier=session.code_verifier,
-            client_secret=session.client_secret if session.client_secret else None,
-        ),
+        _build_auth_code_token_request(session, disco.token_endpoint, cb_response.code),
         http_client=http_client,
     )
 
@@ -903,6 +1322,7 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
     # to verify, and it only works if we let the library own the HTTP client.
     claims: dict = {}
     if id_token_jwt:
+        id_token_options, id_token_algorithms = _id_token_validation_params(session)
         try:
             claims = validate_token(
                 jwt=id_token_jwt,
@@ -910,7 +1330,8 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
                     perform_disco=True,
                     audience=session.client_id,
                     issuer=disco.issuer,
-                    options={"verify_exp": True, "require": ["sub", "iat"]},
+                    algorithms=id_token_algorithms,
+                    options=id_token_options,
                     require_https=False,
                 ),
                 disco_doc_address=disco_endpoint.url,
@@ -955,43 +1376,22 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
                 status_code=400,
             )
 
+        aud_error = _validate_fapi2_audience(session, claims)
+        if aud_error is not None:
+            return aud_error
+
     # Fetch UserInfo (if endpoint is available and we have an access token)
-    userinfo_claims: dict = {}
-    if access_token and disco.userinfo_endpoint and not session.skip_userinfo:
-        try:
-            userinfo_response = get_userinfo(
-                UserInfoRequest(
-                    address=disco.userinfo_endpoint,
-                    token=access_token,
-                    expected_sub=claims.get("sub"),
-                ),
-                http_client=http_client,
-            )
-            if userinfo_response.is_successful:
-                userinfo_claims = userinfo_response.claims or {}
-            else:
-                # OIDC Core 1.0 §5.3.4: sub mismatch is a fatal error.
-                # The RP MUST reject the UserInfo response if sub differs
-                # from the ID token sub.
-                error_msg = userinfo_response.error
-                logger.error(
-                    "REJECTED: UserInfo validation failed (sub mismatch per "
-                    "OIDC Core §5.3.4): %s",
-                    error_msg,
-                )
-                session.result["status"] = "error"
-                session.result["error"] = f"userinfo_validation: {error_msg}"
-                _store_test_result(session)
-                return HTMLResponse(
-                    content=(
-                        "<h1>UserInfo Validation Failed</h1>"
-                        f"<p>{html.escape(str(error_msg))}</p>"
-                    ),
-                    status_code=400,
-                )
-        except PyIdentityModelException as exc:
-            logger.warning("UserInfo exception: %s", exc)
-            session.result["userinfo_error"] = str(exc)
+    userinfo_result = _fetch_userinfo(
+        session, disco, access_token, claims.get("sub"), http_client
+    )
+    if isinstance(userinfo_result, HTMLResponse):
+        return userinfo_result
+    userinfo_claims = userinfo_result
+
+    # FAPI 2.0 (plain_fapi): drive the dedicated resource endpoint so the OIDF
+    # happy-path module transitions to FINISHED (userinfo alone leaves it
+    # WAITING for this profile).
+    _fetch_fapi2_resource(session, access_token, http_client)
 
     # Record the id_token + end-session endpoint so a later /logout can build the
     # RP-Initiated Logout URL. /logout carries no flow parameters of its own, so
