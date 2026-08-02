@@ -78,6 +78,7 @@ src/py_identity_model/
 │   ├── parsers.py          # JSON/text parsing utilities
 │   ├── response_processors.py     # Response processing utilities
 │   ├── jwt_helpers.py      # JWT decoding helpers
+│   ├── mtls.py             # mTLS client auth + cert-bound token validation (RFC 8705)
 │   └── http_utils.py       # HTTP configuration utilities
 ├── exceptions.py            # All exception types
 ├── identity.py             # ClaimsPrincipal/ClaimsIdentity models

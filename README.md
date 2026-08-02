@@ -49,6 +49,7 @@ uv add py-identity-model
 | JWT Secured Authorization Request | RFC 9101 | Done |
 | JWT Secured Authorization Response Mode (JARM) | JARM | Done |
 | private_key_jwt Client Authentication | RFC 7523 | Done |
+| Mutual-TLS Client Auth + Certificate-Bound Tokens | RFC 8705 | Done |
 | FAPI 2.0 Security Profile | FAPI 2.0 | Done |
 | UserInfo Endpoint | OIDC Core | Done |
 | OAuth Callback State Validation | RFC 6749 | Done |
@@ -119,6 +120,7 @@ Each protocol feature has a standalone example in [`examples/`](examples/):
 | [jar_example.py](examples/jar_example.py) | JWT Secured Authorization Request (RFC 9101) |
 | [jarm_example.py](examples/jarm_example.py) | JWT Secured Authorization Response Mode (JARM) |
 | [private_key_jwt_example.py](examples/private_key_jwt_example.py) | private_key_jwt client authentication (RFC 7523) |
+| [mtls_example.py](examples/mtls_example.py) | mTLS client auth + certificate-bound tokens (RFC 8705) |
 | [fapi_example.py](examples/fapi_example.py) | FAPI 2.0 Security Profile |
 | [device_auth_example.py](examples/device_auth_example.py) | Device Authorization Grant (RFC 8628) |
 | [token_exchange_example.py](examples/token_exchange_example.py) | Token Exchange (RFC 8693) |

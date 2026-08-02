@@ -440,3 +440,55 @@ class TestPAR:
         assert response.is_successful is False
         assert response.error is not None
         assert "b'" not in response.error
+
+
+@pytest.mark.unit
+class TestPARResponseReprRedaction:
+    """#431: the ``request_uri`` capability is a secret and must not leak via repr/str."""
+
+    SECRET_URI = "urn:ietf:params:oauth:request_uri:SUPER_SECRET_HANDLE"
+
+    def test_repr_redacts_request_uri(self):
+        response = PushedAuthorizationResponse(
+            is_successful=True, request_uri=self.SECRET_URI, expires_in=60
+        )
+
+        rendered = repr(response)
+        assert "PushedAuthorizationResponse" in rendered
+        assert "[REDACTED]" in rendered
+        assert "SUPER_SECRET_HANDLE" not in rendered
+        # expires_in is not sensitive and must remain visible.
+        assert "expires_in=60" in rendered
+
+    def test_str_redacts_request_uri(self):
+        response = PushedAuthorizationResponse(
+            is_successful=True, request_uri=self.SECRET_URI, expires_in=60
+        )
+
+        assert "SUPER_SECRET_HANDLE" not in str(response)
+        assert "[REDACTED]" in str(response)
+
+    def test_repr_of_failed_response_does_not_crash_or_leak(self):
+        response = PushedAuthorizationResponse(
+            is_successful=False, error="invalid_request", request_uri=None
+        )
+
+        rendered = repr(response)
+        assert "invalid_request" in rendered
+        assert "[REDACTED]" not in rendered
+        assert "request_uri=None" in rendered
+
+    def test_equality_still_behaves(self):
+        a = PushedAuthorizationResponse(
+            is_successful=True, request_uri=self.SECRET_URI, expires_in=60
+        )
+        b = PushedAuthorizationResponse(
+            is_successful=True, request_uri=self.SECRET_URI, expires_in=60
+        )
+        c = PushedAuthorizationResponse(
+            is_successful=True, request_uri=self.SECRET_URI, expires_in=90
+        )
+
+        assert a == b
+        assert a != c
+        assert a != "not-a-response"

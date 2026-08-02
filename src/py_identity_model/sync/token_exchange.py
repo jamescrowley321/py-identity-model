@@ -9,7 +9,7 @@ from ..core.token_exchange_logic import (
     prepare_token_exchange_request_data,
     process_token_exchange_response,
 )
-from .http_client import get_http_client, retry_with_backoff
+from .http_client import resolve_http_client, retry_with_backoff
 from .managed_client import HTTPClient
 
 
@@ -42,9 +42,10 @@ def exchange_token(
     log_token_exchange_request(request)
 
     response = None
+    owned_client = None
     try:
         params, headers, auth = prepare_token_exchange_request_data(request)
-        client = http_client.client if http_client else get_http_client()
+        client, owned_client = resolve_http_client(request.mtls, http_client)
         response = _exchange_token(client, request.address, params, headers, auth)
         return process_token_exchange_response(response)
     except Exception as e:
@@ -52,6 +53,8 @@ def exchange_token(
     finally:
         if response is not None:
             response.close()
+        if owned_client is not None:
+            owned_client.close()
 
 
 __all__ = [

@@ -2,6 +2,52 @@
 
 <!-- version list -->
 
+## v3.5.0 (2026-08-02)
+
+### Bug Fixes
+
+- **auth**: Form-urlencode HTTP Basic client credentials (RFC 6749 §2.3.1)
+  ([`ab9e5a5`](https://github.com/jamescrowley321/py-identity-model/commit/ab9e5a5df9c00f5430b83212784a415ffd25e4f4))
+
+### Features
+
+- **discovery**: Expose pushed_authorization_request_endpoint (RFC 9126 §5)
+  ([`21f85e0`](https://github.com/jamescrowley321/py-identity-model/commit/21f85e0aaa279660a4b7c2c72f400f360efc6363))
+
+- **dpop**: Thread DPoP proofs through PAR + auth-code token requests
+  ([`2aabb62`](https://github.com/jamescrowley321/py-identity-model/commit/2aabb62f8e7f7287e7245001a5a01679747a56c3))
+
+- **dpop**: Thread DPoP proofs through UserInfo resource requests
+  ([`e48beba`](https://github.com/jamescrowley321/py-identity-model/commit/e48bebac34fd10634e4831ff663f9ee7f3ef8e23))
+
+
+## v3.4.3 (2026-08-02)
+
+### Bug Fixes
+
+- **models**: Guard DeviceAuthorizationResponse repr + redact device_code
+  ([#479](https://github.com/jamescrowley321/py-identity-model/pull/479),
+  [`392794a`](https://github.com/jamescrowley321/py-identity-model/commit/392794ac65e96dbfbd9a13c1f0aaa169bd4f4139))
+
+- **models**: Redact secrets in all token/credential response reprs
+  ([#479](https://github.com/jamescrowley321/py-identity-model/pull/479),
+  [`392794a`](https://github.com/jamescrowley321/py-identity-model/commit/392794ac65e96dbfbd9a13c1f0aaa169bd4f4139))
+
+- **models**: Redact secrets in RefreshTokenResponse/PushedAuthorizationResponse repr
+  ([#479](https://github.com/jamescrowley321/py-identity-model/pull/479),
+  [`392794a`](https://github.com/jamescrowley321/py-identity-model/commit/392794ac65e96dbfbd9a13c1f0aaa169bd4f4139))
+
+- **models**: Redact secrets in response repr (#431)
+  ([#479](https://github.com/jamescrowley321/py-identity-model/pull/479),
+  [`392794a`](https://github.com/jamescrowley321/py-identity-model/commit/392794ac65e96dbfbd9a13c1f0aaa169bd4f4139))
+
+### Testing
+
+- **models**: Assert repr/str redaction for RefreshTokenResponse + PushedAuthorizationResponse
+  ([#479](https://github.com/jamescrowley321/py-identity-model/pull/479),
+  [`392794a`](https://github.com/jamescrowley321/py-identity-model/commit/392794ac65e96dbfbd9a13c1f0aaa169bd4f4139))
+
+
 ## v3.4.2 (2026-07-31)
 
 ### Bug Fixes
