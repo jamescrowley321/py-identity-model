@@ -6,8 +6,10 @@ using py-identity-model's public API to exercise all RP conformance tests.
 
 from __future__ import annotations
 
+import base64
 import contextvars
 from dataclasses import dataclass, field
+import datetime
 import html
 import json
 import logging
@@ -16,10 +18,13 @@ from pathlib import Path
 import re
 import secrets
 import sys
+import tempfile
 from urllib.parse import urlencode
 
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.x509.oid import NameOID
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from jwt.algorithms import RSAAlgorithm
@@ -35,6 +40,7 @@ from py_identity_model import (
     DiscoveryPolicy,
     DPoPKey,
     HTTPClient,
+    MtlsClientAuth,
     PrivateKeyJwt,
     PushedAuthorizationRequest,
     TokenValidationConfig,
@@ -54,6 +60,7 @@ from py_identity_model import (
     push_authorization_request,
     register_client,
     request_authorization_code_token,
+    resolve_mtls_endpoint,
     validate_authorize_callback_issuer,
     validate_authorize_callback_state,
     validate_logout_token,
@@ -268,6 +275,10 @@ class AuthSession:
     # per-flow key the PAR + token + userinfo requests are bound to.
     fapi2: bool = False
     dpop_key: DPoPKey | None = None
+    # mTLS (RFC 8705): when set, client authentication + sender constraining use a
+    # client certificate (presented at the TLS layer) instead of private_key_jwt +
+    # DPoP, and requests target the OP's mtls_endpoint_aliases.
+    mtls: bool = False
     # JARM (JWT-Secured Authorization Response Mode): when set, the OP returns a
     # signed authorization response JWT, decoded in /callback via the library's
     # process_jarm_response instead of plain query-string parsing.
@@ -371,6 +382,81 @@ def _fapi2_private_key_jwt(audience: str) -> PrivateKeyJwt:
 
 
 # ---------------------------------------------------------------------------
+# mTLS client certificate (FAPI 2.0 client_auth_type=mtls / sender_constrain=mtls)
+# ---------------------------------------------------------------------------
+#
+# For the mTLS variant the RP authenticates + sender-constrains with a client
+# certificate (RFC 8705) instead of private_key_jwt + DPoP. We mint one
+# self-signed cert at startup, write it to PEM files (the library's MtlsClientAuth
+# takes file paths for httpx's cert=), and publish its public half as the client
+# JWKS (with x5c) at /fapi2-mtls-jwks so the runner registers it for
+# self_signed_tls_client_auth — the OP then matches the presented TLS cert
+# against that registered key.
+
+_FAPI2_MTLS_KID = "fapi2-mtls-rp-key"
+
+
+def _b64u_uint32(value: int) -> str:
+    """Base64url-encode a P-256 coordinate (fixed 32-byte width, no padding)."""
+    return base64.urlsafe_b64encode(value.to_bytes(32, "big")).rstrip(b"=").decode()
+
+
+def _generate_mtls_client_cert() -> tuple[str, str, dict]:
+    """Mint a self-signed EC client cert; return ``(cert_path, key_path, jwks)``."""
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name(
+        [x509.NameAttribute(NameOID.COMMON_NAME, "py-identity-model-mtls-rp")]
+    )
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime(2020, 1, 1, tzinfo=datetime.UTC))
+        .not_valid_after(datetime.datetime(2035, 1, 1, tzinfo=datetime.UTC))
+        .sign(key, hashes.SHA256())
+    )
+    cert_dir = Path(tempfile.mkdtemp(prefix="rp-mtls-"))
+    cert_path = cert_dir / "client.crt"
+    key_path = cert_dir / "client.key"
+    cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    key_path.write_bytes(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
+    der = cert.public_bytes(serialization.Encoding.DER)
+    pub = key.public_key().public_numbers()
+    jwk = {
+        "kty": "EC",
+        "crv": "P-256",
+        "use": "sig",
+        "kid": _FAPI2_MTLS_KID,
+        "x": _b64u_uint32(pub.x),
+        "y": _b64u_uint32(pub.y),
+        "x5c": [base64.b64encode(der).decode()],
+    }
+    return str(cert_path), str(key_path), {"keys": [jwk]}
+
+
+_FAPI2_MTLS_CERT_PATH, _FAPI2_MTLS_KEY_PATH, _FAPI2_MTLS_JWKS = (
+    _generate_mtls_client_cert()
+)
+
+
+def _fapi2_mtls_auth() -> MtlsClientAuth:
+    """mTLS client-auth config presenting the RP's self-signed client cert."""
+    return MtlsClientAuth(
+        certificate=_FAPI2_MTLS_CERT_PATH,
+        private_key=_FAPI2_MTLS_KEY_PATH,
+        auth_method="self_signed_tls_client_auth",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
@@ -406,6 +492,17 @@ def fapi2_jwks() -> JSONResponse:
     assertions. Only public key material is exposed.
     """
     return JSONResponse(content={"keys": [_fapi2_public_jwk()]})
+
+
+@app.get("/fapi2-mtls-jwks", response_model=None)
+def fapi2_mtls_jwks() -> JSONResponse:
+    """Public JWKS (with x5c) for the RP's mTLS client certificate (FAPI 2.0).
+
+    The runner registers this as the client's ``jwks`` so the OP can match the
+    TLS-presented certificate under ``self_signed_tls_client_auth`` (RFC 8705).
+    Only public key material + the certificate are exposed.
+    """
+    return JSONResponse(content=_FAPI2_MTLS_JWKS)
 
 
 @app.get("/discover", response_model=None)
@@ -609,6 +706,14 @@ def authorize(
             "decoded in /callback via process_jarm_response. Implies FAPI 2.0."
         ),
     ),
+    mtls: str = Query(
+        "false",
+        description=(
+            "Drive the FAPI 2.0 mTLS variant: authenticate + sender-constrain "
+            "with a client certificate (RFC 8705) at the OP's mtls_endpoint_"
+            "aliases instead of private_key_jwt + DPoP. Implies FAPI 2.0."
+        ),
+    ),
 ) -> RedirectResponse | JSONResponse:
     """Build an authorization URL and redirect to the OP.
 
@@ -698,7 +803,7 @@ def authorize(
             content={"error": "issuer_mismatch", "detail": error_msg},
         )
 
-    if fapi2.lower() == "true" or jarm.lower() == "true":
+    if fapi2.lower() == "true" or jarm.lower() == "true" or mtls.lower() == "true":
         return _authorize_fapi2(
             disco=disco,
             disco_address=disco_endpoint.url,
@@ -710,6 +815,7 @@ def authorize(
             profile=profile,
             skip_userinfo=skip_userinfo.lower() == "true",
             jarm=jarm.lower() == "true",
+            mtls=mtls.lower() == "true",
             http_client=http_client,
         )
 
@@ -827,17 +933,26 @@ def _authorize_fapi2(
     skip_userinfo: bool,
     http_client: HTTPClient,
     jarm: bool = False,
+    mtls: bool = False,
 ) -> RedirectResponse | JSONResponse:
-    """Drive the FAPI 2.0 authorization request via PAR + DPoP.
+    """Drive the FAPI 2.0 authorization request via PAR.
 
-    Pushes the authorization parameters to the PAR endpoint using
-    ``private_key_jwt`` client authentication (RFC 7523), PKCE ``S256`` and a
-    per-flow DPoP proof (RFC 9449), then redirects to the authorization endpoint
-    with only ``client_id`` + ``request_uri`` (RFC 9126 §4). The DPoP key and the
-    FAPI2 flag are persisted on the session so /callback can complete the flow
-    with a DPoP-bound, private_key_jwt token exchange and RFC 9207 ``iss`` checks.
+    Pushes the authorization parameters to the PAR endpoint with PKCE ``S256``
+    then redirects to the authorization endpoint with only ``client_id`` +
+    ``request_uri`` (RFC 9126 §4). Client authentication + sender constraining
+    are either ``private_key_jwt`` (RFC 7523) + a per-flow DPoP proof (RFC 9449),
+    or — when ``mtls`` — a client certificate presented at the TLS layer against
+    the OP's ``mtls_endpoint_aliases`` (RFC 8705). The chosen mode is persisted on
+    the session so /callback completes the flow the same way, with RFC 9207
+    ``iss`` checks throughout.
     """
-    par_endpoint = disco.pushed_authorization_request_endpoint
+    # mTLS drives the OP's mtls_endpoint_aliases (a distinct host/port); the
+    # library resolves the alias, falling back to the standard endpoint.
+    par_endpoint = (
+        resolve_mtls_endpoint(disco, "pushed_authorization_request_endpoint")
+        if mtls
+        else disco.pushed_authorization_request_endpoint
+    )
     if not par_endpoint:
         error_msg = "OP does not advertise a pushed_authorization_request_endpoint"
         logger.error("REJECTED: %s", error_msg)
@@ -865,7 +980,10 @@ def _authorize_fapi2(
     state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(32)
     code_verifier, code_challenge = generate_pkce_pair()
-    dpop_key = generate_dpop_key("ES256")
+    # mTLS sender-constrains via the client certificate, so no DPoP key; the
+    # cert-configured client is built by the library (http_client must be None).
+    dpop_key = None if mtls else generate_dpop_key("ES256")
+    mtls_auth = _fapi2_mtls_auth() if mtls else None
     redirect_uri = f"{RP_BASE_URL}/callback"
 
     par_response = push_authorization_request(
@@ -878,12 +996,15 @@ def _authorize_fapi2(
             nonce=nonce,
             code_challenge=code_challenge,
             code_challenge_method="S256",
-            private_key_jwt=_fapi2_private_key_jwt(disco.issuer or issuer),
+            private_key_jwt=None
+            if mtls
+            else _fapi2_private_key_jwt(disco.issuer or issuer),
             dpop_key=dpop_key,
+            mtls=mtls_auth,
             # JARM: ask the OP to return a signed authorization response JWT.
             response_mode="jwt" if jarm else None,
         ),
-        http_client=http_client,
+        http_client=None if mtls else http_client,
     )
     if not par_response.is_successful or not par_response.request_uri:
         logger.error("REJECTED: PAR request failed: %s", par_response.error)
@@ -923,6 +1044,7 @@ def _authorize_fapi2(
         fapi2=True,
         dpop_key=dpop_key,
         jarm=jarm,
+        mtls=mtls,
         disco_address=disco_address,
     )
     sessions[state] = session
@@ -937,8 +1059,9 @@ def _authorize_fapi2(
     }
 
     logger.info(
-        "ACCEPTED: FAPI2 PAR pushed (private_key_jwt + DPoP + PKCE S256); "
-        "redirecting to OP with request_uri"
+        "ACCEPTED: FAPI2 PAR pushed (%s + PKCE S256); redirecting to OP with "
+        "request_uri",
+        "mTLS" if mtls else "private_key_jwt + DPoP",
     )
     return RedirectResponse(url=auth_url, status_code=302)
 
@@ -1040,17 +1163,40 @@ def _validate_fapi2_callback_issuer(
     )
 
 
+def _client_for_session(
+    session: AuthSession, http_client: HTTPClient
+) -> HTTPClient | None:
+    """The HTTP client to pass a client-authenticating request.
+
+    mTLS sessions must let the library build a short-lived cert-configured client
+    (``resolve_http_client`` rejects a managed client alongside ``mtls``), so pass
+    ``None``; every other session reuses the shared verify-disabled client.
+    """
+    return None if session.mtls else http_client
+
+
 def _build_auth_code_token_request(
-    session: AuthSession, token_endpoint: str, code: str
+    session: AuthSession, disco: DiscoveryDocumentResponse, code: str
 ) -> AuthorizationCodeTokenRequest:
     """Build the auth-code token exchange request for a session.
 
-    FAPI 2.0 sessions authenticate with ``private_key_jwt`` and bind the token
-    request with DPoP; other sessions use the (optional) client secret.
+    mTLS sessions authenticate + sender-constrain with the client certificate at
+    the OP's mtls token endpoint; other FAPI 2.0 sessions use ``private_key_jwt``
+    + DPoP; the rest use the (optional) client secret.
     """
-    if session.fapi2:
+    if session.mtls:
+        token_endpoint = resolve_mtls_endpoint(disco, "token_endpoint") or ""
         return AuthorizationCodeTokenRequest(
             address=token_endpoint,
+            client_id=session.client_id,
+            code=code,
+            redirect_uri=session.redirect_uri,
+            code_verifier=session.code_verifier,
+            mtls=_fapi2_mtls_auth(),
+        )
+    if session.fapi2:
+        return AuthorizationCodeTokenRequest(
+            address=disco.token_endpoint,
             client_id=session.client_id,
             code=code,
             redirect_uri=session.redirect_uri,
@@ -1059,7 +1205,7 @@ def _build_auth_code_token_request(
             dpop_key=session.dpop_key,
         )
     return AuthorizationCodeTokenRequest(
-        address=token_endpoint,
+        address=disco.token_endpoint,
         client_id=session.client_id,
         code=code,
         redirect_uri=session.redirect_uri,
@@ -1083,17 +1229,25 @@ def _fetch_userinfo(
     """
     if not (access_token and disco.userinfo_endpoint and not session.skip_userinfo):
         return {}
+    # mTLS presents the cert-bound token at the mtls userinfo endpoint; DPoP
+    # sessions present the DPoP-bound token with a proof at the standard endpoint.
+    userinfo_endpoint = (
+        resolve_mtls_endpoint(disco, "userinfo_endpoint")
+        if session.mtls
+        else disco.userinfo_endpoint
+    )
     try:
         userinfo_response = get_userinfo(
             UserInfoRequest(
-                address=disco.userinfo_endpoint,
+                address=userinfo_endpoint,
                 token=access_token,
                 expected_sub=expected_sub,
-                # FAPI 2.0: a DPoP-bound access token must be presented to the
-                # resource server with a DPoP proof, not as a Bearer.
-                dpop_key=session.dpop_key if session.fapi2 else None,
+                dpop_key=(
+                    session.dpop_key if (session.fapi2 and not session.mtls) else None
+                ),
+                mtls=_fapi2_mtls_auth() if session.mtls else None,
             ),
-            http_client=http_client,
+            http_client=_client_for_session(session, http_client),
         )
     except PyIdentityModelException as exc:
         logger.warning("UserInfo exception: %s", exc)
@@ -1169,33 +1323,47 @@ def _validate_fapi2_audience(session: AuthSession, claims: dict) -> HTMLResponse
 
 def _fetch_fapi2_resource(
     session: AuthSession,
+    disco: DiscoveryDocumentResponse,
     access_token: str | None,
     http_client: HTTPClient,
 ) -> None:
-    """Make the FAPI 2.0 DPoP-bound resource ("accounts") request.
+    """Make the FAPI 2.0 sender-constrained resource ("accounts") request.
 
     For the ``plain_fapi`` profile the OIDF client test treats a dedicated
     resource endpoint — not userinfo — as the resource server, and the
     happy-path module only reaches FINISHED once the RP calls it (see
-    ``_FAPI2_RESOURCE_PATH``). We reuse ``get_userinfo`` (with
-    ``expected_sub=None`` so no OIDC sub check runs) purely as a DPoP-bound
-    GET: it presents the cnf-bound access token as ``Authorization: DPoP`` with
-    a resource proof (``ath``) and honors the RFC 9449 §8 ``use_dpop_nonce``
-    retry. Best-effort — the suite fires ``resourceEndpointCallComplete`` when
-    the request arrives, so a non-JSON accounts body on our side is harmless.
+    ``_FAPI2_RESOURCE_PATH``). We reuse ``get_userinfo`` (``expected_sub=None`` so
+    no OIDC sub check runs) purely as a sender-constrained GET presenting the
+    cnf-bound access token: DPoP sessions attach a resource proof (``ath``) with
+    the RFC 9449 §8 nonce retry; mTLS sessions present the client certificate at
+    the mtls resource host (derived from the mtls token endpoint). Best-effort —
+    the suite fires ``resourceEndpointCallComplete`` when the request arrives.
     """
-    if not (session.fapi2 and access_token and session.dpop_key):
+    if not (session.fapi2 and access_token):
         return
-    accounts_url = session.issuer.rstrip("/") + "/" + _FAPI2_RESOURCE_PATH
+    if session.mtls:
+        # The mtls resource endpoint shares the mtls token endpoint's base host
+        # (port 8444) so nginx requests + forwards the client certificate.
+        mtls_token = resolve_mtls_endpoint(disco, "token_endpoint") or ""
+        base = mtls_token.rsplit("/token", 1)[0]
+        request = UserInfoRequest(
+            address=f"{base.rstrip('/')}/{_FAPI2_RESOURCE_PATH}",
+            token=access_token,
+            expected_sub=None,
+            mtls=_fapi2_mtls_auth(),
+        )
+    elif session.dpop_key:
+        request = UserInfoRequest(
+            address=session.issuer.rstrip("/") + "/" + _FAPI2_RESOURCE_PATH,
+            token=access_token,
+            expected_sub=None,
+            dpop_key=session.dpop_key,
+        )
+    else:
+        return
     try:
         resource_response = get_userinfo(
-            UserInfoRequest(
-                address=accounts_url,
-                token=access_token,
-                expected_sub=None,
-                dpop_key=session.dpop_key,
-            ),
-            http_client=http_client,
+            request, http_client=_client_for_session(session, http_client)
         )
     except PyIdentityModelException as exc:
         logger.info("FAPI2 accounts request completed with exception: %s", exc)
@@ -1333,8 +1501,8 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
             status_code=400,
         )
     token_response = request_authorization_code_token(
-        _build_auth_code_token_request(session, disco.token_endpoint, cb_response.code),
-        http_client=http_client,
+        _build_auth_code_token_request(session, disco, cb_response.code),
+        http_client=_client_for_session(session, http_client),
     )
 
     if not token_response.is_successful:
@@ -1451,7 +1619,7 @@ def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
     # FAPI 2.0 (plain_fapi): drive the dedicated resource endpoint so the OIDF
     # happy-path module transitions to FINISHED (userinfo alone leaves it
     # WAITING for this profile).
-    _fetch_fapi2_resource(session, access_token, http_client)
+    _fetch_fapi2_resource(session, disco, access_token, http_client)
 
     # Record the id_token + end-session endpoint so a later /logout can build the
     # RP-Initiated Logout URL. /logout carries no flow parameters of its own, so

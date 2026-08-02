@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import shutil
 import sys
+import textwrap
 import time
 from urllib.parse import urljoin, urlparse
 import zipfile
@@ -463,6 +464,7 @@ def drive_rp_authorize(
     profile: str = "",
     fapi2: bool = False,
     jarm: bool = False,
+    mtls: bool = False,
 ) -> None:
     """Hit the RP's /authorize endpoint to start an auth flow.
 
@@ -486,6 +488,7 @@ def drive_rp_authorize(
         "use_request_uri": str(use_request_uri).lower(),
         "fapi2": str(fapi2).lower(),
         "jarm": str(jarm).lower(),
+        "mtls": str(mtls).lower(),
     }
 
     # Follow all redirects through the full auth flow
@@ -615,19 +618,21 @@ def _clear_rp_cache(rp_base_url: str) -> None:
         logger.warning("Failed to clear RP caches (continuing): %s", exc)
 
 
-def _fetch_rp_jwks(rp_base_url: str) -> dict:
-    """Fetch the RP's public JWKS (FAPI 2.0 private_key_jwt) from the harness.
+def _fetch_rp_jwks(rp_base_url: str, path: str = "/fapi2-jwks") -> dict:
+    """Fetch one of the RP's public JWKS endpoints from the harness.
 
-    The harness generates its client-authentication key at startup and exposes
-    the public half at ``/fapi2-jwks``. Registering it with the suite lets the
-    suite verify the RP's ``private_key_jwt`` assertions. Raises if unreachable —
+    The harness generates its client key material at startup and exposes the
+    public half at ``/fapi2-jwks`` (private_key_jwt signing key) and
+    ``/fapi2-mtls-jwks`` (the mTLS client certificate, with x5c). Registering the
+    right one with the suite lets the OP verify the RP's ``private_key_jwt``
+    assertions or match its TLS-presented certificate. Raises if unreachable —
     a FAPI2 plan without a registered client key cannot pass.
     """
     with httpx.Client(verify=False, timeout=10.0) as client:
-        response = client.get(f"{rp_base_url}/fapi2-jwks")
+        response = client.get(f"{rp_base_url}{path}")
         response.raise_for_status()
         jwks = response.json()
-    logger.info("Fetched RP FAPI2 JWKS (%d key(s))", len(jwks.get("keys", [])))
+    logger.info("Fetched RP JWKS from %s (%d key(s))", path, len(jwks.get("keys", [])))
     return jwks
 
 
@@ -676,6 +681,7 @@ def run_test_module(
     dynamic: bool = False,
     fapi2: bool = False,
     jarm: bool = False,
+    mtls: bool = False,
 ) -> TestResult:
     """Execute a single conformance test module."""
     logger.info("=" * 60)
@@ -809,6 +815,7 @@ def run_test_module(
                 profile=profile,
                 fapi2=fapi2,
                 jarm=jarm,
+                mtls=mtls,
             )
             # Wait briefly for the suite to rotate keys
             time.sleep(1)
@@ -824,6 +831,7 @@ def run_test_module(
                 profile=profile,
                 fapi2=fapi2,
                 jarm=jarm,
+                mtls=mtls,
             )
         else:
             # Standard auth flow (with optional userinfo skip)
@@ -839,6 +847,7 @@ def run_test_module(
                 profile=profile,
                 fapi2=fapi2,
                 jarm=jarm,
+                mtls=mtls,
             )
 
     # Poll until the test finishes
@@ -909,6 +918,7 @@ def run_plan(
     alias = config["alias"]
     fapi2 = bool(config.get("fapi2", False))
     jarm = bool(config.get("jarm", False))
+    mtls = bool(config.get("mtls", False))
 
     logger.info("Plan: %s (%s)", plan_name, alias)
     logger.info("Variant: %s", variant)
@@ -926,14 +936,35 @@ def run_plan(
     client_overrides: dict | None = config.get("client")
     server_jwks: dict | None = None
     if fapi2:
-        client_overrides = {
-            "jwks": _fetch_rp_jwks(rp_base_url),
-            "token_endpoint_auth_method": "private_key_jwt",
-            # The RP requests the minimal ``openid`` scope; the suite requires the
-            # registered client scope to match it exactly
-            # (EnsureRequestedScopeIsEqualToConfiguredScope).
-            "scope": "openid",
-        }
+        if mtls:
+            # mTLS: register the RP's client certificate for
+            # self_signed_tls_client_auth and request cert-bound access tokens.
+            # The suite's EnsureClientCertificateMatches compares the presented
+            # TLS cert against a registered PEM ``certificate``, so supply that
+            # (reconstructed from the jwks x5c) alongside the jwks.
+            mtls_jwks = _fetch_rp_jwks(rp_base_url, "/fapi2-mtls-jwks")
+            x5c = mtls_jwks["keys"][0]["x5c"][0]
+            cert_pem = (
+                "-----BEGIN CERTIFICATE-----\n"
+                + "\n".join(textwrap.wrap(x5c, 64))
+                + "\n-----END CERTIFICATE-----\n"
+            )
+            client_overrides = {
+                "jwks": mtls_jwks,
+                "certificate": cert_pem,
+                "token_endpoint_auth_method": "self_signed_tls_client_auth",
+                "tls_client_certificate_bound_access_tokens": True,
+                "scope": "openid",
+            }
+        else:
+            client_overrides = {
+                "jwks": _fetch_rp_jwks(rp_base_url),
+                "token_endpoint_auth_method": "private_key_jwt",
+                # The RP requests the minimal ``openid`` scope; the suite requires
+                # the registered client scope to match it exactly
+                # (EnsureRequestedScopeIsEqualToConfiguredScope).
+                "scope": "openid",
+            }
         if jarm:
             # JARM: register the alg the OP must sign the authorization response
             # with. It must match the OP's supplied signing key (ES256, see
@@ -999,6 +1030,7 @@ def run_plan(
             dynamic=is_dynamic,
             fapi2=fapi2,
             jarm=jarm,
+            mtls=mtls,
         )
         results.append(result)
 
@@ -1158,6 +1190,9 @@ def main() -> None:
             # FAPI 2.0 Message Signing RP plan (adds JARM signed authorization
             # responses on top of the security profile)
             "fapi2-message-signing-rp",
+            # FAPI 2.0 Security Profile RP, mTLS variant (client_auth_type=mtls +
+            # sender_constrain=mtls: cert-bound tokens over RFC 8705 mutual TLS)
+            "fapi2-mtls-rp",
             # fastapi-identity-model package regression plans (same suite
             # plans, driven against the rp-fastapi harness on :8889)
             "fastapi-basic-rp",

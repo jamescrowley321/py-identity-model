@@ -67,6 +67,7 @@ from ..core.models import (
 from ..core.mtls import (
     certificate_thumbprint_from_file,
     compute_certificate_thumbprint,
+    resolve_mtls_endpoint,
     validate_certificate_binding,
 )
 from ..core.pkce import (
@@ -257,6 +258,7 @@ __all__ = [
     "request_authorization_code_token",
     "request_client_credentials_token",
     "request_device_authorization",
+    "resolve_mtls_endpoint",
     "revoke_token",
     "update_client",
     "validate_authorize_callback_issuer",

@@ -16,7 +16,7 @@ from ..core.userinfo_logic import (
     process_userinfo_response,
     validate_userinfo_sub,
 )
-from .http_client import get_http_client, retry_with_backoff
+from .http_client import resolve_http_client, retry_with_backoff
 from .managed_client import HTTPClient
 
 
@@ -54,8 +54,9 @@ def get_userinfo(
     headers = prepare_userinfo_headers(request)
 
     response = None
+    owned_client = None
     try:
-        client = http_client.client if http_client else get_http_client()
+        client, owned_client = resolve_http_client(request.mtls, http_client)
         response = _request_userinfo(client, request.address, headers)
         if request.dpop_key is not None:
             # RFC 9449 §8: honor a single ``use_dpop_nonce`` challenge by
@@ -72,6 +73,8 @@ def get_userinfo(
     finally:
         if response is not None:
             response.close()
+        if owned_client is not None:
+            owned_client.close()
 
 
 __all__ = [

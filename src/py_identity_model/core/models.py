@@ -1128,6 +1128,10 @@ class UserInfoRequest(BaseRequest):
     token: str
     expected_sub: str | None = None
     dpop_key: DPoPKey | None = None
+    # When set, the UserInfo/resource request presents this client certificate
+    # at the TLS layer (RFC 8705) — required to use an mTLS certificate-bound
+    # access token at the resource server (FAPI 2.0 sender constraining).
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)

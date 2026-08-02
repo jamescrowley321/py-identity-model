@@ -9,6 +9,7 @@ exercised in isolation.
 
 from base64 import urlsafe_b64encode
 from datetime import UTC, datetime
+import ssl
 from urllib.parse import parse_qs
 
 from cryptography import x509
@@ -56,6 +57,7 @@ from py_identity_model.core.models import DiscoveryDocumentResponse
 from py_identity_model.core.mtls import (
     apply_mtls_client_auth,
     build_httpx_cert,
+    build_mtls_ssl_context,
     resolve_mtls_endpoint,
 )
 from py_identity_model.core.par_logic import prepare_par_request_data
@@ -121,6 +123,35 @@ def cert_files(tmp_path_factory) -> tuple[str, str, bytes]:
 def mtls(cert_files) -> MtlsClientAuth:
     cert_path, key_path, _ = cert_files
     return MtlsClientAuth(certificate=cert_path, private_key=key_path)
+
+
+@pytest.mark.unit
+class TestBuildMtlsSslContext:
+    """build_mtls_ssl_context builds a context that presents the client cert.
+
+    httpx 0.28 does not apply ``cert=`` when ``verify`` is a CA-path string, so
+    the mTLS client must supply a fully-built SSLContext instead.
+    """
+
+    def test_returns_ssl_context_with_client_cert_loaded(self, mtls):
+        # load_cert_chain would raise if the cert/key failed to load.
+        ctx = build_mtls_ssl_context(mtls)
+        assert isinstance(ctx, ssl.SSLContext)
+
+    def test_verify_false_disables_server_verification(self, mtls, monkeypatch):
+        monkeypatch.setattr("py_identity_model.core.mtls.get_ssl_verify", lambda: False)
+        ctx = build_mtls_ssl_context(mtls)
+        assert ctx.verify_mode == ssl.CERT_NONE
+        assert ctx.check_hostname is False
+
+    def test_verify_cafile_requires_server_cert(self, mtls, cert_files, monkeypatch):
+        # Reuse the client cert PEM path as a CA bundle to exercise the str path.
+        cafile = cert_files[0]
+        monkeypatch.setattr(
+            "py_identity_model.core.mtls.get_ssl_verify", lambda: cafile
+        )
+        ctx = build_mtls_ssl_context(mtls)
+        assert ctx.verify_mode == ssl.CERT_REQUIRED
 
 
 @pytest.mark.unit

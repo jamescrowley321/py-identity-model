@@ -27,7 +27,7 @@ from ..core.http_utils import (
     resolve_retry_delay,
     should_retry_response,
 )
-from ..core.mtls import build_httpx_cert
+from ..core.mtls import build_mtls_ssl_context
 from ..logging_config import logger
 from ..ssl_config import get_ssl_verify
 
@@ -201,8 +201,7 @@ def build_mtls_client(mtls: MtlsClientAuth) -> httpx.AsyncClient:
         A new ``httpx.AsyncClient`` configured with the client certificate.
     """
     return httpx.AsyncClient(
-        verify=get_ssl_verify(),
-        cert=build_httpx_cert(mtls),
+        verify=build_mtls_ssl_context(mtls),
         timeout=get_timeout(),
         follow_redirects=False,
     )
