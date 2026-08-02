@@ -1,160 +1,160 @@
 {
   "plan": "fapi2-rp",
-  "plan_id": "dXnUtHbBVeQJZ",
+  "plan_id": "h4IijDkEoZgtf",
   "suite_url": "https://localhost.emobix.co.uk:8443",
   "results": [
     {
       "test": "fapi2-security-profile-final-client-test-happy-path",
       "status": "PASSED",
-      "test_id": "izzqJ03MsF2dY7Y",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=izzqJ03MsF2dY7Y",
+      "test_id": "PKyFH5dPDnh3TdX",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=PKyFH5dPDnh3TdX",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-discovery-issuer-mismatch",
       "status": "PASSED",
-      "test_id": "7PFU29VMjBQYItQ",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=7PFU29VMjBQYItQ",
+      "test_id": "PEAAz3rv52l8ZpS",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=PEAAz3rv52l8ZpS",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-invalid-iss",
       "status": "PASSED",
-      "test_id": "QZoWrEEvJA8I24K",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=QZoWrEEvJA8I24K",
+      "test_id": "cpImXtF69JvkhQC",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=cpImXtF69JvkhQC",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-invalid-aud",
       "status": "PASSED",
-      "test_id": "nZWlvY5tsvIlDuV",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=nZWlvY5tsvIlDuV",
+      "test_id": "uTFVoI55QCwfU7a",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=uTFVoI55QCwfU7a",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-invalid-secondary-aud",
       "status": "PASSED",
-      "test_id": "aMV2erh4xRxRjqY",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=aMV2erh4xRxRjqY",
+      "test_id": "4h1PCAgDDBw55St",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=4h1PCAgDDBw55St",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-invalid-null-alg",
       "status": "PASSED",
-      "test_id": "dQluRPaJMNJAvoN",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=dQluRPaJMNJAvoN",
+      "test_id": "F6m9ADag9Q09Lv5",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=F6m9ADag9Q09Lv5",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-invalid-alternate-alg",
       "status": "PASSED",
-      "test_id": "NF59kg2Bho4hx5f",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=NF59kg2Bho4hx5f",
+      "test_id": "H6YVNmQ2v7Rr64n",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=H6YVNmQ2v7Rr64n",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-invalid-expired-exp",
       "status": "PASSED",
-      "test_id": "pYu60GOYTc1m2Dm",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=pYu60GOYTc1m2Dm",
+      "test_id": "pAOjzbghcePW7Hv",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=pAOjzbghcePW7Hv",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-invalid-missing-exp",
       "status": "PASSED",
-      "test_id": "yWYPBazzVAC15LE",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=yWYPBazzVAC15LE",
+      "test_id": "QP54iR19QCfD9SF",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=QP54iR19QCfD9SF",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-invalid-missing-aud",
       "status": "PASSED",
-      "test_id": "9PfvQFiPxYxrcFX",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=9PfvQFiPxYxrcFX",
+      "test_id": "hXWAjAtiRWaRGFh",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=hXWAjAtiRWaRGFh",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-invalid-missing-iss",
       "status": "PASSED",
-      "test_id": "wZ0ZHkD2jbfzBhl",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=wZ0ZHkD2jbfzBhl",
+      "test_id": "lxLTSxN0YJzij4i",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=lxLTSxN0YJzij4i",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-valid-aud-as-array",
       "status": "PASSED",
-      "test_id": "DA3hk1gH7McFW2l",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=DA3hk1gH7McFW2l",
+      "test_id": "RNOjgS4g6wvwcAF",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=RNOjgS4g6wvwcAF",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-invalid-nonce",
       "status": "PASSED",
-      "test_id": "7gEqP3WYiq1800Y",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=7gEqP3WYiq1800Y",
+      "test_id": "8C10BtSa6umnaP4",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=8C10BtSa6umnaP4",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-invalid-missing-nonce",
       "status": "PASSED",
-      "test_id": "fbW4YqqZpFxqzpS",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=fbW4YqqZpFxqzpS",
+      "test_id": "cAcNTnm0Ti0RHZV",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=cAcNTnm0Ti0RHZV",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-invalid-authorization-response-iss",
       "status": "PASSED",
-      "test_id": "Jmdh4iqSf0CcRQI",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=Jmdh4iqSf0CcRQI",
+      "test_id": "QgSdPER7hhr5QpA",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=QgSdPER7hhr5QpA",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-remove-authorization-response-iss",
       "status": "PASSED",
-      "test_id": "yrQXWTdfhvCZCxf",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=yrQXWTdfhvCZCxf",
+      "test_id": "P3sRZopjRDgiwwF",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=P3sRZopjRDgiwwF",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-ensure-authorization-response-with-invalid-state-fails",
       "status": "PASSED",
-      "test_id": "BKXPlVgB3CRA0hq",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=BKXPlVgB3CRA0hq",
+      "test_id": "frl596t3kPvUjJ7",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=frl596t3kPvUjJ7",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-ensure-authorization-response-with-invalid-missing-state-fails",
       "status": "PASSED",
-      "test_id": "tqitTk1L20S8ILV",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=tqitTk1L20S8ILV",
+      "test_id": "SZU2zT2WJLGjTsy",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=SZU2zT2WJLGjTsy",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-token-endpoint-response-without-expires_in",
       "status": "PASSED",
-      "test_id": "ldXLEyaThSVfmTI",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=ldXLEyaThSVfmTI",
+      "test_id": "KV5Zm1ldwknLa7h",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=KV5Zm1ldwknLa7h",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-token-type-case-insensitivity",
       "status": "PASSED",
-      "test_id": "dOa8XydLMSE043o",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=dOa8XydLMSE043o",
+      "test_id": "5FiNJmHV11chiDr",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=5FiNJmHV11chiDr",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-rs-dpop-auth-scheme-case-insensitivity",
       "status": "PASSED",
-      "test_id": "diBpJPIGCL7qD6q",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=diBpJPIGCL7qD6q",
+      "test_id": "8rpIIU4mFHIfVJP",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=8rpIIU4mFHIfVJP",
       "detail": ""
     },
     {
       "test": "fapi2-security-profile-final-client-test-happy-path-no-dpop-nonce",
       "status": "PASSED",
-      "test_id": "NIMdnuAf6EUwUhK",
-      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=NIMdnuAf6EUwUhK",
+      "test_id": "3ZIK8AVPbQFSdCS",
+      "log_url": "https://localhost.emobix.co.uk:8443/log-detail.html?log=3ZIK8AVPbQFSdCS",
       "detail": ""
     }
   ],
