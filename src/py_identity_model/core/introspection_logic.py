@@ -10,6 +10,7 @@ import httpx
 from ..logging_config import logger
 from ..logging_utils import redact_url
 from .client_assertion import apply_private_key_jwt
+from .client_auth import basic_auth_credentials
 from .error_handlers import handle_introspection_error
 from .models import TokenIntrospectionRequest, TokenIntrospectionResponse
 from .response_processors import parse_introspection_response
@@ -47,7 +48,7 @@ def prepare_introspection_request_data(
             default_audience=request.address,
         )
     elif request.client_secret is not None:
-        auth = (request.client_id, request.client_secret)
+        auth = basic_auth_credentials(request.client_id, request.client_secret)
     else:
         params["client_id"] = request.client_id
 

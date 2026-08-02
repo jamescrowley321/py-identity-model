@@ -10,6 +10,8 @@ import httpx
 from ..logging_config import logger
 from ..logging_utils import redact_url
 from .client_assertion import apply_private_key_jwt
+from .client_auth import basic_auth_credentials
+from .dpop import create_dpop_proof
 from .error_handlers import (
     handle_auth_code_token_error,
     handle_refresh_token_error,
@@ -80,7 +82,7 @@ def prepare_token_request_data(
     elif request.client_secret is not None:
         # ``is not None`` (not truthiness) mirrors the auth-code/refresh
         # branches so an empty-string secret is handled identically here.
-        auth = (request.client_id, request.client_secret)
+        auth = basic_auth_credentials(request.client_id, request.client_secret)
     else:
         params["client_id"] = request.client_id
 
@@ -127,8 +129,15 @@ def log_auth_code_token_request(
 
 def prepare_auth_code_token_request_data(
     request: AuthorizationCodeTokenRequest,
+    dpop_nonce: str | None = None,
 ) -> tuple[dict, dict, tuple[str, str] | None]:
     """Prepare request data, headers, and optional auth for auth code exchange.
+
+    Args:
+        request: The authorization code token exchange request.
+        dpop_nonce: Server-provided DPoP nonce to embed in the proof when the
+            request is DPoP-bound and a prior ``use_dpop_nonce`` challenge was
+            returned (RFC 9449 §8).
 
     Returns:
         ``(data, headers, auth)`` where *auth* is ``None`` for public clients.
@@ -145,6 +154,14 @@ def prepare_auth_code_token_request_data(
 
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
+    if request.dpop_key is not None:
+        # RFC 9449: bind the issued tokens to the client's key. The token-
+        # endpoint proof carries no ``ath`` (that is reserved for resource-
+        # server requests, which hash the access token).
+        headers["DPoP"] = create_dpop_proof(
+            request.dpop_key, "POST", request.address, nonce=dpop_nonce
+        )
+
     auth: tuple[str, str] | None = None
     if request.private_key_jwt is not None:
         # RFC 7523: private_key_jwt assertion in body, no auth header.
@@ -157,7 +174,7 @@ def prepare_auth_code_token_request_data(
     elif request.client_secret is not None:
         # RFC 6749 §2.3.1: use Basic auth for confidential clients;
         # client_id is carried in the auth header, not the body.
-        auth = (request.client_id, request.client_secret)
+        auth = basic_auth_credentials(request.client_id, request.client_secret)
     else:
         # Public client: include client_id in the request body
         params["client_id"] = request.client_id
@@ -216,7 +233,7 @@ def prepare_refresh_token_request_data(
     elif request.client_secret is not None:
         # RFC 6749 §2.3.1: use Basic auth for confidential clients;
         # client_id is carried in the auth header, not the body.
-        auth = (request.client_id, request.client_secret)
+        auth = basic_auth_credentials(request.client_id, request.client_secret)
     else:
         # Public client: include client_id in the request body
         params["client_id"] = request.client_id

@@ -9,6 +9,7 @@ import httpx
 
 from ..logging_config import logger
 from ..logging_utils import redact_url
+from .dpop import create_dpop_proof
 from .error_handlers import handle_userinfo_error
 from .models import UserInfoRequest, UserInfoResponse
 from .response_processors import parse_userinfo_response
@@ -26,17 +27,38 @@ def log_userinfo_status(status_code: int) -> None:
     logger.debug(f"UserInfo request status code: {status_code}")
 
 
-def prepare_userinfo_headers(token: str) -> dict:
+def prepare_userinfo_headers(
+    request: UserInfoRequest, dpop_nonce: str | None = None
+) -> dict:
     """
-    Prepare Authorization header for UserInfo request.
+    Prepare the Authorization (and optional DPoP) headers for a UserInfo request.
+
+    A plain access token is sent as ``Authorization: Bearer <token>``. When the
+    request carries a ``dpop_key`` the token is sender-constrained (RFC 9449):
+    it is presented as ``Authorization: DPoP <token>`` alongside a DPoP proof
+    for this resource request. The resource-request proof MUST carry the ``ath``
+    access-token hash (unlike the token-endpoint proof, which does not).
 
     Args:
-        token: Bearer access token
+        request: The UserInfo request (address, token, and optional dpop_key).
+        dpop_nonce: Server-provided DPoP nonce to embed in the proof when a
+            prior ``use_dpop_nonce`` challenge was returned (RFC 9449 §8).
 
     Returns:
-        Headers dict with Authorization: Bearer <token>
+        Headers dict — ``Authorization: Bearer <token>``, or (when DPoP-bound)
+        ``Authorization: DPoP <token>`` plus a ``DPoP`` proof header.
     """
-    return {"Authorization": f"Bearer {token}"}
+    if request.dpop_key is None:
+        return {"Authorization": f"Bearer {request.token}"}
+
+    proof = create_dpop_proof(
+        request.dpop_key,
+        "GET",
+        request.address,
+        access_token=request.token,
+        nonce=dpop_nonce,
+    )
+    return {"Authorization": f"DPoP {request.token}", "DPoP": proof}
 
 
 def process_userinfo_response(response: httpx.Response) -> UserInfoResponse:
