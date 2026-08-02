@@ -198,6 +198,12 @@ async function startProvider() {
       requestObjects: {
         request: true,
       },
+      // JARM — JWT-Secured Authorization Response Mode. Advertises
+      // authorization_signing_alg_values_supported and the *.jwt response
+      // modes in discovery so RP integration tests can detect the capability.
+      jwtResponseModes: {
+        enabled: true,
+      },
       resourceIndicators: {
         enabled: true,
         // Default to urn:test:api so tokens are issued as JWTs.

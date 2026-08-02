@@ -102,6 +102,22 @@ class AuthorizeCallbackException(ValidationException):
     """Raised when authorization callback validation fails."""
 
 
+class JarmValidationException(AuthorizeCallbackException):
+    """Raised when JWT-Secured Authorization Response Mode (JARM) processing fails.
+
+    Covers JARM-specific failures (JARM §4): a missing ``response`` parameter,
+    a rejected signing algorithm (``none``/symmetric/not-advertised), or a
+    response JWT missing a mandatory ``iss``/``aud``/``exp`` claim. Signature,
+    issuer, audience, and expiry mismatches surface as the underlying
+    ``TokenValidationException`` subclasses (``SignatureVerificationException``,
+    ``InvalidIssuerException``, ``InvalidAudienceException``,
+    ``TokenExpiredException``) raised by the shared JWT decoder.
+
+    Subclasses ``AuthorizeCallbackException`` because a JARM failure is an
+    authorization-callback processing error.
+    """
+
+
 class NetworkException(PyIdentityModelException):
     """Raised when network operations fail."""
 
