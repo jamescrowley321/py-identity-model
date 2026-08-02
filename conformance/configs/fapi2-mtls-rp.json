@@ -1,0 +1,16 @@
+{
+  "plan_name": "fapi2-security-profile-final-client-test-plan",
+  "variant": {
+    "client_auth_type": "mtls",
+    "sender_constrain": "mtls",
+    "authorization_request_type": "simple",
+    "fapi_client_type": "oidc",
+    "fapi_profile": "plain_fapi"
+  },
+  "alias": "py-identity-model-fapi2-mtls-rp",
+  "fapi2": true,
+  "mtls": true,
+  "client": {
+    "client_id": "conformance-rp"
+  }
+}
