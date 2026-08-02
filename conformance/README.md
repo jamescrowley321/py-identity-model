@@ -2,6 +2,9 @@
 
 Test infrastructure for running the [OpenID Foundation conformance suite](https://openid.net/certification/testing/) against py-identity-model.
 
+> Adding a *new* profile (not just running an existing one)? Follow the
+> repeatable playbook in [`adding-conformance-profiles.md`](adding-conformance-profiles.md).
+
 ## Architecture
 
 - **Conformance suite** — OIDF Java server + MongoDB + nginx (TLS termination)
