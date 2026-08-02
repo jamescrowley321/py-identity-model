@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v3.8.0 (2026-08-02)
+
+### Continuous Integration
+
+- **conformance**: Install cryptography for the test runner
+  ([`fc8d8e9`](https://github.com/jamescrowley321/py-identity-model/commit/fc8d8e90827fefd7222dbdae2f0c82105d8032a1))
+
+### Features
+
+- **conformance**: OIDF RP conformance harness — new profiles + FAPI2/JARM/mTLS
+  ([`17650e1`](https://github.com/jamescrowley321/py-identity-model/commit/17650e1a0da6e681b6be0be08820a445d60fb908))
+
+
 ## v3.7.0 (2026-08-02)
 
 ### Bug Fixes
