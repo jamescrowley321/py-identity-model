@@ -12,12 +12,14 @@ import httpx
 from ..logging_config import logger
 from ..logging_utils import redact_url
 from .client_assertion import apply_private_key_jwt
+from .client_auth import basic_auth_credentials
 from .models import (
     DeviceAuthorizationRequest,
     DeviceAuthorizationResponse,
     DeviceTokenRequest,
     DeviceTokenResponse,
 )
+from .mtls import apply_mtls_client_auth
 
 
 # RFC 8628 Section 3.5: error codes during token polling
@@ -78,8 +80,12 @@ def prepare_device_auth_request_data(
             client_id=request.client_id,
             default_audience=request.address,
         )
+    elif request.mtls is not None:
+        # RFC 8705 §2: mTLS client auth — certificate is presented at the TLS
+        # layer, client_id goes in the body, no Authorization header.
+        apply_mtls_client_auth(params, client_id=request.client_id)
     elif request.client_secret:
-        auth = (request.client_id, request.client_secret)
+        auth = basic_auth_credentials(request.client_id, request.client_secret)
 
     return params, headers, auth
 
@@ -198,8 +204,12 @@ def prepare_device_token_request_data(
             client_id=request.client_id,
             default_audience=request.address,
         )
+    elif request.mtls is not None:
+        # RFC 8705 §2: mTLS client auth — certificate is presented at the TLS
+        # layer, client_id goes in the body, no Authorization header.
+        apply_mtls_client_auth(params, client_id=request.client_id)
     elif request.client_secret:
-        auth = (request.client_id, request.client_secret)
+        auth = basic_auth_credentials(request.client_id, request.client_secret)
 
     return params, headers, auth
 

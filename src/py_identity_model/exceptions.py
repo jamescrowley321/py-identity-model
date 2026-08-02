@@ -102,6 +102,32 @@ class AuthorizeCallbackException(ValidationException):
     """Raised when authorization callback validation fails."""
 
 
+class JarmValidationException(AuthorizeCallbackException):
+    """Raised when JWT-Secured Authorization Response Mode (JARM) processing fails.
+
+    Covers JARM-specific failures (JARM §4): a missing ``response`` parameter,
+    a rejected signing algorithm (``none``/symmetric/not-advertised), or a
+    response JWT missing a mandatory ``iss``/``aud``/``exp`` claim. Signature,
+    issuer, audience, and expiry mismatches surface as the underlying
+    ``TokenValidationException`` subclasses (``SignatureVerificationException``,
+    ``InvalidIssuerException``, ``InvalidAudienceException``,
+    ``TokenExpiredException``) raised by the shared JWT decoder.
+
+    Subclasses ``AuthorizeCallbackException`` because a JARM failure is an
+    authorization-callback processing error.
+    """
+
+
+class CertificateBindingError(ValidationException):
+    """Raised when mTLS certificate-bound access token validation fails.
+
+    Covers the RFC 8705 §3 confirmation-method check: the token's
+    ``cnf["x5t#S256"]`` thumbprint must match the client certificate
+    presented at the TLS layer. Absent ``cnf``/``x5t#S256`` or a thumbprint
+    mismatch raises this error.
+    """
+
+
 class NetworkException(PyIdentityModelException):
     """Raised when network operations fail."""
 
@@ -173,6 +199,7 @@ class SuccessfulResponseAccessError(PyIdentityModelException):
 
 __all__ = [
     "AuthorizeCallbackException",
+    "CertificateBindingError",
     "ConfigurationException",
     "DiscoveryException",
     "FailedResponseAccessError",

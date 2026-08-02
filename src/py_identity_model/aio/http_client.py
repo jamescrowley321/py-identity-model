@@ -10,10 +10,12 @@ Environment Variables:
     HTTP_TIMEOUT: Request timeout in seconds (default: 30.0)
 """
 
+from __future__ import annotations
+
 import asyncio
 from functools import wraps
 import threading
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 import httpx
 
@@ -25,8 +27,14 @@ from ..core.http_utils import (
     resolve_retry_delay,
     should_retry_response,
 )
+from ..core.mtls import build_mtls_ssl_context
 from ..logging_config import logger
 from ..ssl_config import get_ssl_verify
+
+
+if TYPE_CHECKING:
+    from ..core.models import MtlsClientAuth
+    from .managed_client import AsyncHTTPClient
 
 
 # Thread lock for async client creation (protects multi-threaded initialization)
@@ -178,6 +186,70 @@ def get_async_http_client() -> httpx.AsyncClient:
         return _state["client"]
 
 
+def build_mtls_client(mtls: MtlsClientAuth) -> httpx.AsyncClient:
+    """Build a short-lived async HTTP client presenting a client certificate.
+
+    Used for RFC 8705 mutual-TLS client authentication: the certificate is
+    presented at the TLS layer, so a dedicated client is required (httpx has
+    no per-request ``cert=``). The caller **owns** the returned client and
+    must ``aclose()`` it once the request completes.
+
+    Args:
+        mtls: The mTLS client-authentication configuration.
+
+    Returns:
+        A new ``httpx.AsyncClient`` configured with the client certificate.
+    """
+    return httpx.AsyncClient(
+        verify=build_mtls_ssl_context(mtls),
+        timeout=get_timeout(),
+        follow_redirects=False,
+    )
+
+
+def resolve_async_http_client(
+    mtls: MtlsClientAuth | None,
+    http_client: AsyncHTTPClient | None,
+) -> tuple[httpx.AsyncClient, httpx.AsyncClient | None]:
+    """Resolve the async HTTP client to use for a client-authenticating request.
+
+    At most one of *mtls* / *http_client* may be supplied. When *mtls* is
+    configured, a short-lived cert-configured client is built (RFC 8705); a
+    managed *http_client* is used as-is; otherwise the shared singleton client
+    is used.
+
+    A managed *http_client* cannot be guaranteed to present the requested
+    client certificate at the TLS layer, and the ``prepare_*`` body branch has
+    already dropped ``client_secret``/Basic auth for the mTLS case — so
+    supplying both would silently emit an unauthenticated request. Reject that
+    combination explicitly rather than downgrading.
+
+    Args:
+        mtls: The request's mTLS configuration, or ``None``.
+        http_client: An optional managed ``AsyncHTTPClient`` wrapper.
+
+    Returns:
+        ``(client, owned)`` — *client* is the client to use; *owned* is the
+        same object when the caller must ``aclose()`` it afterwards (mTLS),
+        else ``None`` for shared/managed clients that must not be closed here.
+
+    Raises:
+        ValueError: If both *mtls* and *http_client* are supplied.
+    """
+    if mtls is not None and http_client is not None:
+        raise ValueError(
+            "Cannot combine a managed http_client with mtls: a managed client "
+            "cannot be guaranteed to present the mTLS client certificate. Pass "
+            "one or the other."
+        )
+    if http_client is not None:
+        return http_client.client, None
+    if mtls is not None:
+        client = build_mtls_client(mtls)
+        return client, client
+    return get_async_http_client(), None
+
+
 async def close_async_http_client() -> None:
     """
     Close the persistent async HTTP client and clear the cache.
@@ -213,7 +285,9 @@ def _reset_async_http_client() -> None:
 
 
 __all__ = [
+    "build_mtls_client",
     "close_async_http_client",
     "get_async_http_client",
+    "resolve_async_http_client",
     "retry_with_backoff_async",
 ]

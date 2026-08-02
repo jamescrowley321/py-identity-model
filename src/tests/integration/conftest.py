@@ -238,6 +238,24 @@ def _detect_feature_capabilities(raw_discovery: dict) -> set[str]:
         caps.add("jar")
     if raw_discovery.get("backchannel_logout_supported"):
         caps.add("backchannel_logout")
+    # JARM (JWT-Secured Authorization Response Mode): the AS advertises the
+    # signing algs and/or the *.jwt response modes when it can return a signed
+    # authorization response.
+    response_modes = raw_discovery.get("response_modes_supported", [])
+    if raw_discovery.get("authorization_signing_alg_values_supported") or any(
+        mode.endswith(".jwt") or mode == "jwt" for mode in response_modes
+    ):
+        caps.add("jarm")
+
+    # mTLS (RFC 8705): the AS must both terminate TLS with client-cert
+    # verification and advertise an mTLS client-auth method / mtls_endpoint_aliases.
+    auth_methods = raw_discovery.get("token_endpoint_auth_methods_supported", []) or []
+    if (
+        {"tls_client_auth", "self_signed_tls_client_auth"} & set(auth_methods)
+        or raw_discovery.get("mtls_endpoint_aliases")
+        or raw_discovery.get("tls_client_certificate_bound_access_tokens")
+    ):
+        caps.add("mtls")
 
     # devInteractions: only local fixtures support automated
     # browser-like auth code flows

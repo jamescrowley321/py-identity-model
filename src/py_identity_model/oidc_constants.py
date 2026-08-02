@@ -360,6 +360,12 @@ class ResponseModes(Enum):
     FORM_POST = "form_post"
     QUERY = "query"
     FRAGMENT = "fragment"
+    # JWT-Secured Authorization Response Mode (JARM) — the authorization
+    # response is returned as a JWT in the ``response`` parameter.
+    QUERY_JWT = "query.jwt"
+    FRAGMENT_JWT = "fragment.jwt"
+    FORM_POST_JWT = "form_post.jwt"
+    JWT = "jwt"
 
 
 class DisplayModes(Enum):

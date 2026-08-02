@@ -2,6 +2,52 @@
 
 <!-- version list -->
 
+## v3.6.0 (2026-08-02)
+
+### Bug Fixes
+
+- **mtls**: Address review findings — example, conflict guard, ASCII guard
+  ([#215](https://github.com/jamescrowley321/py-identity-model/pull/215),
+  [`545a402`](https://github.com/jamescrowley321/py-identity-model/commit/545a4027cf42e4a385a7359c190df4dc5afcea18))
+
+- **mtls**: Present client cert on httpx 0.28 + thread mTLS through UserInfo
+  ([`528a474`](https://github.com/jamescrowley321/py-identity-model/commit/528a4745a4c29e2c104c986ef1496522713b3150))
+
+### Documentation
+
+- Document mTLS client auth and cert-bound tokens (RFC 8705)
+  ([`8c39748`](https://github.com/jamescrowley321/py-identity-model/commit/8c39748b09ae3b00b82105837bd0808619bd9216))
+
+### Features
+
+- **mtls**: Add mTLS client auth + certificate-bound token validation (RFC 8705, #215)
+  ([`55c2ba0`](https://github.com/jamescrowley321/py-identity-model/commit/55c2ba09a3e6a220f44a87374913af614448bd06))
+
+### Testing
+
+- **mtls**: Add unit + integration tests for mTLS client auth (RFC 8705, #215)
+  ([`4c00748`](https://github.com/jamescrowley321/py-identity-model/commit/4c0074868bb6cf119190ddacbe026f88f4ccf993))
+
+
+## v3.5.0 (2026-08-02)
+
+### Bug Fixes
+
+- **auth**: Form-urlencode HTTP Basic client credentials (RFC 6749 §2.3.1)
+  ([`ab9e5a5`](https://github.com/jamescrowley321/py-identity-model/commit/ab9e5a5df9c00f5430b83212784a415ffd25e4f4))
+
+### Features
+
+- **discovery**: Expose pushed_authorization_request_endpoint (RFC 9126 §5)
+  ([`21f85e0`](https://github.com/jamescrowley321/py-identity-model/commit/21f85e0aaa279660a4b7c2c72f400f360efc6363))
+
+- **dpop**: Thread DPoP proofs through PAR + auth-code token requests
+  ([`2aabb62`](https://github.com/jamescrowley321/py-identity-model/commit/2aabb62f8e7f7287e7245001a5a01679747a56c3))
+
+- **dpop**: Thread DPoP proofs through UserInfo resource requests
+  ([`e48beba`](https://github.com/jamescrowley321/py-identity-model/commit/e48bebac34fd10634e4831ff663f9ee7f3ef8e23))
+
+
 ## v3.4.3 (2026-08-02)
 
 ### Bug Fixes

@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from .discovery_policy import DiscoveryPolicy
+    from .dpop import DPoPKey
 
 
 # ============================================================================
@@ -481,10 +482,17 @@ class DiscoveryDocumentResponse(BaseResponse):
             "op_tos_uri",
             "introspection_endpoint",
             "code_challenge_methods_supported",
+            "pushed_authorization_request_endpoint",
+            "require_pushed_authorization_requests",
             "end_session_endpoint",
             "backchannel_logout_supported",
             "backchannel_logout_session_supported",
             "authorization_response_iss_parameter_supported",
+            "authorization_signing_alg_values_supported",
+            "authorization_encryption_alg_values_supported",
+            "authorization_encryption_enc_values_supported",
+            "mtls_endpoint_aliases",
+            "tls_client_certificate_bound_access_tokens",
         }
     )
 
@@ -532,6 +540,10 @@ class DiscoveryDocumentResponse(BaseResponse):
     # PKCE support (RFC 8414)
     code_challenge_methods_supported: list[str] | None = None
 
+    # Pushed Authorization Requests (RFC 9126 §5)
+    pushed_authorization_request_endpoint: str | None = None
+    require_pushed_authorization_requests: bool | None = None
+
     # Feature support flags
     claims_parameter_supported: bool | None = None
     request_parameter_supported: bool | None = None
@@ -540,6 +552,15 @@ class DiscoveryDocumentResponse(BaseResponse):
 
     # Authorization-response issuer parameter support (RFC 9207 §3)
     authorization_response_iss_parameter_supported: bool | None = None
+
+    # JWT-Secured Authorization Response Mode (JARM §5) algorithm support
+    authorization_signing_alg_values_supported: list[str] | None = None
+    authorization_encryption_alg_values_supported: list[str] | None = None
+    authorization_encryption_enc_values_supported: list[str] | None = None
+
+    # Mutual-TLS support (RFC 8705 §3.3 / §5)
+    mtls_endpoint_aliases: dict | None = None
+    tls_client_certificate_bound_access_tokens: bool | None = None
 
     # RP-Initiated Logout support (OpenID Connect RP-Initiated Logout 1.0 §2)
     end_session_endpoint: str | None = None
@@ -625,6 +646,38 @@ class PrivateKeyJwt:
     lifetime: int = 300
 
 
+@dataclass
+class MtlsClientAuth:
+    """Mutual-TLS client authentication parameters (RFC 8705).
+
+    When supplied on a client-authenticating request, the client is
+    authenticated by presenting an X.509 certificate at the TLS layer
+    (``tls_client_auth`` or ``self_signed_tls_client_auth``) instead of a
+    client secret. ``client_id`` is carried in the request body and no
+    ``Authorization`` header is sent (RFC 8705 §2). It takes precedence over
+    ``client_secret`` but sits below ``private_key_jwt`` when both are present.
+
+    The certificate is presented at the TLS layer, so the sync/async HTTP
+    wrappers build a short-lived, cert-configured client for the request.
+
+    Attributes:
+        certificate: Filesystem path to the PEM-encoded client certificate.
+        private_key: Filesystem path to the PEM-encoded private key. ``repr``
+            is suppressed so the key path never leaks into logs or crash
+            reports, mirroring the ``private_key`` treatment on
+            :class:`PrivateKeyJwt`.
+        password: Optional password for an encrypted private key. Secret —
+            ``repr`` suppressed.
+        auth_method: The RFC 8705 §2 method name — ``"tls_client_auth"``
+            (default, PKI-based) or ``"self_signed_tls_client_auth"``.
+    """
+
+    certificate: str
+    private_key: str = field(repr=False)
+    password: str | None = field(default=None, repr=False)
+    auth_method: str = "tls_client_auth"
+
+
 # ============================================================================
 # Token Client Models
 # ============================================================================
@@ -648,6 +701,7 @@ class ClientCredentialsTokenRequest(BaseRequest):
     client_secret: str | None = None
     scope: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -680,6 +734,12 @@ class AuthorizationCodeTokenRequest(BaseRequest):
         code_verifier: PKCE code verifier (required when PKCE was used).
         client_secret: Client secret (optional for public clients per RFC 7636).
         scope: Space-delimited list of requested scopes (optional).
+        private_key_jwt: ``private_key_jwt`` authentication parameters.  When
+            set, takes precedence over ``client_secret`` (RFC 7523).
+        dpop_key: When set, the token request is DPoP-bound (RFC 9449): a DPoP
+            proof for the token endpoint is attached and the ``use_dpop_nonce``
+            challenge is honored with a single retry.  FAPI 2.0 sender
+            constraining.
     """
 
     client_id: str
@@ -689,6 +749,8 @@ class AuthorizationCodeTokenRequest(BaseRequest):
     client_secret: str | None = None
     scope: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    dpop_key: DPoPKey | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -728,6 +790,7 @@ class RefreshTokenRequest(BaseRequest):
     scope: str | None = None
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -767,6 +830,7 @@ class TokenIntrospectionRequest(BaseRequest):
     token_type_hint: str | None = None
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -808,6 +872,14 @@ class PushedAuthorizationRequest(BaseRequest):
         code_challenge: PKCE code challenge.
         code_challenge_method: PKCE method (``"S256"`` or ``"plain"``).
         client_secret: Client secret (optional for public clients).
+        private_key_jwt: ``private_key_jwt`` authentication parameters.  When
+            set, takes precedence over ``client_secret`` (RFC 7523).
+        dpop_key: When set, the PAR is DPoP-bound (RFC 9449): a DPoP proof for
+            the PAR endpoint is attached and the ``use_dpop_nonce`` challenge is
+            honored with a single retry.  FAPI 2.0 sender constraining.
+        response_mode: OAuth 2.0 ``response_mode`` to push (e.g. ``"jwt"`` /
+            ``"query.jwt"`` for JWT-Secured Authorization Response Mode, JARM).
+            Omitted from the pushed parameters when ``None``.
     """
 
     client_id: str
@@ -820,6 +892,9 @@ class PushedAuthorizationRequest(BaseRequest):
     code_challenge_method: str | None = None
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    dpop_key: DPoPKey | None = None
+    mtls: MtlsClientAuth | None = None
+    response_mode: str | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -857,6 +932,7 @@ class DeviceAuthorizationRequest(BaseRequest):
     scope: str = "openid"
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -906,6 +982,7 @@ class DeviceTokenRequest(BaseRequest):
     device_code: str
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -968,6 +1045,7 @@ class TokenExchangeRequest(BaseRequest):
     requested_token_type: str | None = None
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -1010,6 +1088,7 @@ class TokenRevocationRequest(BaseRequest):
     token_type_hint: str | None = None
     client_secret: str | None = None
     private_key_jwt: PrivateKeyJwt | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)
@@ -1038,10 +1117,21 @@ class UserInfoRequest(BaseRequest):
             verification per OIDC Core 1.0 Section 5.3.4.  When provided,
             the ``sub`` in the UserInfo response is compared against this
             value and a mismatch produces an error response.
+        dpop_key: When set, the UserInfo request is DPoP-bound (RFC 9449): the
+            access token is presented with ``Authorization: DPoP <token>`` and
+            a resource-request DPoP proof (carrying the ``ath`` access-token
+            hash) is attached, honoring the ``use_dpop_nonce`` challenge with a
+            single retry.  Required to use a sender-constrained access token at
+            the resource server (FAPI 2.0).
+        mtls: When set, the UserInfo/resource request presents this client
+            certificate at the TLS layer (RFC 8705) — required to use an mTLS
+            certificate-bound access token at the resource server.
     """
 
     token: str
     expected_sub: str | None = None
+    dpop_key: DPoPKey | None = None
+    mtls: MtlsClientAuth | None = None
 
 
 @dataclass(repr=False, eq=False)

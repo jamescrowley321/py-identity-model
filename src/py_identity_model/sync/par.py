@@ -4,6 +4,7 @@ Pushed Authorization Requests (synchronous implementation, RFC 9126).
 
 import httpx
 
+from ..core.dpop import extract_dpop_nonce
 from ..core.error_handlers import handle_par_error
 from ..core.models import (
     PushedAuthorizationRequest,
@@ -14,7 +15,7 @@ from ..core.par_logic import (
     prepare_par_request_data,
     process_par_response,
 )
-from .http_client import get_http_client, retry_with_backoff
+from .http_client import resolve_http_client, retry_with_backoff
 from .managed_client import HTTPClient
 
 
@@ -49,18 +50,33 @@ def push_authorization_request(
     log_par_request(request)
 
     response = None
+    owned_client = None
     try:
         params, headers, auth = prepare_par_request_data(request)
-        client = http_client.client if http_client else get_http_client()
+        client, owned_client = resolve_http_client(request.mtls, http_client)
         response = _push_authorization_request(
             client, request.address, params, headers, auth
         )
+        if request.dpop_key is not None:
+            # RFC 9449 §8: honor a single ``use_dpop_nonce`` challenge by
+            # re-minting the proof with the server nonce and retrying once.
+            nonce = extract_dpop_nonce(response)
+            if nonce is not None:
+                response.close()
+                params, headers, auth = prepare_par_request_data(
+                    request, dpop_nonce=nonce
+                )
+                response = _push_authorization_request(
+                    client, request.address, params, headers, auth
+                )
         return process_par_response(response)
     except Exception as e:
         return handle_par_error(e)
     finally:
         if response is not None:
             response.close()
+        if owned_client is not None:
+            owned_client.close()
 
 
 __all__ = [

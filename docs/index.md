@@ -32,6 +32,7 @@ pip install py-identity-model
 | DPoP | RFC 9449 | v2.12 |
 | Pushed Authorization Requests | RFC 9126 | v2.12 |
 | JWT Secured Authorization Request | RFC 9101 | v2.13 |
+| JWT Secured Authorization Response Mode (JARM) | JARM | v3.5 |
 | FAPI 2.0 Security Profile | FAPI 2.0 | v2.14 |
 | Policy-Based Configuration | — | v2.15 |
 | OAuth Callback State Validation | RFC 6749 | v2.9 |

@@ -15,6 +15,7 @@ from ..core.dpop import (
     build_dpop_headers,
     compute_ath,
     create_dpop_proof,
+    extract_dpop_nonce,
     generate_dpop_key,
 )
 from ..core.fapi import (
@@ -28,11 +29,26 @@ from ..core.fapi import (
     validate_fapi_discovery,
 )
 from ..core.jar import build_jar_authorization_url, create_request_object
+from ..core.jarm import (
+    extract_jarm_response_jwt,
+    is_jarm_response,
+)
 from ..core.logout_logic import (
     build_end_session_url,
     validate_post_logout_state,
 )
-from ..core.models import BaseRequest, BaseResponse, PrivateKeyJwt
+from ..core.models import (
+    BaseRequest,
+    BaseResponse,
+    MtlsClientAuth,
+    PrivateKeyJwt,
+)
+from ..core.mtls import (
+    certificate_thumbprint_from_file,
+    compute_certificate_thumbprint,
+    resolve_mtls_endpoint,
+    validate_certificate_binding,
+)
 from ..core.pkce import (
     generate_code_challenge,
     generate_code_verifier,
@@ -62,6 +78,7 @@ from .introspection import (
     TokenIntrospectionResponse,
     introspect_token,
 )
+from .jarm import process_jarm_response
 from .jwks import (
     JsonWebAlgorithmsKeyTypes,
     JsonWebKey,
@@ -167,6 +184,8 @@ __all__ = [
     "JsonWebKeyParameterNames",
     "JwksRequest",
     "JwksResponse",
+    # mTLS (RFC 8705)
+    "MtlsClientAuth",
     # PAR
     "PrivateKeyJwt",
     "PushedAuthorizationRequest",
@@ -193,13 +212,17 @@ __all__ = [
     "build_dpop_headers",
     "build_end_session_url",
     "build_jar_authorization_url",
+    "certificate_thumbprint_from_file",
     "clear_discovery_cache",
     "clear_jwks_cache",
     "compute_ath",
+    "compute_certificate_thumbprint",
     "create_dpop_proof",
     "create_request_object",
     "delete_client",
     "exchange_token",
+    "extract_dpop_nonce",
+    "extract_jarm_response_jwt",
     "generate_code_challenge",
     "generate_code_verifier",
     "generate_dpop_key",
@@ -208,10 +231,12 @@ __all__ = [
     "get_jwks",
     "get_userinfo",
     "introspect_token",
+    "is_jarm_response",
     "jwks_from_dict",
     "parse_authorize_callback_response",
     "parse_discovery_url",
     "poll_device_token",
+    "process_jarm_response",
     "push_authorization_request",
     "read_client",
     "refresh_token",
@@ -219,10 +244,12 @@ __all__ = [
     "request_authorization_code_token",
     "request_client_credentials_token",
     "request_device_authorization",
+    "resolve_mtls_endpoint",
     "revoke_token",
     "update_client",
     "validate_authorize_callback_issuer",
     "validate_authorize_callback_state",
+    "validate_certificate_binding",
     "validate_fapi_authorization_request",
     "validate_fapi_client_config",
     "validate_fapi_discovery",
