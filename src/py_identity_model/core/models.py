@@ -488,6 +488,9 @@ class DiscoveryDocumentResponse(BaseResponse):
             "backchannel_logout_supported",
             "backchannel_logout_session_supported",
             "authorization_response_iss_parameter_supported",
+            "authorization_signing_alg_values_supported",
+            "authorization_encryption_alg_values_supported",
+            "authorization_encryption_enc_values_supported",
             "mtls_endpoint_aliases",
             "tls_client_certificate_bound_access_tokens",
         }
@@ -549,6 +552,11 @@ class DiscoveryDocumentResponse(BaseResponse):
 
     # Authorization-response issuer parameter support (RFC 9207 §3)
     authorization_response_iss_parameter_supported: bool | None = None
+
+    # JWT-Secured Authorization Response Mode (JARM §5) algorithm support
+    authorization_signing_alg_values_supported: list[str] | None = None
+    authorization_encryption_alg_values_supported: list[str] | None = None
+    authorization_encryption_enc_values_supported: list[str] | None = None
 
     # Mutual-TLS support (RFC 8705 §3.3 / §5)
     mtls_endpoint_aliases: dict | None = None
@@ -869,6 +877,9 @@ class PushedAuthorizationRequest(BaseRequest):
         dpop_key: When set, the PAR is DPoP-bound (RFC 9449): a DPoP proof for
             the PAR endpoint is attached and the ``use_dpop_nonce`` challenge is
             honored with a single retry.  FAPI 2.0 sender constraining.
+        response_mode: OAuth 2.0 ``response_mode`` to push (e.g. ``"jwt"`` /
+            ``"query.jwt"`` for JWT-Secured Authorization Response Mode, JARM).
+            Omitted from the pushed parameters when ``None``.
     """
 
     client_id: str
@@ -883,6 +894,7 @@ class PushedAuthorizationRequest(BaseRequest):
     private_key_jwt: PrivateKeyJwt | None = None
     dpop_key: DPoPKey | None = None
     mtls: MtlsClientAuth | None = None
+    response_mode: str | None = None
 
 
 @dataclass(repr=False, eq=False)

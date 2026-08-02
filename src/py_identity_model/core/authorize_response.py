@@ -111,6 +111,34 @@ _PARAM_TO_FIELD: types.MappingProxyType[str, str] = types.MappingProxyType(
 )
 
 
+def _map_params_to_fields(values: dict[str, Any]) -> dict[str, Any]:
+    """Map raw authorization-response parameters to dataclass field names.
+
+    Shared by :func:`parse_authorize_callback_response` (query/fragment
+    parameters) and JARM processing (claims extracted from the response
+    JWT), which use the identical ``code``/``state``/``iss``/``error``/…
+    parameter names.  ``expires_in`` is coerced to ``int`` when possible;
+    an uncoercible value is dropped rather than raising, matching the
+    lenient parsing of the surrounding parameters.
+
+    Args:
+        values: Raw parameter name → value mapping.
+
+    Returns:
+        A mapping of dataclass field names to values, containing only the
+        recognized parameters that were present in *values*.
+    """
+    field_values: dict[str, Any] = {}
+    for param_name, field_name in _PARAM_TO_FIELD.items():
+        if param_name in values:
+            if field_name == "expires_in":
+                with contextlib.suppress(ValueError, TypeError):
+                    field_values[field_name] = int(values[param_name])
+            else:
+                field_values[field_name] = values[param_name]
+    return field_values
+
+
 def parse_authorize_callback_response(
     redirect_uri: str,
 ) -> AuthorizeCallbackResponse:
@@ -156,14 +184,7 @@ def parse_authorize_callback_response(
         raise AuthorizeCallbackException("redirect_uri contains no callback parameters")
 
     # Map known parameters to dataclass fields
-    field_values: dict[str, Any] = {}
-    for param_name, field_name in _PARAM_TO_FIELD.items():
-        if param_name in values:
-            if field_name == "expires_in":
-                with contextlib.suppress(ValueError, TypeError):
-                    field_values[field_name] = int(values[param_name])
-            else:
-                field_values[field_name] = values[param_name]
+    field_values = _map_params_to_fields(values)
 
     if not field_values:
         raise AuthorizeCallbackException(
