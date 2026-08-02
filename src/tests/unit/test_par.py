@@ -55,6 +55,40 @@ class TestPAR:
         assert response.is_successful is True
 
     @respx.mock
+    def test_par_pushes_response_mode_for_jarm(self):
+        # JARM: response_mode must be pushed so the OP returns a signed
+        # authorization response JWT (omitted from the body when unset).
+        route = respx.post(PAR_URL).mock(
+            return_value=httpx.Response(201, json=PAR_RESPONSE)
+        )
+        push_authorization_request(
+            PushedAuthorizationRequest(
+                address=PAR_URL,
+                client_id="app1",
+                redirect_uri="https://app.com/cb",
+                client_secret="secret",
+                response_mode="jwt",
+            )
+        )
+        body = route.calls[0].request.content.decode()
+        assert "response_mode=jwt" in body
+
+    @respx.mock
+    def test_par_omits_response_mode_when_unset(self):
+        route = respx.post(PAR_URL).mock(
+            return_value=httpx.Response(201, json=PAR_RESPONSE)
+        )
+        push_authorization_request(
+            PushedAuthorizationRequest(
+                address=PAR_URL,
+                client_id="app1",
+                redirect_uri="https://app.com/cb",
+                client_secret="secret",
+            )
+        )
+        assert "response_mode" not in route.calls[0].request.content.decode()
+
+    @respx.mock
     def test_par_error(self):
         respx.post(PAR_URL).mock(
             return_value=httpx.Response(400, content=b'{"error":"invalid_request"}')

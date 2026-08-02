@@ -877,6 +877,9 @@ class PushedAuthorizationRequest(BaseRequest):
         dpop_key: When set, the PAR is DPoP-bound (RFC 9449): a DPoP proof for
             the PAR endpoint is attached and the ``use_dpop_nonce`` challenge is
             honored with a single retry.  FAPI 2.0 sender constraining.
+        response_mode: OAuth 2.0 ``response_mode`` to push (e.g. ``"jwt"`` /
+            ``"query.jwt"`` for JWT-Secured Authorization Response Mode, JARM).
+            Omitted from the pushed parameters when ``None``.
     """
 
     client_id: str
@@ -891,6 +894,7 @@ class PushedAuthorizationRequest(BaseRequest):
     private_key_jwt: PrivateKeyJwt | None = None
     dpop_key: DPoPKey | None = None
     mtls: MtlsClientAuth | None = None
+    response_mode: str | None = None
 
 
 @dataclass(repr=False, eq=False)

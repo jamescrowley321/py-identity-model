@@ -462,6 +462,7 @@ def drive_rp_authorize(
     test_name: str = "",
     profile: str = "",
     fapi2: bool = False,
+    jarm: bool = False,
 ) -> None:
     """Hit the RP's /authorize endpoint to start an auth flow.
 
@@ -484,6 +485,7 @@ def drive_rp_authorize(
         "skip_userinfo": str(skip_userinfo).lower(),
         "use_request_uri": str(use_request_uri).lower(),
         "fapi2": str(fapi2).lower(),
+        "jarm": str(jarm).lower(),
     }
 
     # Follow all redirects through the full auth flow
@@ -673,6 +675,7 @@ def run_test_module(
     profile: str = "",
     dynamic: bool = False,
     fapi2: bool = False,
+    jarm: bool = False,
 ) -> TestResult:
     """Execute a single conformance test module."""
     logger.info("=" * 60)
@@ -805,6 +808,7 @@ def run_test_module(
                 test_name=test_name,
                 profile=profile,
                 fapi2=fapi2,
+                jarm=jarm,
             )
             # Wait briefly for the suite to rotate keys
             time.sleep(1)
@@ -819,6 +823,7 @@ def run_test_module(
                 test_name=test_name,
                 profile=profile,
                 fapi2=fapi2,
+                jarm=jarm,
             )
         else:
             # Standard auth flow (with optional userinfo skip)
@@ -833,6 +838,7 @@ def run_test_module(
                 test_name=test_name,
                 profile=profile,
                 fapi2=fapi2,
+                jarm=jarm,
             )
 
     # Poll until the test finishes
@@ -902,6 +908,7 @@ def run_plan(
     variant = config["variant"]
     alias = config["alias"]
     fapi2 = bool(config.get("fapi2", False))
+    jarm = bool(config.get("jarm", False))
 
     logger.info("Plan: %s (%s)", plan_name, alias)
     logger.info("Variant: %s", variant)
@@ -927,6 +934,11 @@ def run_plan(
             # (EnsureRequestedScopeIsEqualToConfiguredScope).
             "scope": "openid",
         }
+        if jarm:
+            # JARM: register the alg the OP must sign the authorization response
+            # with. It must match the OP's supplied signing key (ES256, see
+            # _generate_server_signing_jwks) so the RP can verify the response.
+            client_overrides["authorization_signed_response_alg"] = "ES256"
         # The FAPI 2.0 client plan requires the OP's own signing key set
         # (LoadServerJWKs); mint an ephemeral one for this run.
         server_jwks = _generate_server_signing_jwks()
@@ -986,6 +998,7 @@ def run_plan(
             profile=profile,
             dynamic=is_dynamic,
             fapi2=fapi2,
+            jarm=jarm,
         )
         results.append(result)
 
@@ -1142,6 +1155,9 @@ def main() -> None:
             # FAPI 2.0 Security Profile RP plan (PAR + PKCE S256 +
             # private_key_jwt + DPoP-bound tokens + RFC 9207 iss)
             "fapi2-rp",
+            # FAPI 2.0 Message Signing RP plan (adds JARM signed authorization
+            # responses on top of the security profile)
+            "fapi2-message-signing-rp",
             # fastapi-identity-model package regression plans (same suite
             # plans, driven against the rp-fastapi harness on :8889)
             "fastapi-basic-rp",

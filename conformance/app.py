@@ -47,8 +47,10 @@ from py_identity_model import (
     generate_pkce_pair,
     get_discovery_document,
     get_userinfo,
+    is_jarm_response,
     parse_authorize_callback_response,
     parse_discovery_url,
+    process_jarm_response,
     push_authorization_request,
     register_client,
     request_authorization_code_token,
@@ -60,6 +62,7 @@ from py_identity_model import (
 )
 from py_identity_model.exceptions import (
     ConfigurationException,
+    JarmValidationException,
     LogoutStateValidationException,
     LogoutTokenValidationException,
     PyIdentityModelException,
@@ -265,6 +268,13 @@ class AuthSession:
     # per-flow key the PAR + token + userinfo requests are bound to.
     fapi2: bool = False
     dpop_key: DPoPKey | None = None
+    # JARM (JWT-Secured Authorization Response Mode): when set, the OP returns a
+    # signed authorization response JWT, decoded in /callback via the library's
+    # process_jarm_response instead of plain query-string parsing.
+    jarm: bool = False
+    # The OP's discovery address, kept so /callback can verify a JARM response
+    # (its signature is checked against the OP's published JWKS).
+    disco_address: str = ""
     # Results populated after callback
     result: dict = field(default_factory=dict)
 
@@ -591,6 +601,14 @@ def authorize(
             "DPoP-bound token request, with RFC 9207 iss validation in /callback"
         ),
     ),
+    jarm: str = Query(
+        "false",
+        description=(
+            "Request a JARM (JWT-Secured Authorization Response Mode) response: "
+            "pushes response_mode=jwt so the OP returns a signed response JWT, "
+            "decoded in /callback via process_jarm_response. Implies FAPI 2.0."
+        ),
+    ),
 ) -> RedirectResponse | JSONResponse:
     """Build an authorization URL and redirect to the OP.
 
@@ -680,7 +698,7 @@ def authorize(
             content={"error": "issuer_mismatch", "detail": error_msg},
         )
 
-    if fapi2.lower() == "true":
+    if fapi2.lower() == "true" or jarm.lower() == "true":
         return _authorize_fapi2(
             disco=disco,
             disco_address=disco_endpoint.url,
@@ -691,6 +709,7 @@ def authorize(
             test_name=test_name,
             profile=profile,
             skip_userinfo=skip_userinfo.lower() == "true",
+            jarm=jarm.lower() == "true",
             http_client=http_client,
         )
 
@@ -807,6 +826,7 @@ def _authorize_fapi2(
     profile: str,
     skip_userinfo: bool,
     http_client: HTTPClient,
+    jarm: bool = False,
 ) -> RedirectResponse | JSONResponse:
     """Drive the FAPI 2.0 authorization request via PAR + DPoP.
 
@@ -860,6 +880,8 @@ def _authorize_fapi2(
             code_challenge_method="S256",
             private_key_jwt=_fapi2_private_key_jwt(disco.issuer or issuer),
             dpop_key=dpop_key,
+            # JARM: ask the OP to return a signed authorization response JWT.
+            response_mode="jwt" if jarm else None,
         ),
         http_client=http_client,
     )
@@ -900,6 +922,8 @@ def _authorize_fapi2(
         profile=profile,
         fapi2=True,
         dpop_key=dpop_key,
+        jarm=jarm,
+        disco_address=disco_address,
     )
     sessions[state] = session
     if test_id:
@@ -1182,19 +1206,55 @@ def _fetch_fapi2_resource(
     )
 
 
-def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
-    """Common callback handler for GET and POST response modes."""
-    http_client = _get_http_client()
+def _parse_callback(
+    request_url: str, http_client: HTTPClient
+) -> AuthorizeCallbackResponse | HTMLResponse:
+    """Parse a callback URL, decoding a JARM ``response`` JWT when present.
 
-    # Parse callback parameters
+    A JARM (JWT-Secured Authorization Response Mode) response carries the
+    parameters inside a signed ``response`` JWT rather than plain query params;
+    decode + verify it via the library's ``process_jarm_response``. The flow's
+    client_id / discovery address come from ``_last_flow_context`` because the
+    ``state`` (the session key) is inside the JWT. Returns the parsed callback,
+    or an error ``HTMLResponse`` when parsing or JARM validation fails.
+    """
     try:
-        cb_response = parse_authorize_callback_response(str(request_url))
+        if is_jarm_response(request_url):
+            ctx = _last_flow_context or {}
+            return process_jarm_response(
+                request_url,
+                client_id=ctx.get("client_id", ""),
+                disco_doc_address=ctx.get("disco_address"),
+                require_https=False,
+                http_client=http_client,
+            )
+        return parse_authorize_callback_response(request_url)
+    except (JarmValidationException, TokenValidationException) as exc:
+        # A JARM response failing signature / iss / aud / exp / alg validation
+        # MUST be rejected (the negative message-signing modules). There is no
+        # verified state yet, so respond 400 without completing the flow.
+        logger.error("REJECTED: JARM response validation failed: %s", exc.message)
+        return HTMLResponse(
+            content=(
+                f"<h1>JARM Validation Failed</h1><p>{html.escape(str(exc.message))}</p>"
+            ),
+            status_code=400,
+        )
     except PyIdentityModelException as exc:
         logger.error("Callback parse error: %s", exc)
         return HTMLResponse(
             content="<h1>Callback Error</h1><p>Failed to parse callback</p>",
             status_code=400,
         )
+
+
+def _handle_callback(request_url: str) -> HTMLResponse | JSONResponse:
+    """Common callback handler for GET and POST response modes."""
+    http_client = _get_http_client()
+
+    cb_response = _parse_callback(str(request_url), http_client)
+    if isinstance(cb_response, HTMLResponse):
+        return cb_response
 
     # Look up session by state
     state_value = cb_response.state
