@@ -313,9 +313,48 @@ jobs:
       - name: Build
         run: make build-dist
 
+  security-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          # Full history + the base branch tip so the mutation gate can diff
+          # the changed security surface against BASE (Epic 19 G.1).
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: 3.13
+
+      - name: Cache uv dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: make ci-setup
+
+      - name: Fetch base branch for diff
+        # On a pull_request the reusable workflow inherits github.base_ref;
+        # on a branch push it is empty, so fall back to main. Interpolate the
+        # ref into an env var (not directly into the run: script) for hygiene.
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: git fetch --no-tags origin "$BASE_REF"
+
+      - name: Security gate (mutation)
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: BASE="origin/$BASE_REF" make security-gate
+
   ci-complete:
     if: always()
-    needs: [lint, unit-tests, fastapi-tests, integration-tests-ory, integration-tests-descope, integration-tests-node-oidc, integration-tests-keycloak, example-tests, build]
+    needs: [lint, unit-tests, fastapi-tests, integration-tests-ory, integration-tests-descope, integration-tests-node-oidc, integration-tests-keycloak, example-tests, build, security-gate]
     runs-on: ubuntu-latest
     steps:
       - name: Check CI results
@@ -330,6 +369,7 @@ jobs:
             "${{ needs.integration-tests-keycloak.result }}" \
             "${{ needs.example-tests.result }}" \
             "${{ needs.build.result }}" \
+            "${{ needs.security-gate.result }}" \
           )
           for result in "${results[@]}"; do
             if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then

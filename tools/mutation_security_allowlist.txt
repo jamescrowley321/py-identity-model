@@ -1,0 +1,16 @@
+# Equivalent-mutant allowlist for `make mutation-security` (Epic 19 G.1).
+#
+# mutmut occasionally emits an *equivalent* mutant: a syntactic change that is
+# semantically identical to the original and therefore impossible to kill with
+# any test. Waive one by its **exact mutant name** (as printed by
+# `mutmut results` / shown by `mutmut show <name>`), one per line, with a
+# comment justifying why it is unkillable. Matching is exact — a name here
+# never waives a different mutant that merely contains it as a substring.
+#
+# Every entry weakens the gate, so keep the justification concrete and specific.
+#
+# Example (do NOT uncomment unless that mutant actually survives in your change):
+#   py_identity_model.core.client_auth.x_basic_auth_credentials__mutmut_4  # quote(x, safe="XXXX"): X is always unreserved, output identical
+#
+# SC0 seeds this file empty: SC0 changes no security module, so its gate run is
+# a no-op. Each remediation task (SC1–SC10) adds its own justified waivers.

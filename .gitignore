@@ -165,3 +165,8 @@ infra/**/*.tfstate.backup
 infra/**/*.tfvars
 infra/**/access_key.json
 infra/**/expired_token.txt
+
+# mutmut mutation-testing sandbox + cache (make mutation-security)
+mutants/
+mutmut-stats.json
+.mutmut-cache
