@@ -30,6 +30,7 @@ from ..core.models import (
     JwksResponse,
     TokenValidationConfig,
 )
+from ..core.mtls import validate_certificate_binding
 from ..core.parsers import (
     extract_jwt_header_fields,
     find_key_by_kid,
@@ -491,6 +492,7 @@ def validate_token(
     token_validation_config: TokenValidationConfig,
     disco_doc_address: str | None = None,
     http_client: HTTPClient | None = None,
+    client_certificate: str | bytes | None = None,
 ) -> dict:
     """
     Validate a JWT token.
@@ -521,6 +523,12 @@ def validate_token(
             A ``logger.warning`` is emitted the first time an injected client
             is used in the process so accidental opt-out is detectable in
             production logs.
+        client_certificate: Optional client certificate presented at the mTLS
+            layer (PEM ``str``/``bytes`` or DER ``bytes``).  **Opt-in** (default
+            ``None``): when provided, the token's ``cnf["x5t#S256"]`` MUST match
+            it (RFC 8705 §3), so a stolen certificate-bound token replayed as a
+            plain bearer is rejected.  Default (``None``) is unchanged bearer
+            behaviour.
 
     Returns:
         dict: Decoded token claims
@@ -549,6 +557,14 @@ def validate_token(
     else:
         validate_config_for_manual_validation(token_validation_config)
         decoded_token = decode_with_config(jwt, token_validation_config)
+
+    # Certificate-bound access tokens (OPT-IN, RFC 8705 §3): when the caller
+    # supplies the client certificate presented at the TLS layer, the token's
+    # cnf[x5t#S256] MUST match it — a stolen bound token replayed as a plain
+    # bearer (no cert) is rejected. Default (no cert) is unchanged bearer
+    # behaviour (audit RT1-F1).
+    if client_certificate is not None:
+        validate_certificate_binding(decoded_token, client_certificate)
 
     validate_claims(decoded_token, token_validation_config)
     log_validation_success(decoded_token)

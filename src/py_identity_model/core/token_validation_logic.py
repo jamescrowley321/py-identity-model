@@ -15,6 +15,7 @@ from ..core.models import (
 )
 from ..exceptions import (
     ConfigurationException,
+    InvalidAudienceException,
     InvalidIssuerException,
     TokenValidationException,
 )
@@ -142,6 +143,40 @@ def _enforce_allowed_issuers(
             )
 
 
+def _enforce_strict_audience(
+    claims: dict,
+    allowed_audience: str | list[str],
+) -> None:
+    """Reject a token carrying any audience beyond the configured set.
+
+    PyJWT only checks the configured audience is *present* (set intersection), so
+    a token minted for ``["my-api", "attacker-api"]`` passes an ``audience="my-api"``
+    config — the confused-deputy / secondary-audience gap (audit RT5-F18). When
+    ``strict_audience`` is set, every ``aud`` value MUST be in the configured set.
+
+    Raises:
+        InvalidAudienceException: If the token carries an unexpected audience.
+    """
+    token_aud = claims.get("aud")
+    if token_aud is None:
+        return
+    auds = [token_aud] if isinstance(token_aud, str) else list(token_aud)
+    allowed = (
+        {allowed_audience}
+        if isinstance(allowed_audience, str)
+        else set(allowed_audience)
+    )
+    extra = [a for a in auds if a not in allowed]
+    if extra:
+        raise InvalidAudienceException(
+            "Token audience contains value(s) outside the configured audience",
+            details={
+                "unexpected_audiences": extra,
+                "allowed_audience": sorted(allowed),
+            },
+        )
+
+
 def decode_with_config(
     jwt: str,
     token_validation_config: TokenValidationConfig,
@@ -189,7 +224,7 @@ def decode_with_config(
             effective_issuer, token_validation_config.allowed_issuers
         )
 
-    return decode_and_validate_jwt(
+    decoded = decode_and_validate_jwt(
         jwt=jwt,
         key=token_validation_config.key,
         algorithms=token_validation_config.algorithms,
@@ -199,6 +234,18 @@ def decode_with_config(
         leeway=token_validation_config.leeway,
         subject=token_validation_config.subject,
     )
+
+    # Strict audience (OPT-IN): PyJWT accepts a token whose `aud` merely *contains*
+    # the configured audience, so an extra untrusted audience slips through (audit
+    # RT5-F18). When strict_audience is set, every `aud` value must be in the
+    # configured set. Default (False) leaves PyJWT's behaviour unchanged.
+    if (
+        token_validation_config.strict_audience
+        and token_validation_config.audience is not None
+    ):
+        _enforce_strict_audience(decoded, token_validation_config.audience)
+
+    return decoded
 
 
 def validate_claims(
@@ -309,6 +356,7 @@ def build_resolved_config(
         # Propagate the issuer allowlist so the disco/retry paths (which validate
         # via this resolved config) still enforce issuer pinning.
         allowed_issuers=original_config.allowed_issuers,
+        strict_audience=original_config.strict_audience,
     )
 
 

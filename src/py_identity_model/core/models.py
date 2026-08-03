@@ -1325,6 +1325,12 @@ class TokenValidationConfig:
             Set it only for multi-tenant callers that resolve discovery from an
             untrusted token's ``iss`` — without it an attacker who stands up their
             own tenant and mints a validly-signed token would pass validation.
+        strict_audience: When ``True``, reject a token that carries any ``aud``
+            value outside ``audience``.  **Opt-in** (default ``False``): PyJWT
+            only checks the configured audience is *present*, so by default a
+            token minted for ``["my-api", "other-api"]`` passes an
+            ``audience="my-api"`` config.  Enable to close that secondary-audience
+            / confused-deputy gap.  Default behaviour is unchanged.
 
     Examples:
         >>> # Multi-tenant with clock skew tolerance
@@ -1360,6 +1366,7 @@ class TokenValidationConfig:
     require_https: bool = True
     leeway: float | None = None
     allowed_issuers: list[str] | None = None
+    strict_audience: bool = False
 
 
 __all__ = [
