@@ -217,7 +217,25 @@ def build_resolved_config(
 
     Returns:
         A new TokenValidationConfig with the resolved key and algorithm.
+
+    Raises:
+        TokenValidationException: If the caller restricted ``algorithms`` and the
+            algorithm resolved from JWKS is not in that set. Without this check the
+            resolved config would silently pin ``[alg]`` from the JWKS key and
+            discard the caller's restriction — so a caller could not refuse (for
+            example) an ``RS256``-signed token in discovery mode, a downgrade the
+            FAPI 2.0 profile forbids.
     """
+    if original_config.algorithms is not None and alg not in original_config.algorithms:
+        raise TokenValidationException(
+            f"Token signed with algorithm '{alg}', which is not in the caller's "
+            f"allowed algorithms {sorted(original_config.algorithms)}",
+            token_part="header",
+            details={
+                "resolved_alg": alg,
+                "allowed_algorithms": sorted(original_config.algorithms),
+            },
+        )
     return TokenValidationConfig(
         perform_disco=original_config.perform_disco,
         key=key_dict,
