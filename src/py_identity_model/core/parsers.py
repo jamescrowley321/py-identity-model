@@ -28,7 +28,38 @@ _ALG_TO_KTY: dict[str, str] = {
     "EdDSA": "OKP",
     "Ed25519": "OKP",
     "Ed448": "OKP",
+    # Symmetric HMAC algorithms map to octet keys. Without these entries the
+    # key/alg-consistency check was a no-op for HS*, so an attacker could sign a
+    # token with HS256 using an RSA *public* key as the HMAC secret and the
+    # library's own defence would not catch it (only the JWT dependency would).
+    "HS256": "oct",
+    "HS384": "oct",
+    "HS512": "oct",
 }
+
+# Default signing algorithm per key type, used ONLY when a JWK omits ``alg``.
+# The algorithm is inferred from the trusted key material — never from the
+# attacker-controlled token header.
+_KTY_DEFAULT_ALG: dict[str, str] = {
+    "RSA": "RS256",
+    "EC": "ES256",
+    "OKP": "EdDSA",
+    "oct": "HS256",
+}
+_EC_CRV_DEFAULT_ALG: dict[str, str] = {
+    "P-256": "ES256",
+    "P-384": "ES384",
+    "P-521": "ES512",
+    "secp256k1": "ES256K",
+}
+
+
+def _default_alg_for_key(key: JsonWebKey) -> str:
+    """Infer a signing algorithm from the JWK's key material (never the token
+    header) for keys that do not declare ``alg``."""
+    if key.kty == "EC" and key.crv in _EC_CRV_DEFAULT_ALG:
+        return _EC_CRV_DEFAULT_ALG[key.crv]
+    return _KTY_DEFAULT_ALG.get(key.kty, "RS256")
 
 
 def _validate_key_alg_consistency(
@@ -46,6 +77,13 @@ def _validate_key_alg_consistency(
     """
     if not jwt_alg:
         return
+
+    if jwt_alg.lower() == "none":
+        raise TokenValidationException(
+            "Unsigned tokens (alg=none) are not accepted",
+            token_part="header",
+            details={"alg": jwt_alg},
+        )
 
     expected_kty = _ALG_TO_KTY.get(jwt_alg)
     if expected_kty and key.kty != expected_kty:
@@ -189,7 +227,12 @@ def find_key_by_kid(
             )
             public_key = signing_keys[0]
             _validate_key_alg_consistency(public_key, jwt_alg)
-            alg = public_key.alg if public_key.alg else (jwt_alg or "RS256")
+            # Prefer the key's declared alg. The header alg is only used after
+            # the consistency check above has already rejected key-type confusion
+            # (HS*/none vs an asymmetric key), so it can pick the RS/ES *variant*
+            # but cannot force a weaker key type; fall back to a key-type default,
+            # never a blanket RS256.
+            alg = public_key.alg or jwt_alg or _default_alg_for_key(public_key)
             return public_key.as_dict(), alg
         raise TokenValidationException(
             "JWT has no kid header and JWKS contains multiple signing keys; "
@@ -212,7 +255,10 @@ def find_key_by_kid(
 
     public_key = filtered_keys[0]
     _validate_key_alg_consistency(public_key, jwt_alg)
-    alg = public_key.alg if public_key.alg else "RS256"
+    # Prefer the key's declared alg; the header alg (already checked for key-type
+    # consistency above) picks the RS/ES variant; fall back to a key-type default
+    # rather than a blanket RS256 (which was wrong for EC/OKP keys without alg).
+    alg = public_key.alg or jwt_alg or _default_alg_for_key(public_key)
     return public_key.as_dict(), alg
 
 

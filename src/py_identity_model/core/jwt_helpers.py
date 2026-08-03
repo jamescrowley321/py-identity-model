@@ -9,8 +9,10 @@ from jwt.exceptions import (
     ExpiredSignatureError,
     InvalidAudienceError,
     InvalidIssuerError,
+    InvalidKeyError,
     InvalidSignatureError,
     InvalidTokenError,
+    PyJWTError,
 )
 
 from ..exceptions import (
@@ -208,6 +210,32 @@ def decode_and_validate_jwt(  # noqa: PLR0913  # RFC 7519 §7.2 validation requi
         logger.error(f"Invalid token: {e!s}")
         raise TokenValidationException(
             f"Invalid token: {e!s}",
+            details={"error": str(e)},
+        ) from e
+    except InvalidKeyError as e:
+        # e.g. an HS* token whose resolved key material is an RSA/EC key. Not a
+        # subclass of InvalidTokenError, so it previously escaped unwrapped.
+        logger.error(f"Invalid or incompatible signing key: {e!s}")
+        raise TokenValidationException(
+            "Invalid or incompatible signing key",
+            token_part="header",
+            details={"error": str(e)},
+        ) from e
+    except PyJWTError as e:
+        # Any other PyJWT error — never leak the dependency's exception type past
+        # the library's TokenValidationException contract.
+        logger.error(f"JWT validation error: {e!s}")
+        raise TokenValidationException(
+            f"JWT validation error: {e!s}",
+            details={"error": str(e)},
+        ) from e
+    except NotImplementedError as e:
+        # PyJWT raises NotImplementedError for a disallowed/unknown algorithm
+        # (notably alg=none) at key construction.
+        logger.error(f"Unsupported algorithm: {e!s}")
+        raise TokenValidationException(
+            "Unsupported or disallowed algorithm",
+            token_part="header",
             details={"error": str(e)},
         ) from e
 
