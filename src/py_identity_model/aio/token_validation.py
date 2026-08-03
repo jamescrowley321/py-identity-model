@@ -29,6 +29,7 @@ from ..core.models import (
     JwksResponse,
     TokenValidationConfig,
 )
+from ..core.mtls import validate_certificate_binding
 from ..core.parsers import (
     extract_jwt_header_fields,
     find_key_by_kid,
@@ -516,6 +517,7 @@ async def validate_token(
     token_validation_config: TokenValidationConfig,
     disco_doc_address: str | None = None,
     http_client: AsyncHTTPClient | None = None,
+    client_certificate: str | bytes | None = None,
 ) -> dict:
     """
     Validate a JWT token (async).
@@ -546,6 +548,10 @@ async def validate_token(
             A ``logger.warning`` is emitted the first time an injected client
             is used in the process so accidental opt-out is detectable in
             production logs.
+        client_certificate: Optional client certificate presented at the mTLS
+            layer (PEM ``str``/``bytes`` or DER ``bytes``).  **Opt-in** (default
+            ``None``): when provided, the token's ``cnf["x5t#S256"]`` MUST match
+            it (RFC 8705 §3).  Default (``None``) is unchanged bearer behaviour.
 
     Returns:
         dict: Decoded token claims
@@ -574,6 +580,11 @@ async def validate_token(
     else:
         validate_config_for_manual_validation(token_validation_config)
         decoded_token = decode_with_config(jwt, token_validation_config)
+
+    # Certificate-bound access tokens (OPT-IN, RFC 8705 §3): see the sync
+    # validate_token. Default (no cert) is unchanged bearer behaviour.
+    if client_certificate is not None:
+        validate_certificate_binding(decoded_token, client_certificate)
 
     await validate_async_claims(decoded_token, token_validation_config)
     log_validation_success(decoded_token)
