@@ -1,0 +1,29 @@
+name: OSV-Scanner
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "53 7 * * 1" # weekly Mon 07:53 UTC
+permissions: {}
+jobs:
+  # PR diff scan: gates only vulns NEWLY introduced by the PR.
+  scan-pr:
+    if: ${{ github.event_name == 'pull_request' }}
+    uses: google/osv-scanner/.github/workflows/osv-scanner-reusable-pr.yml@b56b5191101d5f27d4787d5583d8d01e9518a7af # v2.4.0
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+  # Full scan on push/schedule: uploads SARIF to the Security tab.
+  # fail-on-vuln: false so pre-existing/accepted advisories don't red main.
+  scan-scheduled:
+    if: ${{ github.event_name != 'pull_request' }}
+    uses: google/osv-scanner/.github/workflows/osv-scanner-reusable.yml@b56b5191101d5f27d4787d5583d8d01e9518a7af # v2.4.0
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    with:
+      fail-on-vuln: false
