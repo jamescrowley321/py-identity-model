@@ -37,13 +37,13 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: 3.13
 
@@ -120,7 +120,7 @@ jobs:
           done
 
       - name: Create GitHub Pre-release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           tag_name: ${{ steps.vars.outputs.version }}
           prerelease: true
@@ -162,7 +162,7 @@ jobs:
             ```
 
       - name: Comment on PR
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const version = '${{ steps.vars.outputs.version }}';
