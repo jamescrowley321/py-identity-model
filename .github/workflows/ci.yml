@@ -313,6 +313,13 @@ jobs:
       - name: Build
         run: make build-dist
 
+  # NOTE: mutation testing (`make security-gate`) is intentionally NOT a per-PR
+  # job — a full mutmut run over the changed security surface is a nightly-scale
+  # activity (minutes+), not a PR gate. Per-PR, the fail-closed tests under
+  # src/tests/security/ (run by unit-tests) are the mechanical proof that a
+  # control fails when reverted. `make security-gate` remains a local/nightly
+  # tool; a properly time-bounded nightly workflow is a follow-up (Epic 19 G.5).
+
   ci-complete:
     if: always()
     needs: [lint, unit-tests, fastapi-tests, integration-tests-ory, integration-tests-descope, integration-tests-node-oidc, integration-tests-keycloak, example-tests, build]

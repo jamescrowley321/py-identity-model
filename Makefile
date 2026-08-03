@@ -87,6 +87,15 @@ test-fastapi: ## Typecheck + unit-test the fastapi-identity-model package (80% c
 build-fastapi: ## Build the fastapi-identity-model wheel + sdist
 	uv build --package fastapi-identity-model
 
+# ── Security gate ────────────────────────────────────────────────────
+
+.PHONY: mutation-security
+mutation-security: ## Mutation-test changed security modules vs BASE (Epic 19 G.1)
+	uv run python tools/mutation_security.py
+
+.PHONY: security-gate
+security-gate: mutation-security ## Aggregate mechanical security gate (Epic 19 G.5)
+
 # ── Pre-push ────────────────────────────────────────────────────────
 
 .PHONY: pre-push
