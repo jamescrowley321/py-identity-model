@@ -1028,7 +1028,7 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "async-lru", specifier = ">=2.0.4,<3" },
-    { name = "cryptography", specifier = ">=45.0.2,<51" },
+    { name = "cryptography", specifier = ">=50.0.0,<51" },
     { name = "httpx", specifier = ">=0.28.1,<1" },
     { name = "pyjwt", specifier = ">=2.9.0,<3" },
 ]
