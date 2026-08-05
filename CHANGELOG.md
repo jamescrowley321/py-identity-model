@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v3.8.1 (2026-08-05)
+
+### Bug Fixes
+
+- **deps**: Require cryptography>=50 to patch PYSEC-2026-3552/3553/3554
+  ([`7a2c0c7`](https://github.com/jamescrowley321/py-identity-model/commit/7a2c0c7514214f1f696d4bba71304aa911989edd))
+
+### Continuous Integration
+
+- **prerelease**: Anchor version sed to the project.version line
+  ([`3915d42`](https://github.com/jamescrowley321/py-identity-model/commit/3915d42c2fa715bd0c40a715edc8cb9dd58a2351))
+
+
 ## v3.8.0 (2026-08-02)
 
 ### Continuous Integration
