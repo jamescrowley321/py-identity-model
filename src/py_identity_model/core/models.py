@@ -1316,6 +1316,21 @@ class TokenValidationConfig:
         leeway: Clock skew tolerance in seconds for ``exp`` and ``nbf``
             claims.  Useful when clocks between the issuer and this
             server are not perfectly synchronized.
+        allowed_issuers: Optional allowlist of approved issuer identifiers.
+            **Purely opt-in.** When ``None`` (the default) discovery is assumed
+            authoritative and its issuer is used as-is — default behaviour is
+            unchanged. When set, the issuer used to validate the token (the
+            discovery document's issuer in discovery mode, otherwise ``issuer``)
+            MUST be a member, checked *before* the discovery result is trusted.
+            Set it only for multi-tenant callers that resolve discovery from an
+            untrusted token's ``iss`` — without it an attacker who stands up their
+            own tenant and mints a validly-signed token would pass validation.
+        strict_audience: When ``True``, reject a token that carries any ``aud``
+            value outside ``audience``.  **Opt-in** (default ``False``): PyJWT
+            only checks the configured audience is *present*, so by default a
+            token minted for ``["my-api", "other-api"]`` passes an
+            ``audience="my-api"`` config.  Enable to close that secondary-audience
+            / confused-deputy gap.  Default behaviour is unchanged.
 
     Examples:
         >>> # Multi-tenant with clock skew tolerance
@@ -1350,6 +1365,8 @@ class TokenValidationConfig:
     claims_validator: Callable | None = None
     require_https: bool = True
     leeway: float | None = None
+    allowed_issuers: list[str] | None = None
+    strict_audience: bool = False
 
 
 __all__ = [

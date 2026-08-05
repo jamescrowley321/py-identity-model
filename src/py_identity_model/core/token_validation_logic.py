@@ -13,7 +13,12 @@ from ..core.models import (
     JwksResponse,
     TokenValidationConfig,
 )
-from ..exceptions import ConfigurationException, TokenValidationException
+from ..exceptions import (
+    ConfigurationException,
+    InvalidAudienceException,
+    InvalidIssuerException,
+    TokenValidationException,
+)
 from ..logging_config import logger
 from ..logging_utils import redact_token
 
@@ -98,6 +103,80 @@ def validate_config_for_manual_validation(
         )
 
 
+def _enforce_allowed_issuers(
+    effective_issuer: str | list[str] | None,
+    allowed_issuers: list[str],
+) -> None:
+    """Fail closed unless every issuer used to validate the token is approved.
+
+    Multi-tenant spoofing defence (Epic 16 R.9 / audit RT-SPOOF-F1). In discovery
+    mode the ``effective_issuer`` is whatever discovery document the caller pointed
+    at, so the idiomatic middleware pattern (read ``iss`` from the untrusted token,
+    build ``disco_doc_address`` from it, validate) lets an attacker stand up their
+    own tenant, mint a validly-signed token, and pass — only the app's own
+    ``iss``->authz mapping would stop it. Pinning an approved issuer set rejects
+    the discovery result *before* it is trusted. Configured but unresolvable ->
+    fail closed rather than skip the check.
+
+    Raises:
+        InvalidIssuerException: If the effective issuer is not in ``allowed_issuers``
+            (or no issuer could be resolved to check).
+    """
+    allowed = set(allowed_issuers)
+    if isinstance(effective_issuer, str):
+        candidates = [effective_issuer]
+    elif effective_issuer:
+        candidates = list(effective_issuer)
+    else:
+        candidates = []
+    if not candidates:
+        raise InvalidIssuerException(
+            "allowed_issuers is configured but no issuer was resolved to check "
+            "against; refusing to validate without a pinned issuer",
+            details={"allowed_issuers": sorted(allowed)},
+        )
+    for iss in candidates:
+        if iss not in allowed:
+            raise InvalidIssuerException(
+                f"Issuer '{iss}' is not in the configured allowed_issuers",
+                details={"issuer": iss, "allowed_issuers": sorted(allowed)},
+            )
+
+
+def _enforce_strict_audience(
+    claims: dict,
+    allowed_audience: str | list[str],
+) -> None:
+    """Reject a token carrying any audience beyond the configured set.
+
+    PyJWT only checks the configured audience is *present* (set intersection), so
+    a token minted for ``["my-api", "attacker-api"]`` passes an ``audience="my-api"``
+    config — the confused-deputy / secondary-audience gap (audit RT5-F18). When
+    ``strict_audience`` is set, every ``aud`` value MUST be in the configured set.
+
+    Raises:
+        InvalidAudienceException: If the token carries an unexpected audience.
+    """
+    token_aud = claims.get("aud")
+    if token_aud is None:
+        return
+    auds = [token_aud] if isinstance(token_aud, str) else list(token_aud)
+    allowed = (
+        {allowed_audience}
+        if isinstance(allowed_audience, str)
+        else set(allowed_audience)
+    )
+    extra = [a for a in auds if a not in allowed]
+    if extra:
+        raise InvalidAudienceException(
+            "Token audience contains value(s) outside the configured audience",
+            details={
+                "unexpected_audiences": extra,
+                "allowed_audience": sorted(allowed),
+            },
+        )
+
+
 def decode_with_config(
     jwt: str,
     token_validation_config: TokenValidationConfig,
@@ -130,7 +209,22 @@ def decode_with_config(
             "multi-issuer is not supported in discovery mode"
         )
 
-    return decode_and_validate_jwt(
+    # Multi-tenant issuer pinning (OPT-IN): only when the caller sets
+    # allowed_issuers. When it is None (the default) this is skipped entirely and
+    # discovery stays authoritative — default behaviour is unchanged. When set,
+    # the issuer used to validate the token (the discovery issuer in disco mode,
+    # else the configured issuer) MUST be in the approved set, checked before
+    # decode so an attacker's own tenant is rejected before the discovery result
+    # is trusted (audit RT-SPOOF-F1).
+    if token_validation_config.allowed_issuers is not None:
+        effective_issuer = (
+            issuer if issuer is not None else token_validation_config.issuer
+        )
+        _enforce_allowed_issuers(
+            effective_issuer, token_validation_config.allowed_issuers
+        )
+
+    decoded = decode_and_validate_jwt(
         jwt=jwt,
         key=token_validation_config.key,
         algorithms=token_validation_config.algorithms,
@@ -140,6 +234,18 @@ def decode_with_config(
         leeway=token_validation_config.leeway,
         subject=token_validation_config.subject,
     )
+
+    # Strict audience (OPT-IN): PyJWT accepts a token whose `aud` merely *contains*
+    # the configured audience, so an extra untrusted audience slips through (audit
+    # RT5-F18). When strict_audience is set, every `aud` value must be in the
+    # configured set. Default (False) leaves PyJWT's behaviour unchanged.
+    if (
+        token_validation_config.strict_audience
+        and token_validation_config.audience is not None
+    ):
+        _enforce_strict_audience(decoded, token_validation_config.audience)
+
+    return decoded
 
 
 def validate_claims(
@@ -247,6 +353,10 @@ def build_resolved_config(
         claims_validator=original_config.claims_validator,
         require_https=original_config.require_https,
         leeway=original_config.leeway,
+        # Propagate the issuer allowlist so the disco/retry paths (which validate
+        # via this resolved config) still enforce issuer pinning.
+        allowed_issuers=original_config.allowed_issuers,
+        strict_audience=original_config.strict_audience,
     )
 
 
