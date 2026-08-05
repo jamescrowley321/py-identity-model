@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v3.8.2 (2026-08-05)
+
+### Bug Fixes
+
+- **mtls**: Make CertificateBindingError a TokenValidationException subclass
+  ([`65f2cc6`](https://github.com/jamescrowley321/py-identity-model/commit/65f2cc64d7f51bd0feca006abb353f57f8ed5e1e))
+
+### Testing
+
+- **mtls**: Integration proof that cert-binding mismatch fails closed
+  ([`71116dd`](https://github.com/jamescrowley321/py-identity-model/commit/71116dde010c6f7de8b5b48cdbad977fb6e0a1e0))
+
+
 ## v3.8.1 (2026-08-05)
 
 ### Bug Fixes
