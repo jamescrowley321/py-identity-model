@@ -158,6 +158,7 @@ def validate_and_parse_discovery_response(
         "registration_endpoint",
         "introspection_endpoint",
         "end_session_endpoint",
+        "pushed_authorization_request_endpoint",
     ]
     try:
         discovery_url = str(response.url)

@@ -12,12 +12,17 @@ fields:
   the client POST ``client_id``/``redirect_uri``/PKCE ``code_challenge``/
   ``client_secret`` to an attacker or plaintext host (credential-exfil SSRF).
 
-Both fields bypass the validation that already guards the seven sibling
-endpoints, so a discovery document advertising a foreign-authority / plaintext
-URL in either field is accepted today. These tests assert the document is
-REJECTED (``is_successful=False`` — ``DiscoveryException`` collapsed by
-``handle_discovery_error``); they XFAIL until the two fields join the
-authority/scheme validation loop.
+``pushed_authorization_request_endpoint`` (F-06) now joins the authority/scheme
+validation loop (``_endpoint_names``), so a discovery document advertising a
+foreign-authority / plaintext URL there is REJECTED (``is_successful=False`` —
+``DiscoveryException`` collapsed by ``handle_discovery_error``).
+
+``mtls_endpoint_aliases`` (F-05) still XFAILs: strict issuer-authority matching
+cannot be applied to it, because RFC 8705 §5 mTLS endpoints legitimately live on
+a separate host (e.g. ``mtls.example.com`` under issuer ``example.com`` — see
+``test_mtls.py::TestDiscoveryParsesMtlsFields``). The correct fix (scheme +
+internal-IP-literal block, preserving cross-host hostnames) is tracked
+separately.
 
 ``TestSiblingFieldIsValidated`` is a passing control (NOT xfail): it feeds the
 identical malicious URL to a *guarded* sibling field (``token_endpoint``) and
@@ -64,8 +69,10 @@ def _fetch(doc: dict) -> DiscoveryDocumentResponse:
 @pytest.mark.parametrize("malicious_url", [METADATA_HTTP, FOREIGN_HTTPS])
 @pytest.mark.xfail(
     strict=True,
-    reason="F-05: mtls_endpoint_aliases values bypass endpoint authority/scheme "
-    "validation (SSRF + HTTPS->HTTP downgrade of mTLS-auth'd requests)",
+    reason="F-05: mtls_endpoint_aliases values bypass endpoint scheme validation "
+    "(SSRF + HTTPS->HTTP downgrade). Fix must preserve legit cross-host mTLS "
+    "aliases (RFC 8705 §5), so it needs scheme + internal-IP block, not the "
+    "issuer-authority match used for same-host endpoints.",
 )
 @respx.mock
 def test_mtls_endpoint_alias_ssrf_is_rejected(malicious_url: str) -> None:
@@ -80,11 +87,6 @@ def test_mtls_endpoint_alias_ssrf_is_rejected(malicious_url: str) -> None:
 
 
 @pytest.mark.parametrize("malicious_url", [METADATA_HTTP, FOREIGN_HTTPS])
-@pytest.mark.xfail(
-    strict=True,
-    reason="F-06: pushed_authorization_request_endpoint bypasses endpoint "
-    "authority/scheme validation (SSRF + client-cred/PKCE exfil)",
-)
 @respx.mock
 def test_par_endpoint_ssrf_is_rejected(malicious_url: str) -> None:
     doc = {**_BASE_DISCO, "pushed_authorization_request_endpoint": malicious_url}
