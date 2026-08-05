@@ -24,6 +24,7 @@ from py_identity_model import (
     CertificateBindingError,
     ClientCredentialsTokenRequest,
     MtlsClientAuth,
+    TokenValidationException,
     compute_certificate_thumbprint,
     request_client_credentials_token,
     validate_certificate_binding,
@@ -151,3 +152,32 @@ class TestCertificateBoundTokenValidation:
             validate_certificate_binding(
                 {"cnf": {"x5t#S256": other_thumbprint}}, cert_pem
             )
+
+    def test_binding_mismatch_fails_closed_for_generic_handler(self):
+        """A resource server using the idiomatic ``except TokenValidationException``
+        must fail CLOSED on a cert-binding mismatch.
+
+        This is the behavioural proof of the exception-contract fix: because
+        ``CertificateBindingError`` was a *sibling* of ``TokenValidationException``,
+        a real RS handler that denies on ``TokenValidationException`` let a binding
+        mismatch escape and fail OPEN — accepting a stolen bound token as a bearer.
+        Exercised against a real X.509 cert + SHA-256 thumbprint, mirroring how an
+        RS confirms RFC 8705 §3 on a live token.
+        """
+        cert_pem, _ = _self_signed_cert()
+        other_pem, _ = _self_signed_cert()
+        other_thumbprint = compute_certificate_thumbprint(other_pem)
+
+        denied = False
+        try:
+            # Stolen cert-bound token replayed with the wrong client certificate.
+            validate_certificate_binding(
+                {"cnf": {"x5t#S256": other_thumbprint}}, cert_pem
+            )
+        except TokenValidationException:
+            # The RS's generic token-validation handler caught it -> 401 deny.
+            denied = True
+        assert denied, (
+            "cert-binding mismatch escaped `except TokenValidationException` and "
+            "would fail open (stolen bound token accepted as bearer)"
+        )
