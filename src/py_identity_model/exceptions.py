@@ -118,14 +118,23 @@ class JarmValidationException(AuthorizeCallbackException):
     """
 
 
-class CertificateBindingError(ValidationException):
+class CertificateBindingError(TokenValidationException):
     """Raised when mTLS certificate-bound access token validation fails.
 
     Covers the RFC 8705 §3 confirmation-method check: the token's
     ``cnf["x5t#S256"]`` thumbprint must match the client certificate
     presented at the TLS layer. Absent ``cnf``/``x5t#S256`` or a thumbprint
     mismatch raises this error.
+
+    Subclasses ``TokenValidationException`` (not ``ValidationException``
+    directly): a certificate-binding failure is a token-validation failure,
+    so callers using the idiomatic ``except TokenValidationException`` must
+    fail **closed** on it. As a sibling it would escape that handler and
+    fail open — the exact replay it is meant to stop.
     """
+
+    def __init__(self, message: str, details: dict | None = None):
+        super().__init__(message, token_part="payload", details=details)
 
 
 class NetworkException(PyIdentityModelException):

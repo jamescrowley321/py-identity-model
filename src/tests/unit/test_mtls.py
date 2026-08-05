@@ -34,6 +34,7 @@ from py_identity_model import (
     TokenExchangeRequest,
     TokenIntrospectionRequest,
     TokenRevocationRequest,
+    TokenValidationException,
     certificate_thumbprint_from_file,
     compute_certificate_thumbprint,
     get_discovery_document,
@@ -267,6 +268,16 @@ class TestValidateCertificateBinding:
         hmac.compare_digest (which cannot compare non-ASCII str)."""
         with pytest.raises(CertificateBindingError, match="base64url"):
             validate_certificate_binding({"cnf": {"x5t#S256": "abcé"}}, cert_pem)
+
+    def test_binding_error_is_token_validation_exception(self, cert_pem):
+        """A cert-binding failure must be catchable as ``TokenValidationException``
+        so callers using the idiomatic ``except TokenValidationException`` fail
+        CLOSED. Regression: ``CertificateBindingError`` was a *sibling* of
+        ``TokenValidationException``, so such a handler let a binding failure
+        escape and fail open — the exact replay the check is meant to stop."""
+        assert issubclass(CertificateBindingError, TokenValidationException)
+        with pytest.raises(TokenValidationException):
+            validate_certificate_binding({"sub": "user"}, cert_pem)
 
 
 @pytest.mark.unit
