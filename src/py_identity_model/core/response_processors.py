@@ -7,6 +7,7 @@ sync and async implementations.
 
 from __future__ import annotations
 
+import ipaddress
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -42,6 +43,44 @@ def _get_url_authority(url: str) -> str:
         return ""
     parsed = urlparse(url)
     return f"{parsed.scheme}://{parsed.netloc}".lower()
+
+
+def _reject_internal_ip_host(url: str, parameter_name: str) -> None:
+    """Reject a URL whose host is an internal/reserved IP *literal*.
+
+    ``mtls_endpoint_aliases`` (RFC 8705 §5) legitimately point to a foreign
+    *hostname*, so they cannot be authority-matched to the issuer like the
+    same-host endpoints. But a discovery document must never be able to route a
+    certificate-bearing request to a link-local cloud-metadata endpoint
+    (``169.254.169.254``), loopback, or an RFC1918 host — a credential-exfil /
+    SSRF primitive. This blocks IP-literal internal targets.
+
+    Limitation: it does NOT stop a *hostname* that resolves to an internal IP
+    (DNS-rebinding SSRF); defending that needs resolve-and-pin at the HTTP layer
+    and is tracked separately (T9).
+
+    Raises:
+        DiscoveryException: If ``url``'s host is an internal/reserved IP literal.
+    """
+    host = urlparse(url).hostname
+    if not host:
+        return
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return  # a hostname, not an IP literal — allowed (see limitation above)
+    if (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    ):
+        raise DiscoveryException(
+            f"{parameter_name} host '{host}' is an internal/reserved IP address "
+            f"({ip}); refusing to route a request there"
+        )
 
 
 def _validate_endpoint_authority(
@@ -158,6 +197,7 @@ def validate_and_parse_discovery_response(
         "registration_endpoint",
         "introspection_endpoint",
         "end_session_endpoint",
+        "pushed_authorization_request_endpoint",
     ]
     try:
         discovery_url = str(response.url)
@@ -171,6 +211,21 @@ def validate_and_parse_discovery_response(
             _validate_endpoint_authority(
                 ep_url, ep_name, response_json, effective_policy, discovery_url
             )
+
+    # RFC 8705 §5: ``mtls_endpoint_aliases`` map endpoint names to mTLS-specific
+    # URLs on a host that may legitimately differ from the issuer, so the
+    # same-host issuer-authority match above cannot apply. Still enforce the
+    # scheme policy (block an HTTPS->HTTP downgrade of the mTLS control) and
+    # reject internal/reserved IP-literal targets (block SSRF to link-local
+    # cloud metadata / RFC1918 / loopback). Hostname-based SSRF (DNS rebinding)
+    # is out of scope here (tracked as T9).
+    mtls_aliases = response_json.get("mtls_endpoint_aliases")
+    if isinstance(mtls_aliases, dict):
+        for alias_name, alias_url in mtls_aliases.items():
+            alias_param = f"mtls_endpoint_aliases.{alias_name}"
+            validate_https_url_with_policy(alias_url, alias_param, policy)
+            if isinstance(alias_url, str) and alias_url:
+                _reject_internal_ip_host(alias_url, alias_param)
 
     return response_json
 
