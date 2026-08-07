@@ -37,6 +37,19 @@ _BEARER_HEADER_PART_COUNT = 2
 # expected — reject it to prevent token-substitution at the resource server.
 _ID_TOKEN_ONLY_CLAIMS = ("nonce", "at_hash", "c_hash")
 
+# Positive access-token marker claims for the opt-in ID-token-substitution
+# defence (F-07). The negative ``_ID_TOKEN_ONLY_CLAIMS`` check misses a
+# code-flow ID token that carries NONE of nonce/at_hash/c_hash (all optional in
+# the auth-code flow) — such a token has ``aud == client_id`` and passes
+# validation, so it authenticates as a bearer access token. Requiring a
+# *positive* access-token signal closes that gap. ``scope`` is the discriminator
+# that holds across the surveyed OPs (Descope, Keycloak, node-oidc): access
+# tokens carry it, ID tokens never do (``scope`` is not an OIDC ID-token claim).
+# ``scp`` is included so tokens that carry scopes under the Azure AD convention
+# still count as access tokens. This is OPT-IN because some access tokens (e.g.
+# a client_credentials token minted with no scopes) legitimately carry neither.
+_DEFAULT_ACCESS_TOKEN_MARKER_CLAIMS = ("scope", "scp")
+
 
 class TokenValidationMiddleware(BaseHTTPMiddleware):
     """
@@ -57,15 +70,34 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
             ``/docs/oauth2-redirect``). Pass ``[]`` to exclude nothing. When
             omitted, defaults to ``/docs``, ``/openapi.json``, ``/health``.
         custom_claims_validator: Optional custom function to validate additional claims
+        require_access_token_marker: Opt-in ID-token-substitution defence
+            (F-07), default ``False`` (behaviour unchanged). When ``True``, a
+            validated token is additionally required to carry at least one
+            *positive* access-token marker claim (``access_token_marker_claims``)
+            or it is rejected 401 — stopping a code-flow ID token (which carries
+            none of nonce/at_hash/c_hash and whose ``aud`` matches the client_id)
+            from being replayed as a bearer access token. Leave ``False`` if any
+            of your access tokens legitimately omit those claims (e.g. a
+            client_credentials token minted with no scopes).
+        access_token_marker_claims: Claims that mark a token as an access token
+            for ``require_access_token_marker``. Defaults to ``("scope", "scp")``
+            — ``scope`` is the cross-OP discriminator (access tokens carry it, ID
+            tokens never do); ``scp`` covers the Azure AD convention. Override for
+            an OP whose access tokens signal type differently. Ignored when
+            ``require_access_token_marker`` is ``False``.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913  # opt-in F-07 marker config adds two optional params
         self,
         app,
         discovery_url: str,
         audience: str | None = None,
         excluded_paths: list[str] | None = None,
         custom_claims_validator: Callable | None = None,
+        require_access_token_marker: bool = False,
+        access_token_marker_claims: tuple[
+            str, ...
+        ] = _DEFAULT_ACCESS_TOKEN_MARKER_CLAIMS,
     ):
         super().__init__(app)
         if not audience:
@@ -73,8 +105,18 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
                 "TokenValidationMiddleware requires a non-empty 'audience'; a "
                 "None/empty audience skips aud enforcement for aud-less tokens."
             )
+        # An empty marker set with the check enabled would reject every token
+        # (no claim can ever satisfy ``any(...)``); fail loudly at construction
+        # rather than silently 401ing all traffic.
+        if require_access_token_marker and not access_token_marker_claims:
+            raise ValueError(
+                "require_access_token_marker=True needs a non-empty "
+                "access_token_marker_claims; an empty set rejects every token."
+            )
         self.discovery_url = discovery_url
         self.audience = audience
+        self.require_access_token_marker = require_access_token_marker
+        self.access_token_marker_claims = access_token_marker_claims
         # ``is not None`` (not truthiness) so an explicit [] means "exclude
         # nothing" instead of silently re-enabling the defaults.
         self.excluded_paths = (
@@ -118,6 +160,32 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
             )
         return parts[1]
 
+    def _wrong_token_type_error(self, claims: dict) -> str | None:
+        """A 401 detail if *claims* are the wrong token type for a resource
+        server (an ID token presented as an access token), else ``None``.
+
+        Two complementary checks:
+
+        * Negative (always on): an ID-token-only claim
+          (``nonce``/``at_hash``/``c_hash``) is present — those never appear on
+          an access token. With ``audience`` defaulted to the client_id an ID
+          token's ``aud`` matches, so the type must be discriminated on claims.
+        * Positive (opt-in, ``require_access_token_marker``): a code-flow ID
+          token carries none of the negative claims, so also require a positive
+          access-token marker (``scope``/``scp`` by default). Off by default —
+          behaviour unchanged unless explicitly enabled.
+        """
+        if any(c in claims for c in _ID_TOKEN_ONLY_CLAIMS):
+            return "ID token cannot be used as an access token"
+        if self.require_access_token_marker and not any(
+            c in claims for c in self.access_token_marker_claims
+        ):
+            return (
+                "Access token required; presented token lacks an "
+                "access-token marker claim"
+            )
+        return None
+
     async def _authenticate(self, request: Request, token: str) -> JSONResponse | None:
         """Validate *token* and attach claims; return an error response or None."""
         try:
@@ -130,11 +198,11 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
                 ),
                 disco_doc_address=self.discovery_url,
             )
-            # Reject an ID token presented as an access token. With audience
-            # defaulted to client_id, an ID token's aud matches, so type must
-            # be discriminated on ID-token-only claims.
-            if any(c in claims for c in _ID_TOKEN_ONLY_CLAIMS):
-                return self._unauthorized("ID token cannot be used as an access token")
+            # Reject an ID token presented as an access token (token-type
+            # confusion at the resource server).
+            wrong_type = self._wrong_token_type_error(claims)
+            if wrong_type is not None:
+                return self._unauthorized(wrong_type)
             request.state.user = to_principal(claims)
             request.state.claims = claims
             request.state.token = token
