@@ -33,6 +33,7 @@ characterize that IdP; the comparison table is also written to
 ``token_characterization_<provider_slug>.md`` in the working directory.
 """
 
+import os
 from pathlib import Path
 
 import jwt as pyjwt
@@ -271,6 +272,14 @@ class TestTokenCharacterization:
         out_path = Path.cwd() / f"token_characterization_{provider_slug}.md"
         out_path.write_text(document)
         print(f"[token-characterization] table written to {out_path}")
+
+        # In CI, pytest captures stdout on a passing test, so also append the
+        # table to the GitHub Actions job summary (the .md is additionally
+        # uploaded as a build artifact). This is how the data leaves CI.
+        step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if step_summary:
+            with Path(step_summary).open("a", encoding="utf-8") as fh:
+                fh.write(document + "\n")
 
         # Minimum sanity only — this test RECORDS.
         assert id_token, "no id_token obtained"
