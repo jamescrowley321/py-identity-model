@@ -186,6 +186,14 @@ jobs:
           TEST_EXPIRED_TOKEN: ${{ secrets.DESCOPE_EXPIRED_TOKEN }}
           TEST_AUDIENCE: ${{ secrets.DESCOPE_AUDIENCE }}
 
+      - name: Upload token characterization (Descope)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: token-characterization-descope
+          path: token_characterization_*.md
+          if-no-files-found: ignore
+
   integration-tests-node-oidc:
     runs-on: ubuntu-latest
     steps:
@@ -249,6 +257,14 @@ jobs:
 
       - name: Integration Tests (Keycloak)
         run: uv run pytest src/tests -m integration --env-file=.env.keycloak -v
+
+      - name: Upload token characterization (Keycloak)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: token-characterization-keycloak
+          path: token_characterization_*.md
+          if-no-files-found: ignore
 
       - name: Tear down Keycloak fixture
         if: always()
