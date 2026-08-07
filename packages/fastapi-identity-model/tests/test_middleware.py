@@ -152,3 +152,26 @@ def test_root_excluded_path_is_not_a_catch_all():
     assert mw_obj._is_excluded("/api/me") is False
     assert mw_obj._is_excluded("/docs") is True
     assert mw_obj._is_excluded("/docs/oauth2-redirect") is True
+
+
+def test_access_token_marker_defaults_off():
+    # The F-07 defence is opt-in: default construction leaves it disabled with
+    # the scope/scp marker set, so existing deployments are unaffected.
+    mw_obj = TokenValidationMiddleware(
+        FastAPI(), discovery_url=DISCOVERY_URL, audience="cid"
+    )
+    assert mw_obj.require_access_token_marker is False
+    assert mw_obj.access_token_marker_claims == ("scope", "scp")
+
+
+def test_require_access_token_marker_with_empty_claims_raises():
+    # Enabling the requirement with no marker claims would 401 every token;
+    # reject it at construction rather than silently blocking all traffic.
+    with pytest.raises(ValueError, match="access_token_marker_claims"):
+        TokenValidationMiddleware(
+            FastAPI(),
+            discovery_url=DISCOVERY_URL,
+            audience="cid",
+            require_access_token_marker=True,
+            access_token_marker_claims=(),
+        )
