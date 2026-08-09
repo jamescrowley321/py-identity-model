@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v3.8.4 (2026-08-09)
+
+### Bug Fixes
+
+- **ci**: Pin uv to 0.11.29 to unbreak PyPI publish
+  ([#504](https://github.com/jamescrowley321/py-identity-model/pull/504),
+  [`e5e3137`](https://github.com/jamescrowley321/py-identity-model/commit/e5e3137605b03d32687d57c57807b62b10cc1ab2))
+
+### Chores
+
+- Sync uv.lock with 3.8.3
+  ([`80c1f4b`](https://github.com/jamescrowley321/py-identity-model/commit/80c1f4b998cdda50aad19a4fc6e977e3253dfe23))
+
+
 ## v3.8.3 (2026-08-09)
 
 ### Bug Fixes
