@@ -8,6 +8,14 @@ inserted below the marker.
 
 <!-- psr: next release -->
 
+## v0.2.0 (2026-08-09)
+
+### Features
+
+- **fastapi**: Opt-in access-token-marker enforcement (F-07)
+  ([`4e0eb10`](https://github.com/jamescrowley321/py-identity-model/commit/4e0eb10aea9c6451614b5b6cfaa4b2c410f3496b))
+
+
 ## 0.1.0 (2026-07-08)
 
 Initial release. Extracted and hardened from the `py-identity-model` FastAPI
