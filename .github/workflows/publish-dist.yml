@@ -27,7 +27,11 @@ jobs:
       - name: Build distribution 📦
         run: |
           echo ${{ steps.vars.outputs.tag }}
-          sed -i -e "s/0.0.0/${{ steps.vars.outputs.tag }}/" pyproject.toml
+          # Anchor to the project.version line: an unanchored `s/0.0.0/<ver>/`
+          # also matches the `0.0.0` inside dependency pins (e.g.
+          # `cryptography>=50.0.0`), rewriting it to `cryptography>=5<ver>` and
+          # breaking the build (this froze every cryptography>=50 release).
+          sed -i -e "s/^version = \"0.0.0\"/version = \"${{ steps.vars.outputs.tag }}\"/" pyproject.toml
           make build-dist
       - name: Publish distribution 📦 to PyPI
         env:

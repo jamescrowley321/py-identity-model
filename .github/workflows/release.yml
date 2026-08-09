@@ -91,7 +91,11 @@ jobs:
           echo "Building version ${{ steps.release.outputs.version }}"
           # Ensure version is set in pyproject.toml (semantic-release should have done this,
           # but we verify/set it explicitly to be safe)
-          sed -i -e "s/0.0.0/${{ steps.release.outputs.version }}/" pyproject.toml
+          # Anchor to the project.version line: an unanchored `s/0.0.0/<ver>/`
+          # also matches the `0.0.0` inside dependency pins (e.g.
+          # `cryptography>=50.0.0`), rewriting it to `cryptography>=5<ver>` and
+          # breaking the build (this froze every cryptography>=50 release).
+          sed -i -e "s/^version = \"0.0.0\"/version = \"${{ steps.release.outputs.version }}\"/" pyproject.toml
           make build-dist
 
       - name: Upload to GitHub Release Assets
