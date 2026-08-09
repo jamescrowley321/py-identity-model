@@ -2,6 +2,31 @@
 
 <!-- version list -->
 
+## v3.8.3 (2026-08-09)
+
+### Bug Fixes
+
+- **discovery**: Reject internal-IP mtls_endpoint_aliases (F-05)
+  ([`5d60410`](https://github.com/jamescrowley321/py-identity-model/commit/5d60410a2bfdccf0f41f9e48acb3bc94c73233c1))
+
+- **discovery**: Validate pushed_authorization_request_endpoint (F-06)
+  ([`d9ee46c`](https://github.com/jamescrowley321/py-identity-model/commit/d9ee46c31ab7b0a3575233b4db10e1b3bcadcf3d))
+
+### Testing
+
+- **integration**: Clear stale cross-run provider cache at session start
+  ([#495](https://github.com/jamescrowley321/py-identity-model/pull/495),
+  [`6beb9ad`](https://github.com/jamescrowley321/py-identity-model/commit/6beb9ad21b9d4b4bda8615bbee7a6d38c501e5c7))
+
+- **integration**: Surface characterization table via CI step summary + artifact
+  ([#499](https://github.com/jamescrowley321/py-identity-model/pull/499),
+  [`f89427c`](https://github.com/jamescrowley321/py-identity-model/commit/f89427c326d51882e5b9f473b93ca29a648be777))
+
+- **integration**: Token characterization harness for F-07 discriminator
+  ([#499](https://github.com/jamescrowley321/py-identity-model/pull/499),
+  [`f89427c`](https://github.com/jamescrowley321/py-identity-model/commit/f89427c326d51882e5b9f473b93ca29a648be777))
+
+
 ## v3.8.2 (2026-08-05)
 
 ### Bug Fixes
