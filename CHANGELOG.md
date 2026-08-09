@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v3.8.5 (2026-08-09)
+
+### Bug Fixes
+
+- **ci**: Anchor version sed so it can't corrupt the cryptography pin
+  ([#505](https://github.com/jamescrowley321/py-identity-model/pull/505),
+  [`ab7f992`](https://github.com/jamescrowley321/py-identity-model/commit/ab7f992f5bfc04914098f178790972ead8dd96c7))
+
+
 ## v3.8.4 (2026-08-09)
 
 ### Bug Fixes
