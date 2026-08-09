@@ -125,7 +125,13 @@ generate-token: ## Generate a sample JWT token
 ci-setup: ## CI environment setup
 	python -m pip install --upgrade pip
 	pip install pipx
-	pipx install uv
+	# Pin uv: newer uv (0.12.x+) synthesizes a phantom `cryptography>=53.8.3`
+	# constraint on the python_full_version>='3.14' resolution split, making
+	# `cryptography>=50,<51` unsatisfiable and breaking `make build-dist` in the
+	# PyPI publish (3.8.1/3.8.2/3.8.3 all failed to publish for this reason).
+	# 0.11.29 resolves cryptography>=50 across all supported Pythons (incl. 3.14)
+	# correctly. Revisit once the uv resolver bug is fixed upstream.
+	pipx install uv==0.11.29
 	uv venv
 	uv sync --all-packages
 
