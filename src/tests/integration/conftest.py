@@ -8,9 +8,12 @@ Includes:
 
 from contextlib import suppress
 from dataclasses import dataclass
+import getpass
 from html.parser import HTMLParser
 import json
+from pathlib import Path
 import secrets
+import tempfile
 import time
 from types import MappingProxyType
 from typing import Any
@@ -55,6 +58,47 @@ from py_identity_model.exceptions import TokenValidationException
 from py_identity_model.sync.http_client import close_http_client
 
 from .test_utils import get_config
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_configure(config: pytest.Config) -> None:
+    """Clear stale cross-run integration cache before the run starts.
+
+    The session fixtures below cache discovery/JWKS/tokens to JSON at
+    ``tmp_path_factory.getbasetemp().parent`` — a path kept stable so
+    ``pytest -n auto`` workers share one fetch, but which therefore also
+    persists across *separate* runs. Every integration run starts a FRESH
+    provider container with new ephemeral signing keys and mints new tokens,
+    so a cache left over from a prior run is always stale: cached access /
+    opaque tokens have expired ("Token has expired" / introspection inactive)
+    and the cached JWKS no longer matches the new keys ("Invalid signature" /
+    "refresh cooldown active"). That produced ~22 spurious failures on any
+    re-run more than a token TTL after the previous one.
+
+    Clear it once, on the xdist controller only (before workers spawn and
+    before any fixture reads it). The in-run FileLock + JSON cache still
+    prevents the N-worker discovery/JWKS stampede the cache exists to avoid.
+    """
+    if hasattr(config, "workerinput"):  # xdist worker: controller already cleared
+        return
+    factory = getattr(config, "_tmp_path_factory", None)
+    if factory is not None:
+        cache_dir = factory.getbasetemp().parent
+    else:  # fallback to pytest's default basetemp location
+        cache_dir = Path(tempfile.gettempdir()) / f"pytest-of-{getpass.getuser()}"
+    if not cache_dir.is_dir():
+        return
+    stale_cache_stems = (
+        "discovery_document",
+        "raw_discovery",
+        "jwks_response",
+        "client_credentials_token",
+        "opaque_access_token",
+    )
+    for stem in stale_cache_stems:
+        for ext in ("json", "lock"):
+            for stale in cache_dir.glob(f"*_{stem}.{ext}"):
+                stale.unlink(missing_ok=True)
 
 
 # HTTP status codes
