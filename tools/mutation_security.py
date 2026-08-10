@@ -18,9 +18,11 @@ it is explicitly waived. This is robust to new mutmut statuses by construction.
 
 Guardrails
 ----------
-* **Changed-files scope, not full-tree.** Full mutation of every security module
-  is a nightly concern; on a PR we prove the *files this PR touched* are pinned
-  by fail-closed tests. Empty intersection -> exit 0 (safe as a required check).
+* **Changed-function scope, not full-file.** Full mutation of every security
+  module is a nightly concern; on a PR we prove the *functions this PR touched*
+  are pinned by fail-closed tests. Untouched functions in a touched file are
+  pre-existing debt, not this PR's regression surface, so their mutants do not
+  gate the PR. Empty intersection -> exit 0 (safe as a required check).
 * **>=1-mutant floor.** If mutmut produced **zero** mutants for the changed
   files, that is a config/scope/version-drift failure, not a pass — we exit 1.
   (This is the "silent green on output drift" hole the review flagged.)
@@ -37,6 +39,7 @@ tests live under ``src/tests`` (mutmut only auto-copies top-level ``tests/``).
 
 from __future__ import annotations
 
+import ast
 import os
 from pathlib import Path
 import re
@@ -113,6 +116,68 @@ def changed_security_files(base: str) -> list[str]:
         sys.exit(2)
     changed = set(res.stdout.split())
     return [m for m in SECURITY_MODULES if m in changed and Path(m).exists()]
+
+
+def _changed_line_numbers(base: str, path: str) -> set[int]:
+    """New-file line numbers that changed on HEAD versus ``base`` for ``path``."""
+    res = _run(["git", "diff", "-U0", f"{base}...HEAD", "--", path])
+    if res.returncode != 0:
+        res = _run(["git", "diff", "-U0", base, "--", path])
+    lines: set[int] = set()
+    # -U0 hunk header: @@ -old,n +new,m @@ ; m absent means a single line.
+    for m in re.finditer(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", res.stdout, re.M):
+        start = int(m.group(1))
+        count = 1 if m.group(2) is None else int(m.group(2))
+        lines.update(range(start, start + max(count, 1)))
+    return lines
+
+
+def _function_spans(path: str) -> list[tuple[str, int, int]]:
+    """``(name, first_line, last_line)`` for every def/async def in ``path``."""
+    tree = ast.parse(Path(path).read_text())
+    return [
+        (node.name, node.lineno, node.end_lineno or node.lineno)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    ]
+
+
+def unchanged_functions(base: str, changed_files: list[str]) -> set[str]:
+    """Function names in the changed security files that this PR did NOT touch.
+
+    The gate proves the functions a PR *changed* are mutation-pinned — not the
+    pre-existing rest of a file that merely shares it. A mutant living in one of
+    these untouched functions is therefore out of scope. Fail-closed: module-level
+    statements and any mutant we cannot map to a known function stay in scope.
+    """
+    all_funcs: set[str] = set()
+    changed_funcs: set[str] = set()
+    for path in changed_files:
+        lines = _changed_line_numbers(base, path)
+        for name, start, end in _function_spans(path):
+            all_funcs.add(name)
+            if not set(range(start, end + 1)).isdisjoint(lines):
+                changed_funcs.add(name)
+    return all_funcs - changed_funcs
+
+
+def _mutant_function(mutant_name: str) -> str:
+    """The source function a mutmut mutant belongs to (``pkg.mod.x_foo__mutmut_3``
+    -> ``foo``)."""
+    leaf = mutant_name.rpartition("__mutmut_")[0].rpartition(".")[2]
+    return leaf[2:] if leaf.startswith("x_") else leaf
+
+
+def scope_to_changed_functions(
+    statuses: dict[str, str], unchanged: set[str]
+) -> dict[str, str]:
+    """Drop mutants that live in a function the PR did not change (fail-closed:
+    module-level / unrecognised mutants are kept)."""
+    return {
+        name: status
+        for name, status in statuses.items()
+        if _mutant_function(name) not in unchanged
+    }
 
 
 def _write_setup_cfg(only_mutate: list[str]) -> str | None:
@@ -228,7 +293,19 @@ def main() -> int:
             )
             return 2
 
-        unwaived, waived = evaluate(statuses, load_allowlist(_read_allowlist()))
+        # Scope to the functions this PR actually changed. Untouched functions in a
+        # touched file are pre-existing mutation debt, not this PR's regression
+        # surface, so their mutants do not gate the PR (the >=1 floor above still runs
+        # against the full mutant set, so config/version drift is still caught).
+        unchanged = unchanged_functions(base, changed)
+        scoped = scope_to_changed_functions(statuses, unchanged)
+        excluded = len(statuses) - len(scoped)
+        print(
+            f"mutation-security: {len(scoped)}/{len(statuses)} mutant(s) live in the "
+            f"changed function(s); {excluded} in untouched functions are out of scope."
+        )
+
+        unwaived, waived = evaluate(scoped, load_allowlist(_read_allowlist()))
         for w in waived:
             print(f"mutation-security: WAIVED equivalent mutant {w}")
 
@@ -246,8 +323,8 @@ def main() -> int:
             return 1
 
         print(
-            f"mutation-security: PASSED — {len(statuses)} mutant(s) across the changed "
-            "security module(s), all killed (or waived-equivalent)."
+            f"mutation-security: PASSED — {len(scoped)} mutant(s) in the changed "
+            "function(s), all killed (or waived-equivalent)."
         )
         return 0
     finally:
