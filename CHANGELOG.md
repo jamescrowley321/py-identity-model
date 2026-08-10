@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v3.8.7 (2026-08-10)
+
+### Bug Fixes
+
+- **discovery**: Close IP-encoding SSRF bypass + surface off-host escape hatch (F-05/F-06)
+  ([#506](https://github.com/jamescrowley321/py-identity-model/pull/506),
+  [`ef812e6`](https://github.com/jamescrowley321/py-identity-model/commit/ef812e6bb28d6b2a1482fe3b37f8f5939ec8df5b))
+
+### Chores
+
+- Sync uv.lock with 3.8.6
+  ([`afd1b46`](https://github.com/jamescrowley321/py-identity-model/commit/afd1b4678f1fe82973f79b1a198883cf96782bda))
+
+
 ## v3.8.6 (2026-08-10)
 
 ### Bug Fixes
