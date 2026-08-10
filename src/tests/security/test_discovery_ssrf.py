@@ -68,6 +68,9 @@ ENC_OCTAL_HTTPS = "https://0177.0.0.1/token"  # 127.0.0.1
 ENC_HEX_HTTPS = "https://0x7f.0.0.1/token"  # 127.0.0.1
 # A legitimate off-host PAR endpoint (RFC 9126 §5 permits a different host).
 OFFHOST_PAR = "https://par.example.net/par"
+# A loopback mTLS endpoint (local development). Rejected by default; allowed
+# only when DiscoveryPolicy(allow_loopback_endpoints=True) is set.
+LOOPBACK_MTLS_HTTPS = "https://127.0.0.1:8443/token"
 
 _BASE_DISCO = {
     "issuer": "https://as.example.com",
@@ -130,6 +133,53 @@ def test_mtls_endpoint_alias_encoded_internal_target_is_rejected(
     """
     doc = {**_BASE_DISCO, "mtls_endpoint_aliases": {"token_endpoint": encoded_url}}
     result = _fetch(doc)
+    assert result.is_successful is False
+
+
+@respx.mock
+def test_loopback_mtls_alias_rejected_by_default() -> None:
+    """Secure default: a loopback mTLS alias is rejected. Routing a
+    certificate-bearing request to the client's own localhost is a limited SSRF,
+    so it must not be permitted unless the operator explicitly opts in."""
+    doc = {
+        **_BASE_DISCO,
+        "mtls_endpoint_aliases": {"token_endpoint": LOOPBACK_MTLS_HTTPS},
+    }
+    assert _fetch(doc).is_successful is False
+
+
+@respx.mock
+def test_loopback_mtls_alias_allowed_when_opted_in() -> None:
+    """Local-dev opt-in: ``allow_loopback_endpoints=True`` permits a loopback
+    mTLS alias so a developer can debug against a local OP whose discovery doc
+    advertises the ``127.0.0.1`` literal (not the ``localhost`` hostname)."""
+    doc = {
+        **_BASE_DISCO,
+        "mtls_endpoint_aliases": {"token_endpoint": LOOPBACK_MTLS_HTTPS},
+    }
+    respx.get(DISCO_URL).mock(return_value=httpx.Response(200, json=doc))
+    result = get_discovery_document(
+        DiscoveryDocumentRequest(
+            address=DISCO_URL,
+            policy=DiscoveryPolicy(allow_loopback_endpoints=True),
+        )
+    )
+    assert result.is_successful is True
+
+
+@respx.mock
+def test_link_local_mtls_alias_rejected_even_with_loopback_opt_in() -> None:
+    """The loopback opt-in must NOT unblock link-local (169.254.x cloud
+    metadata) or RFC1918 — those are the real SSRF targets and stay blocked
+    regardless of ``allow_loopback_endpoints``."""
+    doc = {**_BASE_DISCO, "mtls_endpoint_aliases": {"token_endpoint": METADATA_HTTPS}}
+    respx.get(DISCO_URL).mock(return_value=httpx.Response(200, json=doc))
+    result = get_discovery_document(
+        DiscoveryDocumentRequest(
+            address=DISCO_URL,
+            policy=DiscoveryPolicy(allow_loopback_endpoints=True),
+        )
+    )
     assert result.is_successful is False
 
 
