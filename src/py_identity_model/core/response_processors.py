@@ -8,6 +8,7 @@ sync and async implementations.
 from __future__ import annotations
 
 import ipaddress
+import socket
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -45,7 +46,32 @@ def _get_url_authority(url: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}".lower()
 
 
-def _reject_internal_ip_host(url: str, parameter_name: str) -> None:
+def _parse_ip_literal(
+    host: str,
+) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """Return the IP address a host denotes, or ``None`` if it is a hostname.
+
+    Recognises not only canonical dotted-quad / IPv6 literals but the alternate
+    IPv4 encodings the OS resolver (``inet_aton``) honours — decimal
+    (``2130706433``), octal (``0177.0.0.1``) and hex (``0x7f.0.0.1``) forms of
+    an internal address. ``ipaddress.ip_address`` rejects those with
+    ``ValueError`` (so a naive check treats them as harmless hostnames), yet the
+    connection still routes to the internal address — the SSRF-evasion class.
+    """
+    try:
+        return ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    try:
+        packed = socket.inet_aton(host)
+    except OSError:
+        return None  # not an IPv4 literal in any encoding — a real hostname
+    return ipaddress.ip_address(packed)
+
+
+def _reject_internal_ip_host(
+    url: str, parameter_name: str, policy: DiscoveryPolicy | None = None
+) -> None:
     """Reject a URL whose host is an internal/reserved IP *literal*.
 
     ``mtls_endpoint_aliases`` (RFC 8705 §5) legitimately point to a foreign
@@ -53,7 +79,14 @@ def _reject_internal_ip_host(url: str, parameter_name: str) -> None:
     same-host endpoints. But a discovery document must never be able to route a
     certificate-bearing request to a link-local cloud-metadata endpoint
     (``169.254.169.254``), loopback, or an RFC1918 host — a credential-exfil /
-    SSRF primitive. This blocks IP-literal internal targets.
+    SSRF primitive. This blocks IP-literal internal targets in every encoding
+    the resolver accepts (dotted-quad, IPv6, and decimal/octal/hex forms).
+
+    Loopback (``127.0.0.0/8`` / ``::1``) may be opted into for local development
+    via ``policy.allow_loopback_endpoints`` — a loopback-routed request is a
+    limited (localhost-only) SSRF, so it is the one internal class safe to allow
+    behind a flag. Link-local and RFC1918/reserved are the real SSRF targets and
+    are never permitted, regardless of the flag.
 
     Limitation: it does NOT stop a *hostname* that resolves to an internal IP
     (DNS-rebinding SSRF); defending that needs resolve-and-pin at the HTTP layer
@@ -65,10 +98,11 @@ def _reject_internal_ip_host(url: str, parameter_name: str) -> None:
     host = urlparse(url).hostname
     if not host:
         return
-    try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
+    ip = _parse_ip_literal(host)
+    if ip is None:
         return  # a hostname, not an IP literal — allowed (see limitation above)
+    if ip.is_loopback and policy is not None and policy.allow_loopback_endpoints:
+        return  # local-dev opt-in; link-local / RFC1918 still fall through below
     if (
         ip.is_private
         or ip.is_loopback
@@ -132,7 +166,9 @@ def _validate_endpoint_authority(
     if ep_authority not in allowed:
         raise DiscoveryException(
             f"{parameter_name} authority '{ep_authority}' does not match "
-            f"expected authorities: {sorted(allowed)}"
+            f"expected authorities: {sorted(allowed)}. If this is a legitimate "
+            f"endpoint on a different host (RFC 8414 / RFC 9126 permit this), add "
+            f"its base address to DiscoveryPolicy.additional_endpoint_base_addresses."
         )
 
 
@@ -225,7 +261,7 @@ def validate_and_parse_discovery_response(
             alias_param = f"mtls_endpoint_aliases.{alias_name}"
             validate_https_url_with_policy(alias_url, alias_param, policy)
             if isinstance(alias_url, str) and alias_url:
-                _reject_internal_ip_host(alias_url, alias_param)
+                _reject_internal_ip_host(alias_url, alias_param, effective_policy)
 
     return response_json
 

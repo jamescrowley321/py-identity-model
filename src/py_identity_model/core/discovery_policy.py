@@ -46,6 +46,14 @@ class DiscoveryPolicy:
             or CDN setups).
         authority: Expected authority (scheme + host) for endpoint
             validation. When ``None``, derived from the discovery URL.
+        allow_loopback_endpoints: Allow ``mtls_endpoint_aliases`` to target a
+            loopback address (``127.0.0.0/8`` / ``::1``) for local development.
+            Default ``False`` — a loopback-routed mTLS request is a limited SSRF
+            to the client's own host, so it must be opted into. Link-local
+            (cloud metadata, ``169.254.0.0/16``) and RFC1918/reserved hosts stay
+            blocked regardless of this flag. Distinct from
+            ``allow_http_on_loopback`` (which relaxes only the HTTPS scheme
+            requirement, not internal-IP routing).
     """
 
     require_https: bool = True
@@ -55,6 +63,7 @@ class DiscoveryPolicy:
     require_key_set: bool = True
     additional_endpoint_base_addresses: list[str] = field(default_factory=list)
     authority: str | None = None
+    allow_loopback_endpoints: bool = False
 
 
 @dataclass

@@ -38,6 +38,7 @@ import respx
 from py_identity_model import (
     DiscoveryDocumentRequest,
     DiscoveryDocumentResponse,
+    DiscoveryPolicy,
     get_discovery_document,
 )
 
@@ -58,6 +59,18 @@ PRIVATE_HTTPS = "https://10.0.0.5/token"
 # A legitimate cross-host mTLS endpoint (RFC 8705 §5) on a separate hostname —
 # must be ALLOWED (mTLS aliases are not authority-matched to the issuer).
 LEGIT_MTLS_HOST = "https://mtls.as.example.com/token"
+# Alternate IPv4 encodings of 127.0.0.1 that the OS resolver (inet_aton) honours
+# but a naive ``ipaddress.ip_address`` literal check treats as hostnames — the
+# decimal/octal/hex SSRF-evasion class. All HTTPS so only the internal-IP check
+# (not the scheme check) can reject them.
+ENC_DECIMAL_HTTPS = "https://2130706433/token"  # 127.0.0.1
+ENC_OCTAL_HTTPS = "https://0177.0.0.1/token"  # 127.0.0.1
+ENC_HEX_HTTPS = "https://0x7f.0.0.1/token"  # 127.0.0.1
+# A legitimate off-host PAR endpoint (RFC 9126 §5 permits a different host).
+OFFHOST_PAR = "https://par.example.net/par"
+# A loopback mTLS endpoint (local development). Rejected by default; allowed
+# only when DiscoveryPolicy(allow_loopback_endpoints=True) is set.
+LOOPBACK_MTLS_HTTPS = "https://127.0.0.1:8443/token"
 
 _BASE_DISCO = {
     "issuer": "https://as.example.com",
@@ -104,12 +117,107 @@ def test_mtls_endpoint_alias_cross_host_is_allowed() -> None:
     assert result.is_successful is True
 
 
+@pytest.mark.parametrize(
+    "encoded_url", [ENC_DECIMAL_HTTPS, ENC_OCTAL_HTTPS, ENC_HEX_HTTPS]
+)
+@respx.mock
+def test_mtls_endpoint_alias_encoded_internal_target_is_rejected(
+    encoded_url: str,
+) -> None:
+    """F-05 (encoding evasion): decimal/octal/hex encodings of an internal IP
+    resolve to the same host as the dotted-quad literal, so a poisoned mTLS
+    alias using ``https://2130706433/`` (127.0.0.1) must fail closed exactly
+    like ``https://127.0.0.1/``. The dotted-quad-only ``ipaddress`` check let
+    these through — they parse as ``ValueError`` (treated as a hostname) while
+    the OS resolver still routes them internally.
+    """
+    doc = {**_BASE_DISCO, "mtls_endpoint_aliases": {"token_endpoint": encoded_url}}
+    result = _fetch(doc)
+    assert result.is_successful is False
+
+
+@respx.mock
+def test_loopback_mtls_alias_rejected_by_default() -> None:
+    """Secure default: a loopback mTLS alias is rejected. Routing a
+    certificate-bearing request to the client's own localhost is a limited SSRF,
+    so it must not be permitted unless the operator explicitly opts in."""
+    doc = {
+        **_BASE_DISCO,
+        "mtls_endpoint_aliases": {"token_endpoint": LOOPBACK_MTLS_HTTPS},
+    }
+    assert _fetch(doc).is_successful is False
+
+
+@respx.mock
+def test_loopback_mtls_alias_allowed_when_opted_in() -> None:
+    """Local-dev opt-in: ``allow_loopback_endpoints=True`` permits a loopback
+    mTLS alias so a developer can debug against a local OP whose discovery doc
+    advertises the ``127.0.0.1`` literal (not the ``localhost`` hostname)."""
+    doc = {
+        **_BASE_DISCO,
+        "mtls_endpoint_aliases": {"token_endpoint": LOOPBACK_MTLS_HTTPS},
+    }
+    respx.get(DISCO_URL).mock(return_value=httpx.Response(200, json=doc))
+    result = get_discovery_document(
+        DiscoveryDocumentRequest(
+            address=DISCO_URL,
+            policy=DiscoveryPolicy(allow_loopback_endpoints=True),
+        )
+    )
+    assert result.is_successful is True
+
+
+@respx.mock
+def test_link_local_mtls_alias_rejected_even_with_loopback_opt_in() -> None:
+    """The loopback opt-in must NOT unblock link-local (169.254.x cloud
+    metadata) or RFC1918 — those are the real SSRF targets and stay blocked
+    regardless of ``allow_loopback_endpoints``."""
+    doc = {**_BASE_DISCO, "mtls_endpoint_aliases": {"token_endpoint": METADATA_HTTPS}}
+    respx.get(DISCO_URL).mock(return_value=httpx.Response(200, json=doc))
+    result = get_discovery_document(
+        DiscoveryDocumentRequest(
+            address=DISCO_URL,
+            policy=DiscoveryPolicy(allow_loopback_endpoints=True),
+        )
+    )
+    assert result.is_successful is False
+
+
 @pytest.mark.parametrize("malicious_url", [METADATA_HTTP, FOREIGN_HTTPS])
 @respx.mock
 def test_par_endpoint_ssrf_is_rejected(malicious_url: str) -> None:
     doc = {**_BASE_DISCO, "pushed_authorization_request_endpoint": malicious_url}
     result = _fetch(doc)
     assert result.is_successful is False
+
+
+@respx.mock
+def test_offhost_par_rejected_by_default_but_accepted_when_allowlisted() -> None:
+    """F-06 keeps the PAR authority-pin by default (a compromised OP must not be
+    able to redirect the client's ``client_secret``/PKCE POST to an attacker
+    host). But RFC 9126 §5 permits a legitimate off-host PAR endpoint, so the
+    documented escape hatch (``additional_endpoint_base_addresses``) must admit
+    it — and the default-rejection error must name that escape hatch so a real
+    split-host OP is a one-line config fix, not a silent break.
+    """
+    doc = {**_BASE_DISCO, "pushed_authorization_request_endpoint": OFFHOST_PAR}
+
+    # Default policy: rejected, and the error points at the escape hatch.
+    default = _fetch(doc)
+    assert default.is_successful is False
+    assert "additional_endpoint_base_addresses" in (default.error or "")
+
+    # With the off-host base allow-listed: accepted.
+    respx.get(DISCO_URL).mock(return_value=httpx.Response(200, json=doc))
+    allowlisted = get_discovery_document(
+        DiscoveryDocumentRequest(
+            address=DISCO_URL,
+            policy=DiscoveryPolicy(
+                additional_endpoint_base_addresses=["https://par.example.net"]
+            ),
+        )
+    )
+    assert allowlisted.is_successful is True
 
 
 class TestSiblingFieldIsValidated:
