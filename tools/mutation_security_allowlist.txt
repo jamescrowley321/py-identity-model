@@ -14,3 +14,11 @@
 #
 # SC0 seeds this file empty: SC0 changes no security module, so its gate run is
 # a no-op. Each remediation task (SC1–SC10) adds its own justified waivers.
+
+# R.9 issuer pinning (_enforce_allowed_issuers): the `else` branch sets
+# `candidates = []`; mutant _6 sets it to `None`. Both fall straight into
+# `if not candidates:` — `not []` and `not None` are both True — so both raise
+# the identical "no issuer was resolved" InvalidIssuerException and the for-loop
+# below is never reached. No input that reaches the else branch can observe []
+# vs None: semantically equivalent, unkillable.
+py_identity_model.core.token_validation_logic.x__enforce_allowed_issuers__mutmut_6
