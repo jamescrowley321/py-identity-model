@@ -28,6 +28,14 @@ _ALG_TO_KTY: dict[str, str] = {
     "EdDSA": "OKP",
     "Ed25519": "OKP",
     "Ed448": "OKP",
+    # Symmetric algorithms map to the "oct" key type. Listing them lets the
+    # consistency check reject an HS* header presented against an asymmetric
+    # (RSA/EC/OKP) JWK — the classic algorithm-confusion vector (RFC 8725
+    # §2.1/§3.1) — while still allowing a legitimate HS256 token signed with a
+    # shared-secret "oct" key (OIDC id_token_signed_response_alg=HS256).
+    "HS256": "oct",
+    "HS384": "oct",
+    "HS512": "oct",
 }
 
 
@@ -46,6 +54,17 @@ def _validate_key_alg_consistency(
     """
     if not jwt_alg:
         return
+
+    # RFC 8725 §3.2: never verify a signed token with the "none" algorithm on a
+    # key-based path. Reject with a typed exception before PyJWK is constructed —
+    # otherwise the no-kid branch hands "none" to PyJWK and raises an untyped
+    # NotImplementedError, breaking the PyIdentityModelException contract (F-01).
+    if jwt_alg.lower() == "none":
+        raise TokenValidationException(
+            "Algorithm 'none' is not permitted for signed-token validation",
+            token_part="header",
+            details={"kid": key.kid, "alg": jwt_alg},
+        )
 
     expected_kty = _ALG_TO_KTY.get(jwt_alg)
     if expected_kty and key.kty != expected_kty:
