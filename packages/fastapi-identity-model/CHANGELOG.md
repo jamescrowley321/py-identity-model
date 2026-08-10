@@ -8,6 +8,15 @@ inserted below the marker.
 
 <!-- psr: next release -->
 
+## v0.2.1 (2026-08-10)
+
+### Bug Fixes
+
+- **fastapi**: Uniform 401 body across validation failures (F-18, CWE-209)
+  ([#508](https://github.com/jamescrowley321/py-identity-model/pull/508),
+  [`d4e8aed`](https://github.com/jamescrowley321/py-identity-model/commit/d4e8aedcd9e2622aab9139ae5f6b09e2e2c1eaf0))
+
+
 ## v0.2.0 (2026-08-09)
 
 ### Features
