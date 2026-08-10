@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v3.8.6 (2026-08-10)
+
+### Bug Fixes
+
+- **security**: Reject HS*/none against an asymmetric key with a typed error (F-01)
+  ([#507](https://github.com/jamescrowley321/py-identity-model/pull/507),
+  [`3d3b49a`](https://github.com/jamescrowley321/py-identity-model/commit/3d3b49ae29596126d771d45f08a6c90c161b66f9))
+
+
 ## v3.8.5 (2026-08-09)
 
 ### Bug Fixes
