@@ -127,7 +127,11 @@ def _write_setup_cfg(only_mutate: list[str]) -> str | None:
         f"only_mutate =\n{only_block}\n"
         # This repo's tests live under src/tests; mutmut only auto-copies
         # top-level tests/, so without this the sandbox has no tests to run.
-        "also_copy =\n    src/tests\n"
+        # tools/ must also be copied: the gate self-test
+        # (src/tests/security/test_mutation_gate.py) loads tools/mutation_security.py
+        # relative to the repo root, which is the sandbox root under mutmut. Without
+        # it the baseline suite fails to collect and mutmut aborts before mutating.
+        "also_copy =\n    src/tests\n    tools\n"
         f"pytest_add_cli_args_test_selection =\n{test_block}\n"
     )
     return backup
