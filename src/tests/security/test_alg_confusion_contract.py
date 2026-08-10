@@ -30,7 +30,7 @@ import jwt as pyjwt
 import pytest
 import respx
 
-from py_identity_model.core.models import TokenValidationConfig
+from py_identity_model.core.models import JsonWebKey, TokenValidationConfig
 from py_identity_model.core.parsers import (
     _validate_key_alg_consistency,
     find_key_by_kid,
@@ -142,3 +142,87 @@ def test_hs256_against_symmetric_oct_key_is_allowed() -> None:
     oct_key = jwks_from_dict({"kty": "oct", "k": "A" * 43, "kid": "hs"})
     # Must not raise — HS256 is consistent with an oct key.
     _validate_key_alg_consistency(oct_key, "HS256")
+
+
+def _key(kty: str = "RSA", *, kid: str = "k1", alg: str | None = None) -> JsonWebKey:
+    """Minimal spec-valid JWK for the given key type. Only ``kty``/``kid``/``alg``
+    are read by the guard; the material is placeholder-but-present so
+    ``JsonWebKey.__post_init__`` validation passes."""
+    if kty == "RSA":
+        return JsonWebKey(kty="RSA", kid=kid, alg=alg, n="AQAB", e="AQAB")
+    if kty == "oct":
+        return JsonWebKey(kty="oct", kid=kid, alg=alg, k="AQAB")
+    raise ValueError(f"unsupported test kty: {kty}")
+
+
+class TestValidateKeyAlgConsistencyContract:
+    """Full exception-contract pins for ``_validate_key_alg_consistency`` — the
+    alg-confusion guard F-01 hardens. Each raising branch asserts type, message,
+    ``token_part`` and ``details``; each accepting branch asserts a clean no-op.
+    Together these kill the guard's mutants (mutation-security gate)."""
+
+    @pytest.mark.parametrize("empty_alg", [None, ""])
+    def test_falsy_alg_is_a_noop(self, empty_alg: str | None) -> None:
+        # No JWT alg -> nothing to check. Also pins that None never reaches
+        # ``.lower()`` (which would AttributeError if the early return were dropped).
+        assert _validate_key_alg_consistency(_key("RSA"), empty_alg) is None
+
+    @pytest.mark.parametrize("none_alg", ["none", "NONE", "None"])
+    def test_none_alg_is_rejected_case_insensitively(self, none_alg: str) -> None:
+        with pytest.raises(TokenValidationException) as exc_info:
+            _validate_key_alg_consistency(_key("RSA", kid="rsa-1"), none_alg)
+        exc = exc_info.value
+        assert exc.message == (
+            "Algorithm 'none' is not permitted for signed-token validation"
+        )
+        assert exc.token_part == "header"
+        assert exc.details == {"kid": "rsa-1", "alg": none_alg}
+
+    def test_symmetric_alg_against_asymmetric_key_is_rejected(self) -> None:
+        # The alg-confusion attack: an HS* header verified against an RSA key.
+        with pytest.raises(TokenValidationException) as exc_info:
+            _validate_key_alg_consistency(_key("RSA", kid="rsa-2"), "HS256")
+        exc = exc_info.value
+        assert exc.message == (
+            "Key type 'RSA' is incompatible with algorithm 'HS256' "
+            "(expected key type 'oct')"
+        )
+        assert exc.token_part == "header"
+        assert exc.details == {"kid": "rsa-2", "kty": "RSA", "alg": "HS256"}
+
+    def test_asymmetric_alg_against_symmetric_key_is_rejected(self) -> None:
+        with pytest.raises(TokenValidationException) as exc_info:
+            _validate_key_alg_consistency(_key("oct", kid="oct-1"), "RS256")
+        exc = exc_info.value
+        assert exc.message == (
+            "Key type 'oct' is incompatible with algorithm 'RS256' "
+            "(expected key type 'RSA')"
+        )
+        assert exc.token_part == "header"
+        assert exc.details == {"kid": "oct-1", "kty": "oct", "alg": "RS256"}
+
+    def test_consistent_kty_and_no_declared_alg_is_a_noop(self) -> None:
+        # RS256 against an RSA key that omits its optional ``alg`` — consistent.
+        assert _validate_key_alg_consistency(_key("RSA"), "RS256") is None
+
+    def test_alg_absent_from_map_is_not_kty_gated(self) -> None:
+        # An alg with no entry in ``_ALG_TO_KTY`` has no expected kty, so the kty
+        # branch must NOT fire (pins the ``expected_kty and ...`` short-circuit).
+        assert _validate_key_alg_consistency(_key("oct"), "PS999") is None
+
+    def test_declared_key_alg_mismatch_is_rejected(self) -> None:
+        # kty is consistent (RSA/RS256) but the key's own ``alg`` disagrees.
+        with pytest.raises(TokenValidationException) as exc_info:
+            _validate_key_alg_consistency(
+                _key("RSA", kid="rsa-3", alg="RS384"), "RS256"
+            )
+        exc = exc_info.value
+        assert exc.message == (
+            "Key algorithm 'RS384' does not match JWT algorithm 'RS256'"
+        )
+        assert exc.token_part == "header"
+        assert exc.details == {"kid": "rsa-3", "key_alg": "RS384", "jwt_alg": "RS256"}
+
+    def test_declared_key_alg_match_is_a_noop(self) -> None:
+        # key.alg == jwt_alg and kty consistent — must pass (pins the ``!=`` check).
+        assert _validate_key_alg_consistency(_key("RSA", alg="RS256"), "RS256") is None
