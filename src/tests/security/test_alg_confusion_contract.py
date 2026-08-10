@@ -31,7 +31,11 @@ import pytest
 import respx
 
 from py_identity_model.core.models import TokenValidationConfig
-from py_identity_model.core.parsers import find_key_by_kid, jwks_from_dict
+from py_identity_model.core.parsers import (
+    _validate_key_alg_consistency,
+    find_key_by_kid,
+    jwks_from_dict,
+)
 from py_identity_model.exceptions import (
     PyIdentityModelException,
     TokenValidationException,
@@ -77,11 +81,6 @@ def _alg_less_rsa_jwk() -> dict:
 
 
 @pytest.mark.parametrize("attacker_alg", ["HS256", "none"])
-@pytest.mark.xfail(
-    strict=True,
-    reason="F-01: _validate_key_alg_consistency no-ops for HS*/none, so a "
-    "no-kid symmetric/none alg against a single alg-less RSA JWK is not rejected",
-)
 def test_find_key_by_kid_rejects_symmetric_alg_against_rsa_key(
     attacker_alg: str,
 ) -> None:
@@ -92,11 +91,6 @@ def test_find_key_by_kid_rejects_symmetric_alg_against_rsa_key(
         find_key_by_kid(None, [key], jwt_alg=attacker_alg)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="F-01: HS256 no-kid token vs single alg-less RSA JWK escapes as an "
-    "untyped jwt.InvalidKeyError, violating the PyIdentityModelException contract",
-)
 @respx.mock
 def test_validate_token_hs256_no_kid_raises_typed_exception() -> None:
     jwk = _alg_less_rsa_jwk()
@@ -120,11 +114,6 @@ def test_validate_token_hs256_no_kid_raises_typed_exception() -> None:
         )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="F-01: alg=none no-kid token vs single alg-less RSA JWK escapes as an "
-    "untyped NotImplementedError, violating the PyIdentityModelException contract",
-)
 @respx.mock
 def test_validate_token_none_alg_no_kid_raises_typed_exception() -> None:
     jwk = _alg_less_rsa_jwk()
@@ -140,3 +129,16 @@ def test_validate_token_none_alg_no_kid_raises_typed_exception() -> None:
             token_validation_config=config,
             disco_doc_address=DISCO_URL,
         )
+
+
+def test_hs256_against_symmetric_oct_key_is_allowed() -> None:
+    """Positive control: HS* against a symmetric ``oct`` key is a LEGITIMATE
+    OIDC configuration — a confidential client with
+    ``id_token_signed_response_alg=HS256`` verifies the ID token with its client
+    secret (an ``oct`` JWK). Only HS*/``none`` against an *asymmetric* key is the
+    alg-confusion attack, so the guard must NOT reject this. Pins the kty-gated
+    fix against over-rejecting the spec-permitted symmetric case.
+    """
+    oct_key = jwks_from_dict({"kty": "oct", "k": "A" * 43, "kid": "hs"})
+    # Must not raise — HS256 is consistent with an oct key.
+    _validate_key_alg_consistency(oct_key, "HS256")
