@@ -50,6 +50,12 @@ _ID_TOKEN_ONLY_CLAIMS = ("nonce", "at_hash", "c_hash")
 # a client_credentials token minted with no scopes) legitimately carry neither.
 _DEFAULT_ACCESS_TOKEN_MARKER_CLAIMS = ("scope", "scp")
 
+# F-18 (CWE-209): every token-validation failure returns this single generic 401
+# body so the response cannot be used as an oracle to distinguish the rejection
+# cause (invalid signature vs wrong audience vs expired). The specific cause is
+# logged server-side for operators, never returned to the caller.
+_GENERIC_401_DETAIL = "Invalid or unauthorized token"
+
 
 class TokenValidationMiddleware(BaseHTTPMiddleware):
     """
@@ -217,11 +223,18 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
                 content={"detail": "Authentication temporarily unavailable"},
             )
         except PyIdentityModelException as e:
-            return self._unauthorized(f"Token validation failed: {e!s}")
+            # Uniform 401 body — do NOT echo the stage-specific cause
+            # (signature/audience/expiry), which would form a CWE-209 oracle
+            # (F-18). Log the real cause server-side for operators.
+            logger.info("Token rejected during validation: %s", e)
+            return self._unauthorized(_GENERIC_401_DETAIL)
         except InvalidTokenError as e:
             # A malformed/undecodable token (e.g. raw pyjwt DecodeError from
-            # header parsing during key lookup) is a client error, not a 500.
-            return self._unauthorized(f"Invalid token: {e!s}")
+            # header parsing during key lookup) is a client error, not a 500 —
+            # and returns the same generic body as any other rejection so the
+            # response can't distinguish "malformed" from "invalid".
+            logger.info("Malformed token rejected: %s", e)
+            return self._unauthorized(_GENERIC_401_DETAIL)
         except Exception:
             # A genuinely unexpected (non-library) failure is a server fault,
             # not an auth decision. Surface a 500 without leaking internals.
