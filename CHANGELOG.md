@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v3.9.0 (2026-08-10)
+
+### Features
+
+- **security**: Opt-in multi-tenant issuer pinning via allowed_issuers (R.9)
+  ([#512](https://github.com/jamescrowley321/py-identity-model/pull/512),
+  [`428e139`](https://github.com/jamescrowley321/py-identity-model/commit/428e139303c2119c8713c8cd72c8efc2785ceba5))
+
+
 ## v3.8.7 (2026-08-10)
 
 ### Bug Fixes
