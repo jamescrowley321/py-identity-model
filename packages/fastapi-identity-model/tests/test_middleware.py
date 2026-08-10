@@ -74,7 +74,8 @@ async def test_invalid_token_returns_401(monkeypatch):
     async with _client(_app(monkeypatch, validate)) as client:
         resp = await client.get("/me", headers={"Authorization": "Bearer bad"})
     assert resp.status_code == 401
-    assert "Token validation failed" in resp.json()["detail"]
+    # F-18: uniform, non-oracular 401 body (does not echo the validation cause).
+    assert resp.json()["detail"] == mw._GENERIC_401_DETAIL
 
 
 async def test_unexpected_error_returns_500(monkeypatch):
@@ -100,7 +101,8 @@ async def test_malformed_token_returns_401_not_500(monkeypatch):
     async with _client(_app(monkeypatch, validate)) as client:
         resp = await client.get("/me", headers={"Authorization": "Bearer invalid"})
     assert resp.status_code == 401
-    assert "Invalid token" in resp.json()["detail"]
+    # F-18: malformed tokens return the same uniform body as any other rejection.
+    assert resp.json()["detail"] == mw._GENERIC_401_DETAIL
 
 
 async def test_id_token_rejected_as_access_token(monkeypatch):

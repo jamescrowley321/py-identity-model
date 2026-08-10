@@ -54,11 +54,6 @@ def _client(app: FastAPI) -> httpx.AsyncClient:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="F-18: 401 body echoes the stage-specific validation error, forming a "
-    "token-validation oracle (CWE-209)",
-)
 async def test_401_body_is_uniform_across_failure_stages(monkeypatch):
     # Three different validation failures, each a PyIdentityModelException.
     failures = [
