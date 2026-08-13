@@ -249,9 +249,9 @@ def _granted_scopes(access_token: str) -> list[str]:
     raw = claims.get("scope") or claims.get("scp") or ""
     if isinstance(raw, str):
         return raw.split()
-    if isinstance(raw, (list, tuple)):
+    if isinstance(raw, (list, tuple, set, frozenset)):
         return [s for s in raw if isinstance(s, str)]
-    # A non-str, non-sequence scope claim (e.g. a JSON int) is not iterable —
+    # A non-str, non-collection scope claim (e.g. a JSON int) is not iterable —
     # treat it as no granted scopes rather than crashing on ``for`` (edge guard).
     return []
 

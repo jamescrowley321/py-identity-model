@@ -19,6 +19,7 @@ This module is excluded from the root pyrefly lint env for the same reason
 from __future__ import annotations
 
 import contextlib
+import sys
 import threading
 import time
 from typing import TYPE_CHECKING
@@ -112,11 +113,15 @@ def serve_mock_op(
     finally:
         server.should_exit = True
         thread.join(_SHUTDOWN_TIMEOUT)
-        if thread.is_alive():
+        if thread.is_alive() and sys.exc_info()[0] is None:
             # The server never honoured ``should_exit`` within the shutdown
             # grace. The daemon thread — still bound to the loopback port —
             # leaks past the ``with`` block and can wedge the next
             # ``serve_mock_op`` reusing the port range (blind SHOULD-FIX).
+            # Only raise when the body did not already fail: a raise here would
+            # otherwise supersede the real test failure, demoting it to a
+            # chained ``__context__`` and misreporting a body assertion as a
+            # shutdown bug (delta SHOULD-FIX).
             raise RuntimeError(
                 f"mock OP did not shut down within {_SHUTDOWN_TIMEOUT}s; "
                 f"the uvicorn thread is still bound to {op.discovery_url}"
@@ -130,11 +135,13 @@ def _wait_for_discovery(
     last_error = "no attempt made"
     while time.monotonic() < deadline:
         if not thread.is_alive():
-            # The uvicorn thread died during startup (bind refused, port TOCTOU
-            # collision, ASGI misconfig). Surface the captured cause immediately
-            # instead of polling the full timeout (edge [DEGRADED]).
+            # The uvicorn thread exited before discovery answered — a crash
+            # (bind refused, port TOCTOU collision, ASGI misconfig) or an
+            # unexpected clean exit. Surface it immediately instead of polling
+            # the full timeout (edge [DEGRADED]); ``thread.error`` chains the
+            # captured cause when there was one, else is ``None`` (clean exit).
             raise RuntimeError(
-                f"mock OP uvicorn thread died during startup (last: {last_error})"
+                f"mock OP uvicorn thread exited during startup (last: {last_error})"
             ) from thread.error
         try:
             response = httpx.get(discovery_url, timeout=2.0)
