@@ -35,9 +35,10 @@ py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_3
 
 # Log-only (class 1): message-text / logger-arg mutations of the "Forcing JWKS
 # refresh" info line (11-17) and the empty-keys retained-cache fallback info
-# line (42-52). These are human-readable log strings, not security controls;
+# line (42-56). These are human-readable log strings, not security controls;
 # they change no control flow, return value, or counter. Asserting exact log
-# text is brittle and out of scope.
+# text is brittle and out of scope. (53-56 mutate the "falling back ... in-flight
+# validation" segments of that same info line — identical justification.)
 py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_11
 py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_12
 py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_13
@@ -56,3 +57,7 @@ py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_49
 py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_50
 py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_51
 py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_52
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_53
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_54
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_55
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_56
