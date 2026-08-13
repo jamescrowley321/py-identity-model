@@ -34,6 +34,30 @@ if TYPE_CHECKING:
 
 
 _READY_POLL_INTERVAL = 0.05
+_SHUTDOWN_TIMEOUT = 10.0
+
+
+class _ServerThread(threading.Thread):
+    """Run ``uvicorn.Server.run`` and remember any startup exception.
+
+    ``server.run()`` raising inside a bare daemon thread is otherwise silently
+    swallowed: the thread just dies and the readiness poll blocks for the full
+    ``timeout`` before failing with an opaque message. Capturing the exception
+    (and exposing liveness) lets the poll fail fast with the real cause, the way
+    the sibling subprocess boot fails fast on ``proc.poll()`` (blind/edge
+    SHOULD-FIX).
+    """
+
+    def __init__(self, server: object) -> None:
+        super().__init__(daemon=True)
+        self._server = server
+        self.error: BaseException | None = None
+
+    def run(self) -> None:
+        try:
+            self._server.run()  # type: ignore[attr-defined]
+        except BaseException as exc:
+            self.error = exc
 
 
 @contextlib.contextmanager
@@ -80,20 +104,38 @@ def serve_mock_op(
         interface="asgi3",
     )
     server = uvicorn.Server(config)
-    thread = threading.Thread(target=server.run, daemon=True)
+    thread = _ServerThread(server)
     thread.start()
     try:
-        _wait_for_discovery(op.discovery_url, timeout)
+        _wait_for_discovery(thread, op.discovery_url, timeout)
         yield op
     finally:
         server.should_exit = True
-        thread.join(timeout)
+        thread.join(_SHUTDOWN_TIMEOUT)
+        if thread.is_alive():
+            # The server never honoured ``should_exit`` within the shutdown
+            # grace. The daemon thread — still bound to the loopback port —
+            # leaks past the ``with`` block and can wedge the next
+            # ``serve_mock_op`` reusing the port range (blind SHOULD-FIX).
+            raise RuntimeError(
+                f"mock OP did not shut down within {_SHUTDOWN_TIMEOUT}s; "
+                f"the uvicorn thread is still bound to {op.discovery_url}"
+            )
 
 
-def _wait_for_discovery(discovery_url: str, timeout: float) -> None:
+def _wait_for_discovery(
+    thread: _ServerThread, discovery_url: str, timeout: float
+) -> None:
     deadline = time.monotonic() + timeout
     last_error = "no attempt made"
     while time.monotonic() < deadline:
+        if not thread.is_alive():
+            # The uvicorn thread died during startup (bind refused, port TOCTOU
+            # collision, ASGI misconfig). Surface the captured cause immediately
+            # instead of polling the full timeout (edge [DEGRADED]).
+            raise RuntimeError(
+                f"mock OP uvicorn thread died during startup (last: {last_error})"
+            ) from thread.error
         try:
             response = httpx.get(discovery_url, timeout=2.0)
             if response.status_code == httpx.codes.OK:

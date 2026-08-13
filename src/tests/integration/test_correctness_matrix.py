@@ -88,8 +88,10 @@ def _get_protected(base_url: str, token: str) -> httpx.Response:
 def mock_matrix():
     """One mock OP + one booted RS (audience=mock-api, require_scope=read).
 
-    Yields a :class:`MockMatrix`; the RS is a single uvicorn subprocess reused
-    across all parametrized cases (a boot is ~1-2s, so we batch, not re-boot).
+    Yields a :class:`MockMatrix`. The mock OP runs in-process (a uvicorn daemon
+    thread inside ``serve_mock_op``); the RS is a separate uvicorn subprocess
+    (``boot_rs``). Both are reused across all parametrized cases — a boot is
+    ~1-2s, so we batch rather than re-boot per case.
     """
     with (
         serve_mock_op() as op,
@@ -247,7 +249,11 @@ def _granted_scopes(access_token: str) -> list[str]:
     raw = claims.get("scope") or claims.get("scp") or ""
     if isinstance(raw, str):
         return raw.split()
-    return [s for s in raw if isinstance(s, str)]
+    if isinstance(raw, (list, tuple)):
+        return [s for s in raw if isinstance(s, str)]
+    # A non-str, non-sequence scope claim (e.g. a JSON int) is not iterable —
+    # treat it as no granted scopes rather than crashing on ``for`` (edge guard).
+    return []
 
 
 @pytest.fixture(scope="module")
