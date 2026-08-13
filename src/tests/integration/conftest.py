@@ -57,6 +57,12 @@ from py_identity_model.core.pkce import generate_pkce_pair
 from py_identity_model.exceptions import TokenValidationException
 from py_identity_model.sync.http_client import close_http_client
 
+from ..harness import (
+    HarnessError,
+    Provider,
+    ProviderConfig,
+    TokenSource,
+)
 from .test_utils import get_config
 
 
@@ -610,6 +616,101 @@ def opaque_access_token(
         access_token = response.token["access_token"]
         cache_file.write_text(json.dumps({"access_token": access_token}))
         return access_token
+
+
+# ============================================================================
+# Unified token-source harness (TH-1.1, #463)
+# ============================================================================
+
+# The provider slug (derived from the ``.env.<slug>`` file) maps onto the
+# harness ``Provider`` enum. An unrecognised slug (e.g. ``.env.local``) leaves
+# the real provider unwired, so only the always-available MOCK provider is
+# offered and the real-IdP tests skip cleanly.
+_SLUG_TO_PROVIDER: dict[str, Provider] = {
+    "node-oidc": Provider.NODE_OIDC,
+    "keycloak": Provider.KEYCLOAK,
+    "ory": Provider.ORY,
+    "descope": Provider.DESCOPE,
+}
+
+
+@pytest.fixture(scope="session")
+def harness_provider(provider_slug) -> Provider | None:
+    """The real :class:`Provider` under test, or ``None`` for an unknown slug."""
+    return _SLUG_TO_PROVIDER.get(provider_slug)
+
+
+@pytest.fixture(scope="session")
+def token_source(
+    harness_provider,
+    raw_discovery,
+    discovery_document,
+    provider_capabilities,
+    test_config,
+) -> TokenSource:
+    """Session-scoped unified minter (:class:`TokenSource`) for the harness.
+
+    Wires the real provider under test — capabilities derived from live
+    discovery via ``provider_matrix.detect_capabilities`` (so the harness and
+    the capability matrix never drift), credentials from the env file — plus
+    the always-available MOCK provider. When the provider supports automated
+    auth-code flows (devInteractions) and the auth-code client is configured,
+    an ``auth_code_minter`` wrapping :func:`perform_auth_code_flow` is injected
+    so ``Grant.AUTHORIZATION_CODE`` mints end-to-end.
+
+    Tests translate the typed gating errors
+    (:class:`HarnessCapabilityError` / :class:`HarnessCredentialError`) to
+    ``pytest.skip`` so secret-gated providers (Ory/Descope) skip cleanly while
+    MOCK is always mintable.
+    """
+    if harness_provider is None:
+        return TokenSource.with_mock()
+
+    auth_code_minter = None
+    if "dev_interactions" in provider_capabilities:
+        client_id = test_config.get("TEST_AUTH_CODE_CLIENT_ID")
+        redirect_uri = test_config.get("TEST_AUTH_CODE_REDIRECT_URI")
+        client_secret = test_config.get("TEST_AUTH_CODE_CLIENT_SECRET")
+        if client_id and redirect_uri:
+
+            def auth_code_minter(
+                tenant: str | None,
+                scopes: str | None,
+                *,
+                _client_id: str = client_id,
+                _redirect_uri: str = redirect_uri,
+                _client_secret: str | None = client_secret,
+            ) -> dict[str, Any]:
+                del tenant  # single-tenant local fixtures ignore tenant shaping
+                result = perform_auth_code_flow(
+                    discovery=discovery_document,
+                    client_id=_client_id,
+                    redirect_uri=_redirect_uri,
+                    config=AuthCodeFlowConfig(
+                        client_secret=_client_secret,
+                        scope=scopes or "openid profile email offline_access",
+                        resource="urn:test:api",
+                    ),
+                )
+                token_response = result["token_response"]
+                if not token_response.is_successful or token_response.token is None:
+                    raise HarnessError(f"auth-code mint failed: {token_response.error}")
+                return dict(token_response.token)
+
+    real_cfg = ProviderConfig.from_discovery(
+        harness_provider,
+        raw_discovery,
+        token_endpoint=discovery_document.token_endpoint,
+        client_id=test_config.get("TEST_CLIENT_ID"),
+        client_secret=test_config.get("TEST_CLIENT_SECRET"),
+        scope=test_config.get("TEST_SCOPE"),
+        auth_code_minter=auth_code_minter,
+        # Descope multi-tenant access-key exchange (AC-3); absent -> skip.
+        descope_project_id=test_config.get("DESCOPE_PROJECT_ID"),
+        descope_management_key=test_config.get("DESCOPE_MANAGEMENT_KEY"),
+        descope_base_url=test_config.get("DESCOPE_BASE_URL"),
+    )
+    return TokenSource.with_mock(extra=[real_cfg])
 
 
 @pytest.fixture(autouse=True)
