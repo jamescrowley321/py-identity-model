@@ -33,11 +33,16 @@ def _truthy(value: str | None) -> bool:
 
 def _excluded_paths() -> list[str] | None:
     """Parse ``RS_EXCLUDED_PATHS`` (comma-separated) or return ``None`` so the
-    middleware falls back to its own defaults (which include ``/health``)."""
+    middleware falls back to its own defaults (which include ``/health``).
+
+    An unset OR empty ``RS_EXCLUDED_PATHS`` both fall back to the middleware
+    defaults. An empty string (which is what ``boot_rs(excluded_paths=[])``
+    serializes to) must NOT be read as an explicit "exclude nothing" list —
+    that would drop the ``/health`` exclusion and break the readiness poll."""
     raw = os.environ.get("RS_EXCLUDED_PATHS")
-    if raw is None:
+    if not raw:
         return None
-    return [p for p in raw.split(",") if p]
+    return [p for p in raw.split(",") if p] or None
 
 
 def create_app() -> FastAPI:

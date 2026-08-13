@@ -15,8 +15,9 @@ from pathlib import Path
 import socket
 import subprocess
 import sys
+import tempfile
 import time
-from typing import TYPE_CHECKING
+from typing import IO, TYPE_CHECKING
 
 import httpx
 
@@ -43,12 +44,23 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def _drain(proc: subprocess.Popen[str]) -> str:
-    return proc.stdout.read() if proc.stdout is not None else ""
+def _drain(log: IO[str]) -> str:
+    """Return everything uvicorn has written to its capture file so far.
+
+    Reading from a seekable temp file (not a live PIPE) never blocks: the child
+    writes to its own inherited fd and we snapshot from position 0. This also
+    means the child can emit an arbitrarily large traceback without filling an
+    OS pipe buffer and deadlocking on ``write()`` (blind/edge SHOULD-FIX).
+    """
+    try:
+        log.seek(0)
+        return log.read()
+    except (OSError, ValueError):  # pragma: no cover - defensive, file closed
+        return ""
 
 
 def _wait_for_health(
-    proc: subprocess.Popen[str], base_url: str, timeout: float
+    proc: subprocess.Popen[str], log: IO[str], base_url: str, timeout: float
 ) -> None:
     deadline = time.monotonic() + timeout
     last_error = "no attempt made"
@@ -56,7 +68,7 @@ def _wait_for_health(
         if proc.poll() is not None:
             raise RuntimeError(
                 f"uvicorn exited before becoming healthy "
-                f"(code {proc.returncode}):\n{_drain(proc)}"
+                f"(code {proc.returncode}):\n{_drain(log)}"
             )
         try:
             response = httpx.get(f"{base_url}/health", timeout=2.0)
@@ -70,7 +82,7 @@ def _wait_for_health(
     proc.terminate()
     raise RuntimeError(
         f"resource server did not become healthy within {timeout}s "
-        f"(last: {last_error}):\n{_drain(proc)}"
+        f"(last: {last_error}):\n{_drain(log)}"
     )
 
 
@@ -117,40 +129,46 @@ def boot_rs(  # noqa: PLR0913 — each RS knob (issuer/audience/scope/workers/..
     if extra_env:
         env.update(extra_env)
 
-    proc = subprocess.Popen(  # noqa: S603 — fixed argv, no shell, test-only
-        [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "src.tests.harness.rs_app:app",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
-            "--workers",
-            str(workers),
-            "--log-level",
-            "warning",
-        ],
-        cwd=str(_REPO_ROOT),
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    try:
-        _wait_for_health(proc, base_url, timeout)
-        yield base_url
-    finally:
-        proc.terminate()
+    # Capture uvicorn output to a seekable temp file rather than a PIPE. A PIPE
+    # is only drained on the failure path, so a healthy-but-chatty worker could
+    # fill the ~64KB OS pipe buffer and block on ``write()``, hanging the server
+    # (blind/edge SHOULD-FIX). A temp file has no such backpressure and reading
+    # it back on failure never blocks. ``TemporaryFile`` also unlinks itself on
+    # close, so there is no lingering fd for the GC to ResourceWarning over.
+    with tempfile.TemporaryFile(mode="w+") as log:
+        proc = subprocess.Popen(  # noqa: S603 — fixed argv, no shell, test-only
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "src.tests.harness.rs_app:app",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(port),
+                "--workers",
+                str(workers),
+                "--log-level",
+                "warning",
+            ],
+            cwd=str(_REPO_ROOT),
+            env=env,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
         try:
-            proc.wait(timeout=_TERMINATE_GRACE)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait(timeout=_TERMINATE_GRACE)
+            _wait_for_health(proc, log, base_url, timeout)
+            yield base_url
         finally:
-            # Close the inherited stdout pipe explicitly. Leaving it to the GC
-            # raises ResourceWarning, which pytest's ``filterwarnings=error``
-            # promotes to an unraisable-exception failure in a later test.
-            if proc.stdout is not None:
-                proc.stdout.close()
+            proc.terminate()
+            try:
+                proc.wait(timeout=_TERMINATE_GRACE)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                # A SIGKILL'd process stuck in uninterruptible I/O may still not
+                # reap within the grace window. Swallow the second timeout so
+                # teardown never raises out of ``finally`` and masks the real
+                # test result (edge [CRASH]).
+                with contextlib.suppress(subprocess.TimeoutExpired):
+                    proc.wait(timeout=_TERMINATE_GRACE)
