@@ -134,6 +134,9 @@ make test-integration-local # Requires .env.local file
 # Run example integration tests (spins up Docker containers)
 make test-examples
 
+# Run the TH-1.5 CI-short load profile (real Locust vs the booted RS + mock OP)
+make test-harness-load       # Opt-in `load` group (locust); Locust runs out-of-process
+
 # Run all tests including examples
 make test-all
 
