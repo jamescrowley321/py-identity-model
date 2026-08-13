@@ -116,6 +116,10 @@ project_excludes = [
     "examples/descope/",
     "packages/fastapi-identity-model/",
     "conformance/",
+    # Harness RS app imports the fastapi stack, unresolved in the root lint env
+    # (same rationale as packages/). Exercised via `make test-harness-rs`
+    # under `uv run --all-packages`.
+    "src/tests/harness/rs_app.py",
     # release tooling imports python-semantic-release, which the dev env
     # doesn't install; validated by the release pipeline itself
     "tools/",

@@ -62,6 +62,15 @@ test-integration-keycloak: ## Run integration tests against Keycloak
 		(docker compose -f test-fixtures/keycloak/docker-compose.yml down && exit 1)
 	docker compose -f test-fixtures/keycloak/docker-compose.yml down
 
+.PHONY: test-harness-rs
+test-harness-rs: ## Boot the RS (uvicorn) against node-oidc and run the TH-1.2 real-HTTP proof
+	@echo "Starting node-oidc-provider fixture..."
+	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml up -d --build --wait
+	@echo "Booting fastapi-identity-model RS under uvicorn (real HTTP)..."
+	uv run --all-packages pytest src/tests/integration/test_rs_boot.py -m integration --env-file=.env.node-oidc -v || \
+		(docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down && exit 1)
+	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
+
 .PHONY: test-benchmark
 test-benchmark: ## Run benchmarks
 	uv run pytest src/tests/benchmarks -v --benchmark-only --benchmark-sort=name
