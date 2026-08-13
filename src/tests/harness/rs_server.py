@@ -148,3 +148,9 @@ def boot_rs(  # noqa: PLR0913 — each RS knob (issuer/audience/scope/workers/..
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait(timeout=_TERMINATE_GRACE)
+        finally:
+            # Close the inherited stdout pipe explicitly. Leaving it to the GC
+            # raises ResourceWarning, which pytest's ``filterwarnings=error``
+            # promotes to an unraisable-exception failure in a later test.
+            if proc.stdout is not None:
+                proc.stdout.close()
