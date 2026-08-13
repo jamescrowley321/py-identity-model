@@ -71,6 +71,15 @@ test-harness-rs: ## Boot the RS (uvicorn) against node-oidc and run the TH-1.2 r
 		(docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down && exit 1)
 	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
 
+.PHONY: test-harness-matrix
+test-harness-matrix: ## Run the TH-1.3 token correctness matrix (mock-OP forged corpus + node-oidc leg) through the booted RS
+	@echo "Starting node-oidc-provider fixture..."
+	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml up -d --build --wait
+	@echo "Running the correctness matrix through the booted RS (real HTTP)..."
+	uv run --all-packages pytest src/tests/integration/test_correctness_matrix.py -m integration --env-file=.env.node-oidc -v || \
+		(docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down && exit 1)
+	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
+
 .PHONY: test-benchmark
 test-benchmark: ## Run benchmarks
 	uv run pytest src/tests/benchmarks -v --benchmark-only --benchmark-sort=name
