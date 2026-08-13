@@ -1,0 +1,107 @@
+"""Serve the framework-free :class:`~mock_op.MockOP` over real localhost HTTP.
+
+The RS boot (:func:`~rs_server.boot_rs`) launches uvicorn as a *subprocess*, so
+it cannot reach an in-process ASGI mock OP — it fetches discovery + JWKS over
+real HTTP. This helper runs the mock OP on a real loopback port so the booted RS
+can validate against it.
+
+The mock OP must run **in-process** (a uvicorn thread, not a subprocess): the
+forged corpus (:func:`~corpus.build_corpus`) is keyed to the *same* ``MockOP``
+instance's signing key, and a subprocess mock OP would re-import a fresh random
+key, breaking every forgery.
+
+``import uvicorn`` is deferred into the function so that plain unit-env
+collection of importers does not fail (uvicorn is not a root test dependency).
+This module is excluded from the root pyrefly lint env for the same reason
+(see ``[tool.pyrefly] project_excludes`` in ``pyproject.toml``).
+"""
+
+from __future__ import annotations
+
+import contextlib
+import threading
+import time
+from typing import TYPE_CHECKING
+
+import httpx
+
+from .mock_op import MockOP, MockOPControls
+from .rs_server import _free_port
+
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+
+_READY_POLL_INTERVAL = 0.05
+
+
+@contextlib.contextmanager
+def serve_mock_op(
+    *,
+    controls: MockOPControls | None = None,
+    timeout: float = 30.0,
+) -> Iterator[MockOP]:
+    """Serve a :class:`MockOP` over real localhost HTTP for the duration of the
+    ``with`` block.
+
+    Binds an ephemeral loopback port, builds a ``MockOP`` whose ``issuer`` is the
+    bound ``http://127.0.0.1:<port>`` (so its discovery ``issuer`` and the RS
+    ``iss`` check both match the URL the RS actually fetches), runs it under
+    ``uvicorn`` in a daemon thread, and polls its discovery endpoint until it
+    answers ``200``.
+
+    Args:
+        controls: Failure-injection knobs handed to the ``MockOP``.
+        timeout: Seconds to wait for the first successful discovery response.
+
+    Yields:
+        The live :class:`MockOP` instance (use ``op.discovery_url`` for the RS,
+        ``op.sign`` / :func:`~corpus.build_corpus` for forged tokens).
+    """
+    # Deferred so importing this module in the root env (where uvicorn is not
+    # installed) does not ImportError — only calling serve_mock_op needs it, and
+    # that path is only taken under `uv run --all-packages`.
+    import uvicorn  # noqa: PLC0415 — intentional in-function import, see above
+
+    port = _free_port()
+    op = MockOP(issuer=f"http://127.0.0.1:{port}", controls=controls)
+    # ``lifespan="off"``: the framework-free app needs no startup, and skipping
+    # lifespan avoids driving ``MockOP._handle_lifespan`` through uvicorn.
+    # ``interface="asgi3"``: ``op.app`` is a bare 3-arg ASGI callable (not a
+    # class), which uvicorn's auto-detection otherwise mistakes for the legacy
+    # 2-arg ASGI-2 factory and calls with a single ``scope`` argument.
+    config = uvicorn.Config(
+        op.app,
+        host="127.0.0.1",
+        port=port,
+        log_level="warning",
+        lifespan="off",
+        interface="asgi3",
+    )
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    try:
+        _wait_for_discovery(op.discovery_url, timeout)
+        yield op
+    finally:
+        server.should_exit = True
+        thread.join(timeout)
+
+
+def _wait_for_discovery(discovery_url: str, timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    last_error = "no attempt made"
+    while time.monotonic() < deadline:
+        try:
+            response = httpx.get(discovery_url, timeout=2.0)
+            if response.status_code == httpx.codes.OK:
+                return
+            last_error = f"HTTP {response.status_code}"
+        except httpx.HTTPError as exc:
+            last_error = str(exc)
+        time.sleep(_READY_POLL_INTERVAL)
+    raise RuntimeError(
+        f"mock OP did not serve discovery within {timeout}s (last: {last_error})"
+    )

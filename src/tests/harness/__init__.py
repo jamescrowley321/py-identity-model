@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from .corpus import CORPUS_AUDIENCE, ForgedToken, build_corpus
 from .mock_op import MockOP, MockOPControls, SigningKey
+from .mock_op_server import serve_mock_op
 from .token_source import (
     Grant,
     HarnessCapabilityError,
@@ -48,4 +49,5 @@ __all__ = [
     "TokenSource",
     "build_corpus",
     "prime_pool",
+    "serve_mock_op",
 ]

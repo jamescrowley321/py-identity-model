@@ -87,7 +87,7 @@ def _wait_for_health(
 
 
 @contextlib.contextmanager
-def boot_rs(  # noqa: PLR0913 — each RS knob (issuer/audience/scope/workers/...) is an explicit keyword
+def boot_rs(
     *,
     discovery_url: str,
     audience: str,

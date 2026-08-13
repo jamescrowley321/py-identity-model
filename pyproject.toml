@@ -120,6 +120,9 @@ project_excludes = [
     # (same rationale as packages/). Exercised via `make test-harness-rs`
     # under `uv run --all-packages`.
     "src/tests/harness/rs_app.py",
+    # Serves the mock OP under uvicorn (deferred import), unresolved in the root
+    # lint env; exercised via `make test-harness-matrix` under `--all-packages`.
+    "src/tests/harness/mock_op_server.py",
     # release tooling imports python-semantic-release, which the dev env
     # doesn't install; validated by the release pipeline itself
     "tools/",
