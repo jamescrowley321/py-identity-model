@@ -33,11 +33,18 @@ class CacheCounters:
     """Thread-safe hit/miss/refresh tallies for the discovery and JWKS caches.
 
     A *hit* is a request served from a fresh cached entry (no upstream call).
-    A *miss* is a request that had to fetch the document/keys from upstream.
-    A *refresh* is a forced upstream JWKS re-fetch triggered by a kid miss or
-    a signature-verification failure (key-rotation recovery); a refresh that
-    coalesces onto another coroutine's in-flight fetch does no upstream work
-    and is not counted.
+    A *miss* is a request that fetched the document/keys from upstream and
+    succeeded. A *refresh* is a forced upstream JWKS re-fetch triggered by a
+    kid miss or a signature-verification failure (key-rotation recovery) that
+    succeeded.
+
+    Only upstream fetches that actually reached the network and returned a
+    successful response are counted. A request rejected by the pre-flight URL
+    scheme check (e.g. a plaintext ``http://`` address under the default
+    HTTPS-required policy) does zero upstream work and is *not* counted — so a
+    forged non-https discovery/JWKS URI cannot inflate the miss/fetch-volume
+    tally. Likewise a refresh that coalesces onto another coroutine's in-flight
+    fetch does no upstream work and is not counted.
     """
 
     disco_hits: int = 0

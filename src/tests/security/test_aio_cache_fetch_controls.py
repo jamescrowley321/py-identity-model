@@ -120,6 +120,10 @@ class TestSchemeEnforcement:
         result = await _get_cached_jwks("http://op.example/jwks")
         assert result.is_successful is False
         assert route.call_count == 0
+        # Fail-closed observability: a scheme-rejected request issues zero
+        # upstream work, so it MUST NOT bump the upstream-fetch miss counter
+        # (else an attacker inflates the miss rate with forged http:// URIs).
+        assert get_cache_counters().snapshot()["jwks_misses"] == 0
 
     @respx.mock
     @pytest.mark.asyncio
@@ -135,6 +139,26 @@ class TestSchemeEnforcement:
         assert response.is_successful is False
         assert from_retained is False
         assert route.call_count == 0
+        # Fail-closed: a scheme-rejected refresh does zero upstream work, so the
+        # refresh (upstream re-fetch) counter MUST NOT increment.
+        assert get_cache_counters().snapshot()["jwks_refreshes"] == 0
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_disco_default_rejects_plaintext_http(self):
+        route = respx.get("http://op.example/.well-known/openid-configuration").mock(
+            return_value=httpx.Response(200, json={"issuer": "http://op.example"})
+        )
+        # Default require_https=True -> plaintext non-loopback HTTP disco is
+        # rejected by the pre-flight scheme check BEFORE any network I/O.
+        result = await _get_disco_response(
+            "http://op.example/.well-known/openid-configuration"
+        )
+        assert result.is_successful is False
+        assert route.call_count == 0
+        # Fail-closed: a scheme-rejected disco request does zero upstream work,
+        # so the disco miss (upstream-fetch) counter MUST NOT increment.
+        assert get_cache_counters().snapshot()["disco_misses"] == 0
 
     @respx.mock
     @pytest.mark.asyncio
@@ -154,6 +178,8 @@ class TestSchemeEnforcement:
         assert response.is_successful is True
         assert response.keys
         assert route.call_count == 1
+        # An upstream fetch WAS issued, so the refresh counter increments.
+        assert get_cache_counters().snapshot()["jwks_refreshes"] == 1
 
 
 # ---------------------------------------------------------------------------
