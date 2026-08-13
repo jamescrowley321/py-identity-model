@@ -173,20 +173,28 @@ flow is portal-based:
    <https://openid.net/foundation/members/certifications/>.)
 1. Go to **<https://submissions.openid.net/>** and complete the web form
    (deployment name `py-identity-model <version>`, profiles, payment code, etc.).
-2. **Upload the artifacts** — up to **6 zip files** total. We submit exactly 6:
-   the test result zip (`*-export.zip`) and the client data zip (`*-rp-logs.zip`)
-   for each of the three profiles.
-3. OIDF validates the submission and **sends the Declaration of Conformance for
-   signature** to the designated signer, then generates the certification.
-   Processing usually takes a few working days. (The form does not specify the
-   signature mechanism — do not assume DocuSign or any particular tool.)
+2. **Upload one certification-package zip per profile — 3 zips**, *not* the raw
+   `*-export.zip` / `*-rp-logs.zip` artifacts (the portal rejects those). Produce
+   each package on the plan-detail page at <https://www.certification.openid.net/>
+   with the **"Publish for Certification"** button: attach that profile's
+   `<plan>-rp-logs.zip` as **"Client data"**, then **"Create Certification
+   Package"**. This calls `POST /api/plan/{id}/certificationpackage`, **publishes
+   and permanently freezes** the plan, and downloads the package zip (do not
+   modify it). No separately produced Declaration-of-Conformance PDF is required —
+   the rp-logs attached as Client data are the evidence. Select all three package
+   zips in a **single** file-chooser dialog; the portal's *"Please provide a valid
+   test result plan"* message is only the empty-file-input validation (selecting
+   files one at a time replaces rather than appends).
+3. OIDF validates the submission and generates the certification. Processing
+   usually takes a few working days.
 
-!!! note "Alternative API path"
-    The suite's `scripts/conformance.py` exposes a programmatic
-    `POST /api/plan/{id}/certificationpackage` (multipart: a *pre-signed*
-    Certification of Conformance PDF + the `clientSideData` zip) which
-    **publishes and permanently freezes** the plan. The portal flow above is the
-    standard route and does not require you to produce the PDF yourself.
+!!! note "Same call, two front-ends"
+    The **"Publish for Certification"** button and the suite's
+    `scripts/conformance.py` both drive the same
+    `POST /api/plan/{id}/certificationpackage` endpoint (multipart: the
+    `clientSideData` / rp-logs zip). Either produces the package zip and
+    **permanently freezes** the plan; neither requires a separately produced
+    Certification-of-Conformance PDF.
 
 ## Status
 
@@ -200,12 +208,13 @@ pages. Tracked in #331 / #242.
 The submission workflow that produced this certification (all steps complete):
 
 1. ~~**Obtain a payment code**~~ — done (fee waiver via `certification@oidf.org`).
-2. ~~Complete the portal submission and upload the 6 artifact zips.~~ — done.
+2. ~~Publish a certification package per profile and complete the portal submission (3 package zips).~~ — done.
 3. ~~Sign the Declaration of Conformance when OIDF sends it for signature.~~ — done.
 
 ### Re-certifying a new version
 
 Certification is pinned to the certified version (`3.1.0`). A later release is
 **not** automatically certified. To certify a new version, re-run the hosted
-suite to regenerate the 6 artifacts (`make conformance-test HOSTED=1 ...`) and
-repeat the [portal submission](#submitting-to-oidf) for the new deployment name.
+suite to regenerate the per-profile artifacts (`make conformance-test HOSTED=1 ...`),
+publish a certification package per profile, and repeat the
+[portal submission](#submitting-to-oidf) for the new deployment name.
