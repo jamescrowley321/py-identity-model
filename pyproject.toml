@@ -40,6 +40,13 @@ docs = [
     "mkdocs-material>=9.6.0,<10",
     "mkdocstrings[python]>=0.29.0,<2",
 ]
+# Load/soak harness (TH-1.5). NOT a root test dependency — locust pulls in gevent
+# and monkey-patches the stdlib, so it is opt-in via `uv run --group load`
+# (see `make test-harness-load`). src/tests/load/{locustfile,runner}.py defer
+# their locust/gevent imports and are pyrefly-excluded in the root lint env.
+load = [
+    "locust>=2.31,<3",
+]
 
 [build-system]
 requires = ["uv_build>=0.6,<0.12"]
@@ -123,6 +130,10 @@ project_excludes = [
     # Serves the mock OP under uvicorn (deferred import), unresolved in the root
     # lint env; exercised via `make test-harness-matrix` under `--all-packages`.
     "src/tests/harness/mock_op_server.py",
+    # Load/soak driver: deferred locust/gevent imports (the `load` group), which
+    # the root lint env does not install. Exercised via `make test-harness-load`.
+    "src/tests/load/locustfile.py",
+    "src/tests/load/runner.py",
     # release tooling imports python-semantic-release, which the dev env
     # doesn't install; validated by the release pipeline itself
     "tools/",
@@ -179,6 +190,10 @@ ignore = [
 "src/tests/harness/**/*.py" = [
     "S101",    # pytest assertions
     "PLR0913", # minter / mock-OP APIs are intentionally parameter-rich (mint, sign, mint_access_token)
+]
+"src/tests/load/**/*.py" = [
+    "S101",    # pytest assertions
+    "PLR2004", # magic values — HTTP status codes in expected-status comparisons
 ]
 "examples/**/*.py" = ["S101"]    # 73 assert violations in example integration tests
 "packages/**/tests/**/*.py" = [
