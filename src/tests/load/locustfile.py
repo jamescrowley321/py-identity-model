@@ -10,9 +10,11 @@ The parent hands two file paths through the environment:
 
 * ``HARNESS_POOL_FILE`` — a JSON array of ``{"name", "token", "expected_status"}``
   entries (the pre-minted replay pool).
-* ``HARNESS_RESULT_FILE`` — where this file writes the run summary on quit
-  (per-class request/failure counts, latency percentiles, RPS, and the 5xx count
-  the parent asserts is zero).
+* ``HARNESS_RESULT_FILE`` — where this file writes the run summary on quit:
+  aggregate RPS + p50/p95/p99/p999 latency, the 5xx count the parent asserts is
+  zero, and a per-class breakdown carrying each class's request/failure counts
+  **and** its p50/p95/p99 latency (so the S2 RS256-vs-ES256 cost ratio is
+  computable from the result).
 
 A response is scored a *failure* only when its status diverges from the class's
 ``expected_status`` — expected 401/403 rejections are the correct outcome and stay
@@ -79,11 +81,16 @@ def _count_server_errors(response: Any = None, **_kw: Any) -> None:
 def _write_summary(environment: Any, **_kw: Any) -> None:
     """Serialise the run summary for the parent runner to read back."""
     total = environment.stats.total
-    by_class: dict[str, dict[str, int]] = {}
+    by_class: dict[str, dict[str, float]] = {}
     for (name, _method), entry in environment.stats.entries.items():
+        # Per-class latency percentiles (not just counts) so the parent can
+        # compute the S2 alg-cost ratio (ES256 vs RS256) from the summary.
         by_class[name] = {
             "requests": entry.num_requests,
             "failures": entry.num_failures,
+            "p50": float(entry.get_response_time_percentile(0.5)),
+            "p95": float(entry.get_response_time_percentile(0.95)),
+            "p99": float(entry.get_response_time_percentile(0.99)),
         }
     summary = {
         "num_requests": total.num_requests,
@@ -92,6 +99,7 @@ def _write_summary(environment: Any, **_kw: Any) -> None:
         "p50": float(total.get_response_time_percentile(0.5)),
         "p95": float(total.get_response_time_percentile(0.95)),
         "p99": float(total.get_response_time_percentile(0.99)),
+        "p999": float(total.get_response_time_percentile(0.999)),
         "server_errors": _server_errors[0],
         "by_class": by_class,
     }

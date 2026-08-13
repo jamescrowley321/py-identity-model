@@ -7,11 +7,14 @@ a scenario; :mod:`pool` builds its token blend; :mod:`locustfile` drives it.
 
 Scenarios are grouped into run **profiles**:
 
-* ``CI_SHORT`` (S1-S8) — the PR gate: short, deterministic, mock-OP-backed,
-  self-contained (no Docker).
+* ``CI_SHORT`` (S1, S2, S3, S6, S8) — the PR gate: short (~3s), deterministic,
+  mock-OP-backed, self-contained (no Docker).
 * ``DIAGNOSTIC`` (S5, S9, S10) — head-of-line / no-store / blocking-validator
   probes run on demand.
-* ``NIGHTLY`` (S7, S11, S12) — long LRU-thrash / RSS-FD soak / multi-tenant runs.
+* ``NIGHTLY`` (S4, S7, S11, S12) — TTL-refresh / LRU-thrash / RSS-FD soak /
+  multi-tenant runs. S4 lives here (not CI-short) because the cache enforces a
+  60s minimum TTL (``core.jwks_cache.MIN_CACHE_TTL_SECONDS``), so a genuine
+  TTL rollover cannot happen inside a ~3s CI-short window — it needs a >60s run.
 
 The SLO gate *thresholds* start unset (:mod:`runner` ``GATES``); the ``test``
 phase runs a baseline, and the ``docs`` phase writes the calibrated table into
@@ -161,10 +164,22 @@ def _inject_latency(op: MockOP) -> None:
     op.controls.latency_seconds = 0.25
 
 
-# The scenario catalogue. S1-S8 form CI_SHORT; S9/S10/S5 DIAGNOSTIC; S7/S11/S12
-# NIGHTLY. Deep mid-run dynamics (S4 TTL rollover, S6 rotation storm, S11 soak
-# RSS/FD trends) are calibrated in the test phase; the setup hooks here apply the
-# pre-run failure-injection state each scenario needs.
+def _short_ttl(op: MockOP) -> None:
+    """S4: advertise the shortest cacheable TTL so a >60s soak crosses the cache
+    TTL boundary and forces a single-flight refresh mid-load.
+
+    ``max-age=60`` is the floor the cache honours (values below
+    ``core.jwks_cache.MIN_CACHE_TTL_SECONDS`` are clamped up to 60s), so this is
+    the tightest rollover achievable — which is why S4 is a NIGHTLY (>60s)
+    scenario, not a CI-short one."""
+    op.controls.discovery_cache_control = "max-age=60"
+    op.controls.jwks_cache_control = "max-age=60"
+
+
+# The scenario catalogue. S1, S2, S3, S6, S8 form CI_SHORT; S5/S9/S10 DIAGNOSTIC;
+# S4/S7/S11/S12 NIGHTLY. Deep mid-run dynamics (S4 TTL rollover, S6 rotation
+# storm, S11 soak RSS/FD trends) are calibrated in the test phase; the setup
+# hooks here apply the pre-run failure-injection state each scenario needs.
 SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         id="S1",
@@ -194,12 +209,17 @@ SCENARIOS: tuple[Scenario, ...] = (
     ),
     Scenario(
         id="S4",
-        title="TTL refresh under load (short TTL)",
-        profile=Profile.CI_SHORT,
+        title="TTL refresh under load (60s TTL rollover)",
+        profile=Profile.NIGHTLY,
         classes=("valid",),
-        gate="warm",
-        notes="a cache TTL rollover mid-load must not spike errors or storm "
-        "the upstream (single-flight refresh)",
+        duration_seconds=75.0,
+        setup=_short_ttl,
+        gate="cold",
+        notes="over a >60s soak the min-TTL (60s) discovery/JWKS entries expire "
+        "mid-load; the rollover must stay single-flight (upstream re-fetch "
+        "bounded to ~1 per TTL window, not per request) and spike no errors. "
+        "NIGHTLY because the 60s cache-TTL floor cannot roll over in a CI-short "
+        "(~3s) window — calibrated nightly",
     ),
     Scenario(
         id="S5",
@@ -256,13 +276,16 @@ SCENARIOS: tuple[Scenario, ...] = (
     ),
     Scenario(
         id="S10",
-        title="blocking claims_validator (event-loop stall)",
+        title="blocking claims_validator (event-loop stall) — SCAFFOLD",
         profile=Profile.DIAGNOSTIC,
         classes=("valid",),
         steady_state=False,
         gate="warm",
-        notes="a synchronous custom claims validator stalls the loop vs an "
-        "async one (calibrated in the test phase)",
+        notes="INCOMPLETE: proving a synchronous custom claims validator stalls "
+        "the loop (vs an async one) needs a blocking validator wired into the RS "
+        "app, which is not yet implemented — this row is a placeholder for a "
+        "later iteration. DIAGNOSTIC-only, never gated; drives no assertion "
+        "today. Do NOT treat as coverage.",
     ),
     Scenario(
         id="S11",

@@ -2,8 +2,10 @@
 
 This is the ``test`` phase's DoD entrypoint: a REAL Locust run (programmatic,
 headless) driving the booted resource server (real uvicorn subprocess, real HTTP)
-with the pre-minted replay pool, over the CI_SHORT scenario profile (S1-S8). A
-green *unit* run is not proof — this drives actual load and scores real responses.
+with the pre-minted replay pool, over the CI_SHORT scenario profile
+(S1, S2, S3, S6, S8). A green *unit* run is not proof — this drives actual load
+and scores real responses. (S4 TTL-rollover needs a >60s window per the 60s cache
+TTL floor and lives in NIGHTLY; S5/S9/S10 are DIAGNOSTIC.)
 
 Self-contained: the controllable mock OP is the design's failure-injection driver
 (latency, key rotation, contention), so no external IdP is needed. The suite skips
@@ -48,8 +50,23 @@ def ci_short_results():
 
 
 def test_every_ci_short_scenario_ran(ci_short_results):
-    """The profile executed exactly the S1-S8 catalogue."""
+    """The profile executed exactly the CI-short catalogue (S1, S2, S3, S6, S8)."""
     assert set(ci_short_results) == set(_CI_SHORT_IDS)
+
+
+def test_s2_alg_cost_ratio_is_reportable(ci_short_results):
+    """S2 (design §4): the RS256-vs-ES256 warm cost ratio is computable.
+
+    Per-class p95 latency is captured in the summary, so the ES256/RS256 ratio
+    the scenario exists to report can actually be derived from the result (both
+    classes drove load and the ratio is a positive, finite number).
+    """
+    s2 = ci_short_results["S2"]
+    assert s2.requests_by_class.get("valid", 0) > 0, s2.requests_by_class
+    assert s2.requests_by_class.get("valid_es256", 0) > 0, s2.requests_by_class
+    ratio = s2.alg_cost_ratio("valid_es256", "valid")
+    assert ratio is not None, s2.latency_by_class
+    assert ratio > 0, s2.latency_by_class
 
 
 @pytest.mark.parametrize("scenario_id", _CI_SHORT_IDS)

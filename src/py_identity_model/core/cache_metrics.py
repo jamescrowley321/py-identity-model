@@ -33,18 +33,22 @@ class CacheCounters:
     """Thread-safe hit/miss/refresh tallies for the discovery and JWKS caches.
 
     A *hit* is a request served from a fresh cached entry (no upstream call).
-    A *miss* is a request that fetched the document/keys from upstream and
-    succeeded. A *refresh* is a forced upstream JWKS re-fetch triggered by a
-    kid miss or a signature-verification failure (key-rotation recovery) that
-    succeeded.
+    A *miss* is a request that fetched the document/keys from upstream. A
+    *refresh* is a forced upstream JWKS re-fetch triggered by a kid miss or a
+    signature-verification failure (key-rotation recovery).
 
-    Only upstream fetches that actually reached the network and returned a
-    successful response are counted. A request rejected by the pre-flight URL
-    scheme check (e.g. a plaintext ``http://`` address under the default
-    HTTPS-required policy) does zero upstream work and is *not* counted — so a
-    forged non-https discovery/JWKS URI cannot inflate the miss/fetch-volume
-    tally. Likewise a refresh that coalesces onto another coroutine's in-flight
-    fetch does no upstream work and is not counted.
+    A miss/refresh counts every request that actually reached the network —
+    **including a failed round trip** (a ``429``/``5xx`` upstream response or a
+    connection error). Counting failed fetches is deliberate: fetch volume
+    during an upstream outage is exactly the signal this metric exists to
+    surface, and dropping it would make an outage read as zero upstream work.
+    This matches ``docs/performance.md`` ("a request that had to fetch from
+    upstream"). Only a request rejected by the pre-flight URL scheme check (e.g.
+    a plaintext ``http://`` address under the default HTTPS-required policy) does
+    zero upstream work and is *not* counted — so a forged non-https
+    discovery/JWKS URI cannot inflate the tally. Likewise a refresh that
+    coalesces onto another coroutine's in-flight fetch does no upstream work and
+    is not counted.
     """
 
     disco_hits: int = 0
@@ -62,7 +66,7 @@ class CacheCounters:
             self.disco_hits += 1
 
     def record_disco_miss(self) -> None:
-        """Count a discovery request that fetched from upstream."""
+        """Count a discovery request that fetched from upstream (incl. failures)."""
         with self._lock:
             self.disco_misses += 1
 
@@ -72,12 +76,13 @@ class CacheCounters:
             self.jwks_hits += 1
 
     def record_jwks_miss(self) -> None:
-        """Count a JWKS request that fetched from upstream."""
+        """Count a JWKS request that fetched from upstream (incl. failures)."""
         with self._lock:
             self.jwks_misses += 1
 
     def record_jwks_refresh(self) -> None:
-        """Count a forced upstream JWKS re-fetch (key-rotation recovery)."""
+        """Count a forced upstream JWKS re-fetch (key-rotation recovery, incl.
+        failures)."""
         with self._lock:
             self.jwks_refreshes += 1
 

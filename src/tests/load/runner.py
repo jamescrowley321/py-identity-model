@@ -3,8 +3,9 @@
 Orchestrates one scenario end to end: serve the mock OP over real HTTP, boot the
 resource server under uvicorn against it, build the pre-minted replay pool, drive
 load with a **real Locust run**, then collect the metrics design §5 asks for:
-RPS, p50/p95/p99, error-rate-by-class (expected rejections excluded), cache-hit
-rate (RS ``/metrics`` at workers=1) and upstream fetches per issuer (the mock OP's
+RPS, p50/p95/p99/p999, per-class latency (the S2 alg-cost ratio),
+error-rate-by-class (expected rejections excluded), cache-hit rate (RS
+``/metrics`` at workers=1) and upstream fetches per issuer (the mock OP's
 in-process ``stats``).
 
 Locust runs in a **subprocess** (``locust --headless -f locustfile.py``) rather
@@ -85,12 +86,27 @@ class LoadResult:
     p50_ms: float
     p95_ms: float
     p99_ms: float
+    p999_ms: float
     server_errors: int
     steady_state: bool
     requests_by_class: dict[str, int] = field(default_factory=dict)
     failures_by_class: dict[str, int] = field(default_factory=dict)
+    # class name -> {"p50", "p95", "p99"} ms; drives the S2 alg-cost ratio.
+    latency_by_class: dict[str, dict[str, float]] = field(default_factory=dict)
     cache_metrics: dict[str, int] = field(default_factory=dict)
     upstream_stats: dict[str, int] = field(default_factory=dict)
+
+    def alg_cost_ratio(self, numerator: str, denominator: str) -> float | None:
+        """p95 latency ratio of two token classes (e.g. ES256 vs RS256, S2).
+
+        Returns ``None`` when either class is absent or the denominator p95 is
+        zero, so a missing/degenerate sample never fabricates a ratio.
+        """
+        num = self.latency_by_class.get(numerator, {}).get("p95")
+        den = self.latency_by_class.get(denominator, {}).get("p95")
+        if not num or not den:
+            return None
+        return num / den
 
     @property
     def error_rate(self) -> float:
@@ -99,12 +115,21 @@ class LoadResult:
 
     @property
     def cache_hit_rate(self) -> float:
-        """Combined discovery+JWKS hit rate over the measured window (0..1)."""
+        """Combined discovery+JWKS hit rate over the measured window (0..1).
+
+        Returns ``0.0`` — not ``1.0`` — when the window recorded no counted
+        cache activity (``total == 0``). An all-upstream-error window now counts
+        its failed fetches as misses (see ``record_*_miss``), so ``total`` is
+        non-zero there and the rate reflects the storm; the ``total == 0`` guard
+        therefore only fires when nothing reached the counted cache paths at all,
+        and reporting that as a perfect 100% would let a broken ``/metrics``
+        scrape masquerade as a warm cache under a ``min_cache_hit_rate`` gate.
+        """
         m = self.cache_metrics
         hits = m.get("disco_hits", 0) + m.get("jwks_hits", 0)
         misses = m.get("disco_misses", 0) + m.get("jwks_misses", 0)
         total = hits + misses
-        return hits / total if total else 1.0
+        return hits / total if total else 0.0
 
 
 def _scrape_cache_metrics(base_url: str) -> dict[str, int]:
@@ -221,11 +246,16 @@ def _to_result(
         p50_ms=float(summary.get("p50", 0.0)),
         p95_ms=float(summary.get("p95", 0.0)),
         p99_ms=float(summary.get("p99", 0.0)),
+        p999_ms=float(summary.get("p999", 0.0)),
         server_errors=int(summary.get("server_errors", 0)),
         steady_state=scenario.steady_state,
         requests_by_class={n: v["requests"] for n, v in by_class.items()},
         failures_by_class={
             n: v["failures"] for n, v in by_class.items() if v["failures"]
+        },
+        latency_by_class={
+            n: {p: float(v[p]) for p in ("p50", "p95", "p99") if p in v}
+            for n, v in by_class.items()
         },
         cache_metrics=_scrape_cache_metrics(base_url),
         upstream_stats=op.stats.snapshot(),

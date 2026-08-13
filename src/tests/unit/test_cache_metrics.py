@@ -228,3 +228,57 @@ class TestCacheCountersIntegration:
         assert snap["jwks_refreshes"] == 1
         # A refresh is an upstream re-fetch, not a hit.
         assert snap["jwks_hits"] == 0
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_disco_failed_upstream_fetch_counts_as_miss(self):
+        """A 503 from upstream is a real round trip → it MUST count as a miss.
+
+        Guards against the regression where gating the counter on
+        ``response.is_successful`` silently dropped 429/5xx fetches, making an
+        upstream outage read as zero upstream volume (design §5 metric).
+        """
+        route = respx.get(DISCO_URL).mock(return_value=httpx.Response(503))
+
+        result = await _get_disco_response(DISCO_URL)
+        snap = get_cache_counters().snapshot()
+
+        assert result.is_successful is False
+        assert route.called  # a real network round trip happened (with retries)
+        assert snap["disco_misses"] == 1  # one logical fetch, counted once
+        assert snap["disco_hits"] == 0
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_jwks_failed_upstream_fetch_counts_as_miss(self):
+        """A 429 JWKS fetch is a real round trip → counted as a miss."""
+        route = respx.get(JWKS_URL).mock(return_value=httpx.Response(429))
+
+        result = await _get_cached_jwks(JWKS_URL)
+        snap = get_cache_counters().snapshot()
+
+        assert result.is_successful is False
+        assert route.called  # a real network round trip happened (with retries)
+        assert snap["jwks_misses"] == 1  # one logical fetch, counted once
+        assert snap["jwks_hits"] == 0
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_jwks_failed_refresh_counts_as_refresh(self):
+        """A refresh whose upstream GET returns 5xx is still an upstream re-fetch."""
+        key_dict, _pem = generate_rsa_keypair()
+        route = respx.get(JWKS_URL).mock(
+            side_effect=[
+                httpx.Response(200, json={"keys": [key_dict]}),
+                httpx.Response(502),
+            ]
+        )
+
+        await _get_cached_jwks(JWKS_URL)  # prime (miss)
+        get_cache_counters().reset()
+
+        await _refresh_jwks(JWKS_URL)  # forced re-fetch → 502
+        snap = get_cache_counters().snapshot()
+
+        assert route.call_count == 2
+        assert snap["jwks_refreshes"] == 1  # counted despite the 502

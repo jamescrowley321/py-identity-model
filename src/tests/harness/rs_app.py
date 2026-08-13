@@ -25,13 +25,14 @@ from fastapi_identity_model import (
     TokenValidationMiddleware,
     require_scope,
 )
+from fastapi_identity_model.config import _default_excluded_paths
 from py_identity_model.core.cache_metrics import get_cache_counters
 
 
-# Mirrors ``fastapi_identity_model.config._default_excluded_paths`` — materialised
-# here so ``/metrics`` can be appended to the exclusion set without dropping the
-# health/docs excludes the middleware would otherwise apply.
-_DEFAULT_EXCLUDED_PATHS = ["/docs", "/openapi.json", "/health"]
+# The middleware's own default exclusion set, reused (not re-listed) so this
+# harness cannot silently drift from the package if that default ever changes —
+# we materialise it only so ``/metrics`` can be appended without dropping the
+# health/docs excludes the middleware would otherwise apply on its own.
 # Unauthenticated cache-counter readout for the load/soak harness (T311). Must be
 # excluded from token validation so the driver can scrape it without a token.
 _METRICS_PATH = "/metrics"
@@ -70,7 +71,7 @@ def create_app() -> FastAPI:
     # Materialise the exclusion set (defaults or the RS_EXCLUDED_PATHS override)
     # and always append ``/metrics`` — an unauthenticated readout the load driver
     # scrapes, which must never require a token regardless of the override.
-    excluded = _excluded_paths() or list(_DEFAULT_EXCLUDED_PATHS)
+    excluded = _excluded_paths() or _default_excluded_paths()
     if _METRICS_PATH not in excluded:
         excluded.append(_METRICS_PATH)
 
