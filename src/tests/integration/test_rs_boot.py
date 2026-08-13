@@ -11,6 +11,8 @@ so ``fastapi_identity_model`` and ``uvicorn`` resolve). Under plain
 importorskips cleanly.
 """
 
+from urllib.parse import urlparse
+
 import httpx
 import jwt
 import pytest
@@ -26,6 +28,22 @@ pytestmark = pytest.mark.integration
 # resourceIndicators.defaultResource (test-fixtures/node-oidc-provider).
 RS_AUDIENCE = "urn:test:api"
 GENERIC_401_DETAIL = "Invalid or unauthorized token"
+
+
+def _is_node_oidc_fixture(raw_discovery: dict) -> bool:
+    """Whether the active provider is the bundled node-oidc-provider fixture.
+
+    The fixed ``urn:test:api`` audience and ``api`` scope this suite asserts on
+    only exist in the local node-oidc-provider (``resourceIndicators``); the
+    remote CI-matrix providers (Keycloak/Ory/Descope) mint tokens with a
+    different audience/scope, so they must skip. node-oidc serves discovery at
+    the localhost host root — the check that distinguishes it from Keycloak,
+    which also runs on localhost but under ``/realms/<realm>``.
+    """
+    parsed = urlparse(raw_discovery.get("issuer", ""))
+    is_local = parsed.hostname in ("localhost", "127.0.0.1")
+    at_host_root = parsed.path in ("", "/")
+    return is_local and at_host_root
 
 
 def _access_token(client_credentials_token) -> str:
@@ -44,7 +62,12 @@ def _granted_scopes(access_token: str) -> list[str]:
 
 
 @pytest.fixture(scope="module")
-def rs_discovery_url(test_config) -> str:
+def rs_discovery_url(test_config, raw_discovery) -> str:
+    if not _is_node_oidc_fixture(raw_discovery):
+        pytest.skip(
+            "RS boot suite asserts node-oidc's urn:test:api audience / api "
+            "scope; remote matrix providers mint different tokens"
+        )
     return test_config["TEST_DISCO_ADDRESS"]
 
 
