@@ -462,11 +462,13 @@ def _descope_accesskey_exchange(
         data = created.json()
         key_id = data.get("key", {}).get("id", "")
         cleartext = data.get("cleartext", "")
+    # Once a key exists, the finally must delete it — even if ``cleartext`` is
+    # absent — so the raise lives inside the try, not before it.
+    try:
         if not cleartext:
             raise HarnessError(
                 f"descope access-key create returned no cleartext: {data}"
             )
-    try:
         with httpx.Client(timeout=_DESCOPE_HTTP_TIMEOUT) as client:
             exchanged = client.post(
                 f"{base}/v1/auth/accesskey/exchange",
@@ -482,15 +484,16 @@ def _descope_accesskey_exchange(
                 )
             return session_jwt
     finally:
-        with (
-            contextlib.suppress(Exception),
-            httpx.Client(timeout=_DESCOPE_HTTP_TIMEOUT) as client,
-        ):
-            client.post(
-                f"{base}/v1/mgmt/accesskey/delete",
-                headers=mgmt_headers,
-                json={"id": key_id},
-            )
+        if key_id:
+            with (
+                contextlib.suppress(Exception),
+                httpx.Client(timeout=_DESCOPE_HTTP_TIMEOUT) as client,
+            ):
+                client.post(
+                    f"{base}/v1/mgmt/accesskey/delete",
+                    headers=mgmt_headers,
+                    json={"id": key_id},
+                )
 
 
 def _peek_jwt_header(token: str) -> tuple[str | None, str | None]:
