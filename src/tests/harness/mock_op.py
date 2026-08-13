@@ -94,6 +94,40 @@ def _ec_signing_key(kid: str) -> SigningKey:
 
 
 @dataclass
+class RequestStats:
+    """Per-path upstream-request tallies (design §5 — upstream fetches/issuer).
+
+    Ground truth for how many times the resource server actually reached each
+    endpoint, letting the load/soak harness assert single-flight behaviour (e.g.
+    S3: a cold stampede must produce exactly one discovery + one JWKS fetch).
+    Every request that reaches a document handler is counted, regardless of the
+    injected response status — a ``429``/``5xx`` still cost an upstream round trip.
+
+    The mock OP runs on a single uvicorn event loop, so these plain ``int``
+    increments are serialised without a lock (unlike the threaded
+    :class:`~py_identity_model.core.cache_metrics.CacheCounters`).
+    """
+
+    discovery: int = 0
+    jwks: int = 0
+    token: int = 0
+    introspect: int = 0
+
+    def snapshot(self) -> dict[str, int]:
+        """Return a detached copy of every counter."""
+        return {
+            "discovery": self.discovery,
+            "jwks": self.jwks,
+            "token": self.token,
+            "introspect": self.introspect,
+        }
+
+    def reset(self) -> None:
+        """Zero every counter (per-scenario baselines)."""
+        self.discovery = self.jwks = self.token = self.introspect = 0
+
+
+@dataclass
 class MockOPControls:
     """Mutable failure-injection knobs (design §2).
 
@@ -174,6 +208,10 @@ class MockOP:
     ) -> None:
         self.issuer = issuer.rstrip("/")
         self.controls = controls or MockOPControls()
+        # Per-path upstream-request counters (design §5). Read/reset over HTTP via
+        # ``GET``/``POST /_stats`` so the out-of-process load driver can scrape
+        # them, or in-process for unit assertions.
+        self.stats = RequestStats()
         # Primary RS256 signs valid tokens and is published by default.
         self.primary_key = _rsa_signing_key("mock-rs256-1")
         # EC key exercises the ES256 path; also published.
@@ -379,6 +417,8 @@ class MockOP:
             ("POST", "/token"): self._handle_token,
             ("POST", "/introspect"): self._handle_introspect,
             ("POST", "/_control"): self._handle_control,
+            ("GET", "/_stats"): self._handle_stats,
+            ("POST", "/_stats"): self._handle_stats_reset,
         }
         return routes.get((method, path))
 
@@ -392,6 +432,7 @@ class MockOP:
                 return
 
     async def _handle_discovery(self, _receive: ASGIReceive, send: ASGISend) -> None:
+        self.stats.discovery += 1
         headers = self._cache_control_headers(self.controls.discovery_cache_control)
         if self.controls.discovery_status != HTTP_OK:
             await self._send_status(send, self.controls.discovery_status, headers)
@@ -399,6 +440,7 @@ class MockOP:
         await self._send_json(send, HTTP_OK, self.discovery_document(), headers)
 
     async def _handle_jwks(self, _receive: ASGIReceive, send: ASGISend) -> None:
+        self.stats.jwks += 1
         headers = self._cache_control_headers(self.controls.jwks_cache_control)
         if self.controls.jwks_status != HTTP_OK:
             await self._send_status(send, self.controls.jwks_status, headers)
@@ -406,6 +448,7 @@ class MockOP:
         await self._send_json(send, HTTP_OK, self.jwks(), headers)
 
     async def _handle_token(self, receive: ASGIReceive, send: ASGISend) -> None:
+        self.stats.token += 1
         if self.controls.token_status != HTTP_OK:
             await self._send_status(send, self.controls.token_status)
             return
@@ -414,9 +457,19 @@ class MockOP:
         await self._send_json(send, HTTP_OK, self.mint_access_token(scopes=scope))
 
     async def _handle_introspect(self, receive: ASGIReceive, send: ASGISend) -> None:
+        self.stats.introspect += 1
         form = parse_qs((await _read_body(receive)).decode())
         token = form.get("token", [""])[0]
         await self._send_json(send, HTTP_OK, self.introspect(token))
+
+    async def _handle_stats(self, _receive: ASGIReceive, send: ASGISend) -> None:
+        """Read the per-path upstream-request counters (design §5)."""
+        await self._send_json(send, HTTP_OK, self.stats.snapshot())
+
+    async def _handle_stats_reset(self, _receive: ASGIReceive, send: ASGISend) -> None:
+        """Zero the per-path counters, returning the (now-zero) snapshot."""
+        self.stats.reset()
+        await self._send_json(send, HTTP_OK, {"ok": True, **self.stats.snapshot()})
 
     async def _handle_control(self, receive: ASGIReceive, send: ASGISend) -> None:
         """Out-of-process control endpoint for the uvicorn-booted case (T311).

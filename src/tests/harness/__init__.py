@@ -12,7 +12,7 @@ A single home for the pieces T300/T301/T311 share:
 from __future__ import annotations
 
 from .corpus import CORPUS_AUDIENCE, ForgedToken, build_corpus
-from .mock_op import MockOP, MockOPControls, SigningKey
+from .mock_op import MockOP, MockOPControls, RequestStats, SigningKey
 from .mock_op_server import serve_mock_op
 from .token_source import (
     Grant,
@@ -45,6 +45,7 @@ __all__ = [
     "Provider",
     "ProviderConfig",
     "ReplayPool",
+    "RequestStats",
     "SigningKey",
     "TokenSource",
     "build_corpus",

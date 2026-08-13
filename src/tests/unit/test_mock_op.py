@@ -280,3 +280,66 @@ def test_introspect_survives_malformed_exp() -> None:
 def test_introspect_reports_inactive_for_non_jwt() -> None:
     result = MockOP().introspect("not.a.jwt")
     assert result["active"] is False
+
+
+# -- Per-path request counters (design §5 — upstream fetches/issuer) ---------
+
+
+async def test_stats_count_each_upstream_request() -> None:
+    """Every document handler bumps its counter — the S3 single-flight ground
+    truth (a cold stampede must show exactly one discovery + one JWKS fetch)."""
+    mock = MockOP()
+    transport = httpx.ASGITransport(app=mock.app)
+    async with httpx.AsyncClient(transport=transport, base_url=mock.issuer) as client:
+        await client.get(mock.discovery_url)
+        await client.get(mock.jwks_uri)
+        await client.get(mock.jwks_uri)
+        await client.post(mock.token_endpoint, data={"scope": "read"})
+    assert mock.stats.snapshot() == {
+        "discovery": 1,
+        "jwks": 2,
+        "token": 1,
+        "introspect": 0,
+    }
+
+
+async def test_stats_count_injected_failures() -> None:
+    """A ``429``/``5xx`` still costs an upstream round trip, so it is counted."""
+    mock = MockOP()
+    mock.controls.jwks_status = HTTP_SERVICE_UNAVAILABLE
+    transport = httpx.ASGITransport(app=mock.app)
+    async with httpx.AsyncClient(transport=transport, base_url=mock.issuer) as client:
+        resp = await client.get(mock.jwks_uri)
+    assert resp.status_code == HTTP_SERVICE_UNAVAILABLE
+    assert mock.stats.jwks == 1
+
+
+async def test_stats_route_reads_and_resets() -> None:
+    """The ``/_stats`` route mirrors ``mock.stats`` and ``POST`` zeroes it — how
+    the out-of-process load driver scrapes upstream-fetch counts per scenario."""
+    mock = MockOP()
+    transport = httpx.ASGITransport(app=mock.app)
+    async with httpx.AsyncClient(transport=transport, base_url=mock.issuer) as client:
+        await client.get(mock.discovery_url)
+        read = await client.get(f"{mock.issuer}/_stats")
+        assert read.json() == {
+            "discovery": 1,
+            "jwks": 0,
+            "token": 0,
+            "introspect": 0,
+        }
+        # The /_stats read itself must NOT count as an upstream document fetch.
+        reset = await client.post(f"{mock.issuer}/_stats")
+        assert reset.json() == {
+            "ok": True,
+            "discovery": 0,
+            "jwks": 0,
+            "token": 0,
+            "introspect": 0,
+        }
+        assert mock.stats.snapshot() == {
+            "discovery": 0,
+            "jwks": 0,
+            "token": 0,
+            "introspect": 0,
+        }

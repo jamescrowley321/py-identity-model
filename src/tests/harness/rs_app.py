@@ -25,6 +25,16 @@ from fastapi_identity_model import (
     TokenValidationMiddleware,
     require_scope,
 )
+from py_identity_model.core.cache_metrics import get_cache_counters
+
+
+# Mirrors ``fastapi_identity_model.config._default_excluded_paths`` — materialised
+# here so ``/metrics`` can be appended to the exclusion set without dropping the
+# health/docs excludes the middleware would otherwise apply.
+_DEFAULT_EXCLUDED_PATHS = ["/docs", "/openapi.json", "/health"]
+# Unauthenticated cache-counter readout for the load/soak harness (T311). Must be
+# excluded from token validation so the driver can scrape it without a token.
+_METRICS_PATH = "/metrics"
 
 
 def _truthy(value: str | None) -> bool:
@@ -57,12 +67,19 @@ def create_app() -> FastAPI:
     audience = os.environ["RS_AUDIENCE"]
     required_scope = os.environ.get("RS_REQUIRE_SCOPE", "api")
 
+    # Materialise the exclusion set (defaults or the RS_EXCLUDED_PATHS override)
+    # and always append ``/metrics`` — an unauthenticated readout the load driver
+    # scrapes, which must never require a token regardless of the override.
+    excluded = _excluded_paths() or list(_DEFAULT_EXCLUDED_PATHS)
+    if _METRICS_PATH not in excluded:
+        excluded.append(_METRICS_PATH)
+
     app = FastAPI(title="token-harness-rs")
     app.add_middleware(
         TokenValidationMiddleware,
         discovery_url=discovery_url,
         audience=audience,
-        excluded_paths=_excluded_paths(),
+        excluded_paths=excluded,
         require_access_token_marker=_truthy(
             os.environ.get("RS_REQUIRE_ACCESS_TOKEN_MARKER")
         ),
@@ -72,6 +89,14 @@ def create_app() -> FastAPI:
     def health() -> dict:
         # Excluded from auth (middleware default) — the readiness probe target.
         return {"status": "ok"}
+
+    @app.get("/metrics")
+    def metrics() -> dict:
+        # Excluded from auth — per-process cache hit/miss/refresh counters
+        # (T299). The load harness scrapes this at ``workers=1`` for an exact
+        # cache-hit rate; across ``--workers N`` each worker keeps its own
+        # counters, so aggregate the per-worker snapshots externally.
+        return get_cache_counters().snapshot()
 
     @app.get("/protected", dependencies=[Depends(require_scope(required_scope))])
     def protected(claims: Claims) -> dict:
