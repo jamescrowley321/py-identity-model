@@ -22,11 +22,15 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Callable
+import contextlib
 from dataclasses import dataclass, field
 from enum import StrEnum
 import json
 import time
 from typing import TYPE_CHECKING, Any
+import uuid
+
+import httpx
 
 from py_identity_model import (
     ClientCredentialsTokenRequest,
@@ -143,6 +147,12 @@ class ProviderConfig:
     scope: str | None = None
     mock_op: MockOP | None = None
     auth_code_minter: AuthCodeMinter | None = None
+    # Descope multi-tenant (access-key -> /v1/auth/accesskey/exchange) config.
+    # When present, ``mint(DESCOPE, tenant=…)`` produces a session JWT carrying
+    # distinct ``dct``/``tenants`` claims (AC-3); absent -> credential skip.
+    descope_project_id: str | None = None
+    descope_management_key: str | None = None
+    descope_base_url: str | None = None
 
     @classmethod
     def from_discovery(
@@ -155,6 +165,9 @@ class ProviderConfig:
         client_secret: str | None = None,
         scope: str | None = None,
         auth_code_minter: AuthCodeMinter | None = None,
+        descope_project_id: str | None = None,
+        descope_management_key: str | None = None,
+        descope_base_url: str | None = None,
     ) -> ProviderConfig:
         """Build a real-provider config, deriving capabilities from discovery.
 
@@ -170,6 +183,9 @@ class ProviderConfig:
             client_secret=client_secret,
             scope=scope,
             auth_code_minter=auth_code_minter,
+            descope_project_id=descope_project_id,
+            descope_management_key=descope_management_key,
+            descope_base_url=descope_base_url,
         )
 
 
@@ -234,6 +250,14 @@ class TokenSource:
             return self._mint_forged(cfg, grant, tenant, malform)
         if provider is Provider.MOCK:
             return self._mint_mock_valid(cfg, grant, tenant, scopes)
+        if (
+            provider is Provider.DESCOPE
+            and grant is Grant.CLIENT_CREDENTIALS
+            and tenant is not None
+        ):
+            # AC-3: the Descope multi-tenant path is the access-key -> session-JWT
+            # exchange (distinct dct/tenants), NOT the plain OIDC token endpoint.
+            return self._mint_descope_tenant(cfg, tenant)
         self._check_capability(cfg, grant)
         self._check_credentials(cfg, grant)
         if grant is Grant.CLIENT_CREDENTIALS:
@@ -299,6 +323,37 @@ class TokenSource:
         token = cfg.auth_code_minter(tenant, scopes)
         return self._from_token_response(
             cfg.provider, Grant.AUTHORIZATION_CODE, token, tenant
+        )
+
+    def _mint_descope_tenant(self, cfg: ProviderConfig, tenant: str) -> MintedToken:
+        """Reuse the identity-stack access-key -> session-JWT exchange (AC-3).
+
+        Creates a temporary tenant-scoped access key, exchanges it via
+        ``/v1/auth/accesskey/exchange`` for a Descope *session JWT* carrying
+        distinct ``dct``/``tenants`` claims, then deletes the key. Credential-
+        gated: absent Descope management config raises
+        :class:`HarnessCredentialError` (translated to ``pytest.skip``).
+        """
+        if not (
+            cfg.descope_project_id
+            and cfg.descope_management_key
+            and cfg.descope_base_url
+        ):
+            raise HarnessCredentialError(
+                "descope: multi-tenant mint requires descope_project_id, "
+                "descope_management_key and descope_base_url"
+            )
+        session_jwt = _descope_accesskey_exchange(
+            base_url=cfg.descope_base_url,
+            project_id=cfg.descope_project_id,
+            management_key=cfg.descope_management_key,
+            tenant=tenant,
+        )
+        return self._from_token_response(
+            Provider.DESCOPE,
+            Grant.CLIENT_CREDENTIALS,
+            {"access_token": session_jwt, "token_type": "Bearer"},
+            tenant,
         )
 
     def _from_token_response(
@@ -375,6 +430,69 @@ class TokenSource:
         return cfg.mock_op
 
 
+_DESCOPE_HTTP_TIMEOUT = 30.0
+
+
+def _descope_accesskey_exchange(
+    *,
+    base_url: str,
+    project_id: str,
+    management_key: str,
+    tenant: str,
+    roles: Iterable[str] = ("owner", "admin"),
+) -> str:
+    """Access-key create -> exchange -> delete, returning the session JWT.
+
+    Mirrors the identity-stack e2e minter: a ``keyTenants`` (array) access key
+    is required so the exchanged session JWT includes ``dct``/``tenants`` claims
+    (a top-level ``tenantId`` does not). The temporary key is deleted best-effort.
+    """
+    base = base_url.rstrip("/")
+    mgmt_headers = {"Authorization": f"Bearer {project_id}:{management_key}"}
+    with httpx.Client(timeout=_DESCOPE_HTTP_TIMEOUT) as client:
+        created = client.post(
+            f"{base}/v1/mgmt/accesskey/create",
+            headers=mgmt_headers,
+            json={
+                "name": f"harness-{uuid.uuid4().hex[:8]}",
+                "keyTenants": [{"tenantId": tenant, "roleNames": list(roles)}],
+            },
+        )
+        created.raise_for_status()
+        data = created.json()
+        key_id = data.get("key", {}).get("id", "")
+        cleartext = data.get("cleartext", "")
+        if not cleartext:
+            raise HarnessError(
+                f"descope access-key create returned no cleartext: {data}"
+            )
+    try:
+        with httpx.Client(timeout=_DESCOPE_HTTP_TIMEOUT) as client:
+            exchanged = client.post(
+                f"{base}/v1/auth/accesskey/exchange",
+                headers={"Authorization": f"Bearer {project_id}:{cleartext}"},
+                json={},
+            )
+            exchanged.raise_for_status()
+            session_jwt = exchanged.json().get("sessionJwt", "")
+            if not session_jwt:
+                raise HarnessError(
+                    f"descope access-key exchange returned no sessionJwt: "
+                    f"{exchanged.json()}"
+                )
+            return session_jwt
+    finally:
+        with (
+            contextlib.suppress(Exception),
+            httpx.Client(timeout=_DESCOPE_HTTP_TIMEOUT) as client,
+        ):
+            client.post(
+                f"{base}/v1/mgmt/accesskey/delete",
+                headers=mgmt_headers,
+                json={"id": key_id},
+            )
+
+
 def _peek_jwt_header(token: str) -> tuple[str | None, str | None]:
     """Best-effort ``(alg, kid)`` from a compact JWT header; ``(None, None)``
     for opaque tokens."""
@@ -385,6 +503,8 @@ def _peek_jwt_header(token: str) -> tuple[str | None, str | None]:
     try:
         header = json.loads(base64.urlsafe_b64decode(header_segment + padding))
     except (ValueError, json.JSONDecodeError):
+        return None, None
+    if not isinstance(header, dict):
         return None, None
     return header.get("alg"), header.get("kid")
 

@@ -705,6 +705,10 @@ def token_source(
         client_secret=test_config.get("TEST_CLIENT_SECRET"),
         scope=test_config.get("TEST_SCOPE"),
         auth_code_minter=auth_code_minter,
+        # Descope multi-tenant access-key exchange (AC-3); absent -> skip.
+        descope_project_id=test_config.get("DESCOPE_PROJECT_ID"),
+        descope_management_key=test_config.get("DESCOPE_MANAGEMENT_KEY"),
+        descope_base_url=test_config.get("DESCOPE_BASE_URL"),
     )
     return TokenSource.with_mock(extra=[real_cfg])
 

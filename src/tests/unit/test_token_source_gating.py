@@ -8,7 +8,12 @@ is always mintable (valid + forged).
 
 from __future__ import annotations
 
+import base64
+import json
+
+import jwt
 import pytest
+import respx
 
 from ..harness import (
     Grant,
@@ -21,6 +26,7 @@ from ..harness import (
     TokenSource,
     prime_pool,
 )
+from ..harness.token_source import _peek_jwt_header
 
 
 JWT_SEGMENT_COUNT = 2
@@ -135,6 +141,72 @@ def test_auth_code_minter_is_invoked() -> None:
     )
     assert token.access_token == "opaque-token"
     assert calls == [("t1", "openid")]
+
+
+def test_descope_multitenant_requires_management_creds() -> None:
+    # Plain CC creds present, but the multi-tenant (tenant=…) path needs the
+    # access-key exchange config; absent -> credential error (drives skip).
+    descope = ProviderConfig(
+        provider=Provider.DESCOPE,
+        capabilities={"client_credentials"},
+        token_endpoint="https://api.descope.com/oauth2/v1/token",
+        client_id="cid",
+        client_secret="secret",
+    )
+    source = TokenSource([descope])
+    with pytest.raises(HarnessCredentialError, match="multi-tenant"):
+        source.mint(Provider.DESCOPE, Grant.CLIENT_CREDENTIALS, tenant="t1")
+
+
+@respx.mock
+def test_descope_multitenant_exchange_produces_dct_tenants() -> None:
+    # AC-3: the multi-tenant path reuses access-key create -> exchange -> delete
+    # and returns the session JWT carrying distinct dct/tenants claims.
+    base = "https://api.descope.com"
+    session_jwt = jwt.encode(
+        {"sub": "u1", "dct": "t1", "tenants": {"t1": {"roles": ["admin"]}}},
+        "x" * 32,
+        algorithm="HS256",
+    )
+    create = respx.post(f"{base}/v1/mgmt/accesskey/create").respond(
+        json={"key": {"id": "k1"}, "cleartext": "ck"}
+    )
+    exchange = respx.post(f"{base}/v1/auth/accesskey/exchange").respond(
+        json={"sessionJwt": session_jwt}
+    )
+    delete = respx.post(f"{base}/v1/mgmt/accesskey/delete").respond(json={})
+
+    cfg = ProviderConfig(
+        provider=Provider.DESCOPE,
+        capabilities={"client_credentials"},
+        descope_project_id="P1",
+        descope_management_key="MK",
+        descope_base_url=base,
+    )
+    token = TokenSource([cfg]).mint(
+        Provider.DESCOPE, Grant.CLIENT_CREDENTIALS, tenant="t1"
+    )
+
+    assert token.access_token == session_jwt
+    assert token.tenant == "t1"
+    # keyTenants array shaping (not top-level tenantId) is what yields dct/tenants.
+    body = json.loads(create.calls.last.request.content)
+    assert body["keyTenants"] == [{"tenantId": "t1", "roleNames": ["owner", "admin"]}]
+    payload = json.loads(
+        base64.urlsafe_b64decode(token.access_token.split(".")[1] + "==").decode()
+    )
+    assert payload["dct"] == "t1"
+    assert "t1" in payload["tenants"]
+    assert exchange.called
+    assert delete.called  # temporary key cleaned up
+
+
+def test_peek_jwt_header_guards_non_object_header() -> None:
+    """A JWT whose header segment decodes to a non-object (e.g. ``5``) must not
+    crash header inspection — return ``(None, None)`` like an opaque token."""
+    non_object_header = base64.urlsafe_b64encode(b"5").rstrip(b"=").decode()
+    token = f"{non_object_header}.{non_object_header}.sig"
+    assert _peek_jwt_header(token) == (None, None)
 
 
 def test_replay_pool_mints_once() -> None:

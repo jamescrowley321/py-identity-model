@@ -15,6 +15,9 @@ signature-valid token the library accepts.
 
 from __future__ import annotations
 
+import base64
+import json
+
 import pytest
 
 from py_identity_model import (
@@ -144,6 +147,34 @@ def test_forged_tokens_require_mock_provider(token_source, harness_provider):
             Grant.CLIENT_CREDENTIALS,
             malform=Malform.TAMPERED_SIG,
         )
+
+
+def test_descope_multitenant_mint_carries_dct_tenants(
+    token_source, harness_provider, test_config
+):
+    """AC-3: the Descope multi-tenant path yields distinct ``dct``/``tenants``.
+
+    Reuses the identity-stack access-key -> ``/v1/auth/accesskey/exchange`` flow
+    (credential-gated on ``DESCOPE_PROJECT_ID``/``DESCOPE_MANAGEMENT_KEY``/
+    ``DESCOPE_BASE_URL`` + a tenant id) so it skips cleanly off Descope.
+    """
+    if harness_provider is not Provider.DESCOPE:
+        pytest.skip("Descope-only: multi-tenant access-key exchange")
+    tenant = test_config.get("DESCOPE_TEST_TENANT_ID")
+    if not tenant:
+        pytest.skip("DESCOPE_TEST_TENANT_ID not configured")
+
+    minted = _mint_or_skip(
+        token_source, Provider.DESCOPE, Grant.CLIENT_CREDENTIALS, tenant=tenant
+    )
+    assert minted.tenant == tenant
+    # Session JWT must carry the Descope multi-tenant claims (dct/tenants).
+    payload_segment = minted.access_token.split(".")[1]
+    payload = json.loads(
+        base64.urlsafe_b64decode(payload_segment + "=" * (-len(payload_segment) % 4))
+    )
+    assert payload.get("dct") == tenant
+    assert tenant in payload.get("tenants", {})
 
 
 def test_mock_provider_always_mintable(token_source):

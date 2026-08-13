@@ -27,7 +27,7 @@ from collections.abc import Awaitable, Callable, MutableMapping
 from dataclasses import dataclass
 import json
 import time
-from typing import Any
+from typing import Any, get_args, get_type_hints
 from urllib.parse import parse_qs
 
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
@@ -110,6 +110,43 @@ class MockOPControls:
     jwks_cache_control: str | None = None
     serve_empty_jwks: bool = False
     oversized_jwks_padding: int = 0
+
+
+def _resolve_control_types() -> dict[str, tuple[type, ...]]:
+    """Resolved ``{field_name: accepted_types}`` for :class:`MockOPControls`."""
+    mapping: dict[str, tuple[type, ...]] = {}
+    for name, anno in get_type_hints(MockOPControls).items():
+        args = get_args(anno)
+        mapping[name] = tuple(a for a in (args or (anno,)) if isinstance(a, type))
+    return mapping
+
+
+# Field -> accepted types, resolved once (the dataclass is immutable in shape).
+_CONTROL_TYPES: dict[str, tuple[type, ...]] = _resolve_control_types()
+
+
+def _set_control(controls: MockOPControls, name: str, value: Any) -> bool:
+    """Type-checked control mutation; returns True if the value was applied.
+
+    A stray ``{"jwks_status": "boom"}`` or ``{"retry_after": 3}`` (JSON number,
+    not string) would otherwise poison a *later* request — an ``int`` handed to
+    an ASGI ``status`` field, or a ``.encode()`` on a non-string. Reject the
+    mismatch at the control call so the failure is local and obvious.
+    """
+    types = _CONTROL_TYPES.get(name)
+    if not types:
+        return False
+    # ``bool`` is a subclass of ``int``: accept it only for genuine bool knobs,
+    # and never let it (or a JSON int) masquerade as a status/int field's value.
+    if isinstance(value, bool):
+        accepted = bool in types
+    elif isinstance(value, int) and float in types:
+        accepted = True  # JSON ints are fine for float knobs (latency_seconds)
+    else:
+        accepted = isinstance(value, types)
+    if accepted:
+        setattr(controls, name, value)
+    return accepted
 
 
 # ASGI scope/messages are MutableMapping (matching httpx.ASGITransport's spec).
@@ -300,7 +337,12 @@ class MockOP:
         except jwt.PyJWTError:
             return {"active": False}
         now = int(time.time())
-        active = int(claims.get("exp", 0)) > now
+        try:
+            active = int(claims.get("exp", 0)) > now
+        except (TypeError, ValueError):
+            # A malformed ``exp`` (exactly the kind of token this harness feeds)
+            # must report inactive, not 500 the endpoint.
+            active = False
         return {"active": active, **claims}
 
     # -- ASGI application ---------------------------------------------------
@@ -380,7 +422,13 @@ class MockOP:
         """Out-of-process control endpoint for the uvicorn-booted case (T311).
 
         Accepts a JSON body: ``{"rotate": true, "publish": false}`` and/or any
-        subset of :class:`MockOPControls` field names to set.
+        subset of :class:`MockOPControls` field names to set. Field values are
+        type-checked against the dataclass; mismatches are reported back in the
+        ``rejected`` list rather than poisoning a later request.
+
+        Security: this route performs key rotation and failure injection with no
+        authentication. It is a *test* fixture — bind it to loopback only. Do NOT
+        expose the booted mock OP on a routable interface.
         """
         try:
             payload = json.loads((await _read_body(receive)).decode() or "{}")
@@ -388,10 +436,16 @@ class MockOP:
             payload = {}
         if payload.pop("rotate", False):
             self.rotate_keys(publish=bool(payload.pop("publish", False)))
-        for name, value in payload.items():
-            if hasattr(self.controls, name):
-                setattr(self.controls, name, value)
-        await self._send_json(send, HTTP_OK, {"ok": True})
+        else:
+            # ``publish`` is only meaningful alongside ``rotate``; drop it so it
+            # is not mistaken for a control field below.
+            payload.pop("publish", None)
+        rejected = [
+            name
+            for name, value in payload.items()
+            if not _set_control(self.controls, name, value)
+        ]
+        await self._send_json(send, HTTP_OK, {"ok": True, "rejected": rejected})
 
     # -- ASGI helpers -------------------------------------------------------
 

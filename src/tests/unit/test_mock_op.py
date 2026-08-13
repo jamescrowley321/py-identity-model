@@ -9,6 +9,7 @@ through the mock OP's discovery + JWKS documents.
 from __future__ import annotations
 
 import httpx
+import jwt
 import pytest
 
 from py_identity_model.aio.managed_client import AsyncHTTPClient
@@ -223,6 +224,59 @@ async def test_control_route_rotates_and_sets_knobs() -> None:
                 "jwks_status": HTTP_SERVICE_UNAVAILABLE,
             },
         )
-    assert resp.json() == {"ok": True}
+    assert resp.json() == {"ok": True, "rejected": []}
     assert mock.controls.jwks_status == HTTP_SERVICE_UNAVAILABLE
     assert mock.signing_key is mock.rotation_key
+
+
+async def test_control_route_rejects_type_mismatched_values() -> None:
+    """A stray JSON type must be rejected at the control call, not crash a later
+    request (design: fail local, not downstream)."""
+    mock = MockOP()
+    transport = httpx.ASGITransport(app=mock.app)
+    async with httpx.AsyncClient(transport=transport, base_url=mock.issuer) as client:
+        resp = await client.post(
+            f"{mock.issuer}/_control",
+            json={
+                "jwks_status": "boom",  # str for an int field -> reject
+                "retry_after": 3,  # int for a str|None field -> reject
+                "oversized_jwks_padding": "big",  # str for an int field -> reject
+                "discovery_status": HTTP_SERVICE_UNAVAILABLE,  # valid int -> apply
+            },
+        )
+        body = resp.json()
+        # The valid knob applied; the mismatches were reported, not applied.
+        assert body["ok"] is True
+        assert set(body["rejected"]) == {
+            "jwks_status",
+            "retry_after",
+            "oversized_jwks_padding",
+        }
+        assert mock.controls.jwks_status == HTTP_OK
+        assert mock.controls.retry_after is None
+        assert mock.controls.oversized_jwks_padding == 0
+        assert mock.controls.discovery_status == HTTP_SERVICE_UNAVAILABLE
+        # The next /jwks request must still succeed (no poisoned state).
+        mock.controls.jwks_status = HTTP_OK
+        jwks = await client.get(mock.jwks_uri)
+        assert jwks.status_code == HTTP_OK
+
+
+def test_introspect_reports_active_for_valid_token() -> None:
+    mock = MockOP()
+    minted = mock.mint_access_token()
+    result = mock.introspect(minted["access_token"])
+    assert result["active"] is True
+
+
+def test_introspect_survives_malformed_exp() -> None:
+    """A token with a non-numeric ``exp`` (exactly what this harness forges)
+    must report inactive, not 500 the introspect endpoint."""
+    token = jwt.encode({"exp": "not-a-number"}, "x" * 32, algorithm="HS256")
+    result = MockOP().introspect(token)
+    assert result["active"] is False
+
+
+def test_introspect_reports_inactive_for_non_jwt() -> None:
+    result = MockOP().introspect("not.a.jwt")
+    assert result["active"] is False
