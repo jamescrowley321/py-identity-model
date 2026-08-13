@@ -42,6 +42,7 @@ from py_identity_model.aio.token_validation import (
 )
 from py_identity_model.core.jwks_cache import (
     DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS,
+    MAX_KID_MISS_COOLDOWN_SECONDS,
     JwksCacheEntry,
     _reset_env_for_testing,
     apply_jwks_cache_outcome,
@@ -107,6 +108,26 @@ def _sign_unknown_kid_token(kid: str) -> str:
         {"sub": "attacker", "iss": "https://example.com"},
         headers={"kid": kid},
     )
+
+
+def _pin_cooldown_high(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the kid-miss cooldown to the maximum so ``EXPECTED_FETCH_COUNT``
+    assertions are independent of wall-clock time.
+
+    The cooldown is measured against real ``time.monotonic()``. The
+    amplification/isolation tests below fire a 25-request attacker loop and
+    assert exactly one prime + one forced refresh — which only holds if the
+    whole loop completes inside the cooldown window. With the 5s default and
+    a per-request RSA keygen, under ``pytest -n auto`` CPU contention the loop
+    can outlast 5s and a second refresh fires, flaking the count. Pinning to
+    the max (well above any loop duration) removes the timing dependency
+    without weakening what the test proves (that the cooldown coalesces a
+    burst into a single refresh). ``_reset_env_for_testing`` clears the memo
+    so the new value is read; ``monkeypatch`` reverts the env at teardown and
+    the autouse fixture resets the memo again.
+    """
+    monkeypatch.setenv("KID_MISS_REFRESH_COOLDOWN", str(MAX_KID_MISS_COOLDOWN_SECONDS))
+    _reset_env_for_testing()
 
 
 # ============================================================================
@@ -176,7 +197,8 @@ EXPECTED_FETCH_COUNT = 2  # 1 prime + 1 refresh inside cooldown window
 
 class TestKidMissCooldownBoundsAmplification:
     @respx.mock
-    def test_sync_cooldown_caps_fetches_under_attack(self):
+    def test_sync_cooldown_caps_fetches_under_attack(self, monkeypatch):
+        _pin_cooldown_high(monkeypatch)
         defender_key_dict, _defender_pem = generate_rsa_keypair()
         defender_key_dict["kid"] = "defender-kid"
 
@@ -213,7 +235,8 @@ class TestKidMissCooldownBoundsAmplification:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_async_cooldown_caps_fetches_under_attack(self):
+    async def test_async_cooldown_caps_fetches_under_attack(self, monkeypatch):
+        _pin_cooldown_high(monkeypatch)
         defender_key_dict, _defender_pem = generate_rsa_keypair()
         defender_key_dict["kid"] = "defender-kid"
 
@@ -365,7 +388,8 @@ class TestCooldownDoesNotBlockLegitimateTraffic:
 
 class TestCooldownIsolationAcrossIssuers:
     @respx.mock
-    def test_per_issuer_cooldown_does_not_cross_contaminate(self):
+    def test_per_issuer_cooldown_does_not_cross_contaminate(self, monkeypatch):
+        _pin_cooldown_high(monkeypatch)
         other_disco_url = "https://other.example/.well-known/openid-configuration"
         other_jwks_url = "https://other.example/jwks"
         other_disco_response = {

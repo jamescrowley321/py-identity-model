@@ -5,6 +5,7 @@ Provides both synchronous and asynchronous APIs for OpenID Connect operations.
 
 # Initialize SSL compatibility for backward compatibility with requests library
 from . import ssl_config  # noqa: F401
+from .core.cache_metrics import CacheCounters, get_cache_counters
 
 # Backward compatible sync exports (default)
 from .exceptions import (
@@ -150,6 +151,7 @@ __all__ = [
     # Base Classes
     "BaseRequest",
     "BaseResponse",
+    "CacheCounters",
     # mTLS (RFC 8705)
     "CertificateBindingError",
     # Identity models
@@ -245,6 +247,7 @@ __all__ = [
     "generate_code_verifier",
     "generate_dpop_key",
     "generate_pkce_pair",
+    "get_cache_counters",
     # Sync API (default)
     "get_discovery_document",
     "get_jwks",
