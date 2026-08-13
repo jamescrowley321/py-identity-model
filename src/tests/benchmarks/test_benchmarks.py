@@ -3,12 +3,25 @@
 Run with: make test-benchmark
 """
 
+import asyncio
+import base64
+import time
+
+import httpx
 import jwt as pyjwt
 import pytest
+import respx
 
 from py_identity_model import (
     validate_fapi_authorization_request,
     validate_fapi_client_config,
+)
+from py_identity_model.aio.token_validation import (
+    clear_discovery_cache,
+    clear_jwks_cache,
+)
+from py_identity_model.aio.token_validation import (
+    validate_token as aio_validate_token,
 )
 from py_identity_model.core.discovery_policy import (
     DiscoveryPolicy,
@@ -20,6 +33,7 @@ from py_identity_model.core.dpop import (
     generate_dpop_key,
 )
 from py_identity_model.core.jar import create_request_object
+from py_identity_model.core.models import TokenValidationConfig
 from py_identity_model.core.parsers import jwks_from_dict
 from py_identity_model.core.pkce import (
     generate_code_challenge,
@@ -200,3 +214,98 @@ def test_bench_pyjwt_decode_baseline(benchmark, sample_signed_jwt, ec_public_pem
 
     result = benchmark(decode_jwt)
     assert result is not None
+
+
+# ============================================================================
+# End-to-end validate_token warm-path Benchmark
+# ============================================================================
+#
+# The raw ``pyjwt.decode`` baseline above measures only the crypto verify. The
+# function that actually runs on every resource-server request is
+# ``aio.validate_token`` — discovery lookup, JWKS lookup, key resolution, decode
+# and claim validation. On the warm path (disco + JWKS both cached) every
+# upstream fetch is skipped, so this micro measures the per-request overhead the
+# cache is meant to eliminate. Upstream is respx-mocked and the caches are
+# pre-warmed once, so the benched runs never touch the network.
+
+_BENCH_ISSUER = "https://bench.example.com"
+_BENCH_DISCO_URL = f"{_BENCH_ISSUER}/.well-known/openid-configuration"
+_BENCH_JWKS_URL = f"{_BENCH_ISSUER}/jwks"
+_BENCH_AUDIENCE = "bench-api"
+
+
+def _rsa_public_jwk(public_key, kid: str) -> dict:
+    """Build an RS256 JWK dict from a cryptography RSA public key."""
+    numbers = public_key.public_numbers()
+
+    def _b64u(value: int, length: int) -> str:
+        return (
+            base64.urlsafe_b64encode(value.to_bytes(length, "big"))
+            .rstrip(b"=")
+            .decode()
+        )
+
+    return {
+        "kty": "RSA",
+        "kid": kid,
+        "n": _b64u(numbers.n, 256),
+        "e": _b64u(numbers.e, 3),
+        "alg": "RS256",
+        "use": "sig",
+    }
+
+
+@pytest.mark.benchmark(group="validation")
+def test_bench_validate_token_warm_path(benchmark, rsa_private_key, rsa_private_pem):
+    """Benchmark the async ``validate_token`` warm path (disco + JWKS cached)."""
+    kid = "bench-validate-key"
+    jwk = _rsa_public_jwk(rsa_private_key.public_key(), kid)
+    disco_doc = {
+        "issuer": _BENCH_ISSUER,
+        "authorization_endpoint": f"{_BENCH_ISSUER}/authorize",
+        "token_endpoint": f"{_BENCH_ISSUER}/token",
+        "jwks_uri": _BENCH_JWKS_URL,
+        "response_types_supported": ["code"],
+        "subject_types_supported": ["public"],
+        "id_token_signing_alg_values_supported": ["RS256"],
+    }
+    now = int(time.time())
+    token = pyjwt.encode(
+        {
+            "iss": _BENCH_ISSUER,
+            "sub": "bench-user",
+            "aud": _BENCH_AUDIENCE,
+            "exp": now + 86400,
+            "iat": now,
+            "nbf": now,
+        },
+        rsa_private_pem,
+        algorithm="RS256",
+        headers={"kid": kid},
+    )
+    config = TokenValidationConfig(perform_disco=True, audience=_BENCH_AUDIENCE)
+
+    loop = asyncio.new_event_loop()
+    try:
+        loop.run_until_complete(clear_discovery_cache())
+        loop.run_until_complete(clear_jwks_cache())
+        with respx.mock:
+            respx.get(_BENCH_DISCO_URL).mock(
+                return_value=httpx.Response(200, json=disco_doc)
+            )
+            respx.get(_BENCH_JWKS_URL).mock(
+                return_value=httpx.Response(200, json={"keys": [jwk]})
+            )
+            # Warm both caches once so the benched runs are pure cache-hit path.
+            loop.run_until_complete(aio_validate_token(token, config, _BENCH_DISCO_URL))
+            result = benchmark(
+                lambda: loop.run_until_complete(
+                    aio_validate_token(token, config, _BENCH_DISCO_URL)
+                )
+            )
+        assert result is not None
+        assert result["sub"] == "bench-user"
+    finally:
+        loop.run_until_complete(clear_discovery_cache())
+        loop.run_until_complete(clear_jwks_cache())
+        loop.close()
