@@ -80,6 +80,15 @@ TEST_AUDIENCE=YOUR_PROJECT_ID
 
 # Optional: Generate an expired token for expiration tests
 TEST_EXPIRED_TOKEN=
+
+# Optional: Multi-tenant access-key exchange (harness TokenSource).
+# When all four are set, `TokenSource.mint(Provider.DESCOPE, tenant=…)` reuses
+# the access-key -> /v1/auth/accesskey/exchange flow to produce a session JWT
+# carrying distinct dct/tenants claims; absent, the multi-tenant test skips.
+DESCOPE_BASE_URL=https://api.descope.com
+DESCOPE_PROJECT_ID=
+DESCOPE_MANAGEMENT_KEY=
+DESCOPE_TEST_TENANT_ID=
 ```
 
 3. Load the environment variables:
