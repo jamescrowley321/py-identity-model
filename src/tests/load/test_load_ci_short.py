@@ -74,6 +74,9 @@ def test_scenario_drove_load_and_met_gates(ci_short_results, scenario_id):
     """Each scenario drove real requests and violated no SLO/correctness gate."""
     result = ci_short_results[scenario_id]
     assert result.num_requests > 0, f"{scenario_id} drove no load"
+    # p999 (design §5) is captured from the run summary, not dropped — it is a
+    # percentile so it must be >= p99 (a reverted/zeroed p999 field fails here).
+    assert result.p999_ms >= result.p99_ms, (result.p999_ms, result.p99_ms)
     violations = evaluate_gates(result)
     assert not violations, "; ".join(violations)
 
