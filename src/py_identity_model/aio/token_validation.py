@@ -11,7 +11,8 @@ import threading
 import time
 from weakref import WeakKeyDictionary
 
-from ..core.discovery_policy import DiscoveryPolicy
+from ..core.cache_metrics import get_cache_counters
+from ..core.discovery_policy import DiscoveryPolicy, validate_url_scheme
 from ..core.jwks_cache import (
     DiscoCacheEntry,
     JwksCacheEntry,
@@ -50,6 +51,37 @@ from ..logging_config import logger
 from .discovery import get_discovery_document
 from .jwks import get_jwks
 from .managed_client import AsyncHTTPClient
+
+
+# ============================================================================
+# Upstream-fetch accounting
+# ============================================================================
+
+
+def _upstream_fetch_attempted(address: str, policy: DiscoveryPolicy) -> bool:
+    """Return ``True`` when an upstream fetch was actually attempted for *address*.
+
+    ``get_discovery_document`` / ``get_jwks`` short-circuit to an *unsuccessful*
+    response **before any network I/O** only when the pre-flight scheme check
+    (:func:`validate_url_scheme`) rejects the address. Every other unsuccessful
+    outcome — a ``429``/``5xx`` upstream response, a connection error/timeout —
+    followed a real network round trip.
+
+    The fetch-volume counters must count those round trips *including the failed
+    ones*: a ``429``/``5xx`` during an upstream outage is exactly the signal an
+    operator watches this metric for, and gating on ``response.is_successful``
+    silently drops it (the outage reads as zero upstream fetches). So gate the
+    miss/refresh increment on "did we get past the scheme check" — which is a
+    pure, side-effect-free re-parse of the same policy the fetch itself applied —
+    rather than on the response status. A scheme-rejected request (zero upstream
+    work, e.g. a forged plaintext ``http://`` URI) is the only excluded case, so
+    it still cannot inflate the tally.
+    """
+    try:
+        validate_url_scheme(address, policy)
+    except ConfigurationException:
+        return False
+    return True
 
 
 # ============================================================================
@@ -134,19 +166,34 @@ async def _get_disco_response(
         # against an eviction on another loop sharing this module-global cache;
         # the process-wide lock inside touch_cache_entry does (#397).
         touch_cache_entry(_disco_cache, cache_key)
+        get_cache_counters().record_disco_hit()
         return entry.response
 
     fetch_lock = _get_disco_fetch_lock(cache_key)
     async with fetch_lock:
         entry = _disco_cache.get(cache_key)
         if entry is not None and not is_cache_expired(entry):
+            # Double-checked hit: another coroutine populated the entry while we
+            # waited on the fetch lock. This is a genuine cache hit, not a miss —
+            # counting it as a miss would inflate the miss rate under concurrent
+            # warmup.
             touch_cache_entry(_disco_cache, cache_key)
+            get_cache_counters().record_disco_hit()
             return entry.response
 
         policy = DiscoveryPolicy(require_https=require_https)
         response = await get_discovery_document(
             DiscoveryDocumentRequest(address=disco_doc_address, policy=policy),
         )
+        # Count the miss whenever an upstream fetch was actually attempted —
+        # including a 429/5xx or a connection error (a real round trip whose
+        # volume this counter exists to surface during an outage). Only a
+        # scheme-rejected address does zero network work and is excluded; see
+        # _upstream_fetch_attempted. Gating on response.is_successful instead
+        # would silently drop failed fetches and make an upstream outage read as
+        # zero upstream volume.
+        if _upstream_fetch_attempted(disco_doc_address, policy):
+            get_cache_counters().record_disco_miss()
         async with _get_disco_cache_write_lock():
             apply_disco_cache_outcome(
                 _disco_cache, cache_key, response, time.monotonic()
@@ -219,13 +266,17 @@ async def _get_cached_jwks(jwks_uri: str, require_https: bool = True) -> JwksRes
         # Refresh LRU recency (see _get_disco_response) — self-serializing via
         # the process-wide structure lock, no per-loop write lock needed.
         touch_cache_entry(_jwks_cache, jwks_uri)
+        get_cache_counters().record_jwks_hit()
         return entry.response
 
     fetch_lock = _get_jwks_fetch_lock(jwks_uri)
     async with fetch_lock:
         entry = _jwks_cache.get(jwks_uri)
         if entry is not None and not is_cache_expired(entry):
+            # Double-checked hit populated by a concurrent fetch (see
+            # _get_disco_response) — count as a hit, not a miss.
             touch_cache_entry(_jwks_cache, jwks_uri)
+            get_cache_counters().record_jwks_hit()
             return entry.response
 
         # The jwks_uri was already vetted against this policy when the
@@ -233,6 +284,12 @@ async def _get_cached_jwks(jwks_uri: str, require_https: bool = True) -> JwksRes
         # pre-flight scheme check inside get_jwks() does not double-reject.
         policy = DiscoveryPolicy(require_https=require_https)
         response = await get_jwks(JwksRequest(address=jwks_uri, policy=policy))
+        # Count the miss whenever an upstream fetch was attempted, including a
+        # 429/5xx round trip (fetch volume during an outage is the signal). Only
+        # a scheme-rejected URI (e.g. plaintext http:// under the default policy)
+        # does zero network work and is excluded; see _upstream_fetch_attempted.
+        if _upstream_fetch_attempted(jwks_uri, policy):
+            get_cache_counters().record_jwks_miss()
         async with _get_jwks_cache_write_lock():
             apply_jwks_cache_outcome(
                 _jwks_cache,
@@ -274,6 +331,13 @@ async def _refresh_jwks(
         logger.info("Forcing JWKS refresh for %s (possible key rotation)", jwks_uri)
         policy = DiscoveryPolicy(require_https=require_https)
         response = await get_jwks(JwksRequest(address=jwks_uri, policy=policy))
+        # Count only the branch that issues the upstream GET, whenever that GET
+        # was actually attempted (a 429/5xx re-fetch is still an upstream round
+        # trip). The coalesced early return above returns another coroutine's
+        # just-fetched result and never reaches here; a scheme-rejected refresh
+        # does zero network work and is excluded via _upstream_fetch_attempted.
+        if _upstream_fetch_attempted(jwks_uri, policy):
+            get_cache_counters().record_jwks_refresh()
         async with _get_jwks_cache_write_lock():
             apply_jwks_cache_outcome(
                 _jwks_cache,

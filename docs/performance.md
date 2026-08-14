@@ -10,112 +10,108 @@ py-identity-model is designed for high performance with built-in caching and sup
 
 ### Discovery Document Caching
 
-Discovery documents are cached automatically to avoid repeated HTTP requests:
+Discovery documents and JWKS are cached in-process to keep the steady-state
+request path off the network. The cache is **not** `functools.lru_cache` /
+`async_lru.alru_cache` — those were replaced (v3.0.0) with an explicit
+**TTL + LRU** cache so entries expire on a schedule, key rotation is handled
+automatically, and concurrent misses are coalesced into a single upstream
+fetch. The cache *policy* lives in `core/jwks_cache.py`; the sync and async
+cache stacks live in `sync/token_validation.py` and `aio/token_validation.py`.
 
-**Sync Implementation:**
-```python
-from functools import lru_cache
+### What is cached
 
-@lru_cache(maxsize=128)
-def _get_disco_response(disco_doc_address: str) -> DiscoveryDocumentResponse:
-    """Cached discovery document fetching"""
-    request = DiscoveryDocumentRequest(address=disco_doc_address)
-    return get_discovery_document(request)
-```
+| Cache | Cache key | Backing store | Default TTL | Env override |
+|-------|-----------|---------------|-------------|--------------|
+| Discovery document | `(address, require_https)` | `OrderedDict` | 3600s (1 hour) | `DISCO_CACHE_TTL` |
+| JWKS | `jwks_uri` | `OrderedDict` | 86400s (24 hours) | `JWKS_CACHE_TTL` |
 
-**Async Implementation:**
-```python
-from async_lru import alru_cache
+Both caches share the same policy machinery:
 
-@alru_cache(maxsize=128)
-async def _get_disco_response(disco_doc_address: str) -> DiscoveryDocumentResponse:
-    """Cached async discovery document fetching"""
-    request = DiscoveryDocumentRequest(address=disco_doc_address)
-    return await get_discovery_document(request)
-```
+- **LRU eviction, 64 entries** (`DEFAULT_MAX_CACHE_ENTRIES`). The store is an
+  `OrderedDict`, not a plain dict, so a *read hit* refreshes recency
+  (`touch_cache_entry`) and eviction targets the least-recently-**used** entry.
+- **TTL resolution order.** For each entry the TTL is the first available of:
+  (1) the response's `Cache-Control: max-age`, (2) the environment override,
+  (3) the built-in default. The resolved value is clamped to
+  **[60s, 86400s]** (`MIN_CACHE_TTL_SECONDS` … `MAX_CACHE_TTL_SECONDS`); a bad
+  or out-of-range env value is clamped and logged, never crashes the request.
+- **Single-flight fetch.** Per-URI striped locks (32 stripes) ensure a cache
+  miss issues exactly one upstream fetch; concurrent requests for the same URI
+  wait on the stripe and then read the freshly-cached entry (a
+  *double-checked* hit) rather than each hitting the network.
+- **Kid-miss cooldown.** If a JWT's `kid` is absent from the cached JWKS the
+  cache is treated as stale and a refresh is forced (OP key rotation). This is
+  rate-limited per-URI — default 5s (`DEFAULT_KID_MISS_REFRESH_COOLDOWN_SECONDS`,
+  override `KID_MISS_REFRESH_COOLDOWN`) — so an attacker forging tokens with
+  random unknown kids cannot amplify inbound traffic into upstream JWKS fetches.
+- **Per-event-loop locks (async).** The async write/fetch locks are keyed on
+  the running event loop via `WeakKeyDictionary` (#399), so a test runner or
+  embed that creates a new loop per scope does not hit
+  `RuntimeError: <Lock> is bound to a different event loop`.
 
-### JWKS Caching
-
-JSON Web Key Sets are also cached:
-
-- **Cache Size**: 128 entries (both sync and async)
-- **Cache Key**: JWKS URL (from discovery document)
-- **Cache Duration**: Lifetime of the process
-- **Thread Safety**: Both implementations are thread-safe
-
-### Cache Behavior Differences
-
-| Aspect | Synchronous | Asynchronous |
-|--------|-------------|--------------|
-| Library | `functools.lru_cache` | `async_lru.alru_cache` |
-| Max Entries | 128 | 128 |
-| Thread Safety | ✅ Yes | ✅ Yes |
-| Cache Sharing | Sync calls only | Async calls only |
-| Cache Clearing | `function.cache_clear()` | `function.cache_clear()` |
-| Performance | Fast | Fast |
-
-**Important:** Sync and async caches are **separate**. They do not share cached data.
-
-#### Example: Cache Separation
-
-```python
-from py_identity_model import get_discovery_document as sync_disco
-from py_identity_model.aio import get_discovery_document as async_disco
-from py_identity_model import DiscoveryDocumentRequest
-
-# First call - fetches from network (sync cache)
-disco = sync_disco(DiscoveryDocumentRequest(address="https://..."))
-
-# Second call - uses sync cache (fast)
-disco = sync_disco(DiscoveryDocumentRequest(address="https://..."))
-
-# Async call - fetches from network again (separate cache!)
-disco = await async_disco(DiscoveryDocumentRequest(address="https://..."))
-
-# Second async call - uses async cache (fast)
-disco = await async_disco(DiscoveryDocumentRequest(address="https://..."))
-```
+**Important:** the sync and async caches are **separate** process-global
+`OrderedDict`s. They do not share cached data.
 
 ### Clearing Caches
 
-You can manually clear caches if needed:
+Use the public cache-clear helpers. **Breaking change (v3.0.0):** the async
+helpers are now `async def` — they acquire the cache write lock before
+clearing so a fetch in flight can't write its result back into a "cleared"
+cache — so callers must `await` them.
 
 ```python
-from py_identity_model.sync.token_validation import _get_disco_response, _get_jwks_response
+# Sync
+from py_identity_model import clear_discovery_cache, clear_jwks_cache
 
-# Clear discovery document cache
-_get_disco_response.cache_clear()
-
-# Clear JWKS cache
-_get_jwks_response.cache_clear()
+clear_discovery_cache()
+clear_jwks_cache()
 ```
-
-For async:
-```python
-from py_identity_model.aio.token_validation import _get_disco_response, _get_jwks_response
-
-# Clear async discovery document cache
-_get_disco_response.cache_clear()
-
-# Clear async JWKS cache
-_get_jwks_response.cache_clear()
-```
-
-### Cache Statistics
-
-You can inspect cache performance:
 
 ```python
-from py_identity_model.sync.token_validation import _get_disco_response
+# Async — must be awaited
+from py_identity_model.aio import clear_discovery_cache, clear_jwks_cache
 
-# Get cache statistics
-info = _get_disco_response.cache_info()
-print(f"Hits: {info.hits}")
-print(f"Misses: {info.misses}")
-print(f"Size: {info.currsize}")
-print(f"Max Size: {info.maxsize}")
-print(f"Hit Rate: {info.hits / (info.hits + info.misses) * 100:.2f}%")
+await clear_discovery_cache()
+await clear_jwks_cache()
 ```
+
+There is no `_get_disco_response.cache_clear()` / `.cache_info()` — those are
+`functools.lru_cache` APIs and the cache no longer uses `lru_cache`.
+
+### Observing Cache Hit Rate
+
+The cache exposes lightweight per-process counters via
+`core/cache_metrics.py`, re-exported at the top level. Read a `snapshot()` and
+compute whatever rate you need:
+
+```python
+from py_identity_model import get_cache_counters
+
+snap = get_cache_counters().snapshot()
+# {'disco_hits': ..., 'disco_misses': ..., 'jwks_hits': ...,
+#  'jwks_misses': ..., 'jwks_refreshes': ...}
+
+jwks_total = snap["jwks_hits"] + snap["jwks_misses"]
+jwks_hit_rate = snap["jwks_hits"] / jwks_total if jwks_total else 0.0
+```
+
+Semantics:
+
+- **hit** — request served from a fresh cached entry (no upstream call);
+  **miss** — request that had to fetch from upstream;
+  **refresh** — a *forced* upstream JWKS re-fetch (kid-miss or
+  signature-failure key-rotation recovery). A refresh that coalesces onto
+  another coroutine's in-flight fetch does no upstream work and is not counted.
+- Counters currently cover the **async** cache paths
+  (`_get_disco_response` / `_get_cached_jwks` / `_refresh_jwks`). The sync
+  stack uses the same TTL/LRU structure but is not yet instrumented.
+- Counters are **per-process**. Under `uvicorn --workers N` each worker keeps
+  its own tally — aggregate snapshots across workers for a fleet-wide rate.
+- The injected-`http_client` path bypasses the caches entirely and is
+  deliberately **not** counted (it performs no caching, so a hit rate over it
+  would be meaningless).
+- `get_cache_counters().reset()` zeros every counter — useful for per-run
+  baselines and tests.
 
 ## Performance Benchmarks
 
@@ -518,25 +514,28 @@ Monitor cache performance in production:
 
 ```python
 import logging
-from py_identity_model.sync.token_validation import _get_disco_response
+from py_identity_model import get_cache_counters
 
 logger = logging.getLogger(__name__)
 
 def log_cache_stats():
     """Log cache statistics periodically."""
-    disco_info = _get_disco_response.cache_info()
+    snap = get_cache_counters().snapshot()
 
-    total = disco_info.hits + disco_info.misses
-    hit_rate = (disco_info.hits / total * 100) if total > 0 else 0
+    disco_total = snap["disco_hits"] + snap["disco_misses"]
+    disco_rate = (snap["disco_hits"] / disco_total * 100) if disco_total else 0
+    jwks_total = snap["jwks_hits"] + snap["jwks_misses"]
+    jwks_rate = (snap["jwks_hits"] / jwks_total * 100) if jwks_total else 0
 
     logger.info(
-        f"Discovery cache: {disco_info.hits} hits, "
-        f"{disco_info.misses} misses, "
-        f"{hit_rate:.1f}% hit rate, "
-        f"{disco_info.currsize}/{disco_info.maxsize} entries"
+        f"Discovery cache: {snap['disco_hits']} hits, "
+        f"{snap['disco_misses']} misses, {disco_rate:.1f}% hit rate | "
+        f"JWKS cache: {snap['jwks_hits']} hits, {snap['jwks_misses']} misses, "
+        f"{snap['jwks_refreshes']} refreshes, {jwks_rate:.1f}% hit rate"
     )
 
-# Log every 1000 requests or periodically
+# Log every 1000 requests or periodically. Counters are per-process — aggregate
+# across workers for a fleet-wide rate.
 ```
 
 ### Performance Metrics

@@ -100,8 +100,9 @@ src/py_identity_model/
    - Core functions are pure (no I/O) and return result objects or raise exceptions
 
 3. **Caching Strategy**
-   - Discovery documents: Cached per-process with `functools.lru_cache` (sync) and `async_lru.alru_cache` (async)
-   - JWKS keys: Cached to avoid repeated fetches during token validation
+   - Discovery documents and JWKS are cached per-process with an explicit **TTL + LRU** cache (an `OrderedDict` bounded to `DEFAULT_MAX_CACHE_ENTRIES` = 64), **not** `functools.lru_cache`/`async_lru.alru_cache`. Cache *policy* lives in `core/jwks_cache.py`; the sync/async cache stacks live in `sync/token_validation.py` and `aio/token_validation.py`.
+   - Entries expire on a TTL resolved from `Cache-Control: max-age` → env override (`DISCO_CACHE_TTL` / `JWKS_CACHE_TTL`) → built-in default, clamped to `[60s, 86400s]`. Concurrent misses are coalesced into a single upstream fetch via per-URI striped locks.
+   - Per-process cache hit/miss/refresh counters are exposed via `core/cache_metrics.py` (`get_cache_counters()`, re-exported at the top level); the async cache paths are instrumented. Clear caches with `clear_discovery_cache()` / `clear_jwks_cache()` (async variants must be `await`ed).
    - All caches are per-process, not shared across processes
 
 4. **Error Handling**
@@ -132,6 +133,9 @@ make test-integration-local # Requires .env.local file
 
 # Run example integration tests (spins up Docker containers)
 make test-examples
+
+# Run the TH-1.5 CI-short load profile (real Locust vs the booted RS + mock OP)
+make test-harness-load       # Opt-in `load` group (locust); Locust runs out-of-process
 
 # Run all tests including examples
 make test-all

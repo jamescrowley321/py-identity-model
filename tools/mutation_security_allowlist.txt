@@ -22,3 +22,42 @@
 # below is never reached. No input that reaches the else branch can observe []
 # vs None: semantically equivalent, unkillable.
 py_identity_model.core.token_validation_logic.x__enforce_allowed_issuers__mutmut_6
+
+# ── T299 cache-observability counters (aio.token_validation) ──────────────────
+#
+# Lock-stripe distribution (class 2): ``_get_*_fetch_lock(None)`` makes
+# ``hash(None) % STRIPES`` pick one fixed valid stripe instead of hashing the
+# URI/key. Single-flight correctness is unaffected — same-URI fetches still
+# serialise on the same lock object — only which of the 32 stripes is selected
+# changes, which is not observable.
+py_identity_model.aio.token_validation.x__get_disco_response__mutmut_19
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_3
+
+# Log-only (class 1): message-text / logger-arg mutations of the "Forcing JWKS
+# refresh" info line (11-17) and the empty-keys retained-cache fallback info
+# line (42-56). These are human-readable log strings, not security controls;
+# they change no control flow, return value, or counter. Asserting exact log
+# text is brittle and out of scope. (53-56 mutate the "falling back ... in-flight
+# validation" segments of that same info line — identical justification.)
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_11
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_12
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_13
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_14
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_15
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_16
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_17
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_42
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_43
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_44
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_45
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_46
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_47
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_48
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_49
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_50
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_51
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_52
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_53
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_54
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_55
+py_identity_model.aio.token_validation.x__refresh_jwks__mutmut_56

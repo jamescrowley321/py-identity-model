@@ -62,6 +62,36 @@ test-integration-keycloak: ## Run integration tests against Keycloak
 		(docker compose -f test-fixtures/keycloak/docker-compose.yml down && exit 1)
 	docker compose -f test-fixtures/keycloak/docker-compose.yml down
 
+.PHONY: test-harness-rs
+test-harness-rs: ## Boot the RS (uvicorn) against node-oidc and run the TH-1.2 real-HTTP proof
+	@echo "Starting node-oidc-provider fixture..."
+	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml up -d --build --wait
+	@echo "Booting fastapi-identity-model RS under uvicorn (real HTTP)..."
+	uv run --all-packages pytest src/tests/integration/test_rs_boot.py -m integration --env-file=.env.node-oidc -v || \
+		(docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down && exit 1)
+	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
+
+.PHONY: test-harness-matrix
+test-harness-matrix: ## Run the TH-1.3 token correctness matrix (mock-OP forged corpus + node-oidc leg) through the booted RS
+	@echo "Starting node-oidc-provider fixture..."
+	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml up -d --build --wait
+	@echo "Running the correctness matrix through the booted RS (real HTTP)..."
+	uv run --all-packages pytest src/tests/integration/test_correctness_matrix.py -m integration --env-file=.env.node-oidc -v || \
+		(docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down && exit 1)
+	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
+
+.PHONY: test-harness-load
+test-harness-load: ## Run the TH-1.5 CI-short load profile (real Locust vs the booted RS + mock OP)
+	@echo "Driving the CI-short Locust profile through the booted RS (real HTTP)..."
+	uv run --group load --all-packages pytest src/tests/load/test_load_ci_short.py \
+		-m integration -p no:benchmark -v
+
+.PHONY: test-harness-load-nightly
+test-harness-load-nightly: ## (nightly) Long TTL-rollover / LRU-thrash / RSS-FD soak profile (S4/S7/S11/S12)
+	@echo "Driving the NIGHTLY soak profile (design §4 S4/S7/S11/S12) through the booted RS..."
+	uv run --group load --all-packages pytest src/tests/load/test_load_nightly.py \
+		-m integration -p no:benchmark -v
+
 .PHONY: test-benchmark
 test-benchmark: ## Run benchmarks
 	uv run pytest src/tests/benchmarks -v --benchmark-only --benchmark-sort=name
