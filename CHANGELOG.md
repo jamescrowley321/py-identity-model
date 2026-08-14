@@ -2,6 +2,103 @@
 
 <!-- version list -->
 
+## v3.10.0 (2026-08-14)
+
+### Bug Fixes
+
+- Address delta-review findings in correctness matrix (TH-1.3)
+  ([`5fced0d`](https://github.com/jamescrowley321/py-identity-model/commit/5fced0d7de18b22848c1edf5946d3e1ec53aaf19))
+
+- Address review findings in correctness matrix (TH-1.3)
+  ([`fe012df`](https://github.com/jamescrowley321/py-identity-model/commit/fe012dfb5b1f5d3d797c67ea6397ff48d0a3475e))
+
+- Address review findings in load suite (TH-1.5)
+  ([`51e3561`](https://github.com/jamescrowley321/py-identity-model/commit/51e3561cd6602022fbcccf63d563c34fc2370931))
+
+- Address review findings in RS boot harness (TH-1.2)
+  ([`f573ad6`](https://github.com/jamescrowley321/py-identity-model/commit/f573ad67bca6222e98f38efccbf089020f82359b))
+
+- **cache**: Count cache miss/refresh only on successful upstream fetch
+  ([`003724c`](https://github.com/jamescrowley321/py-identity-model/commit/003724ccf39af04b42ca88739861ea9cb8a05342))
+
+- **harness**: Gate RS-boot suite to node-oidc in the CI matrix (TH-1.2)
+  ([`c373ed8`](https://github.com/jamescrowley321/py-identity-model/commit/c373ed888e3cee1cc77613d58d360982b2ce74b9))
+
+- **token-validation**: Count upstream fetches that FAILED. The
+  ([`51e3561`](https://github.com/jamescrowley321/py-identity-model/commit/51e3561cd6602022fbcccf63d563c34fc2370931))
+
+### Continuous Integration
+
+- **load**: Run CI-short load in PR CI + add nightly soak workflow
+  ([`93c5534`](https://github.com/jamescrowley321/py-identity-model/commit/93c5534a94fe20a8fd005f6e880a66a89766c8f1))
+
+### Documentation
+
+- Add load/soak suite README and CLAUDE.md test command (TH-1.5)
+  ([`8115079`](https://github.com/jamescrowley321/py-identity-model/commit/811507974ce143d035ddcdf723ca4cb7a09e7533))
+
+- Correct CLAUDE.md caching strategy to TTL+LRU cache (T299)
+  ([`4a2b33c`](https://github.com/jamescrowley321/py-identity-model/commit/4a2b33cfb6f37c7cb6e587035a4706a8d0bc8e3a))
+
+- Document Descope multi-tenant harness env vars
+  ([`c93b1da`](https://github.com/jamescrowley321/py-identity-model/commit/c93b1da7029a597e94923a164a1b25b7b6e19a12))
+
+- **performance**: Correct stale lru_cache/cache_info docs to TTL-LRU reality
+  ([`54e93f3`](https://github.com/jamescrowley321/py-identity-model/commit/54e93f34690cf2b83f1276aa0f0cd8f33a3337df))
+
+### Features
+
+- **cache**: Add per-process cache observability counters
+  ([`84a2548`](https://github.com/jamescrowley321/py-identity-model/commit/84a2548cbadb8ce8c79a13bde72d0ce7a736a4fc))
+
+- **harness**: Mock-OP upstream-fetch counters + RS /metrics readout
+  ([`9302509`](https://github.com/jamescrowley321/py-identity-model/commit/930250926e82c0670dc3aba89f903f0ea5db8323))
+
+### Testing
+
+- Cover LoadResult p999 + cache_hit_rate + alg_cost_ratio (TH-1.5)
+  ([`6315c79`](https://github.com/jamescrowley321/py-identity-model/commit/6315c7999ccdb7a6a9faab3d3d5e54c79b551fe0))
+
+- **benchmarks**: Add validate_token warm-path micro-benchmark
+  ([`dfaad6f`](https://github.com/jamescrowley321/py-identity-model/commit/dfaad6f715c6fcdf8e9d144f72c886e3141ee7ed))
+
+- **cache**: Pin kid-miss cooldown in amplification tests to remove wall-clock flake
+  ([`e84880d`](https://github.com/jamescrowley321/py-identity-model/commit/e84880dbcc3a8dd178f9e86d5a2f54bd4c6d12f9))
+
+- **harness**: Add token_source fixture + real-IdP DoD test (TH-1.1)
+  ([`bdb0dd6`](https://github.com/jamescrowley321/py-identity-model/commit/bdb0dd613a3956731e065c8a07b1f0627957c94f))
+
+- **harness**: Add TokenSource minter, mock OP + forged corpus (TH-1.1)
+  ([`c506ca4`](https://github.com/jamescrowley321/py-identity-model/commit/c506ca432269560b84480de2ff983e29d9f09738))
+
+- **harness**: Boot fastapi-identity-model as a real resource server (TH-1.2)
+  ([`57b3068`](https://github.com/jamescrowley321/py-identity-model/commit/57b3068092fd5028fce15d6a740a6f1dbd5ba260))
+
+- **harness**: Close uvicorn stdout pipe in boot_rs teardown
+  ([`ae119da`](https://github.com/jamescrowley321/py-identity-model/commit/ae119da737d0550f5450b2ea36c05a7e2686ca52))
+
+- **harness**: Crash-harden mock OP + real Descope multi-tenant exchange (TH-1.1, #463)
+  ([`b689aed`](https://github.com/jamescrowley321/py-identity-model/commit/b689aedfc4f3ca11ce87fce38211160533faa00b))
+
+- **harness**: Delete descope access-key even on empty-cleartext response (TH-1.1, #463)
+  ([`c7f47a1`](https://github.com/jamescrowley321/py-identity-model/commit/c7f47a1d2a567aaca3f8e2eec787f151471fc313))
+
+- **harness**: Serve mock OP over real HTTP for out-of-proc RS (TH-1.3)
+  ([`607d5e0`](https://github.com/jamescrowley321/py-identity-model/commit/607d5e05be575965befd8905a9d956bb5b2d95fa))
+
+- **harness**: Token correctness assertion matrix through booted RS (TH-1.3)
+  ([`cd9f39e`](https://github.com/jamescrowley321/py-identity-model/commit/cd9f39e3248bfc66a1c4f2b66e2250ef8ca126cf))
+
+- **harness**: Waive equivalent log-string mutants in _refresh_jwks (TH-1.5)
+  ([`52eeb54`](https://github.com/jamescrowley321/py-identity-model/commit/52eeb547b11672371d98f3cfe6f30ebe52359954))
+
+- **load**: Locust scenario framework + pre-minted pool replay (S1-S8 CI-short)
+  ([`aa87eb7`](https://github.com/jamescrowley321/py-identity-model/commit/aa87eb7e6899ece3a8622206ef644d685b114002))
+
+- **security**: Fail-closed tests for aio cache fetch controls (T299)
+  ([`43be93b`](https://github.com/jamescrowley321/py-identity-model/commit/43be93bc942f255d6066bdbc82b941a1beb35c4b))
+
+
 ## v3.9.0 (2026-08-10)
 
 ### Features
