@@ -87,12 +87,10 @@ test-harness-load: ## Run the TH-1.5 CI-short load profile (real Locust vs the b
 		-m integration -p no:benchmark -v
 
 .PHONY: test-harness-load-nightly
-test-harness-load-nightly: ## (nightly, NOT CI-gated) Long LRU-thrash / RSS-FD soak profile (S7/S11/S12)
-	@echo "Nightly soak profile (design §4 S7/S11/S12) — a documented, not-scheduled"
-	@echo "hook (#271). Run on demand once the SLO baseline is calibrated:"
-	@echo "  uv run --group load --all-packages python -c \\"
-	@echo "    'from src.tests.load.runner import run_profile; from src.tests.load.scenarios import Profile;\\"
-	@echo "     [print(r) for r in run_profile(Profile.NIGHTLY)]'"
+test-harness-load-nightly: ## (nightly) Long TTL-rollover / LRU-thrash / RSS-FD soak profile (S4/S7/S11/S12)
+	@echo "Driving the NIGHTLY soak profile (design §4 S4/S7/S11/S12) through the booted RS..."
+	uv run --group load --all-packages pytest src/tests/load/test_load_nightly.py \
+		-m integration -p no:benchmark -v
 
 .PHONY: test-benchmark
 test-benchmark: ## Run benchmarks
