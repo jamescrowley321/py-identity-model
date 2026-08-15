@@ -1,11 +1,17 @@
 name: Nightly
 
 # Scheduled coverage that does not belong on the per-PR path:
-#  * full-ci   — re-runs the whole reusable CI matrix (all integration providers)
-#                on a schedule, so upstream provider / dependency drift is caught
-#                even on days with no commits.
-#  * load-soak — the long-window load/soak profile (S4 TTL-rollover + S7/S11/S12
-#                LRU-thrash / RSS-FD soak) that is too slow for the PR gate.
+#  * full-ci      — re-runs the whole reusable CI matrix (all integration
+#                   providers) on a schedule, so upstream provider / dependency
+#                   drift is caught even on days with no commits.
+#  * load-soak    — the long-window load/soak profile (S4 TTL-rollover + S7/S11/
+#                   S12 LRU-thrash / RSS-FD soak) that is too slow for the PR gate.
+#  * load-capacity — the TH-4 open-model ramp-to-breakpoint (C1/C2): find the
+#                   goodput knee + max-sustainable RPS. On the default 2-vCPU
+#                   runner the generator/mock-OP/RS are co-located, so the knee is
+#                   a DIRECTIONAL ceiling + regression signal, not the RS's
+#                   absolute limit. Point this at a larger runner (T316) to raise
+#                   the co-located ceiling.
 
 on:
   schedule:
@@ -57,3 +63,34 @@ jobs:
 
       - name: Load soak (S4/S7/S11/S12 — real Locust vs the booted RS)
         run: make test-harness-load-nightly
+
+  load-capacity:
+    name: Load capacity (ramp-to-breakpoint)
+    # runs-on: ubuntu-latest is a 2-vCPU co-located box → the knee is directional.
+    # Swap to a larger GitHub-hosted label (e.g. ubuntu-latest-8-cores) once
+    # provisioned to raise the co-located ceiling (TH-4.5 / T316).
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: 3.13
+
+      - name: Cache uv dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: make ci-setup
+
+      - name: Capacity ramp (C1/C2 — find the goodput knee vs the booted RS)
+        run: make test-harness-load-capacity

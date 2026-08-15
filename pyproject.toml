@@ -194,6 +194,7 @@ ignore = [
 "src/tests/load/**/*.py" = [
     "S101",    # pytest assertions
     "PLR2004", # magic values — HTTP status codes in expected-status comparisons
+    "PLR0913", # the Locust run driver is parameter-rich (users/duration/pacing)
 ]
 "examples/**/*.py" = ["S101"]    # 73 assert violations in example integration tests
 "packages/**/tests/**/*.py" = [

@@ -92,6 +92,12 @@ test-harness-load-nightly: ## (nightly) Long TTL-rollover / LRU-thrash / RSS-FD 
 	uv run --group load --all-packages pytest src/tests/load/test_load_nightly.py \
 		-m integration -p no:benchmark -v
 
+.PHONY: test-harness-load-capacity
+test-harness-load-capacity: ## (TH-4) Open-model ramp-to-breakpoint: find the goodput knee (C1/C2)
+	@echo "Ramping arrival rate to the goodput knee (co-located = directional numbers)..."
+	uv run --group load --all-packages pytest src/tests/load/test_load_capacity.py \
+		-m integration -p no:benchmark -v
+
 .PHONY: test-benchmark
 test-benchmark: ## Run benchmarks
 	uv run pytest src/tests/benchmarks -v --benchmark-only --benchmark-sort=name
