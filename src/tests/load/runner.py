@@ -579,6 +579,21 @@ def render_capacity_report(results: list[CapacityResult]) -> str:
     return "\n".join(lines)
 
 
+def write_capacity_report(results: list[CapacityResult], path: str | Path) -> Path:
+    """Render *results* and write the report to *path*; return the written path.
+
+    The nightly ``load-capacity`` job sets ``HARNESS_CAPACITY_REPORT`` so this
+    file can be uploaded as a downloadable artifact — the ramp curve + knee per
+    scenario, which otherwise lives only in the job log. Parent directories are
+    created so a nested artifact path just works.
+    """
+    out = Path(path)
+    if out.parent != Path():
+        out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(render_capacity_report(results))
+    return out
+
+
 @contextlib.contextmanager
 def _scenario_stack(workers: int = 1) -> Iterator[tuple[MockOP, str, int]]:
     """Fresh mock OP + booted RS for a single scenario (clean cache each time).

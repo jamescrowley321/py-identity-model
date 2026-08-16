@@ -7,11 +7,14 @@ name: Nightly
 #  * load-soak    — the long-window load/soak profile (S4 TTL-rollover + S7/S11/
 #                   S12 LRU-thrash / RSS-FD soak) that is too slow for the PR gate.
 #  * load-capacity — the TH-4 open-model ramp-to-breakpoint (C1/C2): find the
-#                   goodput knee + max-sustainable RPS. On the default 2-vCPU
-#                   runner the generator/mock-OP/RS are co-located, so the knee is
-#                   a DIRECTIONAL ceiling + regression signal, not the RS's
-#                   absolute limit. Point this at a larger runner (T316) to raise
-#                   the co-located ceiling.
+#                   goodput knee + max-sustainable RPS, and upload the ramp curve
+#                   as a downloadable artifact. Runs on the free GitHub-hosted
+#                   `ubuntu-latest` (4-vCPU/16GB on this public repo); the
+#                   generator/mock-OP/RS are co-located, so the knee is a
+#                   DIRECTIONAL ceiling + regression signal, NOT the RS's absolute
+#                   isolated limit (that needs a deployed target, out of scope).
+#                   No paid larger runner is used — directional-on-free is the
+#                   accepted trade-off.
 
 on:
   schedule:
@@ -66,9 +69,10 @@ jobs:
 
   load-capacity:
     name: Load capacity (ramp-to-breakpoint)
-    # runs-on: ubuntu-latest is a 2-vCPU co-located box → the knee is directional.
-    # Swap to a larger GitHub-hosted label (e.g. ubuntu-latest-8-cores) once
-    # provisioned to raise the co-located ceiling (TH-4.5 / T316).
+    # Free GitHub-hosted runner (4-vCPU/16GB on this public repo). Generator,
+    # mock OP and RS are co-located, so the knee is a directional ceiling +
+    # regression signal, not the RS's absolute limit. No paid larger runner is
+    # used; the ramp curve is uploaded as an artifact for trend-tracking.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -93,4 +97,17 @@ jobs:
         run: make ci-setup
 
       - name: Capacity ramp (C1/C2 — find the goodput knee vs the booted RS)
+        env:
+          HARNESS_CAPACITY_REPORT: capacity-report.txt
         run: make test-harness-load-capacity
+
+      # Upload even on failure: the ramp curve is most useful when a rung breached
+      # unexpectedly. The report is written before the assertions run, so it
+      # exists whenever the ramp itself completed.
+      - name: Upload capacity report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: capacity-report
+          path: capacity-report.txt
+          if-no-files-found: warn
