@@ -65,7 +65,19 @@ jobs:
         run: make ci-setup
 
       - name: Load soak (S4/S7/S11/S12 — real Locust vs the booted RS)
+        env:
+          HARNESS_SOAK_REPORT: soak-report.txt
         run: make test-harness-load-nightly
+
+      # RSS/FD trend numbers the pass/fail soak assertions otherwise hide. Written
+      # before the assertions run, so it survives a failing gate — upload always.
+      - name: Upload soak RSS/FD report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: soak-report
+          path: soak-report.txt
+          if-no-files-found: warn
 
   load-capacity:
     name: Load capacity (ramp-to-breakpoint)

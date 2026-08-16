@@ -195,9 +195,10 @@ def test_write_capacity_report_writes_rendered_report(tmp_path):
     """The artifact writer persists exactly what the renderer produces."""
     results = [_capacity_result(breaks_at=2000)]
     out = write_capacity_report(results, tmp_path / "capacity-report.txt")
-    assert out.read_text() == render_capacity_report(results)
-    assert "KNEE" in out.read_text()
-    assert "C1" in out.read_text()
+    written = out.read_text(encoding="utf-8")
+    assert written == render_capacity_report(results)
+    assert "KNEE" in written
+    assert "C1" in written
 
 
 def test_write_capacity_report_creates_parent_dirs(tmp_path):
