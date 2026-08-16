@@ -34,6 +34,12 @@ dev = [
     "pyrefly>=0.34.0",
     "tenacity>=9.0.0,<10",
     "mutmut>=3.7,<4",
+    # Soak RSS/FD sampler (T313). In `dev`, not `load`: the load runner imports
+    # the sampler at module top and `src/tests/unit/test_load_result.py` imports
+    # the runner in the plain unit env (no `load` group), so psutil must resolve
+    # there too. Unlike locust/gevent it does not monkey-patch, so it is safe in
+    # the default env.
+    "psutil>=6,<8",
 ]
 docs = [
     "mkdocs>=1.6.0,<2",

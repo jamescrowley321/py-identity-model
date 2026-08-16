@@ -70,3 +70,52 @@ def test_no_server_errors_anywhere(nightly_results):
         sid: r.server_errors for sid, r in nightly_results.items() if r.server_errors
     }
     assert not offenders, f"server errors (5xx): {offenders}"
+
+
+# A soak leak grows without bound; interpreter/allocator noise over a <=75s window
+# does not. These ceilings are deliberately generous — they catch a runaway leak,
+# not a few MB of arena churn. Precise per-scenario calibration from a baseline is
+# T314 (the dormant ``runner.GATES``); T313 proves the signal exists and is bounded.
+_MAX_SOAK_RSS_GROWTH_MB = 128.0
+_MAX_SOAK_FD_GROWTH = 64
+
+
+@pytest.mark.parametrize("scenario_id", _NIGHTLY_IDS)
+def test_soak_sampled_rss_and_fd(nightly_results, scenario_id):
+    """Every soak scenario actually MEASURED the RS process tree (T313).
+
+    Before T313, S11 ("RSS / FD soak") asserted nothing about RSS/FD — no field
+    carried it. This is the mechanical proof the instrumentation captured a real,
+    continuous trend (>=2 samples over the window) rather than a single reading.
+    """
+    result = nightly_results[scenario_id]
+    resources = result.resources
+    assert resources is not None, f"{scenario_id} was not resource-sampled"
+    assert resources.sampled, f"{scenario_id} captured no live RSS/FD samples"
+    assert resources.num_samples >= 2, (
+        f"{scenario_id} sampled {resources.num_samples}x — expected a continuous "
+        "trend over the run window"
+    )
+    assert resources.rss_max_mb > 0, f"{scenario_id} reported zero peak RSS"
+
+
+@pytest.mark.parametrize("scenario_id", _NIGHTLY_IDS)
+def test_soak_no_unbounded_resource_growth(nightly_results, scenario_id):
+    """RSS and FD growth over the soak stay bounded — the cache-leak tripwire.
+
+    A middleware cache that failed to evict (or an FD/connection leak to the OP)
+    would grow RSS/FDs without bound over the window; a bounded cache stays flat.
+    """
+    resources = nightly_results[scenario_id].resources
+    assert resources is not None, f"{scenario_id} was not resource-sampled"
+    assert resources.sampled, f"{scenario_id} captured no live RSS/FD samples"
+    assert resources.rss_growth_mb < _MAX_SOAK_RSS_GROWTH_MB, (
+        f"{scenario_id} RSS grew {resources.rss_growth_mb:.1f}MB "
+        f"({resources.rss_start_mb:.1f} -> {resources.rss_max_mb:.1f}) "
+        f">= {_MAX_SOAK_RSS_GROWTH_MB}MB — possible memory leak"
+    )
+    assert resources.fd_growth < _MAX_SOAK_FD_GROWTH, (
+        f"{scenario_id} FDs grew by {resources.fd_growth} "
+        f"({resources.fd_start} -> {resources.fd_max}) "
+        f">= {_MAX_SOAK_FD_GROWTH} — possible descriptor/connection leak"
+    )
