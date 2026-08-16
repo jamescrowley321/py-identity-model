@@ -22,10 +22,15 @@ with its real key) reuse the committed expired tokens + cross-provider
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
+import hashlib
+import hmac
+import json
 import time
 from typing import TYPE_CHECKING, Any
 
+from cryptography.hazmat.primitives import serialization
 import jwt
 
 
@@ -34,6 +39,40 @@ if TYPE_CHECKING:
 
 
 CORPUS_AUDIENCE = "mock-api"
+
+
+def _b64url(raw: bytes) -> bytes:
+    """Base64url without padding — the JWS segment encoding."""
+    return base64.urlsafe_b64encode(raw).rstrip(b"=")
+
+
+def _forge_alg_confusion(mock_op: MockOP, claims: dict) -> str:
+    """Forge the classic RS256->HS256 algorithm-confusion token.
+
+    HMAC-SHA256 the token using the victim's RSA **public key** bytes as the
+    shared secret, with a header ``kid`` naming that RSA key. This is the real
+    attack: an RS that honoured the token-header ``alg`` would HMAC-"verify" it
+    with the public key it already holds and accept a forgery. A correct RS pins
+    the algorithm to the JWK's key type and rejects it.
+
+    The secret MUST be the public key (not an arbitrary string): an arbitrary
+    secret is rejected even by a *vulnerable* RS (the HMAC simply won't match the
+    public-key bytes), so it would not actually exercise the algorithm allow-list.
+    PyJWT's high-level ``encode`` refuses an asymmetric HMAC key, so the JWS is
+    hand-rolled.
+    """
+    pub_pem = mock_op.primary_key.private_key.public_key().public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    header = _b64url(
+        json.dumps(
+            {"alg": "HS256", "typ": "JWT", "kid": mock_op.primary_key.kid}
+        ).encode()
+    )
+    payload = _b64url(json.dumps(claims).encode())
+    signing_input = header + b"." + payload
+    signature = _b64url(hmac.new(pub_pem, signing_input, hashlib.sha256).digest())
+    return (signing_input + b"." + signature).decode()
 
 
 @dataclass(frozen=True)
@@ -174,21 +213,29 @@ def build_corpus(mock_op: MockOP) -> dict[str, ForgedToken]:
     )
     add(
         "wrong_alg",
-        jwt.encode(
-            _base_claims(mock_op, now),
-            # >= 32 bytes to avoid PyJWT's InsecureKeyLengthWarning; the exact
-            # secret is irrelevant — the point is HS256 against an RSA kid.
-            "harness-hmac-confusion-secret-key-32b",
-            algorithm="HS256",
-            headers={"kid": mock_op.primary_key.kid},
-        ),
-        "HS256 signed while claiming an RSA kid (alg-confusion)",
+        # The REAL RS256->HS256 confusion: HMAC'd with the RSA public key as the
+        # secret (not an arbitrary string, which a vulnerable RS would also
+        # reject), so only the algorithm allow-list stands between accept and
+        # reject. See _forge_alg_confusion.
+        _forge_alg_confusion(mock_op, _base_claims(mock_op, now)),
+        "HS256 forged with the RSA public key as the HMAC secret (real "
+        "alg-confusion against an RSA kid)",
         rejects=True,
     )
     add(
         "alg_none",
-        jwt.encode(_base_claims(mock_op, now), "", algorithm="none"),
-        "unsigned token with alg:none",
+        # kid names the single published RSA key so JWKS resolution is
+        # unambiguous — the ONLY control that can then reject this token is the
+        # RFC 8725 alg:none defence. Without a kid it would be rejected earlier
+        # by no-kid/multiple-keys ambiguity, masking whether the none-check runs.
+        jwt.encode(
+            _base_claims(mock_op, now),
+            "",
+            algorithm="none",
+            headers={"kid": mock_op.primary_key.kid},
+        ),
+        "unsigned alg:none token with a resolvable kid (isolates the RFC 8725 "
+        "none-defence as the sole rejection cause)",
         rejects=True,
     )
     return {entry.name: entry for entry in entries}
