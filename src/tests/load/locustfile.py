@@ -32,7 +32,7 @@ from pathlib import Path
 import secrets
 from typing import Any
 
-from locust import HttpUser, events, task
+from locust import HttpUser, constant_throughput, events, task
 
 
 HTTP_SERVER_ERROR_FLOOR = 500
@@ -43,6 +43,13 @@ _POOL: list[dict[str, Any]] = json.loads(
 if not _POOL:
     raise ValueError("HARNESS_POOL_FILE described an empty replay pool")
 
+# Open-model pacing (TH-4 capacity ramp). When the runner sets a per-user target
+# throughput (req/s), each user is paced to it via ``constant_throughput`` so the
+# process offers a controlled arrival rate (users x rate) and the goodput knee is
+# visible. Unset/0 keeps the fixed-hold *closed-loop* generator (no wait_time),
+# so the existing S1-S12 scenarios are byte-for-byte unchanged.
+_THROUGHPUT_PER_USER = float(os.environ.get("HARNESS_THROUGHPUT_PER_USER", "") or 0.0)
+
 # Server-error (5xx) tally — a real defect the parent asserts is zero (design §5).
 # A one-element list (not a bare ``int`` + ``global``) so the event listener can
 # mutate it without a module-level ``global`` statement.
@@ -50,7 +57,15 @@ _server_errors = [0]
 
 
 class ReplayUser(HttpUser):
-    """Replays a random pooled token at ``/protected`` every task."""
+    """Replays a random pooled token at ``/protected`` every task.
+
+    Closed-loop by default (no ``wait_time`` → fire back-to-back). When the
+    runner requests an open-model ramp (``HARNESS_THROUGHPUT_PER_USER`` > 0) each
+    user is paced to that rate so the offered arrival rate is controlled.
+    """
+
+    if _THROUGHPUT_PER_USER > 0:
+        wait_time = constant_throughput(_THROUGHPUT_PER_USER)
 
     @task
     def hit_protected(self) -> None:

@@ -74,6 +74,7 @@ in `scenarios.py`; this table mirrors it.
 | **CI_SHORT** | S1, S2, S3, S6, S8 | The PR gate: short (~3s), deterministic, mock-OP-backed, self-contained (no Docker). |
 | **DIAGNOSTIC** | S5, S9, S10 | Head-of-line / no-store / blocking-validator probes, run on demand. |
 | **NIGHTLY** | S4, S7, S11, S12 | TTL-refresh / LRU-thrash / RSS-FD soak / multi-tenant runs, run on demand (feeds #271). |
+| **CAPACITY** | C1, C2 | TH-4 open-model ramp-to-breakpoint: walk arrival rate to the goodput knee. Nightly (`make test-harness-load-capacity`). Fixed-hold scenarios above never ramp. |
 
 | ID | Title | Profile | Proves |
 |----|-------|---------|--------|
@@ -89,6 +90,8 @@ in `scenarios.py`; this table mirrors it.
 | S10 | blocking claims_validator (event-loop stall) | DIAGNOSTIC | **SCAFFOLD — not implemented** (see below) |
 | S11 | RSS / FD soak | NIGHTLY | flat RSS/FD for a single issuer; bounded churn at 64 issuers |
 | S12 | multi-tenant + issuer mix-up | NIGHTLY | tenant LRU survival + RFC 9207 cross-issuer rejection under load |
+| C1 | warm ramp-to-breakpoint (hot cache) | CAPACITY | warm goodput knee + max-sustainable RPS / worker |
+| C2 | cold ramp-to-breakpoint (empty cache) | CAPACITY | cold-cache knee; the C1↔C2 gap quantifies cold cost |
 
 Two placement notes:
 
@@ -99,6 +102,41 @@ Two placement notes:
   validator stalls the event loop needs a blocking validator wired into the RS
   app, which does not exist yet. The row is a DIAGNOSTIC-only placeholder, never
   gated, and drives no assertion. Do **not** treat it as coverage.
+
+## Capacity / breakpoint (TH-4)
+
+Every S1–S12 scenario holds a **fixed** load and reports a settled number — good
+for correctness and regression, useless for "where does it fall over?" A fixed
+closed-loop generator self-throttles as latency rises, hiding the knee. The
+CAPACITY profile answers the capacity question with an **open-model ramp**:
+
+```bash
+make test-harness-load-capacity   # C1 (warm) + C2 (cold), real booted RS
+```
+
+- **Open model, not closed loop.** Each rung offers a *target arrival rate* by
+  pacing users at a constant `rps_per_user` (Locust `constant_throughput`) and
+  sizing the pool to the rate (`RampSpec.users_for`). A fixed user count fails
+  both ways — too few can't offer high rates (a false generator-bound plateau),
+  too many inflate p99 with idle-greenlet queueing (measuring the generator, not
+  the RS). ~40 rps/user is the diagnosed co-located sweet spot.
+- **Knee detection.** The runner walks `start_rps → stop_rps` against the *same*
+  warm RS and stops at the first rung that breaches. The primary, machine-
+  independent signal is a **goodput plateau**: achieved RPS falling below
+  `sustain_ratio × target` means one CPython worker hit its finite verify rate.
+  A p99 ceiling and error budget are the secondary breaches. The last sustained
+  rung is the knee (`max_sustainable_rps`, `knee_p99_ms`); `render_capacity_report`
+  emits the full curve.
+- **Cross-worker sweep.** `worker_scaling_scenarios(base, (1, 2, 4))` re-runs a
+  ramp at N workers to show goodput scales with cores.
+
+**These numbers are DIRECTIONAL, not absolute.** The generator, the in-process
+mock OP, and the RS share one runner, so the knee is where *that co-located
+config* saturates — a real ceiling relative to itself and a solid regression
+signal, but **not** the RS's isolated limit. That needs a deployed target (RS as
+a real service, distributed generator over a network), which is out of scope
+here. Every report line says so. On the default 2-vCPU runner the knee is also
+capacity-capped; point the nightly job at a larger runner to raise it.
 
 ## Calibrated SLO baseline
 

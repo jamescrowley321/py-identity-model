@@ -37,7 +37,13 @@ from ..harness import serve_mock_op
 from ..harness.corpus import CORPUS_AUDIENCE
 from ..harness.rs_server import boot_rs
 from .pool import build_load_pool
-from .scenarios import SCENARIOS_BY_ID, Profile, Scenario, profile_scenarios
+from .scenarios import (
+    SCENARIOS_BY_ID,
+    Profile,
+    RampSpec,
+    Scenario,
+    profile_scenarios,
+)
 
 
 if TYPE_CHECKING:
@@ -132,6 +138,45 @@ class LoadResult:
         return hits / total if total else 0.0
 
 
+@dataclass
+class CapacityStep:
+    """One rung of a capacity ramp: what was offered vs what the RS delivered."""
+
+    target_rps: int
+    achieved_rps: float
+    p99_ms: float
+    error_rate: float
+    server_errors: int
+    breached: bool
+    reasons: list[str] = field(default_factory=list)
+
+
+@dataclass
+class CapacityResult:
+    """The outcome of one capacity/breakpoint ramp (TH-4).
+
+    ``max_sustainable_rps`` is the achieved goodput of the last rung that met SLO
+    — the knee. ``breaking_target_rps`` is the first offered rate that breached
+    (``None`` when the ladder was exhausted without one, i.e. ``stop_rps`` is too
+    low to find the knee — a result to act on, not a pass).
+    """
+
+    scenario_id: str
+    title: str
+    workers: int
+    steps: list[CapacityStep]
+    max_sustainable_rps: float
+    knee_target_rps: int
+    knee_p99_ms: float
+    breaking_target_rps: int | None
+    breach_reasons: list[str] = field(default_factory=list)
+
+    @property
+    def found_breakpoint(self) -> bool:
+        """True when a rung breached SLO (the ramp actually reached the knee)."""
+        return self.breaking_target_rps is not None
+
+
 def _scrape_cache_metrics(base_url: str) -> dict[str, int]:
     try:
         resp = httpx.get(f"{base_url}/metrics", timeout=5.0)
@@ -151,8 +196,23 @@ def _warm_cache(base_url: str, token: str) -> None:
         )
 
 
-def _run_locust(base_url: str, pool: LoadPool, scenario: Scenario) -> dict:
-    """Drive a real Locust run in a subprocess; return its summary dict."""
+def _run_locust(
+    base_url: str,
+    pool: LoadPool,
+    *,
+    users: int,
+    run_seconds: int,
+    throughput_per_user: float = 0.0,
+    label: str = "run",
+) -> dict:
+    """Drive a real Locust run in a subprocess; return its summary dict.
+
+    ``throughput_per_user`` > 0 selects the open-model ramp path: each user is
+    paced to that many req/s (offered load = ``users * throughput_per_user``), so
+    the process drives a *controlled arrival rate*. 0 keeps the closed-loop
+    fixed-hold generator. ``label`` names the run in the no-summary error only.
+    """
+    run_seconds = max(1, run_seconds)
     with tempfile.TemporaryDirectory() as tmp:
         pool_file = Path(tmp) / "pool.json"
         result_file = Path(tmp) / "result.json"
@@ -168,7 +228,6 @@ def _run_locust(base_url: str, pool: LoadPool, scenario: Scenario) -> dict:
                 ]
             )
         )
-        run_seconds = max(1, int(scenario.duration_seconds))
         cmd = [
             sys.executable,
             "-m",
@@ -177,9 +236,9 @@ def _run_locust(base_url: str, pool: LoadPool, scenario: Scenario) -> dict:
             "-f",
             str(_LOCUSTFILE),
             "-u",
-            str(scenario.users),
+            str(users),
             "-r",
-            str(scenario.users),  # ramp all users in one second
+            str(users),  # ramp all users in one second
             "-t",
             f"{run_seconds}s",
             "--host",
@@ -195,6 +254,10 @@ def _run_locust(base_url: str, pool: LoadPool, scenario: Scenario) -> dict:
         env = {
             "HARNESS_POOL_FILE": str(pool_file),
             "HARNESS_RESULT_FILE": str(result_file),
+            # Empty string => closed-loop (locustfile leaves wait_time unset).
+            "HARNESS_THROUGHPUT_PER_USER": (
+                repr(throughput_per_user) if throughput_per_user > 0 else ""
+            ),
         }
         completed = subprocess.run(  # noqa: S603 — fixed argv, no shell, test-only
             cmd,
@@ -206,7 +269,7 @@ def _run_locust(base_url: str, pool: LoadPool, scenario: Scenario) -> dict:
         )
         if not result_file.exists():
             raise RuntimeError(
-                f"locust produced no summary for {scenario.id} "
+                f"locust produced no summary for {label} "
                 f"(exit {completed.returncode}):\n{completed.stderr[-2000:]}"
             )
         return json.loads(result_file.read_text())
@@ -229,7 +292,13 @@ def run_scenario(scenario: Scenario, op: MockOP, base_url: str) -> LoadResult:
         scenario.setup(op)
     op.stats.reset()
 
-    summary = _run_locust(base_url, pool, scenario)
+    summary = _run_locust(
+        base_url,
+        pool,
+        users=scenario.users,
+        run_seconds=int(scenario.duration_seconds),
+        label=scenario.id,
+    )
     return _to_result(scenario, summary, base_url, op)
 
 
@@ -320,16 +389,160 @@ def run_profile(profile: Profile) -> list[LoadResult]:
     is the design's failure-injection driver (latency, 429, key rotation), so the
     self-contained CI_SHORT profile needs no external IdP — the node-oidc
     real-issuer leg (real minted tokens) is a separate test-phase concern.
+
+    Capacity scenarios (``scenario.ramp is not None``) are skipped here — they
+    are ramps, not fixed-hold runs; use :func:`run_capacity_profile`.
     """
     results: list[LoadResult] = []
     for scenario in profile_scenarios(profile):
-        with _scenario_stack() as (op, base_url):
+        if scenario.ramp is not None:
+            continue
+        with _scenario_stack(workers=scenario.workers) as (op, base_url):
             results.append(run_scenario(scenario, op, base_url))
     return results
 
 
+def _breach_reasons(result: LoadResult, target_rps: int, ramp: RampSpec) -> list[str]:
+    """Why a ramp rung failed SLO (empty = it sustained the offered rate).
+
+    A 5xx is a hard defect. The primary knee signal is a *goodput plateau*:
+    achieved RPS falling below ``sustain_ratio * target`` means the RS stopped
+    keeping up (a finite per-core verify rate) — the machine-independent
+    breakpoint. The p99 ceiling and error budget are the secondary SLO breaches.
+    """
+    reasons: list[str] = []
+    if result.server_errors:
+        reasons.append(f"{result.server_errors} server error(s) (5xx)")
+    floor = ramp.sustain_ratio * target_rps
+    if result.rps < floor:
+        reasons.append(
+            f"goodput plateau: {result.rps:.0f} rps < "
+            f"{floor:.0f} ({ramp.sustain_ratio:.0%} of {target_rps} offered)"
+        )
+    if ramp.max_p99_ms is not None and result.p99_ms > ramp.max_p99_ms:
+        reasons.append(f"p99 {result.p99_ms:.0f}ms > {ramp.max_p99_ms:.0f}ms")
+    if result.error_rate > ramp.max_error_rate:
+        reasons.append(f"error-rate {result.error_rate:.4f} > {ramp.max_error_rate}")
+    return reasons
+
+
+def run_capacity_scenario(
+    scenario: Scenario, op: MockOP, base_url: str
+) -> CapacityResult:
+    """Walk *scenario*'s arrival-rate ramp to the goodput knee (TH-4).
+
+    Warms the cache (warm gate), applies any failure injection, then offers each
+    rung of the ladder for ``step_seconds`` against the *same* booted RS — so the
+    ramp measures one server heating up, not a cold restart per rung. Stops at
+    the first rung that breaches SLO and records the previous rung as the knee.
+    """
+    ramp = scenario.ramp
+    if ramp is None:  # pragma: no cover - guarded by the caller
+        raise ValueError(f"{scenario.id}: not a capacity scenario (ramp is None)")
+
+    pool = build_load_pool(op, scenario.classes)
+    if scenario.gate == "warm":
+        valid = next((e for e in pool.entries if e.name.startswith("valid")), None)
+        if valid is not None:
+            _warm_cache(base_url, valid.token)
+    if scenario.setup is not None:
+        scenario.setup(op)
+    op.stats.reset()
+
+    steps: list[CapacityStep] = []
+    max_sustainable_rps = 0.0
+    knee_target_rps = 0
+    knee_p99_ms = 0.0
+    breaking_target_rps: int | None = None
+    breach_reasons: list[str] = []
+
+    for target in ramp.targets():
+        summary = _run_locust(
+            base_url,
+            pool,
+            users=ramp.users_for(target),
+            run_seconds=int(ramp.step_seconds),
+            throughput_per_user=ramp.rps_per_user,
+            label=f"{scenario.id}@{target}rps",
+        )
+        result = _to_result(scenario, summary, base_url, op)
+        reasons = _breach_reasons(result, target, ramp)
+        steps.append(
+            CapacityStep(
+                target_rps=target,
+                achieved_rps=result.rps,
+                p99_ms=result.p99_ms,
+                error_rate=result.error_rate,
+                server_errors=result.server_errors,
+                breached=bool(reasons),
+                reasons=reasons,
+            )
+        )
+        if reasons:
+            breaking_target_rps = target
+            breach_reasons = reasons
+            break
+        max_sustainable_rps = result.rps
+        knee_target_rps = target
+        knee_p99_ms = result.p99_ms
+
+    return CapacityResult(
+        scenario_id=scenario.id,
+        title=scenario.title,
+        workers=scenario.workers,
+        steps=steps,
+        max_sustainable_rps=max_sustainable_rps,
+        knee_target_rps=knee_target_rps,
+        knee_p99_ms=knee_p99_ms,
+        breaking_target_rps=breaking_target_rps,
+        breach_reasons=breach_reasons,
+    )
+
+
+def run_capacity_profile(
+    profile: Profile = Profile.CAPACITY,
+) -> list[CapacityResult]:
+    """Run every ramp scenario in *profile*, each against a fresh RS at its own
+    worker count (the cross-worker scaling sweep boots 1/2/4 workers)."""
+    results: list[CapacityResult] = []
+    for scenario in profile_scenarios(profile):
+        if scenario.ramp is None:
+            continue
+        with _scenario_stack(workers=scenario.workers) as (op, base_url):
+            results.append(run_capacity_scenario(scenario, op, base_url))
+    return results
+
+
+def render_capacity_report(results: list[CapacityResult]) -> str:
+    """A human/artifact-readable capacity curve + knee summary per scenario."""
+    lines: list[str] = []
+    for r in results:
+        lines.append(f"{r.scenario_id}  {r.title}  ({r.workers} worker[s])")
+        lines.append(f"{'target':>8}{'rps':>9}{'p99ms':>8}{'err%':>7}  status")
+        for s in r.steps:
+            status = "BREACH — " + "; ".join(s.reasons) if s.breached else "sustained"
+            lines.append(
+                f"{s.target_rps:>8}{s.achieved_rps:>9.0f}{s.p99_ms:>8.1f}"
+                f"{s.error_rate * 100:>7.2f}  {status}"
+            )
+        if r.found_breakpoint:
+            lines.append(
+                f"  KNEE: ~{r.max_sustainable_rps:.0f} rps sustained "
+                f"(offered {r.knee_target_rps}, p99 {r.knee_p99_ms:.1f}ms); "
+                f"breaks at {r.breaking_target_rps} rps — {'; '.join(r.breach_reasons)}"
+            )
+        else:
+            top = r.steps[-1].target_rps if r.steps else 0
+            lines.append(
+                f"  NO breakpoint within ladder (sustained top rung {top} rps) — "
+                f"raise stop_rps to find the knee"
+            )
+        lines.append("")
+    return "\n".join(lines)
+
+
 @contextlib.contextmanager
-def _scenario_stack() -> Iterator[tuple[MockOP, str]]:
+def _scenario_stack(workers: int = 1) -> Iterator[tuple[MockOP, str]]:
     """Fresh mock OP + booted RS for a single scenario (clean cache each time)."""
     with (
         serve_mock_op() as op,
@@ -337,6 +550,7 @@ def _scenario_stack() -> Iterator[tuple[MockOP, str]]:
             discovery_url=op.discovery_url,
             audience=CORPUS_AUDIENCE,
             require_scope="read",
+            workers=workers,
         ) as base_url,
     ):
         yield op, base_url

@@ -15,6 +15,11 @@ Scenarios are grouped into run **profiles**:
   multi-tenant runs. S4 lives here (not CI-short) because the cache enforces a
   60s minimum TTL (``core.jwks_cache.MIN_CACHE_TTL_SECONDS``), so a genuine
   TTL rollover cannot happen inside a ~3s CI-short window — it needs a >60s run.
+* ``CAPACITY`` (C1, C2) — TH-4 breakpoint runs. Unlike every scenario above
+  (which holds a fixed load), these carry a :class:`RampSpec` and walk the
+  arrival rate up to the goodput knee; :func:`runner.run_capacity_scenario`
+  drives them and records max-sustainable RPS + the knee. Co-located, so the
+  knee is a directional ceiling + regression signal, not an absolute limit.
 
 The SLO gate *thresholds* start unset (:mod:`runner` ``GATES``); the ``test``
 phase runs a baseline, and the ``docs`` phase writes the calibrated table into
@@ -25,8 +30,9 @@ on an uncalibrated threshold.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
+from math import ceil
 from typing import TYPE_CHECKING
 
 
@@ -109,6 +115,69 @@ class Profile(StrEnum):
     CI_SHORT = "ci-short"
     DIAGNOSTIC = "diagnostic"
     NIGHTLY = "nightly"
+    CAPACITY = "capacity"
+
+
+@dataclass(frozen=True)
+class RampSpec:
+    """An open-model arrival-rate ramp for a capacity/breakpoint scenario (TH-4).
+
+    The fixed-hold scenarios (``ramp=None``) drive a *closed-loop* generator —
+    a fixed user count firing back-to-back — which self-throttles as latency
+    rises and so hides the knee. A ramp instead holds a generous **paced** user
+    pool and walks the *target arrival rate* upward one step at a time against
+    the same warm RS, so offered load is controlled and the point where goodput
+    stops tracking it (the knee) becomes visible.
+
+    Each step offers ``target_rps`` for ``step_seconds`` by pacing every user at
+    ``rps_per_user`` req/s (Locust ``constant_throughput``) and sizing the pool
+    to ``target_rps / rps_per_user`` (see :meth:`users_for`) — a *rate-scaled*
+    pool, not a fixed count. Fixed counts fail both ways: too few users cannot
+    offer a high rate (a false generator-bound plateau), too many inflate p99
+    with idle-greenlet queueing (measuring the generator, not the RS). A constant
+    per-user pace keeps latency server-reflective at every rung. The runner walks
+    ``start_rps → stop_rps`` in ``step_rps`` increments and stops at the first
+    step that breaches (goodput plateau, p99 ceiling, or error budget), recording
+    the last sustained step as the knee.
+
+    Attributes:
+        start_rps: First offered arrival rate (req/s).
+        stop_rps: Last offered arrival rate; the ladder never exceeds it.
+        step_rps: Arrival-rate increment between steps.
+        step_seconds: How long to hold each step (>= a few seconds for a stable
+            percentile sample).
+        rps_per_user: Constant per-user arrival rate; the pool is sized to the
+            target so pacing (hence measured latency) stays comparable across the
+            ladder. ~40 rps/user was diagnosed as the co-located sweet spot.
+        min_users: Floor on the pool so low rungs still have a few users.
+        sustain_ratio: A step is goodput-saturated (plateau) when achieved RPS
+            drops below ``sustain_ratio * target_rps`` — the primary,
+            machine-independent knee signal (one core has a finite verify rate).
+        max_p99_ms: Optional p99 latency ceiling; exceeding it breaches the step.
+        max_error_rate: Unexpected-status fraction that breaches the step.
+    """
+
+    start_rps: int
+    stop_rps: int
+    step_rps: int
+    step_seconds: float = 4.0
+    rps_per_user: float = 40.0
+    min_users: int = 4
+    sustain_ratio: float = 0.85
+    max_p99_ms: float | None = None
+    max_error_rate: float = 0.01
+
+    def targets(self) -> tuple[int, ...]:
+        """The arrival-rate ladder, ``start_rps`` … ``stop_rps`` inclusive."""
+        return tuple(range(self.start_rps, self.stop_rps + 1, self.step_rps))
+
+    def users_for(self, target_rps: int) -> int:
+        """Paced-user pool sized to offer *target_rps* at ``rps_per_user`` each.
+
+        Scales the pool to the rate (not a fixed count) so per-user pacing — and
+        therefore measured latency — stays server-reflective across the ladder.
+        """
+        return max(self.min_users, ceil(target_rps / self.rps_per_user))
 
 
 # A pre-run hook mutating the mock OP (failure injection) before load starts.
@@ -132,6 +201,13 @@ class Scenario:
             status distribution is *reported* but not asserted, because the
             expected status is transient and calibrated in the ``test`` phase.
         gate: SLO gate key (design §5) or ``None`` while uncalibrated.
+        workers: uvicorn worker count for the booted RS (the cross-worker
+            scaling sweep boots the same ramp at 1/2/4 workers).
+        ramp: An open-model arrival-rate ramp (TH-4). When set the scenario is a
+            capacity/breakpoint run driven by :func:`runner.run_capacity_scenario`
+            (walk arrival rate to the knee); when ``None`` it is a fixed-hold run
+            driven by :func:`runner.run_scenario` (the ``users``/``duration``
+            closed-loop path). The two are mutually exclusive.
         notes: What the scenario proves.
     """
 
@@ -144,6 +220,8 @@ class Scenario:
     setup: SetupHook | None = field(default=None, repr=False)
     steady_state: bool = True
     gate: str | None = None
+    workers: int = 1
+    ramp: RampSpec | None = None
     notes: str = ""
 
 
@@ -306,6 +384,36 @@ SCENARIOS: tuple[Scenario, ...] = (
         notes="dct/tenants LRU survival (TH-2.1) + RFC 9207 cross-issuer "
         "rejection (TH-2.2) under load (calibrated nightly)",
     ),
+    # --- Capacity / breakpoint (TH-4) ---------------------------------------
+    # These do NOT hold a fixed load: their ``ramp`` walks the arrival rate up
+    # until the single-worker RS stops keeping up. The recorded knee is where a
+    # co-located run saturates — a DIRECTIONAL ceiling + regression signal, not
+    # the RS's absolute isolated limit (which needs a deployed target). Stop is
+    # 8000 rps so a 1-worker CPython RS256 verifier plateaus well inside the
+    # ladder; the runner stops early at the first breach, so the ladder length
+    # bounds — not fixes — the run time.
+    Scenario(
+        id="C1",
+        title="warm ramp-to-breakpoint (valid RS256, hot cache)",
+        profile=Profile.CAPACITY,
+        classes=("valid",),
+        gate="warm",
+        workers=1,
+        ramp=RampSpec(start_rps=500, stop_rps=8000, step_rps=500, max_error_rate=0.02),
+        notes="warm the cache, then ramp arrival rate to the goodput knee; "
+        "records max-sustainable RPS + p99 at the knee for one worker",
+    ),
+    Scenario(
+        id="C2",
+        title="cold ramp-to-breakpoint (empty cache at ramp start)",
+        profile=Profile.CAPACITY,
+        classes=("valid",),
+        gate="cold",
+        workers=1,
+        ramp=RampSpec(start_rps=500, stop_rps=8000, step_rps=500, max_error_rate=0.02),
+        notes="no warmup: the first step pays discovery+JWKS single-flight, then "
+        "the ramp finds the knee — a lower knee than C1 quantifies cold cost",
+    ),
 )
 
 # id -> Scenario, for lookup by the runner and tests.
@@ -315,3 +423,21 @@ SCENARIOS_BY_ID: dict[str, Scenario] = {s.id: s for s in SCENARIOS}
 def profile_scenarios(profile: Profile) -> list[Scenario]:
     """The scenarios that belong to *profile*, in catalogue order."""
     return [s for s in SCENARIOS if s.profile is profile]
+
+
+def worker_scaling_scenarios(
+    base: Scenario, worker_counts: tuple[int, ...]
+) -> list[Scenario]:
+    """Derive one ramp scenario per worker count for the cross-worker sweep.
+
+    The scaling sweep re-runs the *same* ramp at 1/2/4 workers to show goodput
+    scales with cores (design §5/§10: expect >= ~0.8x linear until the box's own
+    cores saturate). Requires ``base.ramp`` — a fixed-hold scenario has no ramp
+    to sweep. Each variant's id is suffixed ``-w<N>`` so results stay distinct.
+    """
+    if base.ramp is None:
+        raise ValueError(f"{base.id}: worker sweep needs a ramp scenario")
+    return [
+        replace(base, id=f"{base.id}-w{n}", workers=n, title=f"{base.title} [{n}w]")
+        for n in worker_counts
+    ]
