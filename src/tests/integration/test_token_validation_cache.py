@@ -29,6 +29,7 @@ from py_identity_model.sync.token_validation import (
 from .conftest import DEFAULT_VALIDATION_OPTIONS as DEFAULT_OPTIONS
 from .test_utils import (
     _is_valid_jwt_format,
+    count_upstream_fetches,
     get_alternate_provider_expired_token,
 )
 
@@ -77,7 +78,11 @@ class TestMultipleTokensFromSameProvider:
     """Test that multiple tokens from the same provider work correctly."""
 
     def test_multiple_tokens_validation_succeeds(
-        self, test_config, token_endpoint, validation_config
+        self,
+        test_config,
+        token_endpoint,
+        validation_config,
+        provider_caches_responses,
     ):
         """
         Generate multiple tokens from the same provider and validate each one.
@@ -93,24 +98,40 @@ class TestMultipleTokensFromSameProvider:
         num_tokens = 3
         tokens = generate_tokens(test_config, token_endpoint, num_tokens)
 
-        # Validate each token (may be duplicates for some providers)
+        # Validate each token (may be duplicates for some providers). All tokens
+        # share the provider and one signing key, so the JWKS cache must serve
+        # every validation after the first from cache.
+        clear_discovery_cache()
+        clear_jwks_cache()
         validated_claims = []
-        for i, token in enumerate(tokens):
-            claims = validate_token(
-                jwt=token,
-                disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
-                token_validation_config=validation_config,
-            )
-            assert claims is not None, f"Token {i + 1} validation failed"
-            validated_claims.append(claims)
+        with count_upstream_fetches() as fetches:
+            for i, token in enumerate(tokens):
+                claims = validate_token(
+                    jwt=token,
+                    disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
+                    token_validation_config=validation_config,
+                )
+                assert claims is not None, f"Token {i + 1} validation failed"
+                validated_claims.append(claims)
 
         # If provider includes jti, verify uniqueness
         if "jti" in validated_claims[0]:
             jtis = [c["jti"] for c in validated_claims]
             assert len(set(jtis)) == num_tokens, "Each token should have unique jti"
 
-        # Caching is verified by performance — 3 validations complete
-        # without 3 separate discovery+JWKS HTTP round-trips.
+        # Caching proof (not timing). JWKS ignores no-store and is always cached,
+        # so a broken JWKS cache would refetch per validation. Discovery honors
+        # no-store, so it is only cache-guaranteed when the provider permits it
+        # (against a no-store provider discovery re-fetches by design).
+        assert fetches["jwks"] == 1, (
+            f"JWKS should be fetched exactly once across {num_tokens} "
+            f"validations, got {fetches} — JWKS caching is not in effect"
+        )
+        if provider_caches_responses:
+            assert fetches["disco"] == 1, (
+                f"discovery should be fetched exactly once across {num_tokens} "
+                f"validations when the provider permits caching, got {fetches}"
+            )
 
 
 @pytest.mark.usefixtures("clear_validation_caches")
@@ -212,37 +233,34 @@ class TestBenchmarkWithPreGeneratedTokens:
         num_unique_tokens = 5
         tokens = generate_tokens(test_config, token_endpoint, num_unique_tokens)
 
-        # Warm up the cache with one validation
-        validate_token(
-            jwt=tokens[0],
-            disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
-            token_validation_config=validation_config,
-        )
-
-        # Now benchmark: validate each token multiple times
         validations_per_token = 20
         total_validations = num_unique_tokens * validations_per_token
 
+        clear_discovery_cache()
+        clear_jwks_cache()
         start_time = datetime.datetime.now(tz=datetime.UTC)
-
-        for _ in range(validations_per_token):
-            for token in tokens:
-                validate_token(
-                    jwt=token,
-                    disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
-                    token_validation_config=validation_config,
-                )
-
+        with count_upstream_fetches() as fetches:
+            for _ in range(validations_per_token):
+                for token in tokens:
+                    validate_token(
+                        jwt=token,
+                        disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
+                        token_validation_config=validation_config,
+                    )
         elapsed_time = datetime.datetime.now(tz=datetime.UTC) - start_time
+        # Informational only — timing is environment-dependent and is NOT the
+        # caching assertion (the fetch-count check below is).
         print(f"\n{total_validations} validations completed in {elapsed_time}")
         print(
             f"Average: {elapsed_time.total_seconds() / total_validations * 1000:.2f}ms per validation"
         )
 
-        # 100 validations should complete in under 1 second with caching
-        assert elapsed_time.total_seconds() < 1, (
-            f"Benchmark too slow: {elapsed_time.total_seconds():.2f}s for "
-            f"{total_validations} validations"
+        # Proof of caching: all num_unique_tokens tokens share one provider, so
+        # the whole loop drives exactly one discovery + one JWKS fetch. A broken
+        # cache would fetch on every validation.
+        assert fetches == {"disco": 1, "jwks": 1}, (
+            f"expected exactly one discovery + one JWKS fetch across "
+            f"{total_validations} validations, got {fetches} — caching is not in effect"
         )
 
     def test_benchmark_single_token_repeated(
@@ -265,33 +283,28 @@ class TestBenchmarkWithPreGeneratedTokens:
             )
         token = client_credentials_token.token["access_token"]
 
-        # Warm up
-        validate_token(
-            jwt=token,
-            disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
-            token_validation_config=validation_config,
-        )
-
         num_validations = 100
+        clear_discovery_cache()
+        clear_jwks_cache()
         start_time = datetime.datetime.now(tz=datetime.UTC)
-
-        for _ in range(num_validations):
-            validate_token(
-                jwt=token,
-                disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
-                token_validation_config=validation_config,
-            )
-
+        with count_upstream_fetches() as fetches:
+            for _ in range(num_validations):
+                validate_token(
+                    jwt=token,
+                    disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
+                    token_validation_config=validation_config,
+                )
         elapsed_time = datetime.datetime.now(tz=datetime.UTC) - start_time
+        # Informational only — timing is environment-dependent and is NOT the
+        # caching assertion (the fetch-count check below is).
         print(f"\n{num_validations} validations of same token: {elapsed_time}")
         print(
             f"Average: {elapsed_time.total_seconds() / num_validations * 1000:.2f}ms per validation"
         )
 
-        # Single token repeated should be very fast due to full cache utilization
-        assert elapsed_time.total_seconds() < 1, (
-            f"Single token benchmark too slow: {elapsed_time.total_seconds():.2f}s"
+        # Proof of caching: the same token validated num_validations times drives
+        # exactly one discovery + one JWKS fetch; the rest are cache hits.
+        assert fetches == {"disco": 1, "jwks": 1}, (
+            f"expected exactly one discovery + one JWKS fetch across "
+            f"{num_validations} validations, got {fetches} — caching is not in effect"
         )
-
-        # Both discovery and JWKS use TTL-based dict caches — validated by
-        # performance (100 validations < 1s proves caching works)
