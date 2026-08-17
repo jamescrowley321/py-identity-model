@@ -17,6 +17,7 @@ from ..load.runner import (
     LoadResult,
     _breach_reasons,
     render_capacity_report,
+    write_capacity_report,
 )
 from ..load.scenarios import (
     SCENARIOS_BY_ID,
@@ -188,6 +189,25 @@ def test_report_flags_missing_breakpoint():
 def test_found_breakpoint_property():
     assert _capacity_result(breaks_at=2000).found_breakpoint is True
     assert _capacity_result(breaks_at=None).found_breakpoint is False
+
+
+def test_write_capacity_report_writes_rendered_report(tmp_path):
+    """The artifact writer persists exactly what the renderer produces."""
+    results = [_capacity_result(breaks_at=2000)]
+    out = write_capacity_report(results, tmp_path / "capacity-report.txt")
+    written = out.read_text(encoding="utf-8")
+    assert written == render_capacity_report(results)
+    assert "KNEE" in written
+    assert "C1" in written
+
+
+def test_write_capacity_report_creates_parent_dirs(tmp_path):
+    """A nested artifact path is created rather than raising FileNotFoundError."""
+    out = write_capacity_report(
+        [_capacity_result(breaks_at=2000)], tmp_path / "nested" / "dir" / "report.txt"
+    )
+    assert out.is_file()
+    assert out.parent == tmp_path / "nested" / "dir"
 
 
 def test_capacity_scenarios_are_well_formed():

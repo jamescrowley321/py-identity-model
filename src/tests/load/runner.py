@@ -579,6 +579,66 @@ def render_capacity_report(results: list[CapacityResult]) -> str:
     return "\n".join(lines)
 
 
+def _write_report(text: str, path: str | Path) -> Path:
+    """Write *text* to *path* as UTF-8, creating parent dirs; return the path.
+
+    UTF-8 is explicit (not the locale default) because both reports carry
+    non-ASCII glyphs — the capacity report's ``—`` and the soak header's ``Δ`` —
+    which would raise ``UnicodeEncodeError`` under a POSIX/ASCII CI locale.
+    """
+    out = Path(path)
+    if out.parent != Path():
+        out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text, encoding="utf-8")
+    return out
+
+
+def write_capacity_report(results: list[CapacityResult], path: str | Path) -> Path:
+    """Render *results* and write the capacity report to *path*.
+
+    The nightly ``load-capacity`` job sets ``HARNESS_CAPACITY_REPORT`` so this
+    file can be uploaded as a downloadable artifact — the ramp curve + knee per
+    scenario, which otherwise lives only in the job log.
+    """
+    return _write_report(render_capacity_report(results), path)
+
+
+def render_soak_report(results: list[LoadResult]) -> str:
+    """A human/artifact-readable RSS/FD trend table per soak scenario (T313).
+
+    Turns the sampled ``LoadResult.resources`` into the numbers the pass/fail
+    soak assertions hide: start/peak/end RSS (MB), FD counts, and the growth
+    deltas that are the actual leak signal. An unsampled scenario is shown as
+    ``not sampled`` rather than fabricated zeros.
+    """
+    lines = [
+        "Soak RSS/FD trend (per scenario) — growth = peak - start",
+        f"{'scenario':<9}{'rssMB0':>8}{'rssMBpk':>9}{'rssMBΔ':>8}"
+        f"{'fd0':>6}{'fdPk':>6}{'fdΔ':>5}{'n':>5}  title",
+    ]
+    for r in results:
+        res = r.resources
+        if res is None or not res.sampled:
+            lines.append(f"{r.scenario_id:<9}{'not sampled':>36}  {r.title}")
+            continue
+        lines.append(
+            f"{r.scenario_id:<9}{res.rss_start_mb:>8.1f}{res.rss_max_mb:>9.1f}"
+            f"{res.rss_growth_mb:>8.1f}{res.fd_start:>6}{res.fd_max:>6}"
+            f"{res.fd_growth:>5}{res.num_samples:>5}  {r.title}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def write_soak_report(results: list[LoadResult], path: str | Path) -> Path:
+    """Render the soak RSS/FD trend and write it to *path*.
+
+    The nightly ``load-soak`` job sets ``HARNESS_SOAK_REPORT`` so the RSS/FD
+    numbers are uploaded as a downloadable artifact instead of being hidden
+    behind a green pass/fail.
+    """
+    return _write_report(render_soak_report(results), path)
+
+
 @contextlib.contextmanager
 def _scenario_stack(workers: int = 1) -> Iterator[tuple[MockOP, str, int]]:
     """Fresh mock OP + booted RS for a single scenario (clean cache each time).

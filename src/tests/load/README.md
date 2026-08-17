@@ -136,8 +136,13 @@ mock OP, and the RS share one runner, so the knee is where *that co-located
 config* saturates — a real ceiling relative to itself and a solid regression
 signal, but **not** the RS's isolated limit. That needs a deployed target (RS as
 a real service, distributed generator over a network), which is out of scope
-here. Every report line says so. On the default 2-vCPU runner the knee is also
-capacity-capped; point the nightly job at a larger runner to raise it.
+here. Every report line says so.
+
+The nightly `load-capacity` job runs on the **free** GitHub-hosted `ubuntu-latest`
+(4-vCPU/16GB on this public repo) and **uploads the ramp curve as a
+`capacity-report` artifact** for trend-tracking. No paid larger runner is
+used — directional-on-free is the accepted trade-off; a true isolated ceiling
+would need the deployed-target lab above, not a bigger CI box.
 
 ## Calibrated SLO baseline
 

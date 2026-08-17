@@ -16,6 +16,7 @@ this process (gevent ``monkey.patch_all`` would deadlock the in-process mock OP)
 from __future__ import annotations
 
 import importlib.util
+import os
 
 import pytest
 
@@ -25,7 +26,7 @@ if importlib.util.find_spec("locust") is None:
 pytest.importorskip("fastapi_identity_model")
 pytest.importorskip("uvicorn")
 
-from ..load.runner import evaluate_gates, run_profile
+from ..load.runner import evaluate_gates, run_profile, write_soak_report
 from ..load.scenarios import Profile, profile_scenarios
 
 
@@ -33,15 +34,24 @@ pytestmark = pytest.mark.integration
 
 _NIGHTLY_IDS = [s.id for s in profile_scenarios(Profile.NIGHTLY)]
 
+# Where the fixture writes the RSS/FD trend table so CI can upload it as an
+# artifact (the numbers the pass/fail assertions otherwise hide). The nightly
+# job overrides it to the artifact path; local runs leave a gitignored file.
+_SOAK_REPORT_PATH = os.environ.get("HARNESS_SOAK_REPORT", "soak-report.txt")
+
 
 @pytest.fixture(scope="module")
 def nightly_results():
     """Run the NIGHTLY soak profile once; share the per-scenario results.
 
     Each scenario boots its own mock OP + RS. S4 alone runs past the 60s cache
-    TTL, so this fixture takes minutes — module scope so it runs once.
+    TTL, so this fixture takes minutes — module scope so it runs once. The RSS/FD
+    trend is written to ``_SOAK_REPORT_PATH`` before the assertions run, so the
+    artifact exists even when a later assertion fails.
     """
-    return {result.scenario_id: result for result in run_profile(Profile.NIGHTLY)}
+    results = {result.scenario_id: result for result in run_profile(Profile.NIGHTLY)}
+    write_soak_report(list(results.values()), _SOAK_REPORT_PATH)
+    return results
 
 
 def test_every_nightly_scenario_ran(nightly_results):

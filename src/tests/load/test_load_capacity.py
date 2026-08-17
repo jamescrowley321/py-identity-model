@@ -20,6 +20,7 @@ for why locust must not be imported in-process). Run via
 from __future__ import annotations
 
 import importlib.util
+import os
 
 import pytest
 
@@ -29,7 +30,11 @@ if importlib.util.find_spec("locust") is None:
 pytest.importorskip("fastapi_identity_model")
 pytest.importorskip("uvicorn")
 
-from ..load.runner import render_capacity_report, run_capacity_profile
+from ..load.runner import (
+    render_capacity_report,
+    run_capacity_profile,
+    write_capacity_report,
+)
 from ..load.scenarios import Profile, profile_scenarios
 
 
@@ -37,15 +42,24 @@ pytestmark = pytest.mark.integration
 
 _CAPACITY_IDS = [s.id for s in profile_scenarios(Profile.CAPACITY)]
 
+# Where the fixture writes the rendered ramp curve + knee so CI can upload it as
+# an artifact. Defaults to the repo/cwd so a local run also leaves a readable
+# report (gitignored); the nightly job overrides it to the artifact path.
+_REPORT_PATH = os.environ.get("HARNESS_CAPACITY_REPORT", "capacity-report.txt")
+
 
 @pytest.fixture(scope="module")
 def capacity_results():
     """Run the CAPACITY profile once; share the per-scenario ramp results.
 
     Each ramp boots its own RS and stops at the first rung that breaches SLO, so
-    a saturating single worker knees within a few rungs — bounded run time.
+    a saturating single worker knees within a few rungs — bounded run time. The
+    rendered report is written to ``_REPORT_PATH`` before the assertions run, so
+    the downloadable artifact exists even when a later assertion fails.
     """
-    return {r.scenario_id: r for r in run_capacity_profile(Profile.CAPACITY)}
+    results = {r.scenario_id: r for r in run_capacity_profile(Profile.CAPACITY)}
+    write_capacity_report(list(results.values()), _REPORT_PATH)
+    return results
 
 
 def test_every_capacity_scenario_ran(capacity_results):

@@ -18,7 +18,12 @@ from ..load.resource_sampler import (
     ResourceSampler,
     sample_process_tree,
 )
-from ..load.runner import _maybe_sampler
+from ..load.runner import (
+    LoadResult,
+    _maybe_sampler,
+    render_soak_report,
+    write_soak_report,
+)
 
 
 pytestmark = pytest.mark.unit
@@ -123,3 +128,56 @@ def test_maybe_sampler_with_pid_yields_live_sampler():
     with _maybe_sampler(os.getpid()) as sampler:
         assert isinstance(sampler, ResourceSampler)
     assert sampler.result.sampled is True
+
+
+def _load_result(scenario_id: str, resources: ResourceSample | None) -> LoadResult:
+    """A minimal LoadResult carrying the fields the soak report reads."""
+    return LoadResult(
+        scenario_id=scenario_id,
+        title=f"{scenario_id} soak",
+        num_requests=100,
+        num_failures=0,
+        rps=100.0,
+        p50_ms=1.0,
+        p95_ms=2.0,
+        p99_ms=3.0,
+        p999_ms=4.0,
+        server_errors=0,
+        steady_state=True,
+        resources=resources,
+    )
+
+
+def test_render_soak_report_shows_rss_fd_numbers_and_growth():
+    """A sampled scenario's RSS/FD extremes and growth appear in the report."""
+    sample = ResourceSample(
+        rss_start_mb=120.0,
+        rss_max_mb=155.0,
+        rss_end_mb=140.0,
+        fd_start=30,
+        fd_max=41,
+        fd_end=36,
+        num_samples=8,
+    )
+    report = render_soak_report([_load_result("S7", sample)])
+    assert "S7" in report
+    assert "120.0" in report  # rss start
+    assert "155.0" in report  # rss peak
+    assert "35.0" in report  # rss growth (155 - 120)
+    assert "11" in report  # fd growth (41 - 30); "S7" carries no stray "11"
+
+
+def test_render_soak_report_marks_unsampled_scenarios():
+    """An unsampled scenario is labelled, not fabricated as zero growth."""
+    report = render_soak_report([_load_result("S12", None)])
+    assert "S12" in report
+    assert "not sampled" in report
+
+
+def test_write_soak_report_persists_rendered_table(tmp_path):
+    """The writer persists exactly the rendered soak table."""
+    results = [_load_result("S4", ResourceSample(90.0, 92.0, 91.0, 20, 21, 20, 5))]
+    out = write_soak_report(results, tmp_path / "soak-report.txt")
+    written = out.read_text(encoding="utf-8")
+    assert written == render_soak_report(results)
+    assert "S4" in written
