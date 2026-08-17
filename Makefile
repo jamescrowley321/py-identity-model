@@ -80,6 +80,18 @@ test-harness-matrix: ## Run the TH-1.3 token correctness matrix (mock-OP forged 
 		(docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down && exit 1)
 	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
 
+.PHONY: test-harness-cross-issuer
+test-harness-cross-issuer: ## Real cross-issuer proof: a token from one Docker IdP (node-oidc/Keycloak) is rejected by an RS trusting the other
+	@echo "Starting node-oidc + Keycloak fixtures side by side..."
+	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml up -d --build --wait
+	docker compose -f test-fixtures/keycloak/docker-compose.yml up -d --build --wait
+	@echo "Cross-presenting real tokens across issuers through the booted RS..."
+	uv run --all-packages pytest src/tests/integration/test_cross_issuer_real_idps.py -m integration -v || \
+		(docker compose -f test-fixtures/keycloak/docker-compose.yml down; \
+		docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down; exit 1)
+	docker compose -f test-fixtures/keycloak/docker-compose.yml down
+	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
+
 .PHONY: test-harness-load
 test-harness-load: ## Run the TH-1.5 CI-short load profile (real Locust vs the booted RS + mock OP)
 	@echo "Driving the CI-short Locust profile through the booted RS (real HTTP)..."
