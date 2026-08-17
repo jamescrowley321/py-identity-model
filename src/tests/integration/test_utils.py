@@ -1,3 +1,4 @@
+import contextlib
 import os
 from pathlib import Path
 
@@ -6,6 +7,7 @@ from dotenv import dotenv_values, load_dotenv
 from py_identity_model.aio.http_client import _reset_async_http_client
 from py_identity_model.ssl_config import get_ssl_verify
 from py_identity_model.sync.http_client import _reset_http_client
+import py_identity_model.sync.token_validation as _sync_token_validation
 
 
 # JWT format: three dot-separated segments
@@ -50,6 +52,47 @@ def _is_valid_jwt_format(token: str) -> bool:
     return token.count(".") == JWT_SEGMENT_SEPARATOR_COUNT and all(
         len(part) > 0 for part in token.split(".")
     )
+
+
+@contextlib.contextmanager
+def count_upstream_fetches():
+    """Count real upstream discovery + JWKS fetches on the sync cached path.
+
+    Wraps — does not replace — the module-level ``get_discovery_document`` and
+    ``get_jwks`` names in :mod:`py_identity_model.sync.token_validation`, so the
+    genuine upstream fetch still runs (live signature validation keeps working)
+    while every round-trip is tallied. A cache *hit* calls neither wrapped
+    function, so the tally is a direct, non-timing proof of caching: N
+    validations that share a provider must drive exactly ONE discovery and ONE
+    JWKS fetch, not N. Clear the caches before entering the block so the first
+    validation is a guaranteed miss and the resulting count is deterministic
+    regardless of cache state left by earlier tests.
+
+    (HTTP-layer retries live *below* ``get_discovery_document``/``get_jwks``, so
+    a transiently-retried fetch is still a single counted call.)
+
+    Yields:
+        A live ``{"disco": int, "jwks": int}`` tally, updated as fetches occur.
+    """
+    real_get_discovery_document = _sync_token_validation.get_discovery_document
+    real_get_jwks = _sync_token_validation.get_jwks
+    counts = {"disco": 0, "jwks": 0}
+
+    def counting_get_discovery_document(*args, **kwargs):
+        counts["disco"] += 1
+        return real_get_discovery_document(*args, **kwargs)
+
+    def counting_get_jwks(*args, **kwargs):
+        counts["jwks"] += 1
+        return real_get_jwks(*args, **kwargs)
+
+    _sync_token_validation.get_discovery_document = counting_get_discovery_document
+    _sync_token_validation.get_jwks = counting_get_jwks
+    try:
+        yield counts
+    finally:
+        _sync_token_validation.get_discovery_document = real_get_discovery_document
+        _sync_token_validation.get_jwks = real_get_jwks
 
 
 def get_alternate_provider_expired_token() -> str | None:

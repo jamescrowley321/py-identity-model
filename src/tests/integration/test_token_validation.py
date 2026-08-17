@@ -13,9 +13,13 @@ from py_identity_model.exceptions import (
     TokenExpiredException,
     TokenValidationException,
 )
+from py_identity_model.sync.token_validation import (
+    clear_discovery_cache,
+    clear_jwks_cache,
+)
 
 from .conftest import DEFAULT_VALIDATION_OPTIONS as DEFAULT_OPTIONS
-from .test_utils import _is_valid_jwt_format
+from .test_utils import _is_valid_jwt_format, count_upstream_fetches
 
 
 # JWT format: three dot-separated segments
@@ -90,8 +94,10 @@ def test_token_validation_with_invalid_config_throws_exception(
         )
 
 
-def test_cache_succeeds(test_config, client_credentials_token, require_https):
-    """Test caching using cached fixtures."""
+def test_cache_succeeds(
+    test_config, client_credentials_token, require_https, provider_caches_responses
+):
+    """JWKS is always cached; discovery is cached when the provider permits it."""
     assert client_credentials_token.token is not None
 
     validation_config = TokenValidationConfig(
@@ -101,15 +107,32 @@ def test_cache_succeeds(test_config, client_credentials_token, require_https):
         require_https=require_https,
     )
 
-    for _ in range(5):
-        validate_token(
-            jwt=client_credentials_token.token["access_token"],
-            disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
-            token_validation_config=validation_config,
-        )
+    num_validations = 5
+    clear_discovery_cache()
+    clear_jwks_cache()
+    with count_upstream_fetches() as fetches:
+        for _ in range(num_validations):
+            validate_token(
+                jwt=client_credentials_token.token["access_token"],
+                disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
+                token_validation_config=validation_config,
+            )
 
-    # Both discovery and JWKS use TTL-based dict caches — validated by
-    # performance (5 validations complete without 5 separate HTTP round-trips).
+    # Proof of caching (not timing). JWKS ignores Cache-Control: no-store
+    # (is_uncacheable_for_jwks) and is therefore always cached — a broken JWKS
+    # cache would refetch on every validation. Discovery honors no-store, so it
+    # is only cache-guaranteed when the provider's Cache-Control permits it
+    # (provider_caches_responses); against a no-store provider discovery
+    # re-fetches per validation by design.
+    assert fetches["jwks"] == 1, (
+        f"JWKS should be fetched exactly once across {num_validations} "
+        f"validations, got {fetches} — JWKS caching is not in effect"
+    )
+    if provider_caches_responses:
+        assert fetches["disco"] == 1, (
+            f"discovery should be fetched exactly once across {num_validations} "
+            f"validations when the provider permits caching, got {fetches}"
+        )
 
 
 def test_benchmark_validation(
@@ -129,30 +152,28 @@ def test_benchmark_validation(
         require_https=require_https,
     )
 
-    # Warm the lru_cache (discovery + JWKS) before benchmarking.
-    # The conftest fixtures fetch discovery/JWKS via get_discovery_document/get_jwks
-    # directly, but validate_token uses its own _get_disco_response/_get_jwks_response
-    # lru_cache wrappers — a separate cache that starts cold in each pytest-xdist worker.
-    # Without this warmup, the first iteration makes real HTTP requests that can hit
-    # Ory's rate limits (429 + 1s retry backoff), pushing the benchmark over budget.
-    validate_token(
-        jwt=client_credentials_token.token["access_token"],
-        disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
-        token_validation_config=validation_config,
-    )
-
+    num_validations = 100
+    clear_discovery_cache()
+    clear_jwks_cache()
     start_time = datetime.datetime.now(tz=datetime.UTC)
-
-    for _ in range(100):
-        validate_token(
-            jwt=client_credentials_token.token["access_token"],
-            disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
-            token_validation_config=validation_config,
-        )
+    with count_upstream_fetches() as fetches:
+        for _ in range(num_validations):
+            validate_token(
+                jwt=client_credentials_token.token["access_token"],
+                disco_doc_address=test_config["TEST_DISCO_ADDRESS"],
+                token_validation_config=validation_config,
+            )
     elapsed_time = datetime.datetime.now(tz=datetime.UTC) - start_time
-    print(elapsed_time)
-    # 100 token validations should complete in under 1 second with caching
-    assert elapsed_time.total_seconds() < 1
+    # Informational only — wall-clock is environment-dependent and is NOT the
+    # caching assertion (the fetch-count check below is).
+    print(f"{num_validations} validations in {elapsed_time}")
+
+    # Proof of caching: one discovery + one JWKS fetch serve the entire loop;
+    # the other validations are cache hits. A broken cache => one fetch each.
+    assert fetches == {"disco": 1, "jwks": 1}, (
+        f"expected exactly one discovery + one JWKS fetch across "
+        f"{num_validations} validations, got {fetches} — caching is not in effect"
+    )
 
 
 def test_claim_validation_function_succeeds(
