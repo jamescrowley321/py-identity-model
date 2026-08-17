@@ -10,6 +10,7 @@ configuration through inherited ``RS_*`` environment variables, waits for the
 from __future__ import annotations
 
 import contextlib
+from dataclasses import dataclass
 import os
 from pathlib import Path
 import socket
@@ -28,6 +29,20 @@ if TYPE_CHECKING:
 
 # src/tests/harness/rs_server.py -> parents[3] is the repo root (holds ``src/``).
 _REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+@dataclass(frozen=True)
+class BootedRS:
+    """A running resource server: its base URL and the uvicorn master PID.
+
+    ``pid`` is the uvicorn *master* process; under ``--workers N`` the request
+    handlers are child processes, so a resource sampler must walk the tree
+    (master + recursive children) rather than sampling ``pid`` alone.
+    """
+
+    base_url: str
+    pid: int
+
 
 _HEALTH_POLL_INTERVAL = 0.25
 _TERMINATE_GRACE = 10.0
@@ -87,7 +102,7 @@ def _wait_for_health(
 
 
 @contextlib.contextmanager
-def boot_rs(
+def boot_rs_process(
     *,
     discovery_url: str,
     audience: str,
@@ -97,8 +112,12 @@ def boot_rs(
     excluded_paths: list[str] | None = None,
     extra_env: Mapping[str, str] | None = None,
     timeout: float = 30.0,
-) -> Iterator[str]:
-    """Boot a single-issuer resource server and yield its base URL.
+) -> Iterator[BootedRS]:
+    """Boot a single-issuer resource server and yield a :class:`BootedRS`.
+
+    Same boot as :func:`boot_rs`, but exposes the uvicorn master PID so a caller
+    (the load runner) can sample the RS process tree's RSS/FD during a run. Most
+    callers only need the URL — use :func:`boot_rs`.
 
     Args:
         discovery_url: OIDC discovery URL the middleware binds to.
@@ -112,7 +131,8 @@ def boot_rs(
         timeout: Seconds to wait for the first healthy ``/health`` response.
 
     Yields:
-        The ``http://127.0.0.1:<port>`` base URL of the running server.
+        A :class:`BootedRS` with the ``http://127.0.0.1:<port>`` base URL and
+        the uvicorn master PID.
     """
     port = _free_port()
     base_url = f"http://127.0.0.1:{port}"
@@ -159,7 +179,7 @@ def boot_rs(
         )
         try:
             _wait_for_health(proc, log, base_url, timeout)
-            yield base_url
+            yield BootedRS(base_url=base_url, pid=proc.pid)
         finally:
             proc.terminate()
             try:
@@ -172,3 +192,36 @@ def boot_rs(
                 # test result (edge [CRASH]).
                 with contextlib.suppress(subprocess.TimeoutExpired):
                     proc.wait(timeout=_TERMINATE_GRACE)
+
+
+@contextlib.contextmanager
+def boot_rs(
+    *,
+    discovery_url: str,
+    audience: str,
+    require_scope: str = "api",
+    workers: int = 1,
+    require_access_token_marker: bool = False,
+    excluded_paths: list[str] | None = None,
+    extra_env: Mapping[str, str] | None = None,
+    timeout: float = 30.0,
+) -> Iterator[str]:
+    """Boot a single-issuer resource server and yield its base URL.
+
+    A thin wrapper over :func:`boot_rs_process` for the common case that only
+    needs the URL. See :func:`boot_rs_process` for the full argument reference.
+
+    Yields:
+        The ``http://127.0.0.1:<port>`` base URL of the running server.
+    """
+    with boot_rs_process(
+        discovery_url=discovery_url,
+        audience=audience,
+        require_scope=require_scope,
+        workers=workers,
+        require_access_token_marker=require_access_token_marker,
+        excluded_paths=excluded_paths,
+        extra_env=extra_env,
+        timeout=timeout,
+    ) as rs:
+        yield rs.base_url

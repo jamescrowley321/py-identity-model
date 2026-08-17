@@ -35,8 +35,9 @@ import httpx
 
 from ..harness import serve_mock_op
 from ..harness.corpus import CORPUS_AUDIENCE
-from ..harness.rs_server import boot_rs
+from ..harness.rs_server import boot_rs_process
 from .pool import build_load_pool
+from .resource_sampler import ResourceSample, ResourceSampler
 from .scenarios import (
     SCENARIOS_BY_ID,
     Profile,
@@ -101,6 +102,9 @@ class LoadResult:
     latency_by_class: dict[str, dict[str, float]] = field(default_factory=dict)
     cache_metrics: dict[str, int] = field(default_factory=dict)
     upstream_stats: dict[str, int] = field(default_factory=dict)
+    # RSS/FD trend of the RS process tree over the run (T313, soak scenarios).
+    # ``None`` when the run was not resource-sampled (no RS pid was passed).
+    resources: ResourceSample | None = None
 
     def alg_cost_ratio(self, numerator: str, denominator: str) -> float | None:
         """p95 latency ratio of two token classes (e.g. ES256 vs RS256, S2).
@@ -275,8 +279,16 @@ def _run_locust(
         return json.loads(result_file.read_text())
 
 
-def run_scenario(scenario: Scenario, op: MockOP, base_url: str) -> LoadResult:
-    """Drive one scenario against an already-booted RS and mock OP."""
+def run_scenario(
+    scenario: Scenario, op: MockOP, base_url: str, *, rs_pid: int | None = None
+) -> LoadResult:
+    """Drive one scenario against an already-booted RS and mock OP.
+
+    When ``rs_pid`` is given, the RS process tree's RSS/FD is sampled for the
+    duration of the load run and attached to the result (``LoadResult.resources``)
+    — the soak leak signal (T313). Omitting it (the default) leaves ``resources``
+    ``None`` and runs exactly as before.
+    """
     pool = build_load_pool(op, scenario.classes)
 
     # A warm scenario measures the hot-cache steady state: prime the cache with a
@@ -292,18 +304,40 @@ def run_scenario(scenario: Scenario, op: MockOP, base_url: str) -> LoadResult:
         scenario.setup(op)
     op.stats.reset()
 
-    summary = _run_locust(
-        base_url,
-        pool,
-        users=scenario.users,
-        run_seconds=int(scenario.duration_seconds),
-        label=scenario.id,
+    with _maybe_sampler(rs_pid) as sampler:
+        summary = _run_locust(
+            base_url,
+            pool,
+            users=scenario.users,
+            run_seconds=int(scenario.duration_seconds),
+            label=scenario.id,
+        )
+    return _to_result(
+        scenario, summary, base_url, op, resources=sampler.result if sampler else None
     )
-    return _to_result(scenario, summary, base_url, op)
+
+
+@contextlib.contextmanager
+def _maybe_sampler(rs_pid: int | None) -> Iterator[ResourceSampler | None]:
+    """Yield a live :class:`ResourceSampler` for ``rs_pid``, or ``None``.
+
+    Keeps :func:`run_scenario` branch-free: the ``with`` block samples when a pid
+    is present and is a no-op otherwise.
+    """
+    if rs_pid is None:
+        yield None
+        return
+    with ResourceSampler(rs_pid) as sampler:
+        yield sampler
 
 
 def _to_result(
-    scenario: Scenario, summary: dict, base_url: str, op: MockOP
+    scenario: Scenario,
+    summary: dict,
+    base_url: str,
+    op: MockOP,
+    *,
+    resources: ResourceSample | None = None,
 ) -> LoadResult:
     by_class = summary.get("by_class", {})
     return LoadResult(
@@ -328,6 +362,7 @@ def _to_result(
         },
         cache_metrics=_scrape_cache_metrics(base_url),
         upstream_stats=op.stats.snapshot(),
+        resources=resources,
     )
 
 
@@ -397,8 +432,8 @@ def run_profile(profile: Profile) -> list[LoadResult]:
     for scenario in profile_scenarios(profile):
         if scenario.ramp is not None:
             continue
-        with _scenario_stack(workers=scenario.workers) as (op, base_url):
-            results.append(run_scenario(scenario, op, base_url))
+        with _scenario_stack(workers=scenario.workers) as (op, base_url, rs_pid):
+            results.append(run_scenario(scenario, op, base_url, rs_pid=rs_pid))
     return results
 
 
@@ -508,7 +543,10 @@ def run_capacity_profile(
     for scenario in profile_scenarios(profile):
         if scenario.ramp is None:
             continue
-        with _scenario_stack(workers=scenario.workers) as (op, base_url):
+        # A ramp changes offered load each rung, so a whole-run RSS/FD trend is
+        # not the breakpoint signal — capacity runs skip the sampler (the pid is
+        # unused). Soak leak coverage is the fixed-hold path (``run_scenario``).
+        with _scenario_stack(workers=scenario.workers) as (op, base_url, _rs_pid):
             results.append(run_capacity_scenario(scenario, op, base_url))
     return results
 
@@ -542,15 +580,19 @@ def render_capacity_report(results: list[CapacityResult]) -> str:
 
 
 @contextlib.contextmanager
-def _scenario_stack(workers: int = 1) -> Iterator[tuple[MockOP, str]]:
-    """Fresh mock OP + booted RS for a single scenario (clean cache each time)."""
+def _scenario_stack(workers: int = 1) -> Iterator[tuple[MockOP, str, int]]:
+    """Fresh mock OP + booted RS for a single scenario (clean cache each time).
+
+    Yields the RS's uvicorn master PID alongside the URL so the runner can sample
+    the process tree's RSS/FD during the run (T313).
+    """
     with (
         serve_mock_op() as op,
-        boot_rs(
+        boot_rs_process(
             discovery_url=op.discovery_url,
             audience=CORPUS_AUDIENCE,
             require_scope="read",
             workers=workers,
-        ) as base_url,
+        ) as rs,
     ):
-        yield op, base_url
+        yield op, rs.base_url, rs.pid

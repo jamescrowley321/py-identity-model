@@ -19,6 +19,7 @@ proofs (LRU, mix-up, `private_key_jwt`); this suite owns load and soak.
 | `pool.py` | The pre-minted replay pool (mint once, replay many). |
 | `locustfile.py` | A standalone Locust file the runner drives as a subprocess. |
 | `runner.py` | Orchestration (fresh mock OP + booted RS per scenario), metric collection, and SLO gate evaluation. |
+| `resource_sampler.py` | Samples the booted RS's process tree (master + workers) RSS/FD during a soak — the memory/descriptor-leak signal (T313). |
 | `test_load_ci_short.py` | The CI-short pytest entrypoint (real Locust run over the CI_SHORT profile). |
 
 ## How to run
@@ -88,7 +89,7 @@ in `scenarios.py`; this table mirrors it.
 | S8 | rejection correctness & uniformity under contention | CI_SHORT | every class returns its correct status, uniform 401 body, zero 500s |
 | S9 | discovery no-store (re-fetch every request) | DIAGNOSTIC | no-store discovery collapses throughput while JWKS stays cached |
 | S10 | blocking claims_validator (event-loop stall) | DIAGNOSTIC | **SCAFFOLD — not implemented** (see below) |
-| S11 | RSS / FD soak | NIGHTLY | flat RSS/FD for a single issuer; bounded churn at 64 issuers |
+| S11 | RSS / FD soak | NIGHTLY | flat RSS/FD for a single issuer — sampled via `resource_sampler.py`, asserted bounded (T313) |
 | S12 | multi-tenant + issuer mix-up | NIGHTLY | tenant LRU survival + RFC 9207 cross-issuer rejection under load |
 | C1 | warm ramp-to-breakpoint (hot cache) | CAPACITY | warm goodput knee + max-sustainable RPS / worker |
 | C2 | cold ramp-to-breakpoint (empty cache) | CAPACITY | cold-cache knee; the C1↔C2 gap quantifies cold cost |
@@ -179,6 +180,32 @@ must have **zero** unexpected-status divergences (every class returns its expect
 200/401/403). Expected 401/403 rejections for invalid token classes are the
 correct outcome and stay out of the error budget.
 
+## Soak RSS/FD instrumentation (T313)
+
+The soak scenarios (S4, S7, S11, S12) exist to prove the middleware's caches are
+**bounded** — a long run against many issuers must not leak memory or file
+descriptors. That claim needs a measurement, so the fixed-hold path
+(`run_scenario`) samples the booted RS's process tree while the scenario runs and
+attaches the trend to `LoadResult.resources` (a `ResourceSample`).
+
+- **Whole tree, not one PID.** `boot_rs` runs uvicorn with `--workers N`, so the
+  request handlers are child processes; `sample_process_tree` sums the master and
+  its recursive children. `boot_rs_process` exposes the master PID (`boot_rs`
+  stays a thin URL-only wrapper for the ~dozen callers that don't need it).
+- **Growth, not an absolute ceiling.** The signal is `rss_growth_mb` /
+  `fd_growth` (peak − start) over the window. A delta is machine-independent — a
+  real leak grows on any box — whereas an absolute RSS number depends on the
+  interpreter build. The nightly test asserts each soak (a) actually captured a
+  continuous trend (≥2 live samples — the mechanical proof S11 now measures
+  something) and (b) stayed under a generous growth ceiling (the leak tripwire).
+- **Capacity ramps skip it.** A ramp changes offered load each rung, so a
+  whole-run RSS/FD trend is not its breakpoint signal; only the fixed-hold soaks
+  are sampled.
+
+The growth ceilings are intentionally generous (catch a runaway leak, not arena
+churn). Precise per-scenario thresholds calibrated from a baseline are **T314**
+(the dormant `runner.GATES`); T313 establishes the signal.
+
 ## Metrics sources
 
 - **Latency / RPS / per-class p50-p99** — Locust's own aggregate + per-class
@@ -189,3 +216,7 @@ correct outcome and stay out of the error budget.
 - **Upstream fetches per issuer** — the mock OP's in-process `/_stats` counters,
   reset after any warmup so the measured window is clean. These are the
   authoritative single-flight proof.
+- **RSS / FD trend** — `resource_sampler.py` samples the RS process tree (master
+  + workers) on a background thread over the soak window; `LoadResult.resources`
+  carries start/peak/end RSS (MB) and FD counts. The leak signal is the growth
+  delta.
