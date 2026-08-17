@@ -22,10 +22,14 @@ Run via ``make test-harness-matrix`` (Docker node-oidc + ``--all-packages`` so
 importorskips cleanly.
 """
 
+import base64
 from collections import namedtuple
+import hashlib
+import hmac
 import time
 from urllib.parse import urlparse
 
+from cryptography.hazmat.primitives import serialization
 import httpx
 import jwt
 import pytest
@@ -169,14 +173,108 @@ def test_f02_cnf_bound_accepted_today(mock_matrix):
 
 
 def test_nothing_silently_accepted(mock_matrix):
-    """Every class outside the accepted set is rejected (never a silent 200)."""
+    """Every class outside the accepted set is rejected with a CLIENT error.
+
+    A negative token must draw a 401/403, never a 200 (silent accept) and never
+    a 5xx: a 500/503 also satisfies "not 200" but means the middleware faulted
+    rather than cleanly rejecting, so ``!= 200`` alone would mask a server-error
+    regression. Asserting the status is exactly a client rejection closes that.
+    """
     for name, forged in mock_matrix.corpus.items():
         if name in ACCEPTED_200_CLASSES:
             continue
         response = _get_protected(mock_matrix.base_url, forged.jwt)
-        assert response.status_code != httpx.codes.OK, (
-            f"class {name!r} was silently accepted (200)"
+        assert response.status_code in (
+            httpx.codes.UNAUTHORIZED,
+            httpx.codes.FORBIDDEN,
+        ), f"class {name!r} drew {response.status_code} (want 401/403, not 200/5xx)"
+
+
+def test_cross_issuer_token_from_a_different_issuer_is_rejected(mock_matrix):
+    """A token 100% valid for a DIFFERENT issuer is rejected by this RS.
+
+    Stands up a second, fully independent mock OP (issuer B — its own keys,
+    discovery and JWKS) and mints a valid access token in B's world. Presented to
+    an RS trusting B the token is accepted (200), so it is genuinely valid; but
+    presented to this suite's RS (trusting issuer A) it is rejected (401). The
+    rejection is therefore specifically cross-issuer: A's JWKS holds no key that
+    verifies B's signature and B's ``iss`` does not match A's discovery issuer.
+
+    This is the real mix-up that the forged ``wrong_iss`` class (A's own key with
+    the ``iss`` claim mutated) cannot exercise — there, no second issuer exists.
+    """
+    with (
+        serve_mock_op() as op_b,
+        boot_rs(
+            discovery_url=op_b.discovery_url,
+            audience=CORPUS_AUDIENCE,
+            require_scope="read",
+        ) as rs_b,
+    ):
+        b_token = op_b.mint_access_token(scopes="read")["access_token"]
+        accepted_by_b = _get_protected(rs_b, b_token).status_code
+        rejected_by_a = _get_protected(mock_matrix.base_url, b_token)
+
+    assert accepted_by_b == httpx.codes.OK, "token is not actually valid for issuer B"
+    assert rejected_by_a.status_code == httpx.codes.UNAUTHORIZED
+    assert rejected_by_a.json() == GENERIC_401_BODY
+
+
+def test_alg_none_and_confusion_reject_via_their_intended_control(mock_matrix):
+    """The two alg negatives reject via the RIGHT control, not a coincidental one.
+
+    Both classes previously passed for partly the wrong reason (``alg_none`` via
+    no-kid/multiple-key ambiguity rather than the none-defence; ``wrong_alg`` via
+    an arbitrary HMAC secret that a *vulnerable* RS would also reject). This pins
+    the isolation so the tests cannot silently rot back into vacuous passes:
+
+    * ``alg_none`` carries a ``kid`` that resolves to a real published key, so the
+      sole remaining rejection path is the RFC 8725 ``alg:none`` defence.
+    * ``wrong_alg`` is HMAC'd with the RSA **public key** as the secret and claims
+      the RSA ``kid``, so only the algorithm allow-list can reject it — verified
+      by recomputing the HMAC over the public key and matching the signature.
+    """
+    op = mock_matrix.op
+    published_kids = {op.primary_key.kid, op.ec_key.kid}
+
+    none_tok = mock_matrix.corpus["alg_none"].jwt
+    none_hdr = jwt.get_unverified_header(none_tok)
+    assert none_hdr["alg"] == "none"
+    assert (
+        none_hdr.get("kid") in published_kids
+    )  # resolvable → none-defence is sole cause
+
+    conf_tok = mock_matrix.corpus["wrong_alg"].jwt
+    conf_hdr = jwt.get_unverified_header(conf_tok)
+    assert conf_hdr["alg"] == "HS256"
+    assert conf_hdr.get("kid") == op.primary_key.kid  # HS256 claiming an RSA kid
+    pub_pem = op.primary_key.private_key.public_key().public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    header_b64, payload_b64, sig_b64 = conf_tok.split(".")
+    expected_sig = (
+        base64.urlsafe_b64encode(
+            hmac.new(
+                pub_pem, f"{header_b64}.{payload_b64}".encode(), hashlib.sha256
+            ).digest()
         )
+        .rstrip(b"=")
+        .decode()
+    )
+    assert sig_b64 == expected_sig, (
+        "wrong_alg is not HMAC'd with the RSA public key — not the real "
+        "alg-confusion attack (an arbitrary secret would prove nothing)"
+    )
+
+    # Both are still rejected by the booted RS.
+    assert (
+        _get_protected(mock_matrix.base_url, none_tok).status_code
+        == httpx.codes.UNAUTHORIZED
+    )
+    assert (
+        _get_protected(mock_matrix.base_url, conf_tok).status_code
+        == httpx.codes.UNAUTHORIZED
+    )
 
 
 def _mint_scopeless_access_token(op) -> str:
