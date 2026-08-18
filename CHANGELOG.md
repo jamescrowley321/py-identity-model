@@ -2,6 +2,39 @@
 
 <!-- version list -->
 
+## v3.11.0 (2026-08-18)
+
+### Bug Fixes
+
+- **go**: Narrow spec-fixture guards so non-fixture unit tests run (CONS-1.1)
+  ([#538](https://github.com/jamescrowley321/py-identity-model/pull/538),
+  [`6c8f12c`](https://github.com/jamescrowley321/py-identity-model/commit/6c8f12c58d4fc7c539d84fc549f27519f45fb0cd))
+
+### Documentation
+
+- Consolidation plan — identity-model into py-identity-model
+  ([#533](https://github.com/jamescrowley321/py-identity-model/pull/533),
+  [`a10c63a`](https://github.com/jamescrowley321/py-identity-model/commit/a10c63ab195b553bc424715ca7bf93582579029a))
+
+- Design-of-record for consolidating identity-model into py-identity-model
+  ([#533](https://github.com/jamescrowley321/py-identity-model/pull/533),
+  [`a10c63a`](https://github.com/jamescrowley321/py-identity-model/commit/a10c63ab195b553bc424715ca7bf93582579029a))
+
+- Refine plan — /py|/go|/rust layout, moon orchestrator, tag scheme
+  ([#533](https://github.com/jamescrowley321/py-identity-model/pull/533),
+  [`a10c63a`](https://github.com/jamescrowley321/py-identity-model/commit/a10c63ab195b553bc424715ca7bf93582579029a))
+
+- **go**: Correct imported Go binding README for landed implementation
+  ([#538](https://github.com/jamescrowley321/py-identity-model/pull/538),
+  [`6c8f12c`](https://github.com/jamescrowley321/py-identity-model/commit/6c8f12c58d4fc7c539d84fc549f27519f45fb0cd))
+
+### Features
+
+- **go**: Import Go binding under /go (CONS-1.1)
+  ([#538](https://github.com/jamescrowley321/py-identity-model/pull/538),
+  [`6c8f12c`](https://github.com/jamescrowley321/py-identity-model/commit/6c8f12c58d4fc7c539d84fc549f27519f45fb0cd))
+
+
 ## v3.10.0 (2026-08-14)
 
 ### Bug Fixes
