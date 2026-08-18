@@ -1,0 +1,452 @@
+# identity-model — Capability Matrix
+
+This is the **canonical, cross-language capability specification**. Every language binding implements these capabilities idiomatically and proves behavioral parity by passing the machine-readable conformance definitions in [`conformance/`](conformance/) against the shared provider in [`../infra`](../infra).
+
+Normative keywords (MUST / SHOULD / MAY) follow [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
+
+## Status Legend
+
+- `implemented` — passes all conformance tests for this capability
+- `in-progress` — partially implemented
+- `planned` — specified, not yet implemented
+- `n/a` — intentionally not applicable to this language
+
+## Tiers & Status
+
+| Tier | Capability | Spec | Conformance | Python | Go | Rust |
+|------|-----------|------|-------------|--------|----|----|
+| Core | OIDC Discovery | OIDC Discovery 1.0 §3–4 | `discovery.json` | implemented | implemented | implemented |
+| Core | JWKS Retrieval + Caching | RFC 7517, RFC 7518 | `jwks.json` | implemented | implemented | implemented |
+| Core | JWT Validation | RFC 7519, RFC 7515 | `validation.json` | implemented | implemented | implemented |
+| Core | Client Credentials | RFC 6749 §4.4 | `client-credentials.json` | implemented | implemented | implemented |
+| Core | Authorization Code + PKCE | RFC 6749 §4.1, RFC 7636 | `authorization-code.json` | planned | implemented | implemented |
+| Core | UserInfo | OIDC Core 1.0 §5.3 | `userinfo.json` | implemented | implemented | implemented |
+| Extended | Token Introspection | RFC 7662 | `introspection.json` | planned | implemented | planned |
+| Extended | Token Revocation | RFC 7009 | `revocation.json` | planned | implemented | planned |
+| Extended | Token Exchange | RFC 8693 | `token-exchange.json` | planned | implemented | planned |
+| Extended | DPoP | RFC 9449 | `dpop.json` | planned | implemented | planned |
+| Advanced | PAR | RFC 9126 | — | planned | planned | planned |
+| Advanced | RAR | RFC 9396 | — | planned | planned | planned |
+| Advanced | CIBA | OpenID CIBA Core | — | planned | planned | planned |
+| Advanced | JARM | OpenID JARM | — | planned | planned | planned |
+
+> Python status reflects the reference implementation [`py-identity-model`](https://github.com/jamescrowley321/py-identity-model), which merges into `python/` at a later date. Go and Rust are scaffolded in this repo with implementation tracked per the conformance definitions.
+
+## Capability Definitions (Core Tier)
+
+### OIDC Discovery
+
+- Implementations MUST fetch `{issuer}/.well-known/openid-configuration` per [OIDC Discovery 1.0 §4.1](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationRequest).
+- The response MUST contain the required metadata fields: `issuer`, `authorization_endpoint`, `token_endpoint`, `jwks_uri`, `response_types_supported`, `subject_types_supported`, `id_token_signing_alg_values_supported` ([§3](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata)).
+- The `issuer` in the response MUST exactly match the requested issuer ([§4.3](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation)); a mismatch MUST error.
+- Implementations MUST cache the parsed document with a configurable TTL. A cache hit MUST NOT make a network request; after TTL expiry the next call MUST re-fetch.
+- Implementations MUST surface distinct, typed errors for transport failures, non-JSON bodies, and missing required fields. Unknown extra fields MUST be ignored, not rejected.
+
+### JWKS Retrieval + Caching
+
+- Implementations MUST fetch the JWK Set from `jwks_uri` and parse it per [RFC 7517 §5](https://www.rfc-editor.org/rfc/rfc7517#section-5).
+- Each key MUST expose `kty`, `kid`, `use`, `alg`; RSA keys expose `n`/`e`, EC keys expose `crv`/`x`/`y` ([RFC 7517 §4](https://www.rfc-editor.org/rfc/rfc7517#section-4)).
+- Resolving a `kid` not in the cached set MUST trigger a forced refresh and retry before returning a key-not-found error (supports key rotation).
+- The key set MUST be cached with a configurable TTL; concurrent fetches for the same URI SHOULD be deduplicated.
+
+### JWT Validation
+
+- Implementations MUST verify the JWS signature using the key resolved by `kid` ([RFC 7515 §4.1](https://www.rfc-editor.org/rfc/rfc7515#section-4.1)).
+- `alg: "none"` MUST be rejected unconditionally ([RFC 7519 §7.2](https://www.rfc-editor.org/rfc/rfc7519#section-7.2)).
+- Registered claims MUST be checked: `iss` (exact match), `aud` (contains expected), `exp` (not expired, configurable clock skew), `nbf` (not before), `iat` (present) ([RFC 7519 §4.1](https://www.rfc-editor.org/rfc/rfc7519#section-4.1)).
+- When an expected `nonce` is supplied, it MUST be validated ([OIDC Core 1.0 §3.1.3.7](https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation)).
+
+### Client Credentials / Authorization Code + PKCE
+
+- Client Credentials MUST send `grant_type=client_credentials` and support `client_secret_basic` (default) and `client_secret_post` auth ([RFC 6749 §4.4](https://www.rfc-editor.org/rfc/rfc6749#section-4.4), [§2.3](https://www.rfc-editor.org/rfc/rfc6749#section-2.3)).
+- PKCE verifiers MUST be 43–128 unreserved characters; the S256 challenge MUST equal `BASE64URL(SHA256(verifier))` ([RFC 7636 §4.1–4.2](https://www.rfc-editor.org/rfc/rfc7636#section-4.1)). Implementations MUST pass the RFC 7636 Appendix B test vectors.
+- Token endpoint errors MUST be parsed into a typed error with `error`, `error_description`, `error_uri` ([RFC 6749 §5.2](https://www.rfc-editor.org/rfc/rfc6749#section-5.2)).
+
+### UserInfo
+
+- Implementations MUST GET the `userinfo_endpoint` with `Authorization: Bearer {token}` and return typed standard claims plus an overflow map ([OIDC Core 1.0 §5.3](https://openid.net/specs/openid-connect-core-1_0.html#UserInfo)).
+- When an expected `sub` is supplied, the UserInfo `sub` MUST match the ID token `sub`; a mismatch MUST error ([§5.3.4](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse)).
+
+## Capability Definitions (Extended Tier)
+
+### Token Introspection
+
+- Implementations MUST POST to the introspection endpoint as
+  `application/x-www-form-urlencoded` with the `token` parameter (REQUIRED) and
+  MAY include an optional `token_type_hint` (`access_token` or `refresh_token`)
+  ([RFC 7662 §2.1](https://www.rfc-editor.org/rfc/rfc7662#section-2.1)). The
+  server MAY use the hint to optimize lookup but MUST NOT fail if it is
+  incorrect, so the request MUST still be sent (and accepted) with a wrong hint.
+- The introspection endpoint is protected; implementations MUST authenticate the
+  introspecting client and MUST support both `client_secret_basic`
+  (HTTP Basic with URL-encoded `client_id:client_secret`) and
+  `client_secret_post` (`client_id`/`client_secret` in the body)
+  ([RFC 7662 §2.1](https://www.rfc-editor.org/rfc/rfc7662#section-2.1),
+  [RFC 6749 §2.3.1](https://www.rfc-editor.org/rfc/rfc6749#section-2.3.1)).
+  `client_secret_basic` MUST be the default.
+- The introspection response is a JSON object whose only REQUIRED member is
+  `active` (boolean). When `active` is `true` the response SHOULD, when
+  applicable, carry `scope`, `client_id`, `username`, `token_type`, `exp`, `iat`,
+  `nbf`, `sub`, `aud`, `iss`, and `jti`; when `active` is `false` no other member
+  is guaranteed present. Implementations MUST model `active` and the standard
+  members as typed fields and MUST preserve any additional members in an overflow
+  map ([RFC 7662 §2.2](https://www.rfc-editor.org/rfc/rfc7662#section-2.2)). `aud`
+  MAY be a single string or an array of strings.
+- When the introspecting client fails authentication the endpoint returns HTTP
+  401; implementations MUST surface a typed error carrying the OAuth `error`
+  (e.g. `invalid_client`), `error_description`, and `error_uri` when present
+  ([RFC 7662 §2.3](https://www.rfc-editor.org/rfc/rfc7662#section-2.3),
+  [RFC 6749 §5.2](https://www.rfc-editor.org/rfc/rfc6749#section-5.2)).
+- The introspection endpoint URL SHOULD be obtained from the
+  `introspection_endpoint` field of the Authorization Server Metadata / OIDC
+  Discovery document rather than requiring manual configuration
+  ([RFC 8414 §2](https://www.rfc-editor.org/rfc/rfc8414#section-2)).
+
+**Worked example** — introspecting an active token with `client_secret_basic`
+(`Authorization` is `Basic BASE64("s6BhdRkqt3" + ":" + "gX1fBat3bV")`):
+
+```http
+POST /introspect HTTP/1.1
+Host: server.example.com
+Accept: application/json
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic czZCaGRSa3F0MzpnWDFmQmF0M2JW
+
+token=mF_9.B5f-4.1JqM&token_type_hint=access_token
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "active": true,
+  "scope": "read write dolphin",
+  "client_id": "l238j323ds-23ij4",
+  "username": "jdoe",
+  "token_type": "Bearer",
+  "exp": 1419356238,
+  "iat": 1419350238,
+  "sub": "Z5O3upPC88QrAjx00dis",
+  "aud": "https://protected.example.net/resource",
+  "iss": "https://server.example.com/",
+  "jti": "d3f5c9a1-2b7e-4c1a-9e8f-0a1b2c3d4e5f"
+}
+```
+
+### Token Revocation
+
+- Implementations MUST POST to the revocation endpoint as
+  `application/x-www-form-urlencoded` with the `token` parameter (REQUIRED) and
+  MAY include an optional `token_type_hint` (`access_token` or `refresh_token`)
+  ([RFC 7009 §2.1](https://www.rfc-editor.org/rfc/rfc7009#section-2.1)). The
+  server MAY use the hint to optimize lookup but MUST accept the request even if
+  the hint is incorrect.
+- The revocation endpoint is protected; implementations MUST authenticate the
+  revoking client and MUST support both `client_secret_basic`
+  (HTTP Basic with URL-encoded `client_id:client_secret`) and
+  `client_secret_post` (`client_id`/`client_secret` in the body)
+  ([RFC 7009 §2.1](https://www.rfc-editor.org/rfc/rfc7009#section-2.1),
+  [RFC 6749 §2.3.1](https://www.rfc-editor.org/rfc/rfc6749#section-2.3.1)).
+  `client_secret_basic` MUST be the default.
+- The server returns HTTP 200 regardless of whether the token was valid,
+  expired, already revoked, or unknown, and MUST NOT differentiate between these
+  cases; a client therefore cannot use revocation to probe token state (token
+  scanning)
+  ([RFC 7009 §2.1](https://www.rfc-editor.org/rfc/rfc7009#section-2.1),
+  [RFC 7009 §2.2](https://www.rfc-editor.org/rfc/rfc7009#section-2.2)). A
+  revocation success carries no response body, so implementations MUST treat any
+  2xx response as success without requiring a body to parse.
+- When the revoking client fails authentication the endpoint returns HTTP 401
+  with `error=invalid_client`, and when it does not support revoking the
+  presented token type it returns HTTP 400 with `error=unsupported_token_type`;
+  implementations MUST surface a typed error carrying the OAuth `error`,
+  `error_description`, and `error_uri` when present
+  ([RFC 7009 §2.2.1](https://www.rfc-editor.org/rfc/rfc7009#section-2.2.1),
+  [RFC 6749 §5.2](https://www.rfc-editor.org/rfc/rfc6749#section-5.2)).
+- The revocation endpoint URL SHOULD be obtained from the `revocation_endpoint`
+  field of the Authorization Server Metadata / OIDC Discovery document rather
+  than requiring manual configuration
+  ([RFC 8414 §2](https://www.rfc-editor.org/rfc/rfc8414#section-2)).
+
+**Worked example** — revoking a refresh token during logout with
+`client_secret_basic` (`Authorization` is
+`Basic BASE64("s6BhdRkqt3" + ":" + "gX1fBat3bV")`):
+
+```http
+POST /revoke HTTP/1.1
+Host: server.example.com
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic czZCaGRSa3F0MzpnWDFmQmF0M2JW
+
+token=45ghiukldjahdnhzdauz&token_type_hint=refresh_token
+```
+
+```http
+HTTP/1.1 200 OK
+```
+
+Revoking an access token uses the same request with
+`token_type_hint=access_token`:
+
+```http
+POST /revoke HTTP/1.1
+Host: server.example.com
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic czZCaGRSa3F0MzpnWDFmQmF0M2JW
+
+token=mF_9.B5f-4.1JqM&token_type_hint=access_token
+```
+
+```http
+HTTP/1.1 200 OK
+```
+
+The same HTTP 200 is returned whether the presented token was still valid,
+already expired, or previously revoked (RFC 7009 §2.1).
+
+### Token Exchange
+
+- Implementations MUST POST to the token endpoint as
+  `application/x-www-form-urlencoded` with
+  `grant_type=urn:ietf:params:oauth:grant-type:token-exchange` and the token
+  exchange parameters
+  ([RFC 8693 §2.1](https://www.rfc-editor.org/rfc/rfc8693#section-2.1)):
+  `subject_token` (REQUIRED) and `subject_token_type` (REQUIRED); the optional
+  `actor_token` and its `actor_token_type` (REQUIRED when `actor_token` is
+  present); and the optional `resource`, `audience`, `scope`, and
+  `requested_token_type`. `resource` and `audience` MAY each appear more than
+  once to name multiple targets.
+- Impersonation vs. delegation semantics
+  ([RFC 8693 §1.1](https://www.rfc-editor.org/rfc/rfc8693#section-1.1)):
+  supplying only `subject_token` requests an **impersonation** token that
+  represents the subject directly; supplying both `subject_token` and
+  `actor_token` requests a **delegation** token that MAY carry an `act` claim
+  identifying the acting party
+  ([RFC 8693 §4.1](https://www.rfc-editor.org/rfc/rfc8693#section-4.1)).
+- The type parameters carry one of the six token type identifier URIs
+  ([RFC 8693 §3](https://www.rfc-editor.org/rfc/rfc8693#section-3)), which
+  implementations MUST serialize verbatim:
+  `urn:ietf:params:oauth:token-type:access_token`,
+  `urn:ietf:params:oauth:token-type:refresh_token`,
+  `urn:ietf:params:oauth:token-type:id_token`,
+  `urn:ietf:params:oauth:token-type:saml1`,
+  `urn:ietf:params:oauth:token-type:saml2`, and
+  `urn:ietf:params:oauth:token-type:jwt`.
+- The token endpoint is protected; implementations MUST authenticate the client
+  and MUST support both `client_secret_basic` (the default) and
+  `client_secret_post`
+  ([RFC 6749 §2.3.1](https://www.rfc-editor.org/rfc/rfc6749#section-2.3.1)).
+- A success response is an HTTP 200 JSON body
+  ([RFC 8693 §2.2](https://www.rfc-editor.org/rfc/rfc8693#section-2.2)) carrying
+  `access_token` (REQUIRED — the issued security token, regardless of its
+  actual type), `issued_token_type` (REQUIRED — the URI of the issued token's
+  type), and `token_type` (REQUIRED), plus the RECOMMENDED `expires_in` and the
+  optional `scope` and `refresh_token`. `token_type` is `Bearer` for a bearer
+  token or `N_A` when the issued token is not usable as a bearer token (e.g. a
+  SAML assertion)
+  ([RFC 8693 §2.2.1](https://www.rfc-editor.org/rfc/rfc8693#section-2.2.1)); the
+  `issued_token_type` MAY differ from any `requested_token_type`.
+- An error response is the standard OAuth token error
+  ([RFC 8693 §2.2.2](https://www.rfc-editor.org/rfc/rfc8693#section-2.2.2),
+  [RFC 6749 §5.2](https://www.rfc-editor.org/rfc/rfc6749#section-5.2)): the
+  server returns HTTP 400 with `error` (e.g. `invalid_grant` for an expired
+  `subject_token`, or `invalid_request` for a malformed request) plus optional
+  `error_description` and `error_uri`; implementations MUST surface a typed
+  error carrying these fields.
+
+**Worked example** — an **impersonation** exchange trading a user access token
+for a scoped-down access token targeting a downstream API, using
+`client_secret_basic`:
+
+```http
+POST /token HTTP/1.1
+Host: server.example.com
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic czZCaGRSa3F0MzpnWDFmQmF0M2JW
+
+grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange
+&subject_token=eyJhbGciOiJFUzI1NiJ9.subject.tok
+&subject_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aaccess_token
+&audience=https%3A%2F%2Fapi.example.com
+&scope=https%3A%2F%2Fapi.example.com%2Fread
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "access_token": "eyJhbGciOiJFUzI1NiJ9.impersonation.tok",
+  "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "https://api.example.com/read"
+}
+```
+
+The `token_type=Bearer` marks the issued `access_token` as usable as a bearer
+token (RFC 8693 §2.2.1).
+
+A **delegation** exchange adds `actor_token` and its REQUIRED `actor_token_type`,
+so the issued token can represent the actor acting on behalf of the subject
+(RFC 8693 §1.1, §4.1):
+
+```http
+POST /token HTTP/1.1
+Host: server.example.com
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic czZCaGRSa3F0MzpnWDFmQmF0M2JW
+
+grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange
+&subject_token=eyJhbGciOiJFUzI1NiJ9.subject.tok
+&subject_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aaccess_token
+&actor_token=eyJhbGciOiJFUzI1NiJ9.actor.tok
+&actor_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Ajwt
+```
+
+When the issued token is not a bearer token, the response instead carries
+`token_type=N_A` (RFC 8693 §2.2.1):
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "access_token": "PHNhbWxwOlJlc3BvbnNl...",
+  "issued_token_type": "urn:ietf:params:oauth:token-type:saml2",
+  "token_type": "N_A",
+  "expires_in": 60
+}
+```
+
+### DPoP
+
+DPoP (Demonstrating Proof of Possession) binds an access token to a client-held
+key pair so a stolen token cannot be replayed without the private key
+(sender-constrained tokens).
+
+- A DPoP proof is a compact-serialized JWS whose protected header MUST set
+  `typ=dpop+jwt`, MUST use an asymmetric `alg` (symmetric algorithms such as
+  `HS256` and the unsecured `none` MUST NOT be used), and MUST carry a `jwk`
+  member holding the **public** key only — no private key material and no `x5c`
+  or `x5t`
+  ([RFC 9449 §4.2](https://www.rfc-editor.org/rfc/rfc9449#section-4.2)).
+- The proof payload MUST include `jti` (a unique value to prevent replay), `htm`
+  (the request's HTTP method), `htu` (the request URI as scheme + authority +
+  path, with any query and fragment removed), and `iat` (issued-at)
+  ([RFC 9449 §4.2](https://www.rfc-editor.org/rfc/rfc9449#section-4.2)).
+- For a token request the proof is sent in the `DPoP` HTTP header and the `ath`
+  claim is NOT included, because a token-request proof does not bind to an access
+  token ([RFC 9449 §5](https://www.rfc-editor.org/rfc/rfc9449#section-5)).
+- The authorization server binds the issued access token to the client key by
+  returning `token_type=DPoP` and embedding a `cnf` claim whose `jkt` member is
+  the RFC 7638 SHA-256 JWK Thumbprint of the client's public key
+  ([RFC 9449 §6](https://www.rfc-editor.org/rfc/rfc9449#section-6),
+  [RFC 7638 §3](https://www.rfc-editor.org/rfc/rfc7638#section-3)).
+- For a protected-resource request the client MUST present the token with the
+  `DPoP` authorization scheme (`Authorization: DPoP <access_token>`, NOT
+  `Bearer`) and MUST include a fresh proof in the `DPoP` header carrying an `ath`
+  claim equal to `BASE64URL(SHA-256(access_token))`
+  ([RFC 9449 §7](https://www.rfc-editor.org/rfc/rfc9449#section-7),
+  [RFC 9449 §4.2](https://www.rfc-editor.org/rfc/rfc9449#section-4.2)).
+- When the server replies with HTTP 401, `error=use_dpop_nonce`, and a
+  `DPoP-Nonce` response header, the client MUST retry with that nonce echoed in
+  the proof's `nonce` claim, and SHOULD cache the nonce for subsequent requests
+  to the same server
+  ([RFC 9449 §8](https://www.rfc-editor.org/rfc/rfc9449#section-8)).
+- Implementations MUST support generating DPoP key pairs for at least ES256
+  (EC P-256) and RS256 (RSA ≥ 2048-bit)
+  ([RFC 9449 §4.1](https://www.rfc-editor.org/rfc/rfc9449#section-4.1),
+  [RFC 7518 §3.1](https://www.rfc-editor.org/rfc/rfc7518#section-3.1)), and
+  SHOULD support loading and persisting keys as JWK or PEM so a key pair survives
+  process restarts and can be rotated without invalidating already-issued bound
+  tokens.
+- A resource server validating a proof MUST check `typ`, `alg`, the embedded
+  `jwk` (and verify the signature against it), `jti`, `htm`, `htu`, and `iat`
+  (within an acceptance window), and optionally `ath` and `nonce`; a proof whose
+  `htm` or `htu` does not match the actual request MUST be rejected
+  ([RFC 9449 §4.3](https://www.rfc-editor.org/rfc/rfc9449#section-4.3)).
+
+**Worked example** — a complete DPoP flow: key generation, a token request
+carrying a proof, receipt of a DPoP-bound token, then a resource request with the
+bound token.
+
+A client generates an ES256 key pair and sends a token request. The proof is a
+JWS whose decoded header and payload are (note `Authorization: DPoP` is absent on
+the token request; the proof itself proves possession):
+
+```http
+POST /token HTTP/1.1
+Host: server.example.com
+Content-Type: application/x-www-form-urlencoded
+DPoP: eyJ0eXAiOiJkcG9wK2p3dCIsImFsZyI6IkVTMjU2Iiwiandr...<signature>
+
+grant_type=client_credentials
+```
+
+```jsonc
+// decoded DPoP proof header (RFC 9449 §4.2)
+{ "typ": "dpop+jwt", "alg": "ES256", "jwk": { "kty": "EC", "crv": "P-256", "x": "...", "y": "..." } }
+// decoded DPoP proof payload (RFC 9449 §5) — no ath on a token request
+{ "jti": "e1j3V_bKic8-LAEB", "htm": "POST", "htu": "https://server.example.com/token", "iat": 1732200000 }
+```
+
+The server issues a DPoP-bound token, marked by `token_type=DPoP` and a
+`cnf.jkt` equal to the RFC 7638 thumbprint of the client's public key
+(RFC 9449 §6):
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "access_token": "eyJhbGciOiJFUzI1NiIsInR5cCI6ImF0K2p3dCJ9...",
+  "token_type": "DPoP",
+  "expires_in": 3600
+}
+```
+
+```jsonc
+// decoded access token payload — cnf.jkt binds the token to the key (RFC 9449 §6, RFC 7638)
+{ "sub": "user-123", "cnf": { "jkt": "x4bBYZ9vUTI9MboLfj1FuSMrI-sh5I8nTTPhZCHmDac" } }
+```
+
+To call a protected resource the client presents the token with the `DPoP`
+scheme (NOT `Bearer`) and a fresh proof whose `ath` binds it to that token
+(RFC 9449 §7):
+
+```http
+GET /protectedresource HTTP/1.1
+Host: resource.example.com
+Authorization: DPoP eyJhbGciOiJFUzI1NiIsInR5cCI6ImF0K2p3dCJ9...
+DPoP: eyJ0eXAiOiJkcG9wK2p3dCIsImFsZyI6IkVTMjU2Iiwiandr...<signature>
+```
+
+```jsonc
+// decoded resource-request proof payload (RFC 9449 §7) — ath = BASE64URL(SHA-256(access_token))
+{ "jti": "-BwC3ESc6acc2lTc", "htm": "GET", "htu": "https://resource.example.com/protectedresource",
+  "iat": 1732200100, "ath": "yRhCjMZbSgJuej6MpSmViNnUiiuiK_CT3FHQXkjq7vk" }
+```
+
+The key difference from Bearer usage (RFC 6750): a Bearer token is presented
+alone with `Authorization: Bearer <token>` and anyone holding the token can use
+it, whereas a DPoP-bound token requires `Authorization: DPoP <token>` *plus* a
+signed proof of the bound private key on every request, so a leaked token is
+useless without the key.
+
+## Machine-Readable Schema
+
+The status table above is also expressed per-capability for tooling (status generators, CI gates, docs site):
+
+```yaml
+capabilities:
+  - name: "OIDC Discovery"
+    tier: core
+    spec_ref: "OpenID Connect Discovery 1.0"
+    conformance_file: "spec/conformance/discovery.json"
+    languages:
+      python: { status: implemented }
+      go: { status: implemented }
+      rust: { status: implemented }
+```

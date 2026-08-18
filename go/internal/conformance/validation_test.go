@@ -31,12 +31,6 @@ var fallbackNow = time.Unix(1_700_000_000, 0).UTC()
 // Go jwt.Validate implementation, and asserts full coverage of the capability's
 // test ids so Go cannot silently skip a case another language executes.
 func TestValidationConformance(t *testing.T) {
-	// The shared /spec tree is imported in CONS-1.3. Until then it is absent
-	// from this repo, so skip cleanly rather than failing the default test run.
-	if _, err := os.Stat(specConformanceDir); errors.Is(err, os.ErrNotExist) {
-		t.Skip("spec/ conformance tree imported in CONS-1.3; skipping until present")
-	}
-
 	suite, err := LoadCapability(filepath.Join(specConformanceDir, "validation.json"))
 	if err != nil {
 		t.Fatalf("load capability: %v", err)

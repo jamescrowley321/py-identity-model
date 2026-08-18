@@ -43,4 +43,4 @@ go run ./examples/hello
 
 Integration tests (build tag `integration`) run against the shared provider in [`../infra`](../infra).
 
-> **Status:** Imported from `identity-model` (CONS-1.1); `go build/vet/test ./...` green. The cross-language conformance vectors (`spec/`) land in CONS-1.3 — until then the fixture-driven tests skip cleanly. See [`CHANGELOG.md`](CHANGELOG.md).
+> **Status:** Imported from `identity-model` (CONS-1.1); `go build/vet/test ./...` green. The cross-language conformance vectors and shared test fixtures now live in [`../spec`](../spec) (imported in CONS-1.3), so the fixture-driven tests and the `internal/conformance` runner execute for real against them — the interim spec-guards have been retired. See [`CHANGELOG.md`](CHANGELOG.md).

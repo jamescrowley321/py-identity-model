@@ -19,7 +19,6 @@ import (
 // fixture reads a shared conformance fixture from spec/test-fixtures/introspection.
 func fixture(t *testing.T, name string) []byte {
 	t.Helper()
-	requireSpec(t)
 	// test file lives at go/pkg/introspection; fixtures at <repo>/spec/test-fixtures.
 	path := filepath.Join("..", "..", "..", "spec", "test-fixtures", "introspection", name)
 	data, err := os.ReadFile(path)
@@ -257,9 +256,6 @@ func TestIntrospect_ErrorResponse(t *testing.T) {
 // INTR-006: the introspection_endpoint is resolved from a discovery document
 // and used by Introspect.
 func TestIntrospect_DiscoveryEndpointResolution(t *testing.T) {
-	// This test reads its fixtures only inside the httptest handler goroutines
-	// below, where a t.Skip would not unwind the test — so guard up front here.
-	requireSpec(t)
 	// Serve both the discovery document (with introspection_endpoint pointing at
 	// this same server's /introspect) and the introspection response.
 	var got capturedRequest
