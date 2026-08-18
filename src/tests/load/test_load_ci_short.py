@@ -105,11 +105,32 @@ def test_s1_warm_cache_is_all_hits(ci_short_results):
     """S1: after warmup the measured window serves entirely from cache.
 
     The authoritative proof is the mock-OP upstream counters (reset after the
-    warmup): ZERO discovery/JWKS fetches during the measured window. The RS-side
-    cache-hit rate is near-1 rather than exactly 1 because its per-process
-    counters also include the single warmup miss (no reset route).
+    warmup): ZERO discovery/JWKS fetches during the measured window — no cache
+    miss ever reached upstream while load was driven.
+
+    The RS-side per-process cache counters have no reset route, so they still
+    carry the single cold warmup miss (one discovery + one JWKS fetch, coalesced
+    by single-flight). The warm invariant is therefore that the measured window
+    added NO misses of its own: discovery and JWKS misses stay at their
+    cold-start bound of one each while hits accrue. That is asserted directly on
+    the miss counts rather than via a hit *rate*, because a hit rate is
+    volume-sensitive — ``hits / (hits + 2)`` only clears 0.99 once the window has
+    driven ~200 requests. A slow, contended CI runner can spin the first Locust
+    subprocess up so late that only a handful of requests land in the window; the
+    lone warmup miss then dominates the cumulative rate and false-fails a cache
+    that is genuinely warm. Bounding the miss counts is request-count-independent
+    and captures the real property (the ``cache_hit_rate`` helper still covers the
+    rate arithmetic in unit tests).
     """
     s1 = ci_short_results["S1"]
     assert s1.upstream_stats.get("discovery", 0) == 0, s1.upstream_stats
     assert s1.upstream_stats.get("jwks", 0) == 0, s1.upstream_stats
-    assert s1.cache_hit_rate >= 0.99, s1.cache_metrics
+    m = s1.cache_metrics
+    # The cache was actually exercised — guards against a broken ``/metrics``
+    # scrape returning an empty dict and passing the miss bounds vacuously.
+    assert m.get("disco_hits", 0) > 0, m
+    assert m.get("jwks_hits", 0) > 0, m
+    # No miss beyond the single cold warmup fetch: the measured window was all
+    # hits (the request-count-independent form of ``cache_hit_rate`` ~ 1).
+    assert m.get("disco_misses", 0) <= 1, m
+    assert m.get("jwks_misses", 0) <= 1, m
