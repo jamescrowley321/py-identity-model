@@ -18,7 +18,6 @@ import (
 // the Go behaviour and the cross-language contract cannot drift apart.
 func exchangeFixture(t *testing.T, name string) string {
 	t.Helper()
-	requireSpec(t)
 	// test file lives at go/pkg/token; fixtures at <repo>/spec/test-fixtures.
 	path := filepath.Join("..", "..", "..", "spec", "test-fixtures", "token-exchange", name)
 	data, err := os.ReadFile(path)
