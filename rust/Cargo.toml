@@ -1,0 +1,31 @@
+[package]
+name = "rs-identity-model"
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.96"
+description = "Production-grade, RFC-compliant OIDC/OAuth2 client library for Rust"
+license = "Apache-2.0"
+repository = "https://github.com/jamescrowley321/identity-model"
+keywords = ["oidc", "oauth2", "jwt", "openid", "authentication"]
+categories = ["authentication", "web-programming"]
+
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+# jsonwebtoken 10 unbundled its crypto backend; `rust_crypto` selects the
+# pure-Rust provider (RustCrypto: rsa/p256/p384/sha2) so no C toolchain
+# (aws-lc/cmake) is needed, matching the crate's rustls-only posture.
+jsonwebtoken = { version = "11", features = ["rust_crypto"] }
+tokio = { version = "1", features = ["sync", "rt-multi-thread", "macros"] }
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.23"
+sha2 = "0.11.0"
+getrandom = "0.4.3"
+
+[dev-dependencies]
+p256 = { version = "0.14.0", features = ["pkcs8", "ecdsa"] }
+rsa = "0.9"
+tokio = { version = "1", features = ["full"] }
+url = "2.5.8"
+wiremock = "0.6.5"
