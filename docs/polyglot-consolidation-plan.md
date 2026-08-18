@@ -1,129 +1,143 @@
 # Polyglot Consolidation Plan — `identity-model` → `py-identity-model`
 
 **Status:** Design of record. Decided 2026-08-17 (James). Supersedes the prior
-"PIM into the polyglot monorepo" direction (see _Reversal_ below).
+"PIM into the polyglot monorepo" direction (see _Reversal_). Build orchestrator
+(`moon`) validated by spike 2026-08-17.
 
 ## Decision
 
 Move `jamescrowley321/identity-model` (Go + Rust) **into**
-`jamescrowley321/py-identity-model` (PIM). **PIM is the surviving repo** — it keeps
-its git history, release tags, OIDF certification, and PyPI pipelines.
-`identity-model`'s history is expendable (0 tags, never released, not prod-ready).
-Package naming stays `{py,go,rs}-identity-model` at the package level even though the
-repo is `py-identity-model`.
+`jamescrowley321/py-identity-model` (PIM). **PIM is the surviving repo** — it keeps its
+git history, release tags, OIDF certification, and PyPI pipelines. `identity-model`'s
+history is expendable (0 tags, never released, not prod-ready). Package naming stays
+`{py,go,rs}-identity-model` at the package level.
+
+Top-level layout is a clean per-language split — **`/py`, `/go`, `/rust`** — **not** a
+root uv workspace. `moon` orchestrates the polyglot repo; each language keeps its native
+toolchain (`uv`+semantic-release, `go`, `cargo`).
 
 ## Reversal — why this inverts the prior plan
 
-The earlier decision (2026-08-01, reaffirmed 2026-08-12 in PR #72) was the opposite:
-move PIM **into** `identity-model` because that repo was the purpose-built polyglot
-shell (`spec/` + `infra/` + capabilities matrix) and "merging into it is less work."
-
-That plan would have moved the **certified, PyPI-published, 329-tag** artifact (PIM)
-into a **0-tag** shell — disrupting exactly the cert lineage + release pipelines the
-same memo flagged as the thing to protect. Keeping PIM stationary as the survivor:
-
-- **OIDF cert continuity → non-issue.** The certified software and its `conformance/`
-  submission artifacts don't move; the mark is unaffected.
-- **PyPI pipelines untouched.** `py-identity-model` + `fastapi-identity-model`
-  semantic-release stay exactly where they are.
-- **Minimal structural reshaping.** PIM is already a uv monorepo
-  (`pyproject.toml` `members = [".", "packages/fastapi-identity-model", …]` with a split
-  semantic-release), so `go/` and `rust/` are natural siblings.
+The earlier decision (2026-08-01, reaffirmed 2026-08-12 in PR #72) was the opposite: move
+PIM **into** `identity-model` because that repo was the purpose-built polyglot shell
+(`spec/` + `infra/`). That would have moved the **certified, PyPI-published, 329-tag**
+artifact into a **0-tag** shell — disrupting exactly the cert lineage + release pipelines
+the same memo flagged as the thing to protect. Keeping PIM stationary as the survivor
+makes OIDF cert continuity a non-issue and leaves both PyPI pipelines untouched.
 
 ### What the reversal trades away (accepted)
 
-1. **Re-homing the polyglot shell.** `identity-model`'s `spec/` neutral-vector
-   conformance contract, `infra/` shared IdP fixtures, and paths-filtered Go/Rust CI
-   must be ported **into** PIM rather than inherited for free. This is the real work.
+1. **Re-home the polyglot shell.** `identity-model`'s `spec/` neutral-vector conformance
+   contract, `infra/` shared IdP fixtures, and Go/Rust CI move **into** PIM rather than
+   being inherited for free. This is the real work.
 2. **Go import-path break.** `github.com/jamescrowley321/identity-model/go` →
-   `github.com/jamescrowley321/py-identity-model/go`. Accepted (0 consumers, not prod);
-   document in `go/README.md` + CHANGELOG.
-3. **Stale planning artifacts.** PR #72's docs
-   (`docs/identity-model-reconciliation-2026-08-12.md`, roadmap PRD, `epic-20-pim-parity`)
-   now describe the opposite direction and need an update pass (P3).
+   `github.com/jamescrowley321/py-identity-model/go` (and again at the rename). Accepted
+   (0 consumers, not prod); document in `go/README.md` + CHANGELOG.
+3. **Stale planning artifacts.** PR #72's docs now describe the opposite direction → fixed
+   in the retirement step.
 
 ## Surviving hard constraint (carried forward)
 
-Do **not** duplicate internal conformance vectors across the three languages. Build
-them **once**: language-neutral vectors + fixtures + expected outcomes keyed on
-canonical error codes (not per-language type names) in `spec/`; a **thin per-language
-executor** mapping vectors → that language's API/errors; a **coverage gate** (every
-language executes every vector id). Port `identity-model`'s `spec/` in; add PIM's
-Python thin executor onto the same vectors.
-
-PIM's external OIDF-cert `conformance/` harness is a **different kind** of testing
-(black-box certification vs. white-box internal vectors) — keep it; it is not the
-duplication being removed.
+Do **not** duplicate internal conformance vectors across the three languages. Build them
+**once**: language-neutral vectors + fixtures + canonical-error-code outcomes in `spec/`;
+a **thin per-language executor**; a **coverage gate** (every language executes every
+vector id). PIM's external OIDF-cert `conformance/` harness is a *different* (black-box)
+kind of testing — keep it.
 
 ## Target layout (in `py-identity-model`)
 
 ```
-src/                    # Python core — unchanged
-packages/fastapi-…      # existing sub-package — unchanged
-go/                     # from identity-model; module → …/py-identity-model/go
-rust/                   # from identity-model; crate rs-identity-model — unchanged
-spec/                   # from identity-model — neutral vectors, single source of conformance truth
-infra/                  # MERGE identity-model infra/ + PIM test-fixtures/ → one IdP fixture set
-conformance/            # PIM OIDF cert harness — unchanged; identity-model rp-go runner folded in
-src/tests/harness/      # existing Python harness → thin executor onto spec/ vectors
+/py                     # Python core moved out of root src/ ; owns uv + semantic-release
+/go                     # from identity-model; module → …/py-identity-model/go
+/rust                   # from identity-model; crate rs-identity-model
+/spec                   # from identity-model — neutral conformance vectors (single source)
+/infra                  # MERGE identity-model infra/ + PIM test-fixtures/ → one IdP fixture set
+/conformance            # PIM OIDF cert harness — unchanged; identity-model rp-go folded in
+.moon/                  # workspace + toolchain config (orchestration only)
+moon.yml (per project)  # /py, /go, /rust each define delegating tasks
 ```
 
-## Release & CI — independent cadence per language
+No root uv workspace. `pyproject.toml` and all Python packaging live under `/py`.
 
-- **Python:** existing semantic-release → PyPI, **unchanged**. Add path-ignore guards so
-  commits touching only `go/**`, `rust/**`, `spec/**`, `infra/**` never cut a PyPI
-  release. (The core parser already excludes `(fastapi)`-scoped commits; this extends the
-  same principle by path.)
-- **Go:** GoReleaser/tags workflow, path-filtered `go/**`. First release is greenfield.
-- **Rust:** cargo-release → crates.io, path-filtered `rust/**`.
-- **Change-detection:** `dorny/paths-filter` so only affected language suites run; bring
+## Build orchestration — `moon` (validated)
+
+`moon` sits **on top** of the native toolchains (`toolchain: 'system'` tasks that shell
+out to `uv`/`go`/`cargo`); it does not replace them, which is what keeps PIM's publishing
+intact. Spike (moon 2.5.1, real Py+Go+Rust projects) confirmed:
+
+- `moon run :test` orchestrates all three in parallel.
+- Content-hash **caching**: unchanged re-run served from cache.
+- **Selective re-run / affected-detection**: change only `/rust` → Go+Py cached, only Rust
+  re-runs; `moon ci --base <ref>` flags affected projects from the git diff.
+
+Reference config is ~6 lines per project. Two gotchas locked in from the spike:
+
+1. **Gitignore `.moon/cache/`** — tracked cache files poison affected-detection.
+2. **Tighten Python task `inputs` to `src/**/*.py`** and gitignore `__pycache__`/`*.pyc` —
+   otherwise `.pyc` churn defeats caching and shows Python as spuriously affected.
+
+Complementary: pin toolchain versions with `.moon/toolchain.yml` (or add `mise`/`proto`
+later if we want shared version pinning across contributors). Rejected alternatives:
+Bazel/Pants (fight Python-wheel/PyPI + Rust; Pants Rust is experimental), Nx (Node runtime;
+Go/Rust are community plugins), Turborepo (JS-centric), Earthly (OSS frozen, Cloud shut
+down 2025).
+
+## Tagging strategy (changes during the reorg)
+
+Bare `{version}` tags (PIM's 329 existing tags) collide once three languages version
+independently. New scheme — **prefixed, per-language**:
+
+| Language | Tool | Tag format | Note |
+|---|---|---|---|
+| Python | `python-semantic-release` (kept) | `py-v{version}` | change `tag_format`; **seed `py-v3.10.0`** at current HEAD so the next bump computes |
+| Go | GoReleaser | `go/vX.Y.Z` | **forced** — a subdir Go module only resolves from `<subdir>/vX.Y.Z` tags |
+| Rust | `cargo-release` → crates.io | `rust-vX.Y.Z` | |
+
+`python-semantic-release` stays through the reorg (keeps publishing working). Revisit
+`release-please` (unifies all three as independent components, handles the Go subdir tag
+format) only at/after the rename.
+
+## Release & CI
+
+- **Python:** existing semantic-release → PyPI, re-pointed at `/py`, `tag_format` changed.
+  Path-guard so `go/**`/`rust/**`/`spec/**`/`infra/**` commits never cut a PyPI release.
+- **Go / Rust:** GoReleaser / cargo-release, path-filtered.
+- **CI:** `dorny/paths-filter` (or `moon ci --base`) so only affected languages run; bring
   the docker IdP fixture matrix up **once**, shared across suites.
-- **Secrets:** consolidate DESCOPE mgmt key, conformance token, PyPI/crates OIDC publish
-  into the one repo's secrets.
+- **Secrets:** consolidate DESCOPE mgmt key, conformance token, PyPI/crates OIDC publish.
 
-## Migration mechanic
+## Migration sequence (James's ordering)
 
-`identity-model`'s blame is expendable, so **no `git-filter-repo`/subtree gymnastics**.
-Bring its tree in as new files in ordinary commits on PIM. (A one-time `git subtree add`
-remains available if we ever decide IM history is worth keeping — not required.)
+Migration mechanic is trivial — IM's blame is expendable, so bring its tree in as ordinary
+new-file commits (no `git-filter-repo`/subtree).
 
-## Phased PRs (stacked into `py-identity-model`, merged bottom-up)
-
-- **P0 — this brief** as design of record. `docs:` (release-safe).
-- **P1 — land the code.** Add `go/` + `rust/` + `spec/` trees; add path-filtered Go +
-  Rust CI; document the Go module-path rename. Guard the Python release on paths.
-  Verify: `go build/test` + `cargo test` green in-repo; a dry-run confirms no accidental
-  PyPI release from a `go/`/`rust/` commit.
-- **P2 — dedup fixtures.** Merge `identity-model` `infra/` + PIM `test-fixtures/` into one
-  fixture set; wire the Python thin executor onto `spec/` vectors; enforce the coverage
-  gate. This is the dedup payoff.
-- **P3 — retire the old repo.** Archive `jamescrowley321/identity-model` read-only with a
-  README pointer to PIM; repoint ralph loops / `PROMPT.md`; update the stale PR-#72
-  planning artifacts.
+1. **Move IM in + kill duplicated test infra.** Land `/go` + `/rust` + `/spec`; merge
+   `infra/` + `test-fixtures/` into one IdP fixture set; wire Python's thin executor onto
+   `spec/` vectors + coverage gate. (No reorg of Python yet.)
+2. **In-place reorg + keep publishing green.** Move Python into `/py`; add `moon`
+   workspace + per-project tasks; re-point `python-semantic-release` at `/py`; change the
+   tag scheme (seed `py-v3.10.0`); add Go/Rust release + path-filtered CI. Verify a
+   dry-run publishes exactly as today.
+3. **Rename the repo + fix references.** Rename `py-identity-model`; update PyPI **Trusted
+   Publishing** (OIDC is keyed to repo+workflow — the rename requires re-config), `project.urls`,
+   README badges, Go module path (again), crates metadata. PyPI **project name is
+   unchanged** by a repo rename. Archive `identity-model` read-only + pointer; repoint
+   ralph loops/`PROMPT.md`; fix the stale PR-#72 planning artifacts.
 
 ## Sequencing vs. in-flight work
 
-- PIM `main` is quiescent (just merged #532) — a good window to land P1 as one PR.
-- `identity-model`'s active Rust-Extended loop + K3–K6 conformance and PIM's #476 FAPI2
-  epic must pause/rebase onto the new paths. Coordinate a short freeze: land P1 + P2, then
-  relaunch loops pointed at `py-identity-model/{go,rust,spec}`.
-- PIM #462 E2E harness is largely delivered → low collision risk.
+PIM `main` is quiescent (just merged #532) — a good window. `identity-model`'s Rust-Extended
+loop + K3–K6 and PIM's #476 FAPI2 epic must pause/rebase onto new paths (short freeze; land
+step 1–2, then relaunch pointed at `/py|/go|/rust|/spec`). PIM #462 E2E harness is largely
+delivered → low collision.
 
 ## Risk register
 
 | Risk | Mitigation |
 |---|---|
-| Re-homing `spec/` + `infra/` + CI is the real cost | Isolated in P2; P1 lands code first so surface stays small |
-| Accidental PyPI release from a `go/`/`rust/` commit | Path-guard `release.yml`; dry-run tag before first real go/rust release |
-| Go consumers break on module-path change | None in prod (0 tags); documented in `go/README` + CHANGELOG |
-| Stale PR-#72 planning artifacts mislead a future session | Memory updated now; artifacts corrected in P3 |
-| Active loops strand on old paths | Freeze window; relaunch against new paths after P2 |
-
-## Open questions for the owner
-
-1. **`spec/` as the one conformance source** — confirm Python's thin executor drops onto
-   `identity-model`'s existing neutral vectors (vs. keeping PIM's current fixtures as-is
-   and only sharing docker IdP infra).
-2. **Do P1–P3 in-session as a stacked PR set**, or hand to a ralph loop? (Reversal is
-   well-scoped → in-session stacking is viable.)
-3. **Retire vs. keep `identity-model`** as a thin read-only mirror after P3.
+| Re-homing `spec/`+`infra/`+CI is the real cost | Isolated in step 1; keep the surface small |
+| Accidental PyPI release from a go/rust commit | Path-guard `release.yml`; dry-run before first real publish |
+| `tag_format` change strands semantic-release's "last release" | Manually seed `py-v3.10.0` at current HEAD (owner OK'd) |
+| Repo rename breaks PyPI Trusted Publishing | Re-config the OIDC publisher as part of step 3; rename last |
+| Go consumers break on module-path change | None in prod (0 tags); documented |
+| Active loops strand on old paths | Freeze window; relaunch against new paths after step 2 |
