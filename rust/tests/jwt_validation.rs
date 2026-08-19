@@ -37,19 +37,15 @@
 //!   [`IdentityError::KeyNotFound`], mirroring the Go reference
 //!   (`go/pkg/jwt/jwt_integration_test.go`).
 
-use base64::Engine;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use rs_identity_model::{
     DiscoveryClient, IdentityError, JwksClient, ProviderMetadata, ValidationOptions,
 };
-use rsa::pkcs1::{EncodeRsaPrivateKey, LineEnding};
-use rsa::{BigUint, RsaPrivateKey};
 use serde_json::{Value, json};
 use std::time::Duration;
 
 const WELL_KNOWN_SUFFIX: &str = "/.well-known/openid-configuration";
-const FIXTURE: &str = "../spec/test-fixtures/validation/signing-key.jwk.json";
+const FIXTURE_DER: &str = "../spec/test-fixtures/validation/signing-key.pkcs1.der";
 const FIXTURE_KID: &str = "test-key-1";
 
 /// Returns the issuer derived from `TEST_DISCO_ADDRESS`, or `None` when the
@@ -191,26 +187,12 @@ async fn integration_client_credentials_validate_and_tamper() {
     );
 }
 
-/// Builds an RS256 [`EncodingKey`] from the shared private JWK fixture so the
-/// signed token carries `kid=test-key-1` — a key the provider does not publish.
+/// Builds an RS256 [`EncodingKey`] from the shared private-key fixture
+/// (`signing-key.pkcs1.der`, the PKCS#1 DER form of `signing-key.jwk.json`) so
+/// the signed token carries `kid=test-key-1` — a key the provider does not
+/// publish — without depending on the `rsa` crate (RUSTSEC-2023-0071).
 fn signing_key() -> EncodingKey {
-    let jwk: Value =
-        serde_json::from_slice(&std::fs::read(FIXTURE).expect("read fixture")).expect("parse jwk");
-    let field = |name: &str| {
-        let s = jwk[name].as_str().unwrap_or_else(|| panic!("jwk.{name}"));
-        BigUint::from_bytes_be(&URL_SAFE_NO_PAD.decode(s).expect("decode base64url"))
-    };
-    let private = RsaPrivateKey::from_components(
-        field("n"),
-        field("e"),
-        field("d"),
-        vec![field("p"), field("q")],
-    )
-    .expect("build RSA private key");
-    let pem = private
-        .to_pkcs1_pem(LineEnding::LF)
-        .expect("encode PKCS#1 PEM");
-    EncodingKey::from_rsa_pem(pem.as_bytes()).expect("encoding key")
+    EncodingKey::from_rsa_der(&std::fs::read(FIXTURE_DER).expect("read signing key DER"))
 }
 
 // JWT-001 / JWT-010: discover the live provider, fetch its real JWKS, then

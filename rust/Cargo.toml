@@ -11,10 +11,12 @@ categories = ["authentication", "web-programming"]
 
 [dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
-# jsonwebtoken 10 unbundled its crypto backend; `rust_crypto` selects the
-# pure-Rust provider (RustCrypto: rsa/p256/p384/sha2) so no C toolchain
-# (aws-lc/cmake) is needed, matching the crate's rustls-only posture.
-jsonwebtoken = { version = "11", features = ["rust_crypto"] }
+# jsonwebtoken 10 unbundled its crypto backend. We select `aws_lc_rs` rather
+# than `rust_crypto` because the pure-Rust provider pulls the `rsa` crate, which
+# carries the unfixable Marvin timing advisory (RUSTSEC-2023-0071, no patched
+# release). aws-lc-rs performs RSA verification without it and clears the OSV
+# gate. Trade-off accepted: adds a C toolchain (aws-lc/cmake) build dependency.
+jsonwebtoken = { version = "11", features = ["aws_lc_rs"] }
 tokio = { version = "1", features = ["sync", "rt-multi-thread", "macros"] }
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
@@ -25,7 +27,6 @@ getrandom = "0.4.3"
 
 [dev-dependencies]
 p256 = { version = "0.14.0", features = ["pkcs8", "ecdsa"] }
-rsa = "0.9"
 tokio = { version = "1", features = ["full"] }
 url = "2.5.8"
 wiremock = "0.6.5"

@@ -253,8 +253,6 @@ mod tests {
     use super::*;
     use crate::jwks::JsonWebKeySet;
     use jsonwebtoken::{EncodingKey, Header};
-    use rsa::pkcs1::{EncodeRsaPrivateKey, LineEnding};
-    use rsa::{BigUint, RsaPrivateKey};
     use serde_json::json;
     use std::time::Duration;
 
@@ -268,30 +266,12 @@ mod tests {
             .unwrap_or_else(|e| panic!("read fixture {name}: {e}"))
     }
 
-    fn b64u(s: &str) -> BigUint {
-        let bytes = URL_SAFE_NO_PAD
-            .decode(s)
-            .unwrap_or_else(|e| panic!("decode base64url component: {e}"));
-        BigUint::from_bytes_be(&bytes)
-    }
-
-    /// Builds an RS256 [`EncodingKey`] from the shared private JWK fixture so
-    /// unit tests sign tokens with the same key material as the other languages.
+    /// Builds an RS256 [`EncodingKey`] from the shared private-key fixture
+    /// (`signing-key.pkcs1.der`, the PKCS#1 DER form of `signing-key.jwk.json`)
+    /// so unit tests sign tokens with the same key material as the other
+    /// languages — without depending on the `rsa` crate (RUSTSEC-2023-0071).
     fn signing_key() -> EncodingKey {
-        let jwk: Value =
-            serde_json::from_slice(&read_fixture("signing-key.jwk.json")).expect("parse jwk");
-        let field = |name: &str| b64u(jwk[name].as_str().unwrap_or_else(|| panic!("jwk.{name}")));
-        let private = RsaPrivateKey::from_components(
-            field("n"),
-            field("e"),
-            field("d"),
-            vec![field("p"), field("q")],
-        )
-        .expect("build RSA private key");
-        let pem = private
-            .to_pkcs1_pem(LineEnding::LF)
-            .expect("encode PKCS#1 PEM");
-        EncodingKey::from_rsa_pem(pem.as_bytes()).expect("encoding key")
+        EncodingKey::from_rsa_der(&read_fixture("signing-key.pkcs1.der"))
     }
 
     /// The public verification key resolved from the JWKS fixture (JWT-001).
