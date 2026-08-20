@@ -9,8 +9,13 @@ load to saturation and records where the single worker falls over.
 The knee is a *co-located, directional* ceiling (generator + mock OP + RS share
 the box, per the design's accepted trade-off) plus a regression signal — NOT the
 RS's absolute isolated limit, which needs a deployed target. The assertions here
-pin the *mechanism* (a breakpoint is found, goodput plateaus, zero 5xx under
-saturation), never a machine-specific RPS number.
+pin the *mechanism* (goodput plateaus **when** a knee is found, zero 5xx under
+saturation, monotonic offered rate, the curve renders), never a machine-specific
+RPS number — and never that a breakpoint *must* exist within the ladder. On this
+co-located config a fast runner can sustain the whole ladder (clean exhaustion)
+and a contended one can plateau at rung 1; both are valid, reported outcomes (the
+knee is Track-B directional data per ``sprint-change-proposal-2026-08-19.md``, not
+a shared-CI pass/fail), so requiring a breakpoint would false-fail on runner noise.
 
 Self-contained and skips cleanly without the load group (see the CI-short suite
 for why locust must not be imported in-process). Run via
@@ -67,27 +72,43 @@ def test_every_capacity_scenario_ran(capacity_results):
     assert set(capacity_results) == set(_CAPACITY_IDS)
 
 
-def test_each_ramp_found_a_breakpoint(capacity_results):
-    """Every ramp reached the knee inside its ladder (not exhausted clean).
+def test_each_ramp_produced_a_consistent_curve(capacity_results):
+    """Every ramp drove real rungs and produced an internally consistent result.
 
-    ``found_breakpoint`` false would mean ``stop_rps`` was too low to saturate
-    the worker — a mis-calibrated ladder, not a passing run.
+    A breakpoint is *reported when found*, not *required*: a fast, uncontended
+    runner can sustain the whole 500→8000 ladder (clean exhaustion) and a slow,
+    contended one can plateau at rung 1 — both are valid outcomes on the
+    co-located config, where the knee is directional Track-B data, not a pass/fail
+    (see ``sprint-change-proposal-2026-08-19.md``). The invariant is that the
+    result is self-consistent, not that a machine-dependent knee exists.
     """
     for scenario_id, r in capacity_results.items():
-        assert r.found_breakpoint, (
-            f"{scenario_id}: ramp exhausted the ladder without a breakpoint "
-            f"(top rung sustained); raise stop_rps. Curve:\n"
-            f"{render_capacity_report([r])}"
-        )
-        assert r.breaking_target_rps is not None
-        assert r.max_sustainable_rps > 0, f"{scenario_id}: could not sustain rung 1"
-        assert r.knee_target_rps < r.breaking_target_rps
+        assert r.steps, f"{scenario_id}: ramp drove no rungs"
+        if r.found_breakpoint:
+            assert r.breaking_target_rps is not None
+            # Every rung before the breaking one sustained, so the recorded knee
+            # target sits strictly below the breaking target (0 if it broke at
+            # rung 1 — a valid, if contended, outcome; not asserted non-zero).
+            assert r.knee_target_rps < r.breaking_target_rps
+        else:
+            # Clean exhaustion: no rung breached, so every step sustained and the
+            # top sustained rung is a real (non-zero) goodput reading.
+            assert all(not s.breached for s in r.steps), render_capacity_report([r])
+            assert r.max_sustainable_rps > 0, (
+                f"{scenario_id}: exhausted the ladder but recorded no sustained "
+                f"goodput.\n{render_capacity_report([r])}"
+            )
 
 
-def test_knee_is_a_goodput_plateau(capacity_results):
-    """The breaking rung is a real saturation: achieved goodput fell below the
-    offered rate, and a breach reason was recorded (not a spurious stop)."""
+def test_knee_is_a_goodput_plateau_when_found(capacity_results):
+    """When a ramp DID find a breakpoint, the breaking rung is a real saturation:
+    achieved goodput fell below the offered rate, and a breach reason was recorded
+    (not a spurious stop). Ramps that exhaust the ladder clean have no breaking
+    rung to characterise and are skipped — their sustained-rung invariant is
+    covered by :func:`test_sustained_rungs_tracked_the_offered_rate`."""
     for scenario_id, r in capacity_results.items():
+        if not r.found_breakpoint:
+            continue
         breaking = r.steps[-1]
         assert breaking.breached
         assert breaking.reasons
@@ -128,9 +149,12 @@ def test_sustained_rungs_tracked_the_offered_rate(capacity_results):
                 assert step.achieved_rps >= ratio * step.target_rps
 
 
-def test_capacity_report_renders_a_knee(capacity_results):
-    """The artifact report names each scenario and its knee."""
-    report = render_capacity_report(list(capacity_results.values()))
-    for scenario_id in capacity_results:
-        assert scenario_id in report
-    assert "KNEE" in report
+def test_capacity_report_renders_each_scenario_outcome(capacity_results):
+    """The artifact report names each scenario and renders its terminal outcome —
+    a ``KNEE`` line when a breakpoint was found, or the explicit ``NO breakpoint
+    within ladder`` line when the ramp exhausted the ladder clean."""
+    for scenario_id, r in capacity_results.items():
+        one = render_capacity_report([r])
+        assert scenario_id in one
+        terminal = "KNEE" if r.found_breakpoint else "NO breakpoint"
+        assert terminal in one, one
