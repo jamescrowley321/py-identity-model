@@ -115,6 +115,16 @@ Semantics:
 
 ## Performance Benchmarks
 
+> **These figures are illustrative, order-of-magnitude examples from a developer
+> machine — not measured SLOs or gate thresholds.** The authoritative measured
+> numbers come from the load/soak harness (`src/tests/load/`), which uploads
+> per-scenario RPS / latency / cache reports as CI artifacts. Those numbers are
+> **directional**: the harness runs co-located (load generator, mock OP, and
+> resource server share one runner), so absolute latency/RPS reflect that shared
+> box, not an isolated deployment. Absolute values become trustworthy gates only on
+> an isolated runner (see `src/tests/load/README.md`, Track C). Treat the tables
+> below as "what good looks like," not as numbers to assert against.
+
 ### Token Validation Performance
 
 Typical token validation times (with caching):

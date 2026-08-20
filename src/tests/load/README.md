@@ -167,27 +167,44 @@ gates are calibrated against.
 S3 proves single-flight directly: 4676 concurrent cold requests coalesce to
 exactly **1** discovery + **1** JWKS upstream fetch.
 
-### Recommended gates
+### Gate model: invariant (A) vs reported (B) vs isolated-runner SLO (C)
 
-The runner's `GATES` start permissive (all thresholds `None`) so a baseline run
-never fails on an uncalibrated number. The values below are the recommended
-headroomed targets derived from the baseline above:
+Per `sprint-change-proposal-2026-08-19.md` (identity-stack-planning), the suite
+gates on what is **mechanically stable** on the co-located shared runner and only
+*reports* what is not. Absolute p99/RPS on a box that shares cores between the
+generator, mock OP, and RS are contention noise, so they are never a shared-CI
+pass/fail.
 
-| Gate | Target |
+**Track A — invariant gates** (fail a shared-CI build; machine-independent; asserted
+today; never flake on runner noise):
+
+| Gate | Rule |
+|------|------|
+| 5xx count | `== 0` (hard) |
+| steady-state status-correctness | every class returns its expected 200/401/403; expected 401/403 rejections stay out of the error budget |
+| single-flight | cold-stampede upstream fetches `== 1` discovery + 1 JWKS per issuer (S3) |
+| warm-all-hits | S1/S2 measured window adds no miss beyond the cold warmup, hits > 0 (`evaluate_gates`; #539 form) |
+| S2 alg-cost ratio | ES256/RS256 p95 ratio within a **wide** band `[0.2, 5.0]` — a ratio is machine-independent, so this catches a >5x alg-cost regression, not noise |
+
+**Track B — reported, not gated** (uploaded as artifacts; never a shared-CI pass/fail):
+absolute RPS, p50–p999 latency, the capacity knee, and the RSS/FD trend. Their
+absolute values are directional on a co-located box, so they live in the smoke /
+capacity / soak report artifacts for review and trend — not in a threshold.
+
+**Track C — absolute SLO gates** (isolated runner only; **T314b → TH-4.5**): the
+`runner.GATES` (`max_p99_ms`/`min_rps`/`max_error_rate`/`min_cache_hit_rate`) stay
+**dormant** (`None`) on shared CI *by design* — they are populated only from a
+baseline on an owner-provisioned isolated runner, where absolute numbers are
+trustworthy. The proposed starting bars below are headroomed from the co-located
+baseline above and are **directional only** until then:
+
+| Proposed bar (Track C — isolated runner) | Target |
 |------|--------|
 | warm `max_p99` | ≤ 50ms |
 | cold-stampede `max_p99` | ≤ 200ms |
 | min RPS | ≥ 800 / worker |
-| max error-rate | ≤ 0.001 (0.1%) — **error excludes** expected 401s for invalid token classes |
-| min cache-hit-rate | ≥ 0.99 (read at `workers=1` for exactness) |
-| 5xx count | == 0 (hard gate) |
-| single-flight | cold-stampede upstream fetches == 1 discovery + 1 JWKS per issuer |
-
-Two invariants hold regardless of threshold calibration and are asserted today: a
-scenario must emit **zero** server errors (5xx), and a *steady-state* scenario
-must have **zero** unexpected-status divergences (every class returns its expected
-200/401/403). Expected 401/403 rejections for invalid token classes are the
-correct outcome and stay out of the error budget.
+| max error-rate | ≤ 0.001 (0.1%) — excludes expected 401s |
+| min cache-hit-rate | ≥ 0.99 (read at `workers=1`) |
 
 ## Soak RSS/FD instrumentation (T313)
 
@@ -212,8 +229,9 @@ attaches the trend to `LoadResult.resources` (a `ResourceSample`).
   are sampled.
 
 The growth ceilings are intentionally generous (catch a runaway leak, not arena
-churn). Precise per-scenario thresholds calibrated from a baseline are **T314**
-(the dormant `runner.GATES`); T313 establishes the signal.
+churn) — a Track-A tripwire, not a calibrated bound. Precise per-scenario
+thresholds calibrated from a baseline are **T314b** on the isolated runner (the
+dormant `runner.GATES`, Track C); T313 establishes the signal.
 
 ## Metrics sources
 

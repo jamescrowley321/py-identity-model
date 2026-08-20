@@ -21,10 +21,13 @@ Scenarios are grouped into run **profiles**:
   drives them and records max-sustainable RPS + the knee. Co-located, so the
   knee is a directional ceiling + regression signal, not an absolute limit.
 
-The SLO gate *thresholds* start unset (:mod:`runner` ``GATES``); the ``test``
-phase runs a baseline, and the ``docs`` phase writes the calibrated table into
-``README.md``. Until then the gates are permissive so a baseline run never fails
-on an uncalibrated threshold.
+Gates come in two tiers (``sprint-change-proposal-2026-08-19.md``). Shared CI gates
+on **machine-independent invariants** — 5xx, status correctness, single-flight, the
+S2 alg-cost ratio band, warm-all-hits (:func:`runner.evaluate_gates`, Track A) — so
+a real regression fails but runner noise never does. The **absolute** SLO thresholds
+(:mod:`runner` ``GATES`` — ``max_p99_ms``/``min_rps``/…) stay dormant on the
+co-located shared runner *by design* and are calibrated only on an isolated runner
+(T314b → TH-4.5, Track C), where absolute p99/RPS are trustworthy.
 """
 
 from __future__ import annotations
