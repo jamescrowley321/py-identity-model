@@ -446,11 +446,17 @@ jobs:
   integration-tests-go:
     # Go suite vs the shared infra/ fixtures: node-oidc default profile, then
     # the same tests re-run against the IdentityServer profile (CONS-1.4).
+    # TEST_REQUIRE_LIVE=1 turns provider-unreachable skips into failures so a
+    # URL/profile drift cannot green-skip the whole leg; -v keeps remaining
+    # skips visible in the log.
     runs-on: ubuntu-latest
+    env:
+      TEST_REQUIRE_LIVE: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
@@ -463,26 +469,28 @@ jobs:
 
       - name: Go integration tests (node-oidc default profile)
         working-directory: go
-        run: go test -tags=integration -count=1 ./...
+        run: go test -v -tags=integration -count=1 ./...
 
       - name: Go integration tests (IdentityServer profile)
         run: |
           set -a && . ./.env.identityserver && set +a
-          cd go && go test -tags=integration -count=1 ./...
+          cd go && go test -v -tags=integration -count=1 ./...
 
       - name: Tear down fixtures
         if: always()
         run: docker compose -f infra/docker-compose.yml down
 
   integration-tests-rust:
-    # Rust #[ignore]-gated live suite vs the shared infra/ node-oidc fixture
-    # (CONS-1.4). Bare `cargo test` (unit) has no CI home yet — CONS-2.4 adds
-    # full change-detected language CI; this job covers the live-provider leg.
+    # Rust unit suite + #[ignore]-gated live suite vs the shared infra/
+    # node-oidc fixture (CONS-1.4). Change-detected per-language CI comes with
+    # CONS-2.4. TEST_REQUIRE_LIVE=1 turns silent skip-returns in the live leg
+    # into panics so an unsourced profile or dead provider cannot green-skip.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
 
       - name: Set up Rust
         run: rustup toolchain install stable --profile minimal && rustup default stable
@@ -498,10 +506,16 @@ jobs:
           restore-keys: |
             cargo-${{ runner.os }}-
 
+      - name: Rust unit tests
+        working-directory: rust
+        run: cargo test
+
       - name: Start node-oidc-provider fixture
         run: docker compose -f infra/docker-compose.yml up -d --build --wait node-oidc-provider
 
       - name: Rust live integration tests
+        env:
+          TEST_REQUIRE_LIVE: "1"
         run: |
           set -a && . ./.env.node-oidc && set +a
           cd rust && cargo test -- --ignored

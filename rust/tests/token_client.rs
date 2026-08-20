@@ -1,9 +1,9 @@
 //! Integration tests for the OAuth 2.0 token client against a real provider.
 //!
-//! `#[ignore]`-gated so the unit `rust` CI job's bare `cargo test` (run with no
-//! provider up) stays green. The dedicated `rust-integration` CI job runs them
-//! with `cargo test -- --ignored` after bringing up the local `infra/`
-//! node-oidc-provider (`:9010`).
+//! `#[ignore]`-gated so a bare `cargo test` (no provider up) stays green. The
+//! `integration-tests-rust` CI job boots the local `infra/` node-oidc-provider
+//! (`:9010`), runs the unit suite, then runs these with
+//! `cargo test -- --ignored` under `TEST_REQUIRE_LIVE=1` (infra skips fail).
 //!
 //! Run locally:
 //!
@@ -69,6 +69,17 @@ fn env_nonempty(name: &str) -> Option<String> {
     if v.is_empty() { None } else { Some(v) }
 }
 
+/// Prints a SKIP marker — unless `TEST_REQUIRE_LIVE=1`, in which case it
+/// panics. CI sets the variable in the leg that just booted the fixture, so an
+/// unreachable provider or unsourced profile turns the leg red instead of
+/// green-skipping every test (mechanical-gate rule, CONS-1.4 review).
+fn skip_or_fail(msg: &str) {
+    if std::env::var("TEST_REQUIRE_LIVE").as_deref() == Ok("1") {
+        panic!("TEST_REQUIRE_LIVE=1 but {msg}");
+    }
+    eprintln!("SKIP: {msg}");
+}
+
 /// Discovers the live provider's `token_endpoint`, skipping the test when the
 /// provider is unreachable so a missing local stack does not fail CI-less runs.
 async fn token_endpoint_or_skip(issuer: &str, allow_http: bool) -> Option<String> {
@@ -85,7 +96,9 @@ async fn token_endpoint_or_skip(issuer: &str, allow_http: bool) -> Option<String
             Some(meta.token_endpoint)
         }
         Err(e) => {
-            eprintln!("SKIP: provider not reachable at {issuer} (run `make infra-up`): {e}");
+            skip_or_fail(&format!(
+                "provider not reachable at {issuer} (run `make infra-up`): {e}"
+            ));
             None
         }
     }
@@ -97,14 +110,14 @@ async fn token_endpoint_or_skip(issuer: &str, allow_http: bool) -> Option<String
 #[ignore = "requires a running OIDC provider (make infra-up); run via cargo test -- --ignored"]
 async fn integration_client_credentials_live() {
     let Some(issuer) = issuer_from_env() else {
-        eprintln!("SKIP: TEST_DISCO_ADDRESS unset; run `make infra-up` and source .env.node-oidc");
+        skip_or_fail("TEST_DISCO_ADDRESS unset; run `make infra-up` and source .env.node-oidc");
         return;
     };
     let (Some(client_id), Some(client_secret)) = (
         env_nonempty("TEST_CLIENT_ID"),
         env_nonempty("TEST_CLIENT_SECRET"),
     ) else {
-        eprintln!("SKIP: TEST_CLIENT_ID/TEST_CLIENT_SECRET unset for this provider profile");
+        skip_or_fail("TEST_CLIENT_ID/TEST_CLIENT_SECRET unset for this provider profile");
         return;
     };
 
@@ -142,11 +155,11 @@ async fn integration_client_credentials_live() {
 #[ignore = "requires a running OIDC provider (make infra-up); run via cargo test -- --ignored"]
 async fn integration_client_credentials_invalid_client() {
     let Some(issuer) = issuer_from_env() else {
-        eprintln!("SKIP: TEST_DISCO_ADDRESS unset; run `make infra-up` and source .env.node-oidc");
+        skip_or_fail("TEST_DISCO_ADDRESS unset; run `make infra-up` and source .env.node-oidc");
         return;
     };
     let Some(client_id) = env_nonempty("TEST_CLIENT_ID") else {
-        eprintln!("SKIP: TEST_CLIENT_ID unset for this provider profile");
+        skip_or_fail("TEST_CLIENT_ID unset for this provider profile");
         return;
     };
 
@@ -191,11 +204,11 @@ async fn integration_client_credentials_invalid_client() {
 #[ignore = "requires a running OIDC provider (make infra-up); run via cargo test -- --ignored"]
 async fn integration_authorization_code_pkce_rejected() {
     let Some(issuer) = issuer_from_env() else {
-        eprintln!("SKIP: TEST_DISCO_ADDRESS unset; run `make infra-up` and source .env.node-oidc");
+        skip_or_fail("TEST_DISCO_ADDRESS unset; run `make infra-up` and source .env.node-oidc");
         return;
     };
     let Some(public_client_id) = env_nonempty("TEST_PKCE_PUBLIC_CLIENT_ID") else {
-        eprintln!("SKIP: TEST_PKCE_PUBLIC_CLIENT_ID unset for this provider profile");
+        skip_or_fail("TEST_PKCE_PUBLIC_CLIENT_ID unset for this provider profile");
         return;
     };
     let redirect_uri = env_nonempty("TEST_REDIRECT_URI")
@@ -314,15 +327,15 @@ async fn follow_to_callback(
 #[ignore = "requires a running OIDC provider (make infra-up); run via cargo test -- --ignored"]
 async fn integration_authorization_code_pkce_end_to_end() {
     let Some(issuer) = issuer_from_env() else {
-        eprintln!("SKIP: TEST_DISCO_ADDRESS unset; run `make infra-up` and source .env.node-oidc");
+        skip_or_fail("TEST_DISCO_ADDRESS unset; run `make infra-up` and source .env.node-oidc");
         return;
     };
     let Some(public_client_id) = env_nonempty("TEST_PKCE_PUBLIC_CLIENT_ID") else {
-        eprintln!("SKIP: TEST_PKCE_PUBLIC_CLIENT_ID unset for this provider profile");
+        skip_or_fail("TEST_PKCE_PUBLIC_CLIENT_ID unset for this provider profile");
         return;
     };
     let Some(redirect_uri) = env_nonempty("TEST_REDIRECT_URI") else {
-        eprintln!("SKIP: TEST_REDIRECT_URI unset for this provider profile");
+        skip_or_fail("TEST_REDIRECT_URI unset for this provider profile");
         return;
     };
 
@@ -334,7 +347,9 @@ async fn integration_authorization_code_pkce_end_to_end() {
     let meta = match discovery.discover(&issuer).await {
         Ok(meta) => meta,
         Err(e) => {
-            eprintln!("SKIP: provider not reachable at {issuer} (run `make infra-up`): {e}");
+            skip_or_fail(&format!(
+                "provider not reachable at {issuer} (run `make infra-up`): {e}"
+            ));
             return;
         }
     };
@@ -375,16 +390,28 @@ async fn integration_authorization_code_pkce_end_to_end() {
             .expect("authorize leg");
 
     if callback.is_none() {
-        // Providers without node-oidc's devInteractions land on a real (or
-        // missing) browser login UI here — e.g. IdentityServer's
+        // A >=400 rendered AT the authorization endpoint itself (no redirect)
+        // is how node-oidc reports the regressions this suite must catch —
+        // unknown client_id, redirect_uri mismatch — so it is a hard failure,
+        // never a skip. (Error redirects back to redirect_uri are caught via
+        // the callback's `error` param below.)
+        let auth_path = url::Url::parse(&meta.authorization_endpoint)
+            .map(|u| u.path().to_string())
+            .unwrap_or_default();
+        assert!(
+            !((status.is_client_error() || status.is_server_error()) && landed.path() == auth_path),
+            "authorization endpoint rejected the request: {status} at {landed}"
+        );
+        // Providers without node-oidc's devInteractions redirect AWAY to a
+        // real (or missing) browser login UI — e.g. IdentityServer's
         // /Account/Login 404s in the headless fixture. Skip, don't fail.
         if status.is_client_error()
             || status.is_server_error()
             || !landed.path().contains("/interaction/")
         {
-            eprintln!(
-                "SKIP: provider has no devInteractions (landed on {landed} with {status}); headless flow unavailable"
-            );
+            skip_or_fail(&format!(
+                "provider has no devInteractions (landed on {landed} with {status}); headless flow unavailable"
+            ));
             return;
         }
         // devInteractions login: a single endpoint dispatches on `prompt`.
@@ -450,7 +477,7 @@ async fn integration_authorization_code_pkce_end_to_end() {
         "empty access_token in exchange response"
     );
     assert!(
-        token.id_token.is_some(),
+        token.id_token.as_deref().is_some_and(|t| !t.is_empty()),
         "openid-scoped code exchange returned no id_token"
     );
 }

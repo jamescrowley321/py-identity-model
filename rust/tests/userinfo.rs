@@ -1,9 +1,9 @@
 //! Integration tests for the OIDC UserInfo client against a real provider.
 //!
-//! `#[ignore]`-gated so the unit `rust` CI job's bare `cargo test` (run with no
-//! provider up) stays green. The dedicated `rust-integration` CI job runs them
-//! with `cargo test -- --ignored` after bringing up the local `infra/`
-//! node-oidc-provider (`:9010`).
+//! `#[ignore]`-gated so a bare `cargo test` (no provider up) stays green. The
+//! `integration-tests-rust` CI job boots the local `infra/` node-oidc-provider
+//! (`:9010`), runs the unit suite, then runs these with
+//! `cargo test -- --ignored` under `TEST_REQUIRE_LIVE=1` (infra skips fail).
 //!
 //! Run locally:
 //!
@@ -43,6 +43,17 @@ const WELL_KNOWN_SUFFIX: &str = "/.well-known/openid-configuration";
 
 /// Returns the issuer derived from `TEST_DISCO_ADDRESS`, or `None` when the
 /// variable is unset so the caller can skip gracefully.
+/// Prints a SKIP marker — unless `TEST_REQUIRE_LIVE=1`, in which case it
+/// panics. CI sets the variable in the leg that just booted the fixture, so an
+/// unreachable provider or unsourced profile turns the leg red instead of
+/// green-skipping every test (mechanical-gate rule, CONS-1.4 review).
+fn skip_or_fail(msg: &str) {
+    if std::env::var("TEST_REQUIRE_LIVE").as_deref() == Ok("1") {
+        panic!("TEST_REQUIRE_LIVE=1 but {msg}");
+    }
+    eprintln!("SKIP: {msg}");
+}
+
 fn issuer_from_env() -> Option<String> {
     let disco = std::env::var("TEST_DISCO_ADDRESS").ok()?;
     let disco = disco.trim();
@@ -76,13 +87,15 @@ async fn endpoints_or_skip(issuer: &str, allow_http: bool) -> Option<(String, St
     match discovery.discover(issuer).await {
         Ok(meta) => {
             let Some(userinfo) = meta.userinfo_endpoint.filter(|u| !u.is_empty()) else {
-                eprintln!("SKIP: provider does not advertise a userinfo_endpoint");
+                skip_or_fail("provider does not advertise a userinfo_endpoint");
                 return None;
             };
             Some((userinfo, meta.token_endpoint))
         }
         Err(e) => {
-            eprintln!("SKIP: provider not reachable at {issuer} (run `make infra-up`): {e}");
+            skip_or_fail(&format!(
+                "provider not reachable at {issuer} (run `make infra-up`): {e}"
+            ));
             None
         }
     }
@@ -95,7 +108,7 @@ async fn endpoints_or_skip(issuer: &str, allow_http: bool) -> Option<(String, St
 #[ignore = "requires a running OIDC provider (make infra-up); run via cargo test -- --ignored"]
 async fn integration_userinfo_bogus_token() {
     let Some(issuer) = issuer_from_env() else {
-        eprintln!("SKIP: TEST_DISCO_ADDRESS unset; run `make infra-up` and source .env.node-oidc");
+        skip_or_fail("TEST_DISCO_ADDRESS unset; run `make infra-up` and source .env.node-oidc");
         return;
     };
 
@@ -147,14 +160,14 @@ async fn integration_userinfo_bogus_token() {
 #[ignore = "requires a running OIDC provider (make infra-up); run via cargo test -- --ignored"]
 async fn integration_userinfo_client_credentials_token() {
     let Some(issuer) = issuer_from_env() else {
-        eprintln!("SKIP: TEST_DISCO_ADDRESS unset; run `make infra-up` and source .env.node-oidc");
+        skip_or_fail("TEST_DISCO_ADDRESS unset; run `make infra-up` and source .env.node-oidc");
         return;
     };
     let (Some(client_id), Some(client_secret)) = (
         env_nonempty("TEST_CLIENT_ID"),
         env_nonempty("TEST_CLIENT_SECRET"),
     ) else {
-        eprintln!("SKIP: TEST_CLIENT_ID/TEST_CLIENT_SECRET unset for this provider profile");
+        skip_or_fail("TEST_CLIENT_ID/TEST_CLIENT_SECRET unset for this provider profile");
         return;
     };
 
@@ -164,7 +177,7 @@ async fn integration_userinfo_client_credentials_token() {
         return;
     };
     if token_endpoint.is_empty() {
-        eprintln!("SKIP: provider does not advertise a token_endpoint");
+        skip_or_fail("provider does not advertise a token_endpoint");
         return;
     }
 
@@ -182,7 +195,9 @@ async fn integration_userinfo_client_credentials_token() {
     let tok = match token_client.client_credentials(Some("openid")).await {
         Ok(tok) => tok,
         Err(e) => {
-            eprintln!("SKIP: client_credentials with openid scope unavailable: {e}");
+            skip_or_fail(&format!(
+                "client_credentials with openid scope unavailable: {e}"
+            ));
             return;
         }
     };

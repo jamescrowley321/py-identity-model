@@ -41,6 +41,11 @@ responds (Compose `healthcheck`s gate `--wait`, so CI can't race a
 half-booted provider; the Keycloak probe additionally waits for the realm
 import to finish).
 
+> All fixtures share one compose project, so every `make test-integration-*`
+> target's teardown runs `docker compose down` for the whole project —
+> including providers you started separately with `make infra-up`. Re-run
+> `make infra-up` afterwards if you need them back.
+
 ## Test selection
 
 All suites read the shared `TEST_*` environment convention:
@@ -56,13 +61,13 @@ All suites read the shared `TEST_*` environment convention:
   `cargo test -- --ignored` with `.env.node-oidc` sourced (they skip cleanly
   when `TEST_DISCO_ADDRESS` is unset).
 
-Pre-registered clients (mirrored across node-oidc-provider and
-IdentityServer so the same `TEST_CLIENT_ID`/`TEST_CLIENT_SECRET` work against
-both): `test-client-credentials`, `test-auth-code`, `test-pkce-public`
-(public, PKCE), `test-opaque` (node-oidc only — issues opaque tokens for
-introspection/revocation), `test-device`, `test-token-exchange`,
-`test-private-key-jwt` (node-oidc only). Keycloak registers
-`py-identity-model-client`, `test-auth-code`, and `test-pkce-public` in the
-imported `py-identity-model` realm. Custom multi-tenant claims (`dct`,
-`tenants`) are injected by the node-oidc fixture; see
+Pre-registered clients: `test-client-credentials`, `test-auth-code`, and
+`test-pkce-public` (public, PKCE) are **mirrored** across node-oidc-provider
+and IdentityServer so the same `TEST_CLIENT_ID`/`TEST_CLIENT_SECRET` work
+against both. `test-opaque` (opaque tokens for introspection/revocation),
+`test-device`, `test-token-exchange`, and `test-private-key-jwt` are
+**node-oidc-provider only**. Keycloak registers `py-identity-model-client`,
+`test-auth-code`, and `test-pkce-public` in the imported `py-identity-model`
+realm. Custom multi-tenant claims (`dct`, `tenants`) are injected by the
+node-oidc fixture; see
 [`node-oidc-provider/provider.js`](node-oidc-provider/provider.js).

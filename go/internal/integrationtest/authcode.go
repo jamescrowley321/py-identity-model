@@ -72,9 +72,22 @@ func PerformAuthCodeFlow(
 		return nil, err
 	}
 	if callback == "" {
-		// Providers without node-oidc's devInteractions land on a real (or
-		// missing) browser login UI here — e.g. IdentityServer's
-		// /Account/Login 404s in the headless fixture. Both shapes mean
+		// A >=400 rendered AT the authorization endpoint itself (no redirect)
+		// is how node-oidc reports the regressions this suite must catch —
+		// unknown client_id, redirect_uri mismatch — so it is a hard failure,
+		// never a skip. (Error redirects back to redirect_uri are caught via
+		// the callback's `error` param below.)
+		authPath := ""
+		if u, perr := url.Parse(authorizationEndpoint); perr == nil {
+			authPath = u.Path
+		}
+		if resp.StatusCode >= http.StatusBadRequest && resp.Request.URL.Path == authPath {
+			return nil, fmt.Errorf("authorization endpoint rejected the request: %d at %s",
+				resp.StatusCode, resp.Request.URL)
+		}
+		// Providers without node-oidc's devInteractions redirect AWAY to a
+		// real (or missing) browser login UI — e.g. IdentityServer's
+		// /Account/Login 404s in the headless fixture. That shape means
 		// "no headless login": signal skip, not failure.
 		if resp.StatusCode >= http.StatusBadRequest ||
 			!strings.Contains(resp.Request.URL.Path, "/interaction/") {

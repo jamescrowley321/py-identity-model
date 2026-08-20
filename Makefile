@@ -80,11 +80,11 @@ test-integration-go: ## Run Go integration tests against node-oidc (defaults) + 
 	@echo "Starting node-oidc-provider + IdentityServer fixtures..."
 	$(INFRA_COMPOSE) up -d --build --wait node-oidc-provider identityserver
 	@echo "Running Go integration tests (node-oidc default profile)..."
-	cd go && go test -tags=integration -count=1 ./... || \
-		(cd .. && $(INFRA_COMPOSE) down && exit 1)
+	(cd go && go test -tags=integration -count=1 ./...) || \
+		($(INFRA_COMPOSE) down && exit 1)
 	@echo "Running Go integration tests (IdentityServer profile)..."
-	set -a && . ./.env.identityserver && set +a && cd go && go test -tags=integration -count=1 ./... || \
-		(cd .. && $(INFRA_COMPOSE) down && exit 1)
+	set -a && . ./.env.identityserver && set +a && (cd go && go test -tags=integration -count=1 ./...) || \
+		($(INFRA_COMPOSE) down && exit 1)
 	$(INFRA_COMPOSE) down
 
 .PHONY: test-integration-rust
@@ -92,8 +92,8 @@ test-integration-rust: ## Run Rust live integration tests (#[ignore]-gated) agai
 	@echo "Starting node-oidc-provider fixture..."
 	$(INFRA_COMPOSE) up -d --build --wait node-oidc-provider
 	@echo "Running Rust live integration tests..."
-	set -a && . ./.env.node-oidc && set +a && cd rust && cargo test -- --ignored || \
-		(cd .. && $(INFRA_COMPOSE) down && exit 1)
+	set -a && . ./.env.node-oidc && set +a && (cd rust && cargo test -- --ignored) || \
+		($(INFRA_COMPOSE) down && exit 1)
 	$(INFRA_COMPOSE) down
 
 .PHONY: test-harness-rs
@@ -178,7 +178,7 @@ security-gate: mutation-security ## Aggregate mechanical security gate (Epic 19 
 # ── Pre-push ────────────────────────────────────────────────────────
 
 .PHONY: pre-push
-pre-push: lint test-fastapi test-integration-node-oidc test-integration-keycloak conformance-test-harness test-examples ## Full local validation before push
+pre-push: lint test-fastapi test-integration-node-oidc test-integration-keycloak test-integration-go test-integration-rust conformance-test-harness test-examples ## Full local validation before push
 
 # ── Docs ─────────────────────────────────────────────────────────────
 
