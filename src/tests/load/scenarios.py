@@ -180,6 +180,31 @@ class RampSpec:
         return max(self.min_users, ceil(target_rps / self.rps_per_user))
 
 
+@dataclass(frozen=True)
+class AlgCostBand:
+    """A machine-independent gate on the p95 latency ratio of two token classes.
+
+    Absolute p95 latency is runner-dependent (contention noise on a co-located
+    box), but the *ratio* of two classes measured in the **same** window is not —
+    both classes ride the same contention simultaneously, so the ratio reflects
+    the algorithms, not the machine. A deliberately **wide** band therefore
+    catches an order-of-magnitude alg-cost regression (e.g. an ES256 verify path
+    suddenly 5x slower) without ever flaking on runner noise. It is a regression
+    tripwire, NOT an SLO — see ``sprint-change-proposal-2026-08-19.md`` Track A.
+
+    Attributes:
+        num: Numerator token class (e.g. ``"valid_es256"``).
+        den: Denominator token class (e.g. ``"valid"``).
+        lo: Inclusive lower bound on ``num_p95 / den_p95``.
+        hi: Inclusive upper bound on ``num_p95 / den_p95``.
+    """
+
+    num: str
+    den: str
+    lo: float
+    hi: float
+
+
 # A pre-run hook mutating the mock OP (failure injection) before load starts.
 SetupHook = Callable[["MockOP"], None]
 
@@ -208,6 +233,15 @@ class Scenario:
             (walk arrival rate to the knee); when ``None`` it is a fixed-hold run
             driven by :func:`runner.run_scenario` (the ``users``/``duration``
             closed-loop path). The two are mutually exclusive.
+        alg_cost_band: Optional machine-independent gate on a two-class p95 latency
+            ratio (Track A). Set on scenarios that blend two token algorithms so a
+            cost-ratio regression FAILS ``evaluate_gates`` rather than only being
+            reported (e.g. S2's ES256/RS256).
+        warm_all_hits: When ``True`` the measured window must serve entirely from a
+            warm cache — ``evaluate_gates`` requires cache hits with no new misses
+            beyond the single cold warmup (the request-count-independent invariant
+            from #539). Only for warm scenarios whose classes are all cache-friendly
+            (no unknown-kid/no-store injection); leave ``False`` otherwise.
         notes: What the scenario proves.
     """
 
@@ -222,6 +256,8 @@ class Scenario:
     gate: str | None = None
     workers: int = 1
     ramp: RampSpec | None = None
+    alg_cost_band: AlgCostBand | None = None
+    warm_all_hits: bool = False
     notes: str = ""
 
 
@@ -265,6 +301,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         profile=Profile.CI_SHORT,
         classes=("valid",),
         gate="warm",
+        warm_all_hits=True,
         notes="find the warm p99 knee and RPS/worker with a fully hot cache",
     ),
     Scenario(
@@ -273,7 +310,11 @@ SCENARIOS: tuple[Scenario, ...] = (
         profile=Profile.CI_SHORT,
         classes=("valid", "valid_es256"),
         gate="warm",
-        notes="report the ES256/RS256 warm-validation cost ratio",
+        warm_all_hits=True,
+        # Wide band: a >5x swing in the ES256/RS256 p95 ratio is an unambiguous
+        # alg-cost regression; two classes in one window keep noise well under it.
+        alg_cost_band=AlgCostBand("valid_es256", "valid", 0.2, 5.0),
+        notes="report AND gate the ES256/RS256 warm-validation cost ratio",
     ),
     Scenario(
         id="S3",
