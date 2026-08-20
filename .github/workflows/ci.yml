@@ -480,6 +480,56 @@ jobs:
         if: always()
         run: docker compose -f infra/docker-compose.yml down
 
+  spec-vector-coverage:
+    # CONS-1.5 cross-language coverage gate: every language's thin runner must
+    # execute every executable vector id in spec/conformance (offline — no
+    # docker fixtures), and native cases must carry per-language test anchors.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: 3.13
+
+      - name: Cache uv dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-${{ runner.os }}-
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Cache cargo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: make ci-setup
+
+      - name: Spec vector-coverage gate
+        run: make spec-coverage
+
   integration-tests-rust:
     # Rust unit suite + #[ignore]-gated live suite vs the shared infra/
     # node-oidc fixture (CONS-1.4). Change-detected per-language CI comes with
@@ -526,7 +576,7 @@ jobs:
 
   ci-complete:
     if: always()
-    needs: [lint, unit-tests, fastapi-tests, integration-tests-ory, integration-tests-descope, integration-tests-node-oidc, integration-tests-keycloak, integration-tests-cross-issuer, integration-tests-go, integration-tests-rust, example-tests, build, security-gate, load-smoke]
+    needs: [lint, unit-tests, fastapi-tests, integration-tests-ory, integration-tests-descope, integration-tests-node-oidc, integration-tests-keycloak, integration-tests-cross-issuer, integration-tests-go, integration-tests-rust, spec-vector-coverage, example-tests, build, security-gate, load-smoke]
     runs-on: ubuntu-latest
     steps:
       - name: Check CI results
@@ -542,6 +592,7 @@ jobs:
             "${{ needs.integration-tests-cross-issuer.result }}" \
             "${{ needs.integration-tests-go.result }}" \
             "${{ needs.integration-tests-rust.result }}" \
+            "${{ needs.spec-vector-coverage.result }}" \
             "${{ needs.example-tests.result }}" \
             "${{ needs.build.result }}" \
             "${{ needs.security-gate.result }}" \

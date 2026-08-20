@@ -2,11 +2,13 @@ package conformance
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -63,6 +65,43 @@ func TestValidationConformance(t *testing.T) {
 		if !tc.IsNative() && !executed[tc.ID] {
 			t.Errorf("case %s is defined but was not executed by the Go runner", tc.ID)
 		}
+	}
+
+	writeCoverageReport(t, suite, executed)
+}
+
+// writeCoverageReport emits the executed/native case ids for the
+// cross-language coverage gate (tools/spec_coverage_gate.py) when
+// SPEC_COVERAGE_OUT is set. Same shape as the Python and Rust runners.
+func writeCoverageReport(t *testing.T, suite *Capability, executed map[string]bool) {
+	t.Helper()
+	out := os.Getenv("SPEC_COVERAGE_OUT")
+	if out == "" {
+		return
+	}
+	native := map[string]string{}
+	for _, tc := range suite.Tests {
+		if tc.IsNative() {
+			native[tc.ID] = tc.NativeTest
+		}
+	}
+	ids := make([]string, 0, len(executed))
+	for id := range executed {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	report := map[string]any{
+		"language":   "go",
+		"capability": suite.Capability,
+		"executed":   ids,
+		"native":     native,
+	}
+	b, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal coverage report: %v", err)
+	}
+	if err := os.WriteFile(out, append(b, '\n'), 0o644); err != nil {
+		t.Fatalf("write coverage report %s: %v", out, err)
 	}
 }
 
