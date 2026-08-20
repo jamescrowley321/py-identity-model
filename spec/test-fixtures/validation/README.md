@@ -6,6 +6,7 @@ Shared key material and static tokens for the `validation` conformance suite
 | File | Purpose |
 |------|---------|
 | `signing-key.jwk.json` | RSA-2048 **private** JWK (`kid=test-key-1`, `alg=RS256`). Implementations mint signed test tokens with this key so each language signs with identical material. |
+| `signing-key.pkcs1.der` | The **same** private key in PKCS#1 DER form (byte-for-byte derived from `signing-key.jwk.json`). Lets signers that consume DER/PEM (e.g. the Rust binding via `jsonwebtoken::EncodingKey::from_rsa_der`) load the shared key without a JWK-to-key crate. Binary DER, not armored PEM, to avoid tripping secret scanners. |
 | `jwks.json` | The matching **public** JWK Set served to the validator. Resolving `kid=test-key-1` yields the key that verifies tokens signed with `signing-key.jwk.json`. |
 | `alg-none-token.txt` | A static unsigned JWT with header `alg:"none"`, for `JWT-003`. It must be rejected unconditionally. |
 
