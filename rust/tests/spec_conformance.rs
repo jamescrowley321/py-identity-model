@@ -250,12 +250,22 @@ fn mint_token(spec: &TokenSpec) -> String {
 
     if spec.signing_key == "ephemeral" {
         // Corrupt the signature instead of signing with a throwaway RSA key
-        // (see module docs): flip the final signature character to one that
-        // stays in the base64url alphabet but changes the signature bytes.
-        let mut chars: Vec<char> = token.chars().collect();
-        let last = *chars.last().expect("non-empty token");
-        *chars.last_mut().unwrap() = if last == 'A' { 'B' } else { 'A' };
-        return chars.into_iter().collect();
+        // (see module docs). Flip a character early in the signature segment —
+        // NOT the last char: the RS256 signature's final base64url char carries
+        // only 2 significant bits, so flipping it can produce non-canonical
+        // trailing bits that a strict decoder rejects as *malformed* rather
+        // than a signature mismatch. A full-6-bit interior position always
+        // changes the decoded signature bytes and keeps the token well-formed,
+        // so verification fails for the right reason (JWT-009 = signature).
+        let (rest, sig) = token
+            .rsplit_once('.')
+            .expect("compact JWS has a signature segment");
+        assert!(sig.len() > 2, "signature segment too short to corrupt");
+        let mut sig_chars: Vec<char> = sig.chars().collect();
+        // Position 1 is a full-6-bit char (not the final trailing-bit char).
+        let orig = sig_chars[1];
+        sig_chars[1] = if orig == 'A' { 'B' } else { 'A' };
+        return format!("{rest}.{}", sig_chars.into_iter().collect::<String>());
     }
     token
 }

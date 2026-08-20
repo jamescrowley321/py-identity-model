@@ -19,6 +19,10 @@ Two deliberate deviations from the Go runner, both semantics-preserving:
   claims-validator extension point (``TokenValidationConfig.claims_validator``
   + ``core.token_validation_logic.validate_claims``), not a dedicated option;
   the executor wires the vector's ``expected_nonce`` through that path.
+* **iat presence** (JWT-013): Go/Rust hard-require ``iat`` natively; PIM keeps
+  it opt-in (default-off) for backward compatibility, so the executor drives
+  PIM into the required behaviour via its ``require`` option. An intentional,
+  documented default difference — see the PARITY NOTE in ``_execute``.
 
 Coverage: ``test_every_vector_case_is_parametrized`` is the runner-internal
 gate (every non-native case id must be executed; native cases must name a
@@ -165,8 +169,15 @@ def _execute(vector: dict) -> dict:
         else None
     )
     algorithms = options.get("allowed_algorithms") or ["RS256"]
-    # The capability requires iat presence (RFC 7519 §4.1 as profiled in
-    # spec/capabilities.md, JWT-013); vector required_claims extend it.
+    # PARITY NOTE (JWT-013): the capability requires iat presence (RFC 7519
+    # §4.1.6, profiled in spec/capabilities.md). Go and Rust enforce this
+    # NATIVELY (go/pkg/jwt/claims.go, rust/src/jwt/claims.rs both hard-require
+    # iat) — their runners pass no option for JWT-013. py-identity-model keeps
+    # iat-presence OPT-IN (default-off) to stay backward-compatible for existing
+    # consumers, so the executor drives PIM into the capability's required
+    # behaviour via its documented `require` option. This is a real, intentional
+    # default difference, not a masked gap: the assertion still exercises PIM's
+    # option-plumbing + exception-wrapping path. Vector required_claims extend it.
     pyjwt_options: dict = {
         "require": ["iat", *options.get("required_claims", [])],
     }

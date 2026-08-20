@@ -113,6 +113,20 @@ def check_reports(report_dir: Path) -> int:
     if not inventory:
         sys.exit("[spec-coverage] no capability with executable vectors found in spec/")
 
+    # Each language runner writes ONE report keyed to a single capability today
+    # (only validation.json has executable vectors). If a second capability
+    # gains vectors, this one-report-per-language shape would silently stop
+    # gating it — so fail loudly and force the runners to emit per-capability
+    # reports before that can happen, rather than pass covering only some.
+    if len(inventory) > 1:
+        sys.exit(
+            "[spec-coverage] GATE FAILED — multiple capabilities now carry "
+            f"executable vectors ({sorted(inventory)}), but each language runner "
+            "reports only one. Extend the runners to emit a per-capability "
+            "coverage report and update this gate to check every (language, "
+            "capability) pair before landing new vectors."
+        )
+
     failures: list[str] = []
     for language, _, _ in RUNNERS:
         report_path = report_dir / f"{language}.json"
