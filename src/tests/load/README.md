@@ -184,7 +184,7 @@ today; never flake on runner noise):
 | steady-state status-correctness | every class returns its expected 200/401/403; expected 401/403 rejections stay out of the error budget |
 | single-flight | cold-stampede upstream fetches `== 1` discovery + 1 JWKS per issuer (S3) |
 | warm-all-hits | S1/S2 measured window adds no miss beyond the cold warmup, hits > 0 (`evaluate_gates`; #539 form) |
-| S2 alg-cost ratio | ES256/RS256 p95 ratio within a **wide** band `[0.2, 5.0]` — a ratio is machine-independent, so this catches a >5x alg-cost regression, not noise |
+| S2 alg-cost ratio | ES256/RS256 p95 ratio within a **coarse** band `[0.33, 3.0]` — a ratio is machine-independent (healthy is pinned ~1.0), so this catches a **gross per-request cost asymmetry** (e.g. one path doing per-request keygen/IO), NOT a subtle or common-mode verify regression (those are Track C — end-to-end p95 is ms-quantised and overhead-dominated) |
 
 **Track B — reported, not gated** (uploaded as artifacts; never a shared-CI pass/fail):
 absolute RPS, p50–p999 latency, the capacity knee, and the RSS/FD trend. Their

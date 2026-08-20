@@ -85,7 +85,8 @@ def test_no_server_errors_anywhere(nightly_results):
 # A soak leak grows without bound; interpreter/allocator noise over a <=75s window
 # does not. These ceilings are deliberately generous — they catch a runaway leak,
 # not a few MB of arena churn. Precise per-scenario calibration from a baseline is
-# T314 (the dormant ``runner.GATES``); T313 proves the signal exists and is bounded.
+# T314b on the isolated runner (the dormant ``runner.GATES``, Track C); T313 proves
+# the signal exists and is bounded.
 _MAX_SOAK_RSS_GROWTH_MB = 128.0
 _MAX_SOAK_FD_GROWTH = 64
 
