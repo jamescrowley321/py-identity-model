@@ -458,12 +458,15 @@ def evaluate_gates(result: LoadResult) -> list[str]:
 
 
 def _alg_cost_band_violations(result: LoadResult, scenario: Scenario) -> list[str]:
-    """Flag a two-class p95 latency ratio that fell outside its wide band.
+    """Flag a two-class p95 latency ratio outside its band (a gross asymmetry).
 
-    A degenerate/missing ratio (a class did not drive load, or its p95 is zero) is
-    NOT flagged here — presence is asserted by the CI-short reportable test — so
-    the gate never double-jeopardies a thin sample; it fires only on a real,
-    order-of-magnitude ratio regression.
+    A coarse tripwire (see :class:`AlgCostBand`): it catches a gross per-request
+    cost asymmetry between the two algorithm paths, not a subtle verify-time
+    regression (end-to-end p95 is ms-quantised and overhead-dominated). A
+    degenerate/missing ratio (a class did not drive load, or its p95 is zero) is
+    NOT flagged here — presence is asserted by the CI-short
+    ``test_s2_alg_cost_ratio_is_reportable`` test — so the gate never
+    double-jeopardies a thin sample.
     """
     band = scenario.alg_cost_band
     if band is None:

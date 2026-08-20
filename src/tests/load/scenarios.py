@@ -182,15 +182,20 @@ class RampSpec:
 
 @dataclass(frozen=True)
 class AlgCostBand:
-    """A machine-independent gate on the p95 latency ratio of two token classes.
+    """A machine-independent, **coarse** tripwire on the p95 ratio of two classes.
 
-    Absolute p95 latency is runner-dependent (contention noise on a co-located
-    box), but the *ratio* of two classes measured in the **same** window is not —
-    both classes ride the same contention simultaneously, so the ratio reflects
-    the algorithms, not the machine. A deliberately **wide** band therefore
-    catches an order-of-magnitude alg-cost regression (e.g. an ES256 verify path
-    suddenly 5x slower) without ever flaking on runner noise. It is a regression
-    tripwire, NOT an SLO — see ``sprint-change-proposal-2026-08-19.md`` Track A.
+    The ratio of two classes measured in the **same** window is machine-independent
+    (both ride the same contention), unlike absolute p95. But it is a blunt
+    instrument, not a verify-cost gate: end-to-end p95 is dominated by non-crypto
+    overhead and reported in whole milliseconds, so the healthy ES256/RS256 ratio
+    sits pinned at ~1.0 (measured) and a *subtle* verify-time regression (sub-ms)
+    does not move it at all. What a modest band DOES catch is a **gross per-request
+    cost asymmetry** between the two algorithm paths — e.g. one path accidentally
+    doing per-request keygen or IO, adding whole milliseconds to only that class.
+    It does NOT catch a subtle verify regression, nor a **common-mode** slowdown
+    (both classes move together, ratio unchanged); those need absolute latency on
+    the isolated runner (Track C, ``sprint-change-proposal-2026-08-19.md``). A
+    coarse regression tripwire, NOT an SLO.
 
     Attributes:
         num: Numerator token class (e.g. ``"valid_es256"``).
@@ -311,10 +316,13 @@ SCENARIOS: tuple[Scenario, ...] = (
         classes=("valid", "valid_es256"),
         gate="warm",
         warm_all_hits=True,
-        # Wide band: a >5x swing in the ES256/RS256 p95 ratio is an unambiguous
-        # alg-cost regression; two classes in one window keep noise well under it.
-        alg_cost_band=AlgCostBand("valid_es256", "valid", 0.2, 5.0),
-        notes="report AND gate the ES256/RS256 warm-validation cost ratio",
+        # Coarse asymmetry tripwire: the healthy ES256/RS256 p95 ratio is pinned at
+        # ~1.0 (measured), so a >3x whole-ms swing means one path is doing gross
+        # per-request work the other isn't. Deliberately flake-safe, not tight; it
+        # does NOT catch subtle or common-mode verify regressions (those are
+        # Track C, isolated runner).
+        alg_cost_band=AlgCostBand("valid_es256", "valid", 0.33, 3.0),
+        notes="report AND coarsely gate the ES256/RS256 warm-validation cost ratio",
     ),
     Scenario(
         id="S3",
