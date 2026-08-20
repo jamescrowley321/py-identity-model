@@ -403,16 +403,17 @@ SCENARIOS: tuple[Scenario, ...] = (
     ),
     Scenario(
         id="S10",
-        title="blocking claims_validator (event-loop stall) — SCAFFOLD",
+        title="blocking claims_validator (event-loop stall) — DEFERRED BACKLOG",
         profile=Profile.DIAGNOSTIC,
         classes=("valid",),
         steady_state=False,
         gate="warm",
-        notes="INCOMPLETE: proving a synchronous custom claims validator stalls "
-        "the loop (vs an async one) needs a blocking validator wired into the RS "
-        "app, which is not yet implemented — this row is a placeholder for a "
-        "later iteration. DIAGNOSTIC-only, never gated; drives no assertion "
-        "today. Do NOT treat as coverage.",
+        notes="DEFERRED BACKLOG, de-scoped from the S1-S12 coverage matrix "
+        "(sprint-change-proposal-2026-08-19): proving a synchronous custom claims "
+        "validator stalls the loop (vs an async one) needs a blocking validator "
+        "wired into the RS app — a separate feature, not yet implemented. "
+        "DIAGNOSTIC-only, never gated; drives no assertion. Do NOT treat as "
+        "coverage.",
     ),
     Scenario(
         id="S11",
