@@ -15,7 +15,7 @@ proofs (LRU, mix-up, `private_key_jwt`); this suite owns load and soak.
 
 | Module | Role |
 |--------|------|
-| `scenarios.py` | The S1–S12 catalogue, run profiles, and the expected-status map (authoritative profile split — see below). |
+| `scenarios.py` | The S1–S12 catalogue (S1–S9, S11, S12 implemented; **S10 is a deferred-backlog scaffold** — see below), run profiles, and the expected-status map (authoritative profile split — see below). |
 | `pool.py` | The pre-minted replay pool (mint once, replay many). |
 | `locustfile.py` | A standalone Locust file the runner drives as a subprocess. |
 | `runner.py` | Orchestration (fresh mock OP + booted RS per scenario), metric collection, and SLO gate evaluation. |
@@ -88,7 +88,7 @@ in `scenarios.py`; this table mirrors it.
 | S7 | LRU thrash > 64 issuers | NIGHTLY | bounded memory under > 64 distinct issuers |
 | S8 | rejection correctness & uniformity under contention | CI_SHORT | every class returns its correct status, uniform 401 body, zero 500s |
 | S9 | discovery no-store (re-fetch every request) | DIAGNOSTIC | no-store discovery collapses throughput while JWKS stays cached |
-| S10 | blocking claims_validator (event-loop stall) | DIAGNOSTIC | **SCAFFOLD — not implemented** (see below) |
+| S10 | blocking claims_validator (event-loop stall) | DIAGNOSTIC | **DEFERRED BACKLOG — not implemented, excluded from coverage** (see below) |
 | S11 | RSS / FD soak | NIGHTLY | flat RSS/FD for a single issuer — sampled via `resource_sampler.py`, asserted bounded (T313) |
 | S12 | multi-tenant + issuer mix-up | NIGHTLY | tenant LRU survival + RFC 9207 cross-issuer rejection under load |
 | C1 | warm ramp-to-breakpoint (hot cache) | CAPACITY | warm goodput knee + max-sustainable RPS / worker |
@@ -99,10 +99,14 @@ Two placement notes:
 - **S4 is NIGHTLY-only.** The cache enforces a hard 60s minimum TTL
   (`core.jwks_cache.MIN_CACHE_TTL_SECONDS`), so a genuine TTL rollover cannot
   happen inside a ~3s CI-short window — S4 needs a >60s run.
-- **S10 is an unimplemented scaffold.** Proving a synchronous custom claims
+- **S10 is deferred backlog, not coverage.** Proving a synchronous custom claims
   validator stalls the event loop needs a blocking validator wired into the RS
-  app, which does not exist yet. The row is a DIAGNOSTIC-only placeholder, never
-  gated, and drives no assertion. Do **not** treat it as coverage.
+  app — a separate feature that does not exist yet. S10 is therefore **de-scoped
+  from the S1–S12 coverage matrix** (11 scenarios are implemented) and kept only
+  as a tracked backlog marker: DIAGNOSTIC-only, never gated, drives no assertion.
+  Implementing it requires a blocking-validator RS app + a scenario that asserts
+  the loop stall vs an async validator. See `sprint-change-proposal-2026-08-19.md`
+  (identity-stack-planning). Do **not** treat it as coverage.
 
 ## Capacity / breakpoint (TH-4)
 
