@@ -2,6 +2,39 @@
 
 <!-- version list -->
 
+## v3.11.1 (2026-08-20)
+
+### Bug Fixes
+
+- **rust**: Remove dead RUSTSEC-2023-0071 allowlist from deny.toml
+  ([#541](https://github.com/jamescrowley321/py-identity-model/pull/541),
+  [`d683095`](https://github.com/jamescrowley321/py-identity-model/commit/d683095773c2bb478bee5a3c03c98bb38e9c59d9))
+
+### Chores
+
+- **rust**: Import Rust binding under /rust (CONS-1.2)
+  ([#541](https://github.com/jamescrowley321/py-identity-model/pull/541),
+  [`d683095`](https://github.com/jamescrowley321/py-identity-model/commit/d683095773c2bb478bee5a3c03c98bb38e9c59d9))
+
+### Continuous Integration
+
+- **load**: Upload PR-gate load-smoke summary as an artifact
+  ([#542](https://github.com/jamescrowley321/py-identity-model/pull/542),
+  [`b460611`](https://github.com/jamescrowley321/py-identity-model/commit/b46061150adeaf1e5fac6a5a85a94a2fc2b2122a))
+
+### Refactoring
+
+- **rust**: Drop rsa crate (RUSTSEC-2023-0071) via aws_lc_rs backend
+  ([#541](https://github.com/jamescrowley321/py-identity-model/pull/541),
+  [`d683095`](https://github.com/jamescrowley321/py-identity-model/commit/d683095773c2bb478bee5a3c03c98bb38e9c59d9))
+
+### Testing
+
+- **load**: Make S1 warm-cache proof request-count-independent
+  ([#539](https://github.com/jamescrowley321/py-identity-model/pull/539),
+  [`60cfdf4`](https://github.com/jamescrowley321/py-identity-model/commit/60cfdf4e90cc5964a0240ad3be76e8e9e3d57a4a))
+
+
 ## v3.11.0 (2026-08-18)
 
 ### Bug Fixes
