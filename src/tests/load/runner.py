@@ -447,6 +447,66 @@ def evaluate_gates(result: LoadResult) -> list[str]:
                 f"{result.scenario_id}: cache-hit-rate {result.cache_hit_rate:.4f} "
                 f"< {gate.min_cache_hit_rate}"
             )
+    # Machine-independent Track-A gates (sprint-change-proposal-2026-08-19): these
+    # fail on a real regression but never on runner noise, so they are safe on the
+    # co-located shared CI where absolute p99/RPS thresholds cannot live.
+    scenario = SCENARIOS_BY_ID.get(result.scenario_id)
+    if scenario is not None:
+        violations.extend(_alg_cost_band_violations(result, scenario))
+        violations.extend(_warm_all_hits_violations(result, scenario))
+    return violations
+
+
+def _alg_cost_band_violations(result: LoadResult, scenario: Scenario) -> list[str]:
+    """Flag a two-class p95 latency ratio that fell outside its wide band.
+
+    A degenerate/missing ratio (a class did not drive load, or its p95 is zero) is
+    NOT flagged here — presence is asserted by the CI-short reportable test — so
+    the gate never double-jeopardies a thin sample; it fires only on a real,
+    order-of-magnitude ratio regression.
+    """
+    band = scenario.alg_cost_band
+    if band is None:
+        return []
+    ratio = result.alg_cost_ratio(band.num, band.den)
+    if ratio is None:
+        return []
+    if not band.lo <= ratio <= band.hi:
+        return [
+            f"{result.scenario_id}: {band.num}/{band.den} p95 ratio {ratio:.3f} "
+            f"outside [{band.lo}, {band.hi}] — alg-cost regression"
+        ]
+    return []
+
+
+def _warm_all_hits_violations(result: LoadResult, scenario: Scenario) -> list[str]:
+    """Flag a warm-all-hits scenario whose measured window was not all-hits.
+
+    The request-count-independent form of the S1 warm invariant (#539) lifted into
+    the gate path: the window must record cache hits and add no misses beyond the
+    single cold warmup (≤1 discovery, ≤1 JWKS). Zero hits also fires — a broken
+    ``/metrics`` scrape must not pass a warm-cache gate vacuously.
+    """
+    if not scenario.warm_all_hits:
+        return []
+    m = result.cache_metrics
+    hits = m.get("disco_hits", 0) + m.get("jwks_hits", 0)
+    if hits <= 0:
+        return [
+            f"{result.scenario_id}: warm-all-hits gate saw no cache hits "
+            f"(metrics={m}) — cache not exercised or /metrics scrape broken"
+        ]
+    violations: list[str] = []
+    if m.get("disco_misses", 0) > 1:
+        violations.append(
+            f"{result.scenario_id}: warm window added discovery misses "
+            f"(disco_misses={m.get('disco_misses')} > 1)"
+        )
+    if m.get("jwks_misses", 0) > 1:
+        violations.append(
+            f"{result.scenario_id}: warm window added JWKS misses "
+            f"(jwks_misses={m.get('jwks_misses')} > 1)"
+        )
     return violations
 
 
