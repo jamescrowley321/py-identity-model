@@ -23,8 +23,10 @@ Scenarios are grouped into run **profiles**:
 
 Gates come in two tiers (``sprint-change-proposal-2026-08-19.md``). Shared CI gates
 on **machine-independent invariants** — 5xx, status correctness, single-flight, the
-S2 alg-cost ratio band, warm-all-hits (:func:`runner.evaluate_gates`, Track A) — so
-a real regression fails but runner noise never does. The **absolute** SLO thresholds
+S2 alg-cost ratio band, warm-all-hits — asserted across :func:`runner.evaluate_gates`
+(5xx, status, alg-cost band, warm-all-hits) and the CI-short tests (single-flight in
+``test_s3_cold_stampede_is_single_flight``) — Track A, so a real regression fails but
+runner noise never does. The **absolute** SLO thresholds
 (:mod:`runner` ``GATES`` — ``max_p99_ms``/``min_rps``/…) stay dormant on the
 co-located shared runner *by design* and are calibrated only on an isolated runner
 (T314b → TH-4.5, Track C), where absolute p99/RPS are trustworthy.
