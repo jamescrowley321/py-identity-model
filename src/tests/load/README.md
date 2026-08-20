@@ -15,7 +15,7 @@ proofs (LRU, mix-up, `private_key_jwt`); this suite owns load and soak.
 
 | Module | Role |
 |--------|------|
-| `scenarios.py` | The S1–S12 catalogue (S1–S9, S11, S12 implemented; **S10 is a deferred-backlog scaffold** — see below), run profiles, and the expected-status map (authoritative profile split — see below). |
+| `scenarios.py` | The S1–S12 catalogue (S1–S9, S11, S12 implemented; **S10 is deferred backlog, not coverage** — see below), run profiles, and the expected-status map (authoritative profile split — see below). |
 | `pool.py` | The pre-minted replay pool (mint once, replay many). |
 | `locustfile.py` | A standalone Locust file the runner drives as a subprocess. |
 | `runner.py` | Orchestration (fresh mock OP + booted RS per scenario), metric collection, and SLO gate evaluation. |
