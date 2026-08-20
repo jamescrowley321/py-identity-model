@@ -158,10 +158,11 @@ conformance/results/hosted/rp-logs/
 .ralph/
 PROMPT.md
 
-# Load-report artifacts (TH-4) — written by the load-capacity / load-soak runs,
-# uploaded as CI artifacts, never committed.
+# Load-report artifacts — written by the load-capacity / load-soak / load-smoke
+# runs, uploaded as CI artifacts, never committed.
 capacity-report.txt
 soak-report.txt
+load-smoke-report.txt
 
 # Terraform
 infra/**/.terraform/

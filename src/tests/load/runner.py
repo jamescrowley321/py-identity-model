@@ -639,6 +639,47 @@ def write_soak_report(results: list[LoadResult], path: str | Path) -> Path:
     return _write_report(render_soak_report(results), path)
 
 
+def render_smoke_report(results: list[LoadResult]) -> str:
+    """A human/artifact-readable per-scenario summary for the CI_SHORT gate.
+
+    Turns each scenario's throughput/latency/error/cache numbers — and its
+    pass/fail gate verdict — into a table the PR-gate ``load-smoke`` job uploads
+    as a downloadable artifact, so the per-PR load run leaves evidence behind
+    instead of only a green check. The ``gate`` column flags PASS/FAIL; any
+    violations are listed in full below the table.
+    """
+    lines = [
+        "Load-smoke summary (CI_SHORT) — real Locust vs the booted RS, short hold",
+        f"{'scenario':<9}{'reqs':>7}{'rps':>9}{'p50ms':>8}{'p95ms':>8}{'p99ms':>8}"
+        f"{'p999ms':>9}{'err%':>7}{'5xx':>5}{'hit%':>7}  {'gate':<4} title",
+    ]
+    violations: list[str] = []
+    for r in results:
+        gate = evaluate_gates(r)
+        violations.extend(gate)
+        lines.append(
+            f"{r.scenario_id:<9}{r.num_requests:>7}{r.rps:>9.1f}{r.p50_ms:>8.1f}"
+            f"{r.p95_ms:>8.1f}{r.p99_ms:>8.1f}{r.p999_ms:>9.1f}"
+            f"{r.error_rate * 100:>7.2f}{r.server_errors:>5}{r.cache_hit_rate * 100:>7.1f}"
+            f"  {'FAIL' if gate else 'PASS':<4} {r.title}"
+        )
+    if violations:
+        lines.append("")
+        lines.append("Gate violations:")
+        lines.extend(f"  - {v}" for v in violations)
+    return "\n".join(lines) + "\n"
+
+
+def write_smoke_report(results: list[LoadResult], path: str | Path) -> Path:
+    """Render the CI_SHORT per-scenario summary and write it to *path*.
+
+    The PR-gate ``load-smoke`` job sets ``HARNESS_SMOKE_REPORT`` so this table is
+    uploaded as a downloadable artifact — the per-scenario RPS / latency /
+    gate-verdict evidence that otherwise lives only in the job log.
+    """
+    return _write_report(render_smoke_report(results), path)
+
+
 @contextlib.contextmanager
 def _scenario_stack(workers: int = 1) -> Iterator[tuple[MockOP, str, int]]:
     """Fresh mock OP + booted RS for a single scenario (clean cache each time).

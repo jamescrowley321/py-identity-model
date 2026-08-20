@@ -437,7 +437,18 @@ jobs:
         run: make ci-setup
 
       - name: Load smoke (CI-short profile — real Locust vs the booted RS)
+        env:
+          HARNESS_SMOKE_REPORT: load-smoke-report.txt
         run: make test-harness-load
+
+      # Per-scenario RPS/latency/gate table. Written before the gate assertions
+      # run, so the artifact survives a failing gate — upload always.
+      - name: Upload load-smoke report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: load-smoke-report
+          path: load-smoke-report.txt
 
   ci-complete:
     if: always()

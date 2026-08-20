@@ -21,6 +21,7 @@ thread the runner boots. Locust only ever runs in the runner's subprocess.
 from __future__ import annotations
 
 import importlib.util
+import os
 
 import pytest
 
@@ -30,7 +31,7 @@ if importlib.util.find_spec("locust") is None:
 pytest.importorskip("fastapi_identity_model")
 pytest.importorskip("uvicorn")
 
-from ..load.runner import evaluate_gates, run_profile
+from ..load.runner import evaluate_gates, run_profile, write_smoke_report
 from ..load.scenarios import Profile, profile_scenarios
 
 
@@ -38,15 +39,25 @@ pytestmark = pytest.mark.integration
 
 _CI_SHORT_IDS = [s.id for s in profile_scenarios(Profile.CI_SHORT)]
 
+# Where the fixture writes the per-scenario RPS/latency/gate table so CI can
+# upload it as an artifact (the numbers the pass/fail assertions otherwise hide).
+# The load-smoke job overrides it to the artifact path; local runs leave a
+# gitignored file.
+_SMOKE_REPORT_PATH = os.environ.get("HARNESS_SMOKE_REPORT", "load-smoke-report.txt")
+
 
 @pytest.fixture(scope="module")
 def ci_short_results():
     """Run the CI_SHORT profile once; share the per-scenario results.
 
     Each scenario boots its own mock OP + RS, so this is a few seconds per
-    scenario — run once at module scope and assert over the results.
+    scenario — run once at module scope and assert over the results. The
+    per-scenario summary is written to ``_SMOKE_REPORT_PATH`` before the
+    assertions run, so the artifact exists even when a later assertion fails.
     """
-    return {result.scenario_id: result for result in run_profile(Profile.CI_SHORT)}
+    results = {result.scenario_id: result for result in run_profile(Profile.CI_SHORT)}
+    write_smoke_report(list(results.values()), _SMOKE_REPORT_PATH)
+    return results
 
 
 def test_every_ci_short_scenario_ran(ci_short_results):
