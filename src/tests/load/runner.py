@@ -57,10 +57,10 @@ if TYPE_CHECKING:
 HTTP_SERVER_ERROR_FLOOR = 500
 _LOCUSTFILE = Path(__file__).with_name("locustfile.py")
 _LOCUST_GRACE = 60.0  # seconds of headroom over a scenario's run-time
-# A steady-state window that recorded fewer than this many requests never really
-# measured the RS — see _degenerate_window. The re-drive stretches the window by
-# this factor so a cold-runner startup cost is amortised on the second attempt.
-_MIN_STEADY_STATE_REQUESTS = 1
+# A window that recorded fewer than this many requests never really measured the
+# RS — see _degenerate_window. The re-drive stretches the window by this factor so
+# a cold-runner Locust startup cost is amortised on the second attempt.
+_MIN_MEASURED_REQUESTS = 1
 _DEGENERATE_RETRY_FACTOR = 3
 
 
@@ -317,14 +317,17 @@ def run_scenario(
             run_seconds=int(scenario.duration_seconds),
             label=scenario.id,
         )
-        # A steady-state window that drove ~zero requests never measured the RS:
-        # on a cold/contended runner Locust's subprocess startup (gevent
-        # monkey-patch + import + connect) can consume the whole short window
-        # before any request completes, yielding a degenerate 0-request summary
-        # that false-fails the "drove load"/warm-cache gates. Re-drive once with a
-        # longer window — the caches are already warm and the flake does not
-        # repeat — rather than trusting the empty measurement.
-        if _degenerate_window(scenario, summary):
+        # A window that drove ~zero requests never measured the RS: on a
+        # cold/contended runner Locust's subprocess startup (gevent monkey-patch +
+        # import + connect) can consume the whole short window before any request
+        # completes, yielding a degenerate 0-request summary that false-fails the
+        # "drove load"/warm-cache gates. This startup flake is orthogonal to the
+        # scenario type — a fast failure-injection scenario (S6 kid-rotation,
+        # returning quick 401/200s) that recorded zero is just as degenerate as a
+        # steady-state one. Re-drive once with a longer window — the caches are
+        # already warm and the flake does not repeat — rather than trusting the
+        # empty measurement.
+        if _degenerate_window(summary):
             summary = _run_locust(
                 base_url,
                 pool,
@@ -337,16 +340,20 @@ def run_scenario(
     )
 
 
-def _degenerate_window(scenario: Scenario, summary: dict) -> bool:
-    """True when a steady-state run recorded too few requests to be a measurement.
+def _degenerate_window(summary: dict) -> bool:
+    """True when a run recorded ~zero requests — a startup flake, not a measurement.
 
-    Only steady-state scenarios qualify: a failure-injection scenario
-    (``steady_state=False``) can legitimately drive few completed requests (e.g.
-    provider-slowness stalls), so a low count there is signal, not a flake.
+    Applies to *every* scenario, not just steady-state ones: the flake is Locust
+    subprocess startup eating the window, orthogonal to scenario type, so a fast
+    failure-injection scenario (e.g. S6, which is ``steady_state=False`` yet in the
+    PR gate) that recorded zero requests is just as degenerate. Only a literally
+    empty window (``< 1`` request) qualifies, so a ``steady_state=False`` scenario
+    that legitimately drives a *few* requests (provider-slowness stalls) keeps its
+    data — non-zero injection signal is never masked. If the re-drive is also
+    empty, the empty summary stands and the caller's ``num_requests > 0`` gate
+    fails as it should (a truly hung RS is a defect, not a flake).
     """
-    if not scenario.steady_state:
-        return False
-    return int(summary.get("num_requests", 0)) < _MIN_STEADY_STATE_REQUESTS
+    return int(summary.get("num_requests", 0)) < _MIN_MEASURED_REQUESTS
 
 
 @contextlib.contextmanager

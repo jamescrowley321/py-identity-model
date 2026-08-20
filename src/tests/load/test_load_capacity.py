@@ -84,6 +84,17 @@ def test_each_ramp_produced_a_consistent_curve(capacity_results):
     """
     for scenario_id, r in capacity_results.items():
         assert r.steps, f"{scenario_id}: ramp drove no rungs"
+        # Machine-independent RS-liveness floor: the RS must have served real
+        # goodput on at least one rung (achieved_rps is measured, not bookkeeping,
+        # so this is not tautological). It catches a totally broken RS — zero
+        # throughput, every request hanging — WITHOUT re-introducing an absolute
+        # rps gate: a sub-threshold *absolute* throughput regression is
+        # indistinguishable from a merely-contended runner here and is deferred to
+        # Track C (isolated runner, sprint-change-proposal-2026-08-19), not gated.
+        assert any(s.achieved_rps > 0 for s in r.steps), (
+            f"{scenario_id}: RS served zero goodput on every rung — dead RS.\n"
+            f"{render_capacity_report([r])}"
+        )
         if r.found_breakpoint:
             assert r.breaking_target_rps is not None
             # Every rung before the breaking one sustained, so the recorded knee
