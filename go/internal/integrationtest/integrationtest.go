@@ -15,9 +15,9 @@ const wellKnownSuffix = "/.well-known/openid-configuration"
 
 // Default profile: the infra/ node-oidc-provider, so a bare
 // `go test -tags=integration ./...` keeps working after
-// `cd infra && docker compose up -d`.
+// `make infra-up` (repo root).
 const (
-	defaultDiscoveryAddress = "http://localhost:9000" + wellKnownSuffix
+	defaultDiscoveryAddress = "http://localhost:9010" + wellKnownSuffix
 	defaultClientID         = "test-client-credentials"
 	defaultClientSecret     = "test-client-credentials-secret"
 	defaultScope            = "api"

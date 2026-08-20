@@ -7,7 +7,7 @@
 //
 // Against the local infra/ provider (node-oidc-provider over plain HTTP):
 //
-//	go run ./examples/jwks -jwks-uri http://localhost:9000/jwks -insecure-http
+//	go run ./examples/jwks -jwks-uri http://localhost:9010/jwks -insecure-http
 package main
 
 import (

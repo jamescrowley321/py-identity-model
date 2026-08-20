@@ -15,7 +15,7 @@ import (
 // the provider selected by the TEST_* environment (OIDC Discovery 1.0). The
 // default profile is the infra/ node-oidc-provider:
 //
-//	cd infra && docker compose up -d
+//	make infra-up
 //	cd go && go test -tags=integration ./pkg/discovery/...
 //
 // Point TEST_DISCO_ADDRESS at another provider (IdentityServer, Ory, Descope)

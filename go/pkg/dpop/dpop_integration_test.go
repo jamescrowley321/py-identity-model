@@ -34,7 +34,7 @@ func TestIntegration_DPoP_BoundClientCredentials(t *testing.T) {
 
 	cfg, err := discovery.FetchConfiguration(ctx, tc.Issuer, discovery.WithInsecureAllowHTTP())
 	if err != nil {
-		t.Skipf("provider not reachable at %s (local: run `cd infra && docker compose up -d`): %v", tc.Issuer, err)
+		t.Skipf("provider not reachable at %s (local: run `make infra-up`): %v", tc.Issuer, err)
 	}
 	if _, ok := cfg.Extra["dpop_signing_alg_values_supported"]; !ok {
 		t.Skip("provider does not advertise dpop_signing_alg_values_supported; DPoP not supported")

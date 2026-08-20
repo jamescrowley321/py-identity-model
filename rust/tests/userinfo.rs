@@ -3,7 +3,7 @@
 //! `#[ignore]`-gated so the unit `rust` CI job's bare `cargo test` (run with no
 //! provider up) stays green. The dedicated `rust-integration` CI job runs them
 //! with `cargo test -- --ignored` after bringing up the local `infra/`
-//! node-oidc-provider (`:9000`).
+//! node-oidc-provider (`:9010`).
 //!
 //! Run locally:
 //!

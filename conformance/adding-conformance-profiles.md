@@ -83,7 +83,7 @@ Record the exact `planName` and the full set of variant keys/values.
   tests against the `node-oidc-provider` fixture** — it is credential-free and
   already enables DPoP, PAR, JAR, resource-indicator JWTs, and a
   `private_key_jwt` client with FAPI-2 signing algs
-  (`test-fixtures/node-oidc-provider/provider.js`). Extend the fixture if the
+  (`infra/node-oidc-provider/provider.js`). Extend the fixture if the
   profile needs a capability it doesn't yet serve.
 - Only once the library behavior exists and is tested, wire the RP harness
   (`conformance/app.py`, and `conformance/app_fastapi.py` for the package

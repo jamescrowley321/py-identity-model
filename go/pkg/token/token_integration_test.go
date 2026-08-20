@@ -22,7 +22,7 @@ func tokenEndpoint(t *testing.T, ctx context.Context, tc integrationtest.Config)
 	}
 	cfg, err := discovery.FetchConfiguration(ctx, tc.Issuer, dopts...)
 	if err != nil {
-		t.Skipf("provider not reachable at %s (local: run `cd infra && docker compose up -d`): %v", tc.Issuer, err)
+		t.Skipf("provider not reachable at %s (local: run `make infra-up`): %v", tc.Issuer, err)
 	}
 	if cfg.TokenEndpoint == "" {
 		t.Fatalf("discovery returned no token_endpoint")
@@ -94,12 +94,76 @@ func TestIntegration_ClientCredentials_InvalidClient(t *testing.T) {
 	}
 }
 
+// ACG-001..ACG-003 (live, end-to-end): a full headless authorization-code +
+// PKCE round-trip against node-oidc-provider's devInteractions — authorize,
+// automated login + consent, callback code, then the real token-endpoint
+// exchange with the code_verifier (CONS-1.4, carried AC-0A.5: authz-code+PKCE
+// completes with no browser interaction). Skips on provider profiles without
+// devInteractions (IdentityServer, cloud providers).
+func TestIntegration_AuthorizationCode_PKCE_EndToEnd(t *testing.T) {
+	tc := integrationtest.Load()
+	if tc.PublicClientID == "" {
+		t.Skip("TEST_PKCE_PUBLIC_CLIENT_ID not set for this provider profile")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	var dopts []discovery.Option
+	if tc.AllowHTTP {
+		dopts = append(dopts, discovery.WithInsecureAllowHTTP())
+	}
+	cfg, err := discovery.FetchConfiguration(ctx, tc.Issuer, dopts...)
+	if err != nil {
+		t.Skipf("provider not reachable at %s (local: run `make infra-up`): %v", tc.Issuer, err)
+	}
+	if cfg.AuthorizationEndpoint == "" {
+		t.Skip("provider advertises no authorization_endpoint")
+	}
+
+	verifier, err := token.GenerateCodeVerifier()
+	if err != nil {
+		t.Fatalf("GenerateCodeVerifier: %v", err)
+	}
+	state, err := token.GenerateCodeVerifier()
+	if err != nil {
+		t.Fatalf("generate state: %v", err)
+	}
+
+	res, err := integrationtest.PerformAuthCodeFlow(ctx, cfg.AuthorizationEndpoint,
+		tc.PublicClientID, tc.RedirectURI, "openid", token.S256Challenge(verifier), state)
+	if errors.Is(err, integrationtest.ErrNoDevInteractions) {
+		t.Skipf("headless flow unavailable on this profile: %v", err)
+	}
+	if err != nil {
+		t.Fatalf("PerformAuthCodeFlow: %v", err)
+	}
+	if res.State != state {
+		t.Fatalf("callback state = %q, want %q", res.State, state)
+	}
+
+	opts := []token.Option{token.WithCodeVerifier(verifier)}
+	if tc.AllowHTTP {
+		opts = append(opts, token.WithInsecureAllowHTTP())
+	}
+	resp, err := token.AuthorizationCode(ctx, cfg.TokenEndpoint, tc.PublicClientID,
+		res.Code, tc.RedirectURI, opts...)
+	if err != nil {
+		t.Fatalf("AuthorizationCode exchange: %v", err)
+	}
+	if resp.AccessToken == "" {
+		t.Errorf("empty access_token: %+v", resp)
+	}
+	if resp.IDToken == "" {
+		t.Errorf("empty id_token for an openid-scoped code flow: %+v", resp)
+	}
+}
+
 // ACG-004/ACG-005/ACG-006 (live, partial): exchanging an invalid authorization
 // code carrying a PKCE code_verifier reaches the live token endpoint and is
 // rejected with a typed TokenError. This confirms the request shape (grant
-// type, code, code_verifier) and live error parsing. A full interactive PKCE
-// round-trip (browser login at /authorize) is out of scope for an automated
-// test; the request plumbing it depends on is verified here.
+// type, code, code_verifier) and live error parsing independent of the
+// end-to-end flow above.
 func TestIntegration_AuthorizationCode_PKCE_Rejected(t *testing.T) {
 	tc := integrationtest.Load()
 	if tc.PublicClientID == "" {

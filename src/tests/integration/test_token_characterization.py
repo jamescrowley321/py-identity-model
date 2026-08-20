@@ -23,7 +23,7 @@ Run against node-oidc locally (clear the stale token/JWKS caches first)::
     make test-integration-node-oidc
 
 To see the printed comparison table, bring the fixture up the way the Makefile
-target does (``docker compose -f test-fixtures/node-oidc-provider/... up``) then::
+target does (``docker compose -f infra/node-oidc-provider/... up``) then::
 
     uv run pytest src/tests/integration/test_token_characterization.py \
         -m integration --env-file=.env.node-oidc -s -v

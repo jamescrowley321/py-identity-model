@@ -219,14 +219,14 @@ jobs:
         run: make ci-setup
 
       - name: Start node-oidc-provider fixture
-        run: docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml up -d --build --wait
+        run: docker compose -f infra/docker-compose.yml up -d --build --wait node-oidc-provider
 
       - name: Integration Tests (node-oidc-provider)
         run: uv run pytest src/tests -m integration --env-file=.env.node-oidc -v
 
       - name: Tear down node-oidc-provider fixture
         if: always()
-        run: docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
+        run: docker compose -f infra/docker-compose.yml down
 
   integration-tests-keycloak:
     runs-on: ubuntu-latest
@@ -253,7 +253,7 @@ jobs:
         run: make ci-setup
 
       - name: Start Keycloak fixture
-        run: docker compose -f test-fixtures/keycloak/docker-compose.yml up -d --build --wait
+        run: docker compose -f infra/docker-compose.yml up -d --build --wait keycloak
 
       - name: Integration Tests (Keycloak)
         run: uv run pytest src/tests -m integration --env-file=.env.keycloak -v
@@ -268,7 +268,7 @@ jobs:
 
       - name: Tear down Keycloak fixture
         if: always()
-        run: docker compose -f test-fixtures/keycloak/docker-compose.yml down
+        run: docker compose -f infra/docker-compose.yml down
 
   integration-tests-cross-issuer:
     # Both Docker IdPs up side by side so a REAL token minted by one is rejected
@@ -297,22 +297,15 @@ jobs:
       - name: Install dependencies
         run: make ci-setup
 
-      - name: Start node-oidc-provider fixture
-        run: docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml up -d --build --wait
-
-      - name: Start Keycloak fixture
-        run: docker compose -f test-fixtures/keycloak/docker-compose.yml up -d --build --wait
+      - name: Start node-oidc-provider + Keycloak fixtures
+        run: docker compose -f infra/docker-compose.yml up -d --build --wait node-oidc-provider keycloak
 
       - name: Cross-issuer real-token rejection (node-oidc <-> Keycloak)
         run: uv run --all-packages pytest src/tests/integration/test_cross_issuer_real_idps.py -m integration -v
 
-      - name: Tear down Keycloak fixture
+      - name: Tear down fixtures
         if: always()
-        run: docker compose -f test-fixtures/keycloak/docker-compose.yml down
-
-      - name: Tear down node-oidc-provider fixture
-        if: always()
-        run: docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
+        run: docker compose -f infra/docker-compose.yml down
 
   example-tests:
     if: inputs.run-example-tests
@@ -450,9 +443,76 @@ jobs:
           name: load-smoke-report
           path: load-smoke-report.txt
 
+  integration-tests-go:
+    # Go suite vs the shared infra/ fixtures: node-oidc default profile, then
+    # the same tests re-run against the IdentityServer profile (CONS-1.4).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+
+      - name: Start node-oidc-provider + IdentityServer fixtures
+        run: docker compose -f infra/docker-compose.yml up -d --build --wait node-oidc-provider identityserver
+
+      - name: Go integration tests (node-oidc default profile)
+        working-directory: go
+        run: go test -tags=integration -count=1 ./...
+
+      - name: Go integration tests (IdentityServer profile)
+        run: |
+          set -a && . ./.env.identityserver && set +a
+          cd go && go test -tags=integration -count=1 ./...
+
+      - name: Tear down fixtures
+        if: always()
+        run: docker compose -f infra/docker-compose.yml down
+
+  integration-tests-rust:
+    # Rust #[ignore]-gated live suite vs the shared infra/ node-oidc fixture
+    # (CONS-1.4). Bare `cargo test` (unit) has no CI home yet — CONS-2.4 adds
+    # full change-detected language CI; this job covers the live-provider leg.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Cache cargo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      - name: Start node-oidc-provider fixture
+        run: docker compose -f infra/docker-compose.yml up -d --build --wait node-oidc-provider
+
+      - name: Rust live integration tests
+        run: |
+          set -a && . ./.env.node-oidc && set +a
+          cd rust && cargo test -- --ignored
+
+      - name: Tear down fixture
+        if: always()
+        run: docker compose -f infra/docker-compose.yml down
+
   ci-complete:
     if: always()
-    needs: [lint, unit-tests, fastapi-tests, integration-tests-ory, integration-tests-descope, integration-tests-node-oidc, integration-tests-keycloak, integration-tests-cross-issuer, example-tests, build, security-gate, load-smoke]
+    needs: [lint, unit-tests, fastapi-tests, integration-tests-ory, integration-tests-descope, integration-tests-node-oidc, integration-tests-keycloak, integration-tests-cross-issuer, integration-tests-go, integration-tests-rust, example-tests, build, security-gate, load-smoke]
     runs-on: ubuntu-latest
     steps:
       - name: Check CI results
@@ -466,6 +526,8 @@ jobs:
             "${{ needs.integration-tests-node-oidc.result }}" \
             "${{ needs.integration-tests-keycloak.result }}" \
             "${{ needs.integration-tests-cross-issuer.result }}" \
+            "${{ needs.integration-tests-go.result }}" \
+            "${{ needs.integration-tests-rust.result }}" \
             "${{ needs.example-tests.result }}" \
             "${{ needs.build.result }}" \
             "${{ needs.security-gate.result }}" \

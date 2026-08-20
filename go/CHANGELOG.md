@@ -10,6 +10,17 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Headless authorization-code + PKCE end-to-end integration test**
+  (`TestIntegration_AuthorizationCode_PKCE_EndToEnd`, CONS-1.4): drives
+  node-oidc-provider's devInteractions (login + consent) with a plain HTTP
+  client, then exchanges the callback code with the `code_verifier`. Skips
+  cleanly on provider profiles without devInteractions. The flow driver lives
+  in `internal/integrationtest/authcode.go`.
+- **The consolidated `/infra` fixture stack exists** (CONS-1.4): the
+  integration suite's default profile now really boots via `make infra-up`
+  (node-oidc-provider + IdentityServer) from the repo root, and a dedicated
+  `integration-tests-go` CI job runs the suite against both profiles.
+
 - **Imported the Go binding into `py-identity-model` under `go/`** as part of the
   polyglot consolidation epic (CONS-1, story CONS-1.1). The tree was previously
   developed in the standalone `identity-model` repository and is brought in as a
@@ -17,6 +28,9 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- **Default node-oidc-provider port is `9010`** (was `9000`): the consolidated
+  `/infra` fixture keeps the py-identity-model port so the certified Python
+  suite is unchanged; the Go defaults and examples moved instead (CONS-1.4).
 - **Module path rewritten** from `github.com/jamescrowley321/identity-model/go`
   to `github.com/jamescrowley321/py-identity-model/go`. This path is **interim**:
   it changes again when the repository is renamed in CONS-3. There are no external

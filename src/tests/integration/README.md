@@ -180,6 +180,26 @@ provider does not advertise (or credentials that are not supplied) cause the
 relevant tests to **skip cleanly** rather than fail. Live back-channel logout
 capture, for example, skips unless a reachable receiver URL is configured.
 
+## Shared Fixtures & the Go/Rust Suites
+
+All local Docker IdP fixtures live in one place — `infra/` — behind a single
+`infra/docker-compose.yml` (consolidated in CONS-1.4): node-oidc-provider
+(`:9010`), Duende IdentityServer (`:9001`), and Keycloak (`:8080`). Every
+language suite in the repo tests against the same providers:
+
+```bash
+make infra-up               # node-oidc (:9010) + IdentityServer (:9001)
+make test-integration-go    # Go suite: node-oidc default profile + IdentityServer profile
+make test-integration-rust  # Rust #[ignore]-gated live suite vs node-oidc
+make infra-down
+```
+
+The Go suite needs no env file for the node-oidc profile (in-code defaults);
+`.env.identityserver` selects the IdentityServer profile. The Rust suite
+sources `.env.node-oidc`. All three languages drive a **headless
+authorization-code + PKCE** flow end-to-end against node-oidc-provider's
+`devInteractions` in CI.
+
 ## Provider Capability Matrix
 
 `make provider-matrix` probes every configured provider (any `.env.*` file) and

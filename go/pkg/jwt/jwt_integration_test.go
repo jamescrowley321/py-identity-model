@@ -40,7 +40,7 @@ func TestIntegration_Validate_AgainstLiveJWKS(t *testing.T) {
 	}
 	cfg, err := discovery.FetchConfiguration(ctx, tc.Issuer, dopts...)
 	if err != nil {
-		t.Skipf("provider not reachable at %s (local: run `cd infra && docker compose up -d`): %v", tc.Issuer, err)
+		t.Skipf("provider not reachable at %s (local: run `make infra-up`): %v", tc.Issuer, err)
 	}
 
 	var jopts []jwks.Option
