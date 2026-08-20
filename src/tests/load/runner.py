@@ -66,11 +66,17 @@ _DEGENERATE_RETRY_FACTOR = 3
 
 @dataclass(frozen=True)
 class Gate:
-    """SLO thresholds for a scenario class (design §5).
+    """Absolute SLO thresholds for a scenario class — **Track C** only.
 
-    All fields start ``None`` (permissive) so a baseline run never fails on an
-    uncalibrated threshold; the ``test`` phase measures and the ``docs`` phase
-    writes the calibrated numbers here / into the README table.
+    These are *dormant by design* on the co-located shared runner, not "pending
+    calibration": absolute p99/RPS on a box that shares cores between the
+    generator, mock OP, and RS are contention noise, so any fixed threshold is
+    either useless (loose) or flaky (tight). Shared CI instead gates on the
+    machine-independent invariants in :func:`evaluate_gates` (5xx, status
+    correctness, the S2 alg-cost ratio band, warm-all-hits — Track A). These
+    absolute fields are populated only from a baseline on an owner-provisioned
+    **isolated** runner, where the numbers are trustworthy (T314b → TH-4.5). See
+    ``sprint-change-proposal-2026-08-19.md`` and ``src/tests/load/README.md``.
     """
 
     max_p99_ms: float | None = None
@@ -79,7 +85,9 @@ class Gate:
     min_cache_hit_rate: float | None = None
 
 
-# Gate key -> thresholds. Permissive until the test-phase baseline calibrates them.
+# Gate key -> absolute thresholds. Dormant on shared CI by design (Track C); the
+# machine-independent gates that actually fail a shared-CI build live in
+# evaluate_gates (Track A). Absolute bars are set only on an isolated runner.
 GATES: dict[str, Gate] = {
     "warm": Gate(),
     "cold": Gate(),
