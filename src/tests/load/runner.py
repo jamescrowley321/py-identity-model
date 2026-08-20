@@ -57,6 +57,11 @@ if TYPE_CHECKING:
 HTTP_SERVER_ERROR_FLOOR = 500
 _LOCUSTFILE = Path(__file__).with_name("locustfile.py")
 _LOCUST_GRACE = 60.0  # seconds of headroom over a scenario's run-time
+# A steady-state window that recorded fewer than this many requests never really
+# measured the RS — see _degenerate_window. The re-drive stretches the window by
+# this factor so a cold-runner startup cost is amortised on the second attempt.
+_MIN_STEADY_STATE_REQUESTS = 1
+_DEGENERATE_RETRY_FACTOR = 3
 
 
 @dataclass(frozen=True)
@@ -312,9 +317,36 @@ def run_scenario(
             run_seconds=int(scenario.duration_seconds),
             label=scenario.id,
         )
+        # A steady-state window that drove ~zero requests never measured the RS:
+        # on a cold/contended runner Locust's subprocess startup (gevent
+        # monkey-patch + import + connect) can consume the whole short window
+        # before any request completes, yielding a degenerate 0-request summary
+        # that false-fails the "drove load"/warm-cache gates. Re-drive once with a
+        # longer window — the caches are already warm and the flake does not
+        # repeat — rather than trusting the empty measurement.
+        if _degenerate_window(scenario, summary):
+            summary = _run_locust(
+                base_url,
+                pool,
+                users=scenario.users,
+                run_seconds=int(scenario.duration_seconds) * _DEGENERATE_RETRY_FACTOR,
+                label=f"{scenario.id}:retry-degenerate-window",
+            )
     return _to_result(
         scenario, summary, base_url, op, resources=sampler.result if sampler else None
     )
+
+
+def _degenerate_window(scenario: Scenario, summary: dict) -> bool:
+    """True when a steady-state run recorded too few requests to be a measurement.
+
+    Only steady-state scenarios qualify: a failure-injection scenario
+    (``steady_state=False``) can legitimately drive few completed requests (e.g.
+    provider-slowness stalls), so a low count there is signal, not a flake.
+    """
+    if not scenario.steady_state:
+        return False
+    return int(summary.get("num_requests", 0)) < _MIN_STEADY_STATE_REQUESTS
 
 
 @contextlib.contextmanager
