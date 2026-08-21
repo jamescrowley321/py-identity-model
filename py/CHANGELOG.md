@@ -2,6 +2,26 @@
 
 <!-- version list -->
 
+## v3.11.2 (2026-08-21)
+
+### Bug Fixes
+
+- **cons2.1**: Address adversarial review — un-break docs, un-vacuum security gate, fix
+  release-asset upload
+  ([`4954c30`](https://github.com/jamescrowley321/py-identity-model/commit/4954c30d5ec99af9512c0dd19789b35c4aa3427a))
+
+- **cons2.1**: Make mutation-security gate rename-aware (exclude pure moves)
+  ([`5a8ad60`](https://github.com/jamescrowley321/py-identity-model/commit/5a8ad604889fac3ba9446323ef871a8051f0c980))
+
+### Refactoring
+
+- **cons2.1**: Drop inline S603 noqas, scope subprocess policy properly
+  ([`3b68213`](https://github.com/jamescrowley321/py-identity-model/commit/3b682130918d53f7051f3f644704df19afc57e20))
+
+- **layout**: Relocate Python package into /py (CONS-2.1)
+  ([`649b954`](https://github.com/jamescrowley321/py-identity-model/commit/649b95430e5b6c738d5ebf04d1ffdebcb5568157))
+
+
 ## v3.11.1 (2026-08-20)
 
 ### Bug Fixes
