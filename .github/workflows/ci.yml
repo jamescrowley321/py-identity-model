@@ -50,7 +50,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          key: uv-${{ runner.os }}-${{ hashFiles('py/uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
 
@@ -77,7 +77,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          key: uv-${{ runner.os }}-${{ hashFiles('py/uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
 
@@ -104,7 +104,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          key: uv-${{ runner.os }}-${{ hashFiles('py/uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
 
@@ -132,7 +132,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          key: uv-${{ runner.os }}-${{ hashFiles('py/uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
 
@@ -168,7 +168,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          key: uv-${{ runner.os }}-${{ hashFiles('py/uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
 
@@ -211,7 +211,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          key: uv-${{ runner.os }}-${{ hashFiles('py/uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
 
@@ -222,7 +222,7 @@ jobs:
         run: docker compose -f infra/docker-compose.yml up -d --build --wait node-oidc-provider
 
       - name: Integration Tests (node-oidc-provider)
-        run: uv run pytest src/tests -m integration --env-file=.env.node-oidc -v
+        run: uv run --directory py pytest src/tests -m integration --env-file=../.env.node-oidc -v
 
       - name: Tear down node-oidc-provider fixture
         if: always()
@@ -245,7 +245,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          key: uv-${{ runner.os }}-${{ hashFiles('py/uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
 
@@ -256,7 +256,7 @@ jobs:
         run: docker compose -f infra/docker-compose.yml up -d --build --wait keycloak
 
       - name: Integration Tests (Keycloak)
-        run: uv run pytest src/tests -m integration --env-file=.env.keycloak -v
+        run: uv run --directory py pytest src/tests -m integration --env-file=../.env.keycloak -v
 
       - name: Upload token characterization (Keycloak)
         if: always()
@@ -290,7 +290,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          key: uv-${{ runner.os }}-${{ hashFiles('py/uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
 
@@ -301,7 +301,7 @@ jobs:
         run: docker compose -f infra/docker-compose.yml up -d --build --wait node-oidc-provider keycloak
 
       - name: Cross-issuer real-token rejection (node-oidc <-> Keycloak)
-        run: uv run --all-packages pytest src/tests/integration/test_cross_issuer_real_idps.py -m integration -v
+        run: uv run --directory py --all-packages pytest src/tests/integration/test_cross_issuer_real_idps.py -m integration -v
 
       - name: Tear down fixtures
         if: always()
@@ -325,7 +325,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          key: uv-${{ runner.os }}-${{ hashFiles('py/uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
 
@@ -356,7 +356,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          key: uv-${{ runner.os }}-${{ hashFiles('py/uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
 
@@ -385,7 +385,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          key: uv-${{ runner.os }}-${{ hashFiles('py/uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
 
@@ -422,7 +422,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          key: uv-${{ runner.os }}-${{ hashFiles('py/uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
 
@@ -500,7 +500,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          key: uv-${{ runner.os }}-${{ hashFiles('py/uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
 

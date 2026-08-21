@@ -6,9 +6,10 @@ WORKDIR /app
 COPY conformance/requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install py-identity-model from source
-COPY pyproject.toml README.md ./
-COPY src/ src/
+# Install py-identity-model from source (relocated under /py in CONS-2.1; build
+# context is the repo root, so the package now lives at py/).
+COPY py/pyproject.toml py/README.md ./
+COPY py/src/ src/
 RUN pip install --no-cache-dir .
 
 # Copy harness app

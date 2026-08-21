@@ -34,11 +34,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --group docs
+          uv sync --directory py --group docs
 
       - name: Build MkDocs site
         run: |
-          uv run mkdocs build --strict
+          uv run --project py mkdocs build --strict
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
