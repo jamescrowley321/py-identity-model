@@ -102,24 +102,47 @@ def _run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
 
 
 def changed_security_files(base: str) -> list[str]:
-    """Security modules changed on HEAD versus ``base`` (that still exist)."""
-    res = _run(["git", "diff", "--name-only", f"{base}...HEAD"])
+    """Security modules whose CONTENT changed on HEAD versus ``base``.
+
+    Uses ``--name-status -M`` so a pure rename — a file that only MOVED with no
+    content change, e.g. the CONS-2.1 relocation of the package into ``py/`` —
+    is excluded: moving a file changes no security logic, so there is nothing to
+    mutation-test (and treating a move as a full-file change would run mutation
+    testing over every relocated module). Content changes (``A``/``M`` or a
+    rename with <100% similarity) are kept, keyed on the NEW path.
+
+    Paths are normalized to be package-relative: this tool runs from ``py/``
+    (the package root, CONS-2.1) where ``SECURITY_MODULES`` are listed
+    ``src/py_identity_model/...``, but ``git`` prints repo-root paths, so the
+    ``py/`` prefix is stripped. Without that strip the membership test matches
+    nothing and passes vacuously — the exact hole PR #510 closed.
+    """
+    res = _run(["git", "diff", "--name-status", "-M", f"{base}...HEAD"])
     if res.returncode != 0:
         # No common merge-base yet (e.g. a freshly created local base branch):
         # fall back to a direct two-dot diff against the base tip.
-        res = _run(["git", "diff", "--name-only", base])
+        res = _run(["git", "diff", "--name-status", "-M", base])
     if res.returncode != 0:
         print(
             f"error: could not diff against BASE={base!r}:\n{res.stderr}",
             file=sys.stderr,
         )
         sys.exit(2)
-    # `git diff --name-only` prints paths relative to the repo ROOT, but this
-    # tool runs from py/ (the package root, CONS-2.1) where SECURITY_MODULES are
-    # listed package-relative (src/py_identity_model/...). Strip the py/ prefix
-    # so the membership test matches — without this the gate silently matches
-    # nothing and passes vacuously, re-introducing the exact hole PR #510 fixed.
-    changed = {p.removeprefix("py/") for p in res.stdout.split()}
+    changed: set[str] = set()
+    for line in res.stdout.splitlines():
+        fields = line.split("\t")
+        status = fields[0]
+        if status.startswith("R"):
+            # "R<similarity>\told\tnew"; a 100%-similar rename is a pure move
+            # (no content change) and the new path is the last tab field.
+            if status == "R100":
+                continue
+            newpath = fields[-1]
+        elif status[:1] in ("A", "M"):
+            newpath = fields[1]
+        else:  # D (deleted) etc. — nothing exists on HEAD to test
+            continue
+        changed.add(newpath.removeprefix("py/"))
     return [m for m in SECURITY_MODULES if m in changed and Path(m).exists()]
 
 
