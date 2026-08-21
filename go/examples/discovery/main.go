@@ -7,7 +7,7 @@
 //
 // Against the local infra/ provider (node-oidc-provider over plain HTTP):
 //
-//	go run ./examples/discovery -issuer http://localhost:9000 -insecure-http
+//	go run ./examples/discovery -issuer http://localhost:9010 -insecure-http
 package main
 
 import (

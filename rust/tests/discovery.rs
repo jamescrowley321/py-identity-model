@@ -1,9 +1,9 @@
 //! Integration tests for the OIDC Discovery client against a real provider.
 //!
-//! These are `#[ignore]`-gated so the unit `rust` CI job's bare `cargo test`
-//! (run with no provider up) stays green. The dedicated `rust-integration` CI
-//! job runs them with `cargo test -- --ignored` after bringing up the local
-//! `infra/` node-oidc-provider (`:9000`).
+//! `#[ignore]`-gated so a bare `cargo test` (no provider up) stays green. The
+//! `integration-tests-rust` CI job boots the local `infra/` node-oidc-provider
+//! (`:9010`), runs the unit suite, then runs these with
+//! `cargo test -- --ignored` under `TEST_REQUIRE_LIVE=1` (infra skips fail).
 //!
 //! Run locally:
 //!
@@ -28,6 +28,17 @@ const WELL_KNOWN_SUFFIX: &str = "/.well-known/openid-configuration";
 
 /// Returns the issuer derived from `TEST_DISCO_ADDRESS`, or `None` when the
 /// variable is unset so the caller can skip gracefully.
+/// Prints a SKIP marker — unless `TEST_REQUIRE_LIVE=1`, in which case it
+/// panics. CI sets the variable in the leg that just booted the fixture, so an
+/// unreachable provider or unsourced profile turns the leg red instead of
+/// green-skipping every test (mechanical-gate rule, CONS-1.4 review).
+fn skip_or_fail(msg: &str) {
+    if std::env::var("TEST_REQUIRE_LIVE").as_deref() == Ok("1") {
+        panic!("TEST_REQUIRE_LIVE=1 but {msg}");
+    }
+    eprintln!("SKIP: {msg}");
+}
+
 fn issuer_from_env() -> Option<String> {
     let disco = std::env::var("TEST_DISCO_ADDRESS").ok()?;
     let disco = disco.trim();
@@ -50,7 +61,7 @@ fn issuer_from_env() -> Option<String> {
 #[ignore = "requires a running OIDC provider (make infra-up); run via cargo test -- --ignored"]
 async fn integration_discovers_real_provider() {
     let Some(issuer) = issuer_from_env() else {
-        eprintln!("SKIP: TEST_DISCO_ADDRESS unset; run `make infra-up` and source .env.node-oidc");
+        skip_or_fail("TEST_DISCO_ADDRESS unset; run `make infra-up` and source .env.node-oidc");
         return;
     };
 

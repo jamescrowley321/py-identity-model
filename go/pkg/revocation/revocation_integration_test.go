@@ -31,7 +31,7 @@ func endpoints(t *testing.T, ctx context.Context, tc integrationtest.Config) (to
 	}
 	cfg, err := discovery.FetchConfiguration(ctx, tc.Issuer, discovery.WithInsecureAllowHTTP())
 	if err != nil {
-		t.Skipf("provider not reachable at %s (local: run `cd infra && docker compose up -d`): %v", tc.Issuer, err)
+		integrationtest.SkipUnreachable(t, "provider not reachable at %s (local: run `make infra-up`): %v", tc.Issuer, err)
 	}
 	if cfg.RevocationEndpoint == "" {
 		t.Skip("discovery returned no revocation_endpoint")

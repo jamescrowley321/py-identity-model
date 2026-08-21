@@ -44,53 +44,84 @@ test-integration-descope: ## Run integration tests against Descope
 	@echo "Running integration tests against Descope..."
 	uv run pytest src/tests -m integration $(if $(wildcard .env.descope),--env-file=.env.descope) -v -n auto -p no:benchmark
 
+# ── Shared IdP fixtures (infra/) ─────────────────────────────────────
+# One compose file serves every language suite; targets start only the
+# provider(s) they need. See infra/README.md.
+INFRA_COMPOSE := docker compose -f infra/docker-compose.yml
+
+.PHONY: infra-up
+infra-up: ## Start the Go/Rust default provider pair (node-oidc :9010 + IdentityServer :9001)
+	$(INFRA_COMPOSE) up -d --build --wait node-oidc-provider identityserver
+
+.PHONY: infra-down
+infra-down: ## Stop all infra/ fixture providers
+	$(INFRA_COMPOSE) down
+
 .PHONY: test-integration-node-oidc
 test-integration-node-oidc: ## Run integration tests against node-oidc-provider
 	@echo "Starting node-oidc-provider fixture..."
-	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml up -d --build --wait
+	$(INFRA_COMPOSE) up -d --build --wait node-oidc-provider
 	@echo "Running integration tests against node-oidc-provider..."
 	uv run pytest src/tests -m integration --env-file=.env.node-oidc -v || \
-		(docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down && exit 1)
-	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
+		($(INFRA_COMPOSE) down && exit 1)
+	$(INFRA_COMPOSE) down
 
 .PHONY: test-integration-keycloak
 test-integration-keycloak: ## Run integration tests against Keycloak
 	@echo "Starting Keycloak fixture..."
-	docker compose -f test-fixtures/keycloak/docker-compose.yml up -d --build --wait
+	$(INFRA_COMPOSE) up -d --build --wait keycloak
 	@echo "Running integration tests against Keycloak..."
 	uv run pytest src/tests -m integration --env-file=.env.keycloak -v || \
-		(docker compose -f test-fixtures/keycloak/docker-compose.yml down && exit 1)
-	docker compose -f test-fixtures/keycloak/docker-compose.yml down
+		($(INFRA_COMPOSE) down && exit 1)
+	$(INFRA_COMPOSE) down
+
+.PHONY: test-integration-go
+test-integration-go: ## Run Go integration tests against node-oidc (defaults) + IdentityServer profile
+	@echo "Starting node-oidc-provider + IdentityServer fixtures..."
+	$(INFRA_COMPOSE) up -d --build --wait node-oidc-provider identityserver
+	@echo "Running Go integration tests (node-oidc default profile)..."
+	(cd go && go test -tags=integration -count=1 ./...) || \
+		($(INFRA_COMPOSE) down && exit 1)
+	@echo "Running Go integration tests (IdentityServer profile)..."
+	set -a && . ./.env.identityserver && set +a && (cd go && go test -tags=integration -count=1 ./...) || \
+		($(INFRA_COMPOSE) down && exit 1)
+	$(INFRA_COMPOSE) down
+
+.PHONY: test-integration-rust
+test-integration-rust: ## Run Rust live integration tests (#[ignore]-gated) against node-oidc
+	@echo "Starting node-oidc-provider fixture..."
+	$(INFRA_COMPOSE) up -d --build --wait node-oidc-provider
+	@echo "Running Rust live integration tests..."
+	set -a && . ./.env.node-oidc && set +a && (cd rust && cargo test -- --ignored) || \
+		($(INFRA_COMPOSE) down && exit 1)
+	$(INFRA_COMPOSE) down
 
 .PHONY: test-harness-rs
 test-harness-rs: ## Boot the RS (uvicorn) against node-oidc and run the TH-1.2 real-HTTP proof
 	@echo "Starting node-oidc-provider fixture..."
-	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml up -d --build --wait
+	$(INFRA_COMPOSE) up -d --build --wait node-oidc-provider
 	@echo "Booting fastapi-identity-model RS under uvicorn (real HTTP)..."
 	uv run --all-packages pytest src/tests/integration/test_rs_boot.py -m integration --env-file=.env.node-oidc -v || \
-		(docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down && exit 1)
-	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
+		($(INFRA_COMPOSE) down && exit 1)
+	$(INFRA_COMPOSE) down
 
 .PHONY: test-harness-matrix
 test-harness-matrix: ## Run the TH-1.3 token correctness matrix (mock-OP forged corpus + node-oidc leg) through the booted RS
 	@echo "Starting node-oidc-provider fixture..."
-	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml up -d --build --wait
+	$(INFRA_COMPOSE) up -d --build --wait node-oidc-provider
 	@echo "Running the correctness matrix through the booted RS (real HTTP)..."
 	uv run --all-packages pytest src/tests/integration/test_correctness_matrix.py -m integration --env-file=.env.node-oidc -v || \
-		(docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down && exit 1)
-	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
+		($(INFRA_COMPOSE) down && exit 1)
+	$(INFRA_COMPOSE) down
 
 .PHONY: test-harness-cross-issuer
 test-harness-cross-issuer: ## Real cross-issuer proof: a token from one Docker IdP (node-oidc/Keycloak) is rejected by an RS trusting the other
 	@echo "Starting node-oidc + Keycloak fixtures side by side..."
-	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml up -d --build --wait
-	docker compose -f test-fixtures/keycloak/docker-compose.yml up -d --build --wait
+	$(INFRA_COMPOSE) up -d --build --wait node-oidc-provider keycloak
 	@echo "Cross-presenting real tokens across issuers through the booted RS..."
 	uv run --all-packages pytest src/tests/integration/test_cross_issuer_real_idps.py -m integration -v || \
-		(docker compose -f test-fixtures/keycloak/docker-compose.yml down; \
-		docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down; exit 1)
-	docker compose -f test-fixtures/keycloak/docker-compose.yml down
-	docker compose -f test-fixtures/node-oidc-provider/docker-compose.yml down
+		($(INFRA_COMPOSE) down; exit 1)
+	$(INFRA_COMPOSE) down
 
 .PHONY: test-harness-load
 test-harness-load: ## Run the TH-1.5 CI-short load profile (real Locust vs the booted RS + mock OP)
@@ -147,7 +178,7 @@ security-gate: mutation-security ## Aggregate mechanical security gate (Epic 19 
 # ── Pre-push ────────────────────────────────────────────────────────
 
 .PHONY: pre-push
-pre-push: lint test-fastapi test-integration-node-oidc test-integration-keycloak conformance-test-harness test-examples ## Full local validation before push
+pre-push: lint test-fastapi test-integration-node-oidc test-integration-keycloak test-integration-go test-integration-rust conformance-test-harness test-examples ## Full local validation before push
 
 # ── Docs ─────────────────────────────────────────────────────────────
 

@@ -25,7 +25,7 @@ pytest.importorskip("fastapi_identity_model")
 pytestmark = pytest.mark.integration
 
 # node-oidc issues JWT access tokens with aud=urn:test:api via
-# resourceIndicators.defaultResource (test-fixtures/node-oidc-provider).
+# resourceIndicators.defaultResource (infra/node-oidc-provider).
 RS_AUDIENCE = "urn:test:api"
 GENERIC_401_DETAIL = "Invalid or unauthorized token"
 

@@ -46,5 +46,5 @@ validation, JWKS handling, discovery, and the HTTP client behavior they rely on.
 
 Out of scope: the test/conformance harnesses (`src/tests/**`,
 `packages/**/tests/**`, `conformance/`), example applications (`examples/`), and
-the local provider fixtures under `test-fixtures/` and `infra/`, which are
+the local provider fixtures under `infra/`, which are
 development-only and never shipped to consumers.

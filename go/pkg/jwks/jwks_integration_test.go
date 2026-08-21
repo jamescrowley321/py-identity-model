@@ -16,7 +16,7 @@ import (
 // selected by the TEST_* environment (RFC 7517 §5). The default profile is
 // the infra/ node-oidc-provider:
 //
-//	cd infra && docker compose up -d
+//	make infra-up
 //	cd go && go test -tags=integration ./pkg/jwks/...
 //
 // The jwks_uri is resolved from discovery against the profile's issuer, or

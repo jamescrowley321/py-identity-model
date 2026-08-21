@@ -41,6 +41,6 @@ go test ./...
 go run ./examples/hello
 ```
 
-Integration tests (build tag `integration`) run against the shared provider in [`../infra`](../infra).
+Integration tests (build tag `integration`) run against the shared providers in [`../infra`](../infra) — boot them with `make infra-up` from the repo root (node-oidc-provider `:9010` is the env-free default profile; source `.env.identityserver` for the IdentityServer profile).
 
 > **Status:** Imported from `identity-model` (CONS-1.1); `go build/vet/test ./...` green. The cross-language conformance vectors and shared test fixtures now live in [`../spec`](../spec) (imported in CONS-1.3), so the fixture-driven tests and the `internal/conformance` runner execute for real against them — the interim spec-guards have been retired. See [`CHANGELOG.md`](CHANGELOG.md).

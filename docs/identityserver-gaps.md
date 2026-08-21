@@ -4,7 +4,7 @@ This document compares the OIDC test fixtures used by py-identity-model to ident
 
 ## Background
 
-py-identity-model historically used a Duende IdentityServer (.NET) fixture for integration testing (`examples/identity-server/`). As the library expanded to cover advanced OAuth 2.0/OIDC specifications (DPoP, PAR, JAR, Device Authorization, Token Exchange, FAPI 2.0), a node-oidc-provider fixture was added (`test-fixtures/node-oidc-provider/`) to provide coverage that IdentityServer cannot.
+py-identity-model historically used a Duende IdentityServer (.NET) fixture for integration testing (`examples/identity-server/`). As the library expanded to cover advanced OAuth 2.0/OIDC specifications (DPoP, PAR, JAR, Device Authorization, Token Exchange, FAPI 2.0), a node-oidc-provider fixture was added (`infra/node-oidc-provider/`) to provide coverage that IdentityServer cannot.
 
 ## Feature Comparison
 

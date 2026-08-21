@@ -56,7 +56,7 @@ E2+SampTwVolT/BEG7coOzdYem3Yr2FkBicTXhqWNGiG7RWkD+d/rVhW
 """
 
 # Public JWK coordinates registered for ``test-private-key-jwt`` in
-# ``test-fixtures/node-oidc-provider/provider.js``. The self-check below pins
+# ``infra/node-oidc-provider/provider.js``. The self-check below pins
 # the coupling so a key/JWK mismatch fails loudly instead of surfacing as an
 # opaque signature error (or a silent skip) during the live tests.
 PKJWT_REGISTERED_JWK_X = "2zO8YKrKpBuAyVED2ChwZYFfzkt52RNvkmpqU8FaJU8"
