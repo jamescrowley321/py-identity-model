@@ -114,7 +114,12 @@ def changed_security_files(base: str) -> list[str]:
             file=sys.stderr,
         )
         sys.exit(2)
-    changed = set(res.stdout.split())
+    # `git diff --name-only` prints paths relative to the repo ROOT, but this
+    # tool runs from py/ (the package root, CONS-2.1) where SECURITY_MODULES are
+    # listed package-relative (src/py_identity_model/...). Strip the py/ prefix
+    # so the membership test matches — without this the gate silently matches
+    # nothing and passes vacuously, re-introducing the exact hole PR #510 fixed.
+    changed = {p.removeprefix("py/") for p in res.stdout.split()}
     return [m for m in SECURITY_MODULES if m in changed and Path(m).exists()]
 
 

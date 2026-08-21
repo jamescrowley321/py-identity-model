@@ -109,6 +109,11 @@ jobs:
         with:
           github_token: ${{ secrets.RELEASE_TOKEN }}
           tag: ${{ steps.release.outputs.tag }}
+          # Run in py/ (like the version action) so the config's
+          # dist_glob_patterns ["dist/*"] resolves to py/dist where
+          # `make build-dist` writes — otherwise the wheel+sdist are silently
+          # not attached to the GitHub Release (CONS-2.1).
+          directory: py
 
       - name: Publish to PyPI
         if: steps.release.outputs.released == 'true'

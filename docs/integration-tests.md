@@ -1,1 +1,1 @@
-../src/tests/integration/README.md
+../py/src/tests/integration/README.md

@@ -1,1 +1,1 @@
-../CHANGELOG.md
+../py/CHANGELOG.md

@@ -57,12 +57,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 # ── Release automation (python-semantic-release) ──────────────────────
-# Invoked from the REPO ROOT via
-#   semantic-release -c packages/fastapi-identity-model/pyproject.toml version
+# Invoked from py/ (CONS-2.1) via
+#   cd py && semantic-release -c packages/fastapi-identity-model/pyproject.toml version
 # (release.yml, after the root release job) — all paths below are
-# repo-root-relative. Only commits scoped "(fastapi)" drive this version;
-# every other commit belongs to the root py-identity-model pipeline.
-# See tools/release_parsers.py for the scope routing.
+# py/-relative (semantic-release resolves commit_parser + version_toml relative
+# to the CWD, not to this config file's directory). Only commits scoped
+# "(fastapi)" drive this version; every other commit belongs to the root
+# py-identity-model pipeline. See tools/release_parsers.py for the scope routing.
 [tool.semantic_release]
 commit_parser = "tools/release_parsers.py:FastapiCommitParser"
 tag_format = "fastapi-identity-model-v{version}"
