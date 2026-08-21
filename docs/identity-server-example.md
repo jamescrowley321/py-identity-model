@@ -1,1 +1,1 @@
-../examples/identity-server/README.md
+../py/examples/identity-server/README.md

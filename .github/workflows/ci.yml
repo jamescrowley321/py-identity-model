@@ -191,7 +191,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: token-characterization-descope
-          path: token_characterization_*.md
+          path: py/token_characterization_*.md
           if-no-files-found: ignore
 
   integration-tests-node-oidc:
@@ -263,7 +263,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: token-characterization-keycloak
-          path: token_characterization_*.md
+          path: py/token_characterization_*.md
           if-no-files-found: ignore
 
       - name: Tear down Keycloak fixture
@@ -441,7 +441,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: load-smoke-report
-          path: load-smoke-report.txt
+          path: py/load-smoke-report.txt
 
   integration-tests-go:
     # Go suite vs the shared infra/ fixtures: node-oidc default profile, then
