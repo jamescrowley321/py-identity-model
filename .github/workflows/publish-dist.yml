@@ -3,9 +3,11 @@ name: Publish Distribution 📦
 on:
   push:
     tags:
-      - "[0-9]+.[0-9]+.[0-9]+"
-      - "[0-9]+.[0-9]+rc[0-9]+"
-      - "[0-9]+.[0-9]+[ab][0-9]+"
+      # Python releases are tagged py-v{version} (CONS-2.2), keeping them
+      # distinct from the go/vX.Y.Z and rust-vX.Y.Z tags.
+      - "py-v[0-9]+.[0-9]+.[0-9]+"
+      - "py-v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"
+      - "py-v[0-9]+.[0-9]+.[0-9]+-[ab][0-9]+"
 
 permissions:
   contents: read
@@ -23,7 +25,9 @@ jobs:
         run: make ci-setup
       - name: Set tag version
         id: vars
-        run: echo "tag=$(git describe --tags $(git rev-list --tags --max-count=1))" >> $GITHUB_OUTPUT
+        # The pushed tag is py-v{version}; strip the py-v prefix to get the
+        # PEP 440 version written into pyproject.toml for the build.
+        run: echo "tag=${GITHUB_REF_NAME#py-v}" >> $GITHUB_OUTPUT
       - name: Build distribution 📦
         run: |
           echo ${{ steps.vars.outputs.tag }}

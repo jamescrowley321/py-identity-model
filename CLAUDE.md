@@ -275,12 +275,17 @@ This repo is a `uv` workspace. Besides the core `py-identity-model` library
     `release.yml`); the resulting `fastapi-identity-model-v*` tag triggers
     `.github/workflows/release-fastapi.yml`, which publishes to PyPI via
     trusted publishing.
-  - **Commit convention:** scope every package commit `(fastapi)` — a custom
-    scope-routed parser (`tools/release_parsers.py`) sends `(fastapi)` commits
-    to the package pipeline and everything else to the root pipeline, so
-    `feat(fastapi)` never bumps the core library. The routing is scope-based,
-    not path-based: an **unscoped** `fix:` touching only `packages/` would
-    still bump the core, so the scope is load-bearing.
+  - **Commit convention:** scope every commit that belongs to a non-Python
+    release track. A custom scope-routed parser (`tools/release_parsers.py`)
+    drops commits scoped `(fastapi)`, `(go)`, `(rust)`, `(node)`, `(spec)`, or
+    `(infra)` from the core `py-identity-model` pipeline (and the fastapi
+    pipeline keeps only `(fastapi)`), so e.g. `feat(go)` or `feat(fastapi)`
+    never bumps the Python library. Python releases use the `py-v{version}`
+    tag format; Go/Rust use `go/vX.Y.Z` / `rust-vX.Y.Z`. The routing is
+    scope-based, not path-based: an **unscoped** `feat:` touching only `go/`
+    would still bump the core, so the scope is load-bearing (the release
+    workflow path-guards `go/**` `rust/**` `spec/**` `infra/**` `node/**` as a
+    second line of defence).
 
 ## Version Management
 
