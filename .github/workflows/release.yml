@@ -70,17 +70,22 @@ jobs:
           github_token: ${{ secrets.RELEASE_TOKEN }}
           git_committer_name: "github-actions"
           git_committer_email: "actions@users.noreply.github.com"
+          # The Python package + its semantic-release config moved under py/
+          # (CONS-2.1); run the action there so pyproject.toml, the commit
+          # parser (tools/release_parsers.py), version_toml, and CHANGELOG.md
+          # all resolve relative to py/.
+          directory: py
 
       - name: Sync uv.lock with released version
         if: steps.release.outputs.released == 'true'
         run: |
           git config user.name "github-actions"
           git config user.email "actions@users.noreply.github.com"
-          uv lock
-          if git diff --quiet uv.lock; then
+          (cd py && uv lock)
+          if git diff --quiet py/uv.lock; then
             echo "uv.lock already up to date"
           else
-            git add uv.lock
+            git add py/uv.lock
             git commit -m "chore: sync uv.lock with ${{ steps.release.outputs.version }}"
             git push
           fi
@@ -95,7 +100,7 @@ jobs:
           # also matches the `0.0.0` inside dependency pins (e.g.
           # `cryptography>=50.0.0`), rewriting it to `cryptography>=5<ver>` and
           # breaking the build (this froze every cryptography>=50 release).
-          sed -i -e "s/^version = \"0.0.0\"/version = \"${{ steps.release.outputs.version }}\"/" pyproject.toml
+          sed -i -e "s/^version = \"0.0.0\"/version = \"${{ steps.release.outputs.version }}\"/" py/pyproject.toml
           make build-dist
 
       - name: Upload to GitHub Release Assets
@@ -179,5 +184,7 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "actions@users.noreply.github.com"
-          uvx --from python-semantic-release==10.6.1 semantic-release \
+          # Run from py/ so the package config, its commit parser
+          # (tools/release_parsers.py) and version_toml resolve under py/ (CONS-2.1).
+          cd py && uvx --from python-semantic-release==10.6.1 semantic-release \
             -c packages/fastapi-identity-model/pyproject.toml version

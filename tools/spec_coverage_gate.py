@@ -39,7 +39,7 @@ DEFAULT_REPORT_DIR = REPO_ROOT / "build" / "spec-coverage"
 RUNNERS: list[tuple[str, Path, list[str]]] = [
     (
         "python",
-        REPO_ROOT,
+        REPO_ROOT / "py",
         [
             "uv",
             "run",

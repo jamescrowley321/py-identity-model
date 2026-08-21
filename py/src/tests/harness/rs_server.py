@@ -27,8 +27,10 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
 
 
-# src/tests/harness/rs_server.py -> parents[3] is the repo root (holds ``src/``).
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+# py/src/tests/harness/rs_server.py -> parents[3] is the Python package root
+# (``py/``, which holds ``src/``); uvicorn boots the RS from here so
+# ``src.tests.harness.rs_app`` imports.
+_PY_ROOT = Path(__file__).resolve().parents[3]
 
 
 @dataclass(frozen=True)
@@ -171,7 +173,7 @@ def boot_rs_process(
                 "--log-level",
                 "warning",
             ],
-            cwd=str(_REPO_ROOT),
+            cwd=str(_PY_ROOT),
             env=env,
             stdout=log,
             stderr=subprocess.STDOUT,

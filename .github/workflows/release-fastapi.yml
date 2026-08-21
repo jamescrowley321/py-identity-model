@@ -48,12 +48,12 @@ jobs:
         run: make test-fastapi
 
       - name: Build fastapi-identity-model
-        run: uv build --package fastapi-identity-model --out-dir dist-fastapi
+        run: cd py && uv build --package fastapi-identity-model --out-dir ../dist-fastapi
 
       - name: Verify tag matches package version
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          version="$(grep -m1 '^version' packages/fastapi-identity-model/pyproject.toml | cut -d'"' -f2)"
+          version="$(grep -m1 '^version' py/packages/fastapi-identity-model/pyproject.toml | cut -d'"' -f2)"
           tag="${GITHUB_REF_NAME#fastapi-identity-model-v}"
           if [ "$version" != "$tag" ]; then
             echo "::error::Tag '$tag' does not match package version '$version'"

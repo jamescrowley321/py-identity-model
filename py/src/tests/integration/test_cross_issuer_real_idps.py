@@ -44,8 +44,9 @@ pytest.importorskip("uvicorn")
 
 pytestmark = pytest.mark.integration
 
-# src/tests/integration/test_*.py -> parents[3] is the repo root (holds .env.*).
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+# py/src/tests/integration/test_*.py -> parents[4] is the true repo root, which
+# holds the shared .env.* provider profiles (polyglot: py/go/rust all read them).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 @dataclass(frozen=True)

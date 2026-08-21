@@ -55,7 +55,11 @@ from py_identity_model.exceptions import (
 )
 
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+# The shared /spec + /infra trees are polyglot and live at the true repo root
+# (parents[4]); the Python package (and its native-test anchors) live under
+# /py (parents[3]).
+_PY_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = Path(__file__).resolve().parents[4]
 _SPEC_FILE = _REPO_ROOT / "spec" / "conformance" / "validation.json"
 _FIXTURE_ROOT = _REPO_ROOT / "spec" / "test-fixtures"
 
@@ -297,7 +301,7 @@ def test_every_vector_case_is_parametrized() -> None:
         anchor = _PYTHON_NATIVE_TESTS.get(case_id)
         assert anchor, f"native case {case_id} has no Python native-test anchor"
         anchor_file, anchor_test = anchor.split("::", 1)
-        anchor_path = _REPO_ROOT / anchor_file
+        anchor_path = _PY_ROOT / anchor_file
         assert anchor_path.is_file(), f"{case_id}: anchor file {anchor_file} missing"
         assert anchor_test.split("::")[-1] in anchor_path.read_text(), (
             f"{case_id}: anchor test {anchor_test} not found in {anchor_file}"

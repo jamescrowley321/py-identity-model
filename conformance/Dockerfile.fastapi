@@ -6,13 +6,14 @@ WORKDIR /app
 COPY conformance/requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install py-identity-model from source (satisfies the package's core dependency)
-COPY pyproject.toml README.md ./
-COPY src/ src/
+# Install py-identity-model from source (relocated under /py in CONS-2.1; build
+# context is the repo root, so the package now lives at py/).
+COPY py/pyproject.toml py/README.md ./
+COPY py/src/ src/
 RUN pip install --no-cache-dir .
 
 # Install the fastapi-identity-model workspace package under test
-COPY packages/fastapi-identity-model/ packages/fastapi-identity-model/
+COPY py/packages/fastapi-identity-model/ packages/fastapi-identity-model/
 RUN pip install --no-cache-dir packages/fastapi-identity-model/
 
 # Copy harness apps (app_fastapi.py reuses app.py's per-test log plumbing)

@@ -46,12 +46,32 @@ py-identity-model is a production-grade OIDC/OAuth2.0 helper library for Python 
 
 6. **Create a PR for all changes** — push the feature branch and open a PR against `main`. PR titles **must** follow conventional commit format (e.g., `feat(discovery): add metadata support`, `fix: handle missing kid`, `ci: update actions`).
 
+## Repository Layout (CONS-2.1)
+
+This repository is a **polyglot monorepo**. The Python package was relocated
+from the repo root into **`py/`**; Go, Rust, the shared conformance `spec/`,
+and the shared IdP fixtures `infra/` are siblings at the root:
+
+```
+py/      # Python core (src/, packages/, tools/, pyproject.toml, uv.lock) — this package
+go/      # Go binding    rust/    # Rust binding
+spec/    # cross-language conformance vectors    infra/   # shared IdP docker fixtures
+conformance/  # OIDF certification harness (Python)
+```
+
+**Every path below that starts `src/…`, `packages/…`, or `tools/…` lives under
+`py/`.** Run Python tooling from `py/` (`cd py && uv run …`) or, preferably, via
+the repo-root `Makefile` targets, which already `cd` into `py/` for you
+(`make lint`, `make test-unit`, `make test-fastapi`, `make spec-coverage`,
+`make test-integration-*`). The shared `.env.*` provider profiles stay at the
+repo root (they are read by the Python, Go, and Rust suites alike).
+
 ## Architecture
 
 ### Module Structure
 
 ```
-src/py_identity_model/
+py/src/py_identity_model/
 ├── sync/                    # Synchronous API implementations
 │   ├── http_client.py      # Thread-local HTTP client (threading.local)
 │   ├── discovery.py        # Sync discovery document operations
@@ -114,7 +134,7 @@ src/py_identity_model/
 
 ### Setup
 ```bash
-uv sync                     # Install dependencies and sync environment
+cd py && uv sync            # Install dependencies (run from py/)
 ```
 
 ### Testing
@@ -141,10 +161,10 @@ make test-harness-load       # Opt-in `load` group (locust); Locust runs out-of-
 make test-all
 
 # Run a single test file
-uv run pytest src/tests/unit/test_discovery.py -v
+cd py && uv run pytest src/tests/unit/test_discovery.py -v
 
 # Run a specific test
-uv run pytest src/tests/unit/test_discovery.py::test_function_name -v
+cd py && uv run pytest src/tests/unit/test_discovery.py::test_function_name -v
 ```
 
 **Coverage Requirements**: All test commands enforce 80% minimum coverage (enforced by pytest + pre-commit).
@@ -155,7 +175,7 @@ uv run pytest src/tests/unit/test_discovery.py::test_function_name -v
 make lint
 
 # Auto-fix linting issues
-uv run ruff check --fix src/
+cd py && uv run ruff check --fix src/
 ```
 
 ### Building
@@ -244,9 +264,9 @@ See `ssl_config.py` for implementation details.
 ## Workspace Packages
 
 This repo is a `uv` workspace. Besides the core `py-identity-model` library
-(`src/py_identity_model/`), it ships framework packages under `packages/`:
+(`py/src/py_identity_model/`), it ships framework packages under `py/packages/`:
 
-- **`packages/fastapi-identity-model/`** — FastAPI OIDC middleware + relying-party
+- **`py/packages/fastapi-identity-model/`** — FastAPI OIDC middleware + relying-party
   login router, built on the core library. Independently versioned and published.
   - Test + typecheck: `make test-fastapi`. Build: `make build-fastapi`.
   - **Released automatically** by semantic-release: `feat(fastapi)`/`fix(fastapi)`
