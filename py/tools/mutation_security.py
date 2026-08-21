@@ -98,7 +98,7 @@ _MUTANT_LINE = re.compile(
 def _run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     # Commands are built from module constants and a git ref, never untrusted
     # shell input; shell=False keeps args literal.
-    return subprocess.run(cmd, text=True, capture_output=True, check=False)  # noqa: S603
+    return subprocess.run(cmd, text=True, capture_output=True, check=False)
 
 
 def changed_security_files(base: str) -> list[str]:
@@ -302,7 +302,7 @@ def main() -> int:
     try:
         # mutmut writes into ./mutants (gitignored) and exits 0 even with survivors;
         # a non-zero code means the run itself crashed (bad config, import error...).
-        run = subprocess.run(  # noqa: S603
+        run = subprocess.run(
             [sys.executable, "-m", "mutmut", "run"], check=False, text=True
         )
         if run.returncode != 0:

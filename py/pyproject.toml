@@ -221,6 +221,14 @@ ignore = [
     "PLW0603", # global for singleton HTTP client
     "ARG001",  # unused args kept for API compatibility
 ]
+"tools/**/*.py" = [
+    # These are dev/CI orchestration scripts whose whole job is to shell out to
+    # git and mutmut with fixed, literal argv (no shell, no untrusted input).
+    # S603 blanket-flags every subprocess call and has no code-level fix, so it
+    # is a false positive for this class of file — scoped here as reviewed
+    # policy rather than scattered `# noqa` at each call site.
+    "S603",
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["py_identity_model", "fastapi_identity_model"]
