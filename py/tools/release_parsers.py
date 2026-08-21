@@ -3,7 +3,7 @@
 The repo hosts two independently versioned distributions:
 
 - the core ``py-identity-model`` library, released by the root
-  python-semantic-release config (bare ``{version}`` tags), and
+  python-semantic-release config (``py-v{version}`` tags), and
 - the ``fastapi-identity-model`` package, released by the config in
   ``packages/fastapi-identity-model/pyproject.toml``
   (``fastapi-identity-model-v{version}`` tags).
