@@ -1,0 +1,14 @@
+# moon orchestrates the polyglot repo on top of the native toolchains — each
+# project's tasks shell out to uv / go / cargo (toolchain: 'system'); moon adds
+# caching and affected-detection. It does NOT replace native build/publish.
+$schema: 'https://moonrepo.dev/schemas/workspace.json'
+
+projects:
+  py: 'py'
+  go: 'go'
+  rust: 'rust'
+  node: 'node'
+
+vcs:
+  provider: 'github'
+  defaultBranch: 'main'

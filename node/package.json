@@ -1,0 +1,7 @@
+{
+  "name": "@identity-model/node",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Planned Node/TypeScript OIDC/OAuth2 library — not yet implemented.",
+  "license": "Apache-2.0"
+}

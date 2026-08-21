@@ -1,0 +1,4 @@
+$schema: 'https://moonrepo.dev/schemas/toolchain.json'
+# No managed toolchains: every task runs on the system toolchain and invokes
+# the language's own tool (uv / go / cargo). Contributors install those
+# natively; moon only orchestrates.
