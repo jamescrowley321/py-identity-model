@@ -1,6 +1,6 @@
 # identity-model — Capability Matrix
 
-This is the **canonical, cross-language capability specification**. Every language binding implements these capabilities idiomatically and proves behavioral parity by passing the machine-readable conformance definitions in [`conformance/`](conformance/) against the shared provider in [`../infra`](../infra).
+This is the **canonical, cross-language capability specification**. Every language’s library implements these capabilities idiomatically and proves behavioral parity by passing the machine-readable conformance definitions in [`conformance/`](conformance/) against the shared provider in [`../infra`](../infra).
 
 Normative keywords (MUST / SHOULD / MAY) follow [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 

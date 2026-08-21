@@ -6,9 +6,6 @@ integration tests against — plus cloud provider profiles (Ory, Descope) that
 reuse the same test suites. Testing every change against heterogeneous
 providers catches provider-specific behavior a single fixture cannot.
 
-Consolidated in CONS-1.4 from the former root `test-fixtures/` (Python) and
-`identity-model`'s `infra/` (Go/Rust) into this single fixture set.
-
 | Provider | Where | Issuer | Fixture |
 |----------|-------|--------|---------|
 | [`node-oidc-provider`](https://github.com/panva/node-oidc-provider) | local compose | `http://localhost:9010` | [`node-oidc-provider/`](node-oidc-provider/) |
