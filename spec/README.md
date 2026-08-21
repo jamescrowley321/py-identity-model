@@ -1,6 +1,6 @@
 # Cross-Language Specification
 
-This directory is the **single source of truth** for what every identity-model language binding must do. It is language-agnostic: no implementation code lives here.
+This directory is the **single source of truth** for what every identity-model library must do. It is language-agnostic: no implementation code lives here.
 
 ## Contents
 
@@ -68,7 +68,7 @@ See [`conformance/validation.json`](conformance/validation.json) for the full se
 | Validation | `conformance/validation.json` (JWT-001..013) — **executable vectors** | `test-fixtures/validation/` |
 
 Validation is the first capability with executable vectors and a runner in
-**every language** (CONS-1.5): Go `go/internal/conformance`, Python
+**every language**: Go `go/internal/conformance`, Python
 `src/tests/unit/test_spec_conformance.py`, Rust `rust/tests/spec_conformance.rs`
 — 12 executable cases + 1 native case each. Each runner asserts full coverage
 internally, and the **cross-language coverage gate**

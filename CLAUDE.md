@@ -46,15 +46,15 @@ py-identity-model is a production-grade OIDC/OAuth2.0 helper library for Python 
 
 6. **Create a PR for all changes** — push the feature branch and open a PR against `main`. PR titles **must** follow conventional commit format (e.g., `feat(discovery): add metadata support`, `fix: handle missing kid`, `ci: update actions`).
 
-## Repository Layout (CONS-2.1)
+## Repository Layout
 
-This repository is a **polyglot monorepo**. The Python package was relocated
-from the repo root into **`py/`**; Go, Rust, the shared conformance `spec/`,
-and the shared IdP fixtures `infra/` are siblings at the root:
+This repository is a **polyglot monorepo**. The Python package lives under
+**`py/`**; Go, Rust, the shared conformance `spec/`, and the shared IdP
+fixtures `infra/` are siblings at the root:
 
 ```
 py/      # Python core (src/, packages/, tools/, pyproject.toml, uv.lock) — this package
-go/      # Go binding    rust/    # Rust binding
+go/      # Go library     rust/    # Rust library
 spec/    # cross-language conformance vectors    infra/   # shared IdP docker fixtures
 conformance/  # OIDF certification harness (Python)
 ```

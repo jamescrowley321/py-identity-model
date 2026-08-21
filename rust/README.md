@@ -1,10 +1,12 @@
 # identity-model (Rust)
 
-Rust implementation of the [identity-model](../README.md) OIDC/OAuth2 client library.
+A native Rust library for OpenID Connect and OAuth 2.0 clients: discovery,
+JWKS retrieval and key resolution, JWT validation, and the token and UserInfo
+endpoints.
 
 - **Crate:** `rs-identity-model` (not yet published to crates.io)
 - **Edition:** 2024 · **MSRV:** 1.96
-- **Build:** from source with `cargo build` (no crates.io release yet)
+- **Build:** from source with `cargo build`
 
 ## Module Layout
 
@@ -36,8 +38,13 @@ cargo test
 cargo run --example basic_setup
 ```
 
-Integration tests run against the shared provider in [`../infra`](../infra).
+Integration tests run against the shared provider in [`../infra`](../infra)
+(`make infra-up` from the repo root).
 
-> **Status:** Core tier implemented and hardened. Implementation tracks the
-> cross-language [`spec/`](../spec); the Extended tier (introspection, revocation,
-> token exchange, DPoP) is the next milestone.
+## Capabilities
+
+The Core tier (discovery, JWKS, JWT validation, client-credentials and
+authorization-code + PKCE, UserInfo) is implemented. The Extended tier
+(introspection, revocation, token exchange, DPoP) is in progress. Behavioral
+parity with the Python and Go libraries is enforced by the cross-language
+conformance vectors in [`../spec`](../spec).

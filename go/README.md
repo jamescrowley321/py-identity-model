@@ -1,46 +1,46 @@
 # identity-model (Go)
 
-Go implementation of the [identity-model](../README.md) OIDC/OAuth2 client library.
+A native Go library for OpenID Connect and OAuth 2.0 clients: discovery, JWKS
+retrieval and key resolution, JWT validation, and the token, introspection,
+revocation, DPoP, and UserInfo endpoints.
 
 - **Module:** `github.com/jamescrowley321/py-identity-model/go`
 - **Minimum Go:** 1.26
 - **Install:** `go get github.com/jamescrowley321/py-identity-model/go`
 
-> **Imported from `identity-model` (CONS-1).** This Go binding was merged into
-> `py-identity-model` as part of the polyglot consolidation epic. The module
-> path above is **interim** and will change again at the repo rename (CONS-3);
-> there are no external consumers, so the churn is accepted. See `CHANGELOG.md`.
-
-## Package Layout
+## Packages
 
 | Package | Purpose | Spec |
 |---------|---------|------|
 | `pkg/discovery` | OIDC Discovery client | OIDC Discovery 1.0 |
 | `pkg/jwks` | JWKS fetch + key resolution | RFC 7517 / 7518 |
 | `pkg/jwt` | JWT signature + claims validation | RFC 7519 / 7515 |
-| `pkg/token` | Client credentials, auth code, PKCE | RFC 6749 / 7636 |
+| `pkg/token` | Client credentials, authorization code, PKCE | RFC 6749 / 7636 |
 | `pkg/introspection` | Token introspection client | RFC 7662 |
 | `pkg/revocation` | Token revocation client | RFC 7009 |
 | `pkg/dpop` | DPoP proof creation + verification | RFC 9449 |
 | `pkg/userinfo` | UserInfo endpoint client | OIDC Core 1.0 §5.3 |
-| `internal/` | Shared non-exported utilities | — |
 
-## Design Conventions
+## Design
 
-- HTTP via `net/http` stdlib; `sync.Pool` for client reuse.
+- HTTP via the `net/http` standard library; `sync.Pool` for client reuse.
 - Functional options for configuration: `WithTimeout()`, `WithCacheTTL()`, `WithHTTPClient()`.
-- `singleflight` to deduplicate concurrent discovery / JWKS fetches.
+- `singleflight` deduplicates concurrent discovery / JWKS fetches.
 - JOSE handling via `go-jose/v4`.
 
-## Getting Started
+## Getting started
 
 ```bash
 go build ./...
-go vet ./...
 go test ./...
 go run ./examples/hello
 ```
 
-Integration tests (build tag `integration`) run against the shared providers in [`../infra`](../infra) — boot them with `make infra-up` from the repo root (node-oidc-provider `:9010` is the env-free default profile; source `.env.identityserver` for the IdentityServer profile).
+Integration tests use the `integration` build tag and run against the shared
+providers in [`../infra`](../infra); start them with `make infra-up` from the
+repo root. The env-free default profile targets node-oidc-provider on `:9010`;
+source `.env.identityserver` to run the same tests against IdentityServer.
 
-> **Status:** Imported from `identity-model` (CONS-1.1); `go build/vet/test ./...` green. The cross-language conformance vectors and shared test fixtures now live in [`../spec`](../spec) (imported in CONS-1.3), so the fixture-driven tests and the `internal/conformance` runner execute for real against them — the interim spec-guards have been retired. See [`CHANGELOG.md`](CHANGELOG.md).
+Behavioral parity with the Python and Rust libraries is enforced by the
+cross-language conformance vectors in [`../spec`](../spec), which the
+`internal/conformance` runner executes.

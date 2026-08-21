@@ -5,17 +5,26 @@ libraries in **Python, Go, and Rust**, validated against one shared,
 language-neutral conformance specification and one shared set of local identity
 providers.
 
-| Path | What | Package |
-|------|------|---------|
-| [`py/`](py/) | Python core (JWT, discovery, JWKS, token validation) + `fastapi-identity-model` middleware. OIDF-certified; published to PyPI. | [`py-identity-model`](https://pypi.org/project/py-identity-model/) · [`fastapi-identity-model`](https://pypi.org/project/fastapi-identity-model/) |
-| [`go/`](go/) | Go binding | `github.com/jamescrowley321/py-identity-model/go` |
-| [`rust/`](rust/) | Rust binding | crate `rs-identity-model` |
-| [`spec/`](spec/) | Language-neutral conformance vectors + capability matrix — the single source of truth every binding executes against. | — |
-| [`infra/`](infra/) | Shared local IdP fixtures (node-oidc-provider, Duende IdentityServer, Keycloak) all suites test against; plus Descope Terraform. | — |
-| [`conformance/`](conformance/) | The Python package's OIDF certification harness (black-box RP). Unchanged by the polyglot layout. | — |
+Each library is a standalone, idiomatic implementation in its own language —
+not a wrapper over a shared core — and every one is held to the same behavior
+by the conformance vectors in [`spec/`](spec/).
 
-> The Python package's own README (its PyPI long description) lives at
-> [`py/README.md`](py/README.md).
+| Path | Library | Install |
+|------|---------|---------|
+| [`py/`](py/) | Python — the OIDF-certified reference. Ships the core library plus the `fastapi-identity-model` middleware. | [`py-identity-model`](https://pypi.org/project/py-identity-model/) · [`fastapi-identity-model`](https://pypi.org/project/fastapi-identity-model/) (PyPI) |
+| [`go/`](go/) | Go | `go get github.com/jamescrowley321/py-identity-model/go` |
+| [`rust/`](rust/) | Rust | crate `rs-identity-model` (build from source) |
+
+Supporting directories:
+
+| Path | Purpose |
+|------|---------|
+| [`spec/`](spec/) | The language-neutral capability spec and conformance vectors every library is tested against. |
+| [`infra/`](infra/) | Shared local identity-provider fixtures (node-oidc-provider, Duende IdentityServer, Keycloak) the integration suites run against. |
+| [`conformance/`](conformance/) | The Python library's OpenID Foundation certification harness. |
+
+The Python library's own README (its PyPI description) is at
+[`py/README.md`](py/README.md).
 
 ## Working in this repo
 
