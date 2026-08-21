@@ -168,6 +168,10 @@ build-fastapi: ## Build the fastapi-identity-model wheel + sdist
 
 # ── Security gate ────────────────────────────────────────────────────
 
+.PHONY: spec-coverage
+spec-coverage: ## CONS-1.5: run the py/go/rust /spec vector runners + 100% per-language coverage gate
+	uv run python tools/spec_coverage_gate.py
+
 .PHONY: mutation-security
 mutation-security: ## Mutation-test changed security modules vs BASE (Epic 19 G.1)
 	uv run python tools/mutation_security.py
