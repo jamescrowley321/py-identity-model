@@ -1,52 +1,90 @@
-# py-identity-model — polyglot OIDC/OAuth2.0 client libraries
+# identity-model
 
-A single repository housing production-grade OpenID Connect / OAuth 2.0 client
-libraries in **Python, Go, and Rust**, validated against one shared,
-language-neutral conformance specification and one shared set of local identity
-providers.
+**One OIDC/OAuth2 client library, in every language, that behaves the same everywhere.**
 
-Each library is a standalone, idiomatic implementation in its own language —
-not a wrapper over a shared core — and every one is held to the same behavior
-by the conformance vectors in [`spec/`](spec/).
+Outside of .NET, writing an OpenID Connect or OAuth 2.0 *client* means gluing
+together three or four half-overlapping libraries per language — one for JWTs,
+another for discovery, a third for the flows — each with its own quirks, its own
+gaps, and no relationship to what you'd reach for in the next service written in
+a different language. Duende's IdentityModel solved this for C#: one coherent,
+RFC-compliant client library with clean abstractions. Nothing equivalent exists
+for the rest of the stack.
 
-| Path | Library | Install |
-|------|---------|---------|
-| [`py/`](py/) | Python — the OIDF-certified reference. Ships the core library plus the `fastapi-identity-model` middleware. | [`py-identity-model`](https://pypi.org/project/py-identity-model/) · [`fastapi-identity-model`](https://pypi.org/project/fastapi-identity-model/) (PyPI) |
-| [`go/`](go/) | Go | `go get github.com/jamescrowley321/py-identity-model/go` |
-| [`rust/`](rust/) | Rust | crate `rs-identity-model` (build from source) |
+**identity-model** is that library, brought to Python, Go, and Rust (Node/TypeScript
+next). Not four unrelated ports — one design, one capability surface, one set of
+RFC-compliance guarantees, implemented natively and idiomatically in each language
+and held to a single shared behavioral contract. Move from a Python service to a
+Go one and the mental model comes with you.
 
-Supporting directories:
+- **RFC-first** — every capability maps to a specific RFC or OpenID Connect section, not a vendor's happy path.
+- **Native, not bindings** — each library is real, idiomatic code in its own language (`httpx`/`net/http`/`reqwest`), sharing a design, not a runtime.
+- **Provably consistent** — one language-neutral [conformance spec](spec/) defines the expected behavior as executable vectors, and every language must pass every vector (enforced in CI).
+- **Provider-agnostic** — Descope, Okta, Auth0, Keycloak, Entra, or any spec-compliant provider.
 
-| Path | Purpose |
-|------|---------|
-| [`spec/`](spec/) | The language-neutral capability spec and conformance vectors every library is tested against. |
-| [`infra/`](infra/) | Shared local identity-provider fixtures (node-oidc-provider, Duende IdentityServer, Keycloak) the integration suites run against. |
-| [`conformance/`](conformance/) | The Python library's OpenID Foundation certification harness. |
+It is a protocol **client** library: it talks to identity providers. It is **not**
+an identity provider or authorization server (no token issuance, no consent
+screens), and not framework middleware — though middleware is built on top of it
+(see [`fastapi-identity-model`](py/packages/fastapi-identity-model)).
 
-The Python library's own README (its PyPI description) is at
-[`py/README.md`](py/README.md).
+Credit where due: the design philosophy, capability taxonomy, and
+spec-compliance bar are a deliberate port of
+[Duende IdentityModel](https://github.com/DuendeSoftware/foss/tree/main/identity-model).
 
-## Working in this repo
+## The libraries
 
-Each language keeps its native toolchain:
+| Language | Status | Install |
+|----------|--------|---------|
+| **Python** — [`py/`](py/) | Production-proven and **OpenID Foundation certified**. The reference implementation the others are measured against. Full Core + Extended surface. | `pip install py-identity-model` |
+| **Go** — [`go/`](go/) | Core + Extended (introspection, revocation, token exchange, DPoP) implemented. | `go get github.com/jamescrowley321/py-identity-model/go` |
+| **Rust** — [`rust/`](rust/) | Core implemented; Extended in progress. Not yet published to crates.io. | build from source (crate `rs-identity-model`) |
+| **Node / TypeScript** | Planned. | — |
 
-```bash
-# Python (from py/)
-cd py && uv sync --all-packages && uv run pytest src/tests -m unit
+Capabilities span discovery, JWKS retrieval with caching, JWT validation, the
+client-credentials / authorization-code+PKCE / refresh / device flows, UserInfo,
+token introspection and revocation, token exchange, and DPoP — see the
+per-language READMEs and the [capability matrix](spec/capabilities.md) for the
+authoritative, RFC-referenced status of each in each language.
 
-# Go
-cd go && go test ./...
+## What makes the guarantee real
 
-# Rust
-cd rust && cargo test
+The claim "every library behaves the same" is only worth anything if it's
+enforced. It is:
+
+- **[`spec/`](spec/)** — a language-neutral capability spec plus machine-readable
+  conformance vectors: inputs and expected outcomes expressed as canonical,
+  cross-language error codes. This is the single source of truth for *what
+  correct means*.
+- Each language runs those vectors through a thin executor, and a **cross-language
+  coverage gate** fails CI if any language skips any vector (`make spec-coverage`).
+- **[`conformance/`](conformance/)** — the Python library additionally passes the
+  OpenID Foundation's official certification suite.
+- **[`infra/`](infra/)** — one shared set of local identity providers
+  (node-oidc-provider, Keycloak, Duende IdentityServer) that every language's
+  integration tests run against, so "works against a real provider" means the
+  same thing for all of them.
+
+## Repository layout
+
+A polyglot monorepo — each language keeps its own native toolchain.
+
+```
+py/    Python library + fastapi-identity-model middleware   (uv, PyPI)
+go/    Go library                                            (go)
+rust/  Rust library — crate rs-identity-model                (cargo)
+spec/  cross-language conformance spec + vectors
+infra/ shared local identity-provider fixtures
 ```
 
-The repo-root [`Makefile`](Makefile) wraps the common flows —
-`make infra-up` / `make infra-down` bring the shared IdP fixtures up,
-`make test-integration-{node-oidc,keycloak,go,rust}` run the per-language
-integration suites against them, and `make spec-coverage` runs the
-cross-language `/spec` vector-coverage gate (every language must execute every
-vector). See [`spec/README.md`](spec/README.md) and [`infra/README.md`](infra/README.md).
+```bash
+cd py && uv sync --all-packages && uv run pytest src/tests -m unit   # Python
+cd go && go test ./...                                               # Go
+cd rust && cargo test                                                # Rust
+```
+
+The repo-root `Makefile` wraps the common flows: `make infra-up` brings the
+shared providers up, `make test-integration-{node-oidc,keycloak,go,rust}` run the
+integration suites, and `make spec-coverage` runs the cross-language conformance
+gate. See [`spec/README.md`](spec/README.md) and [`infra/README.md`](infra/README.md).
 
 ## License
 
