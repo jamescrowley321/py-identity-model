@@ -4,7 +4,8 @@ Shared HTTP utilities for retry logic and configuration.
 This module provides common utilities used by both sync and async HTTP clients.
 
 Environment Variables:
-    HTTP_RETRY_MAX_ATTEMPTS: Maximum number of retry attempts (default: 3)
+    HTTP_RETRY_MAX_ATTEMPTS: Maximum number of retry attempts (default: 3).
+        Also accepted as HTTP_RETRY_COUNT (documented alias).
     HTTP_RETRY_BASE_DELAY: Base delay in seconds for exponential backoff (default: 1.0)
     HTTP_TIMEOUT: Request timeout in seconds (default: 30.0)
 """
@@ -44,8 +45,14 @@ def get_retry_config() -> tuple[int, float]:
     Returns:
         tuple: (max_retries, base_delay)
     """
+    # Accept the documented ``HTTP_RETRY_COUNT`` name as an alias of
+    # ``HTTP_RETRY_MAX_ATTEMPTS`` (the README and the workspace docs advertise
+    # ``HTTP_RETRY_COUNT``). ``HTTP_RETRY_MAX_ATTEMPTS`` wins when both are set;
+    # ``"0"`` is truthy, so an explicit ``0`` (disable retries) is honored.
     max_retries = int(
-        os.getenv("HTTP_RETRY_MAX_ATTEMPTS", str(DEFAULT_RETRY_MAX_ATTEMPTS))
+        os.getenv("HTTP_RETRY_MAX_ATTEMPTS")
+        or os.getenv("HTTP_RETRY_COUNT")
+        or str(DEFAULT_RETRY_MAX_ATTEMPTS)
     )
     base_delay = float(
         os.getenv("HTTP_RETRY_BASE_DELAY", str(DEFAULT_RETRY_BASE_DELAY))
