@@ -47,6 +47,10 @@ jobs:
           };
           const keys = (process.env.ENABLED || "").split("\n")
             .map((l) => l.replace(/#.*/, "").trim()).filter(Boolean);
+          if (keys.length === 0) {
+            core.setFailed("ENABLED must list at least one lens; an empty matrix would fail workflow validation with an opaque error.");
+            return;
+          }
           const include = keys.map((k) => ({ lens: k, name: NAMES[k] || k }));
           const fs = require("fs");
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify({ include })}\n`);
@@ -111,20 +115,29 @@ jobs:
     # that skips (as it did for fork/bot PRs when review was skipped) would let
     # an untrusted PR merge with zero adversarial review. Fail closed instead.
     if: always()
+    # Read-only by design: gate mode reads the lens reviews and reports its
+    # verdict through this job's own success/failure status (the required
+    # "Merge Gate" check). It performs no Octokit writes, so it needs no
+    # checks:write / pull-requests:write — keep it least-privilege.
     permissions:
       contents: read
       pull-requests: read
     steps:
-      # Fork and bot PRs are out of the trust boundary: preflight is skipped for
-      # them (no secrets), which skips the review lenses. Don't let the required
-      # check vanish — fail closed so a maintainer must review and merge manually.
-      - name: Fail closed for un-reviewed (fork/bot) PRs
-        if: needs.review.result == 'skipped'
+      # Fail closed whenever the review did not complete cleanly. Two cases:
+      #   - skipped: fork/bot PRs (out of the trust boundary — preflight skips
+      #     them, which skips the lenses).
+      #   - failure/cancelled: one or more lens legs crashed (model 5xx, network,
+      #     action bug), leaving an incomplete review.
+      # In both cases the required check must be an explicit failure, never
+      # absent/skipped (branch protection treats a skipped required check as
+      # passing) and never adjudicated on a partial lens set as if it were clean.
+      - name: Fail closed when review did not complete
+        if: needs.review.result != 'success'
         run: |
-          echo "::error::Adversarial review did not run for this PR (fork or bot — out of trust boundary). The Merge Gate fails closed; a maintainer must review and merge manually."
+          echo "::error::Adversarial review did not complete cleanly (fork/bot PR, or one or more lenses failed: review=${{ needs.review.result }}). The Merge Gate fails closed — a maintainer must review and merge manually, or re-run the lenses."
           exit 1
       - name: Adjudicate lenses
-        if: needs.review.result != 'skipped'
+        if: needs.review.result == 'success'
         uses: jamescrowley321/adversarial-review@7d18b99faf7567366b5091deaf1470692d668245 # v1.6.0
         with:
           mode: gate
