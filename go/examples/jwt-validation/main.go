@@ -26,8 +26,8 @@ import (
 
 	jose "github.com/go-jose/go-jose/v4"
 
-	"github.com/jamescrowley321/py-identity-model/go/pkg/jwks"
-	"github.com/jamescrowley321/py-identity-model/go/pkg/jwt"
+	"github.com/jamescrowley321/identity-model/go/pkg/jwks"
+	"github.com/jamescrowley321/identity-model/go/pkg/jwt"
 )
 
 func main() {

@@ -13,10 +13,10 @@ import (
 
 	jose "github.com/go-jose/go-jose/v4"
 
-	"github.com/jamescrowley321/py-identity-model/go/internal/integrationtest"
-	"github.com/jamescrowley321/py-identity-model/go/pkg/discovery"
-	"github.com/jamescrowley321/py-identity-model/go/pkg/jwks"
-	"github.com/jamescrowley321/py-identity-model/go/pkg/jwt"
+	"github.com/jamescrowley321/identity-model/go/internal/integrationtest"
+	"github.com/jamescrowley321/identity-model/go/pkg/discovery"
+	"github.com/jamescrowley321/identity-model/go/pkg/jwks"
+	"github.com/jamescrowley321/identity-model/go/pkg/jwt"
 )
 
 // TestIntegration_Validate_AgainstLiveJWKS discovers the live provider

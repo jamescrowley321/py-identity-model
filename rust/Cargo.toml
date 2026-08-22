@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.96"
 description = "Production-grade, RFC-compliant OIDC/OAuth2 client library for Rust"
 license = "Apache-2.0"
-repository = "https://github.com/jamescrowley321/py-identity-model"
+repository = "https://github.com/jamescrowley321/identity-model"
 keywords = ["oidc", "oauth2", "jwt", "openid", "authentication"]
 categories = ["authentication", "web-programming"]
 

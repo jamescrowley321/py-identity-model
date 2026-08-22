@@ -37,7 +37,7 @@ screens), and not framework middleware — though middleware is built on top of 
 | Language | Status | Install |
 |----------|--------|---------|
 | **Python** — [`py/`](py/) | Production-proven and **OpenID Foundation certified**. The reference implementation the others are measured against. Full Core + Extended surface. | `pip install py-identity-model` |
-| **Go** — [`go/`](go/) | Core + Extended (introspection, revocation, token exchange, DPoP) implemented. | `go get github.com/jamescrowley321/py-identity-model/go` |
+| **Go** — [`go/`](go/) | Core + Extended (introspection, revocation, token exchange, DPoP) implemented. | `go get github.com/jamescrowley321/identity-model/go` |
 | **Rust** — [`rust/`](rust/) | Core implemented; Extended in progress. Not yet published to crates.io. | build from source (crate `rs-identity-model`) |
 | **Node / TypeScript** | Planned. | — |
 

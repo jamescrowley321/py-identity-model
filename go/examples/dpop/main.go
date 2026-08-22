@@ -19,7 +19,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/jamescrowley321/py-identity-model/go/pkg/dpop"
+	"github.com/jamescrowley321/identity-model/go/pkg/dpop"
 )
 
 func main() {

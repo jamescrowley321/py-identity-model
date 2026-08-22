@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamescrowley321/py-identity-model/go/internal/integrationtest"
-	"github.com/jamescrowley321/py-identity-model/go/pkg/discovery"
-	"github.com/jamescrowley321/py-identity-model/go/pkg/dpop"
-	"github.com/jamescrowley321/py-identity-model/go/pkg/token"
+	"github.com/jamescrowley321/identity-model/go/internal/integrationtest"
+	"github.com/jamescrowley321/identity-model/go/pkg/discovery"
+	"github.com/jamescrowley321/identity-model/go/pkg/dpop"
+	"github.com/jamescrowley321/identity-model/go/pkg/token"
 )
 
 // DPOP-001/DPOP-005 (live): request a client_credentials access token from the

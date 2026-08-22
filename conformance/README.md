@@ -180,7 +180,7 @@ profile's scope:
 
 If we wanted to certify WebFinger discovery behavior, it would require a separate
 profile and test plan — py-identity-model does not currently implement WebFinger discovery
-and it is not in the current certification scope (see [#242](https://github.com/jamescrowley321/py-identity-model/issues/242)).
+and it is not in the current certification scope (see [#242](https://github.com/jamescrowley321/identity-model/issues/242)).
 
 ## Endpoints
 

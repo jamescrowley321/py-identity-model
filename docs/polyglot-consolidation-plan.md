@@ -7,7 +7,7 @@
 ## Decision
 
 Move `jamescrowley321/identity-model` (Go + Rust) **into**
-`jamescrowley321/py-identity-model` (PIM). **PIM is the surviving repo** — it keeps its
+`jamescrowley321/identity-model` (PIM). **PIM is the surviving repo** — it keeps its
 git history, release tags, OIDF certification, and PyPI pipelines. `identity-model`'s
 history is expendable (0 tags, never released, not prod-ready). Package naming stays
 `{py,go,rs}-identity-model` at the package level.
@@ -31,7 +31,7 @@ makes OIDF cert continuity a non-issue and leaves both PyPI pipelines untouched.
    contract, `infra/` shared IdP fixtures, and Go/Rust CI move **into** PIM rather than
    being inherited for free. This is the real work.
 2. **Go import-path break.** `github.com/jamescrowley321/identity-model/go` →
-   `github.com/jamescrowley321/py-identity-model/go` (and again at the rename). Accepted
+   `github.com/jamescrowley321/identity-model/go` (and again at the rename). Accepted
    (0 consumers, not prod); document in `go/README.md` + CHANGELOG.
 3. **Stale planning artifacts.** PR #72's docs now describe the opposite direction → fixed
    in the retirement step.

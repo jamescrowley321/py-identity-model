@@ -23,8 +23,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/jamescrowley321/py-identity-model/go/pkg/discovery"
-	"github.com/jamescrowley321/py-identity-model/go/pkg/userinfo"
+	"github.com/jamescrowley321/identity-model/go/pkg/discovery"
+	"github.com/jamescrowley321/identity-model/go/pkg/userinfo"
 )
 
 func main() {

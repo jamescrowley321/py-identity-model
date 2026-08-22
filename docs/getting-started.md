@@ -199,7 +199,7 @@ def protected_route():
 ## Next Steps
 
 - Read the [API Documentation](index.md) for detailed information on all classes and functions
-- Check out [Examples](https://github.com/jamescrowley321/py-identity-model/tree/main/examples) for complete working examples
+- Check out [Examples](https://github.com/jamescrowley321/identity-model/tree/main/examples) for complete working examples
 - Read the [Migration Guide](migration-guide.md) for sync to async migration
 - Learn about [OAuth 2.0 and OpenID Connect specifications](https://oauth.net/2/)
 
@@ -236,4 +236,4 @@ load_dotenv()
 
 - Check the [Troubleshooting Guide](troubleshooting.md)
 - Review the [FAQ](faq.md)
-- Open an issue on [GitHub](https://github.com/jamescrowley321/py-identity-model/issues)
+- Open an issue on [GitHub](https://github.com/jamescrowley321/identity-model/issues)

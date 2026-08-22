@@ -4,9 +4,9 @@ A native Go library for OpenID Connect and OAuth 2.0 clients: discovery, JWKS
 retrieval and key resolution, JWT validation, and the token, introspection,
 revocation, DPoP, and UserInfo endpoints.
 
-- **Module:** `github.com/jamescrowley321/py-identity-model/go`
+- **Module:** `github.com/jamescrowley321/identity-model/go`
 - **Minimum Go:** 1.26
-- **Install:** `go get github.com/jamescrowley321/py-identity-model/go`
+- **Install:** `go get github.com/jamescrowley321/identity-model/go`
 
 ## Packages
 

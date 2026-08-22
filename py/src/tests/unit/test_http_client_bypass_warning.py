@@ -16,7 +16,7 @@ Pinned contract:
 - Sync and aio modules each have their own one-shot flag, so a process that
   uses both APIs sees at most two warnings.
 
-See https://github.com/jamescrowley321/py-identity-model/issues/402
+See https://github.com/jamescrowley321/identity-model/issues/402
 """
 
 from __future__ import annotations

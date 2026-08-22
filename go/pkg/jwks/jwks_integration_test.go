@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamescrowley321/py-identity-model/go/internal/integrationtest"
-	"github.com/jamescrowley321/py-identity-model/go/pkg/discovery"
-	"github.com/jamescrowley321/py-identity-model/go/pkg/jwks"
+	"github.com/jamescrowley321/identity-model/go/internal/integrationtest"
+	"github.com/jamescrowley321/identity-model/go/pkg/discovery"
+	"github.com/jamescrowley321/identity-model/go/pkg/jwks"
 )
 
 // TestIntegration_FetchKeySet exercises a real JWKS fetch against the provider
