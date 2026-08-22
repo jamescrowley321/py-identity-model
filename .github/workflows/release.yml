@@ -4,6 +4,16 @@ on:
   push:
     branches:
       - main
+    # Second line of defence (the commit-parser scope routing is the first):
+    # a push that touches ONLY the sibling native libraries or the shared
+    # spec/infra never runs the Python release job. Mixed pushes that also
+    # touch py/ still release; the parser then drops any cross-track commits.
+    paths-ignore:
+      - 'go/**'
+      - 'rust/**'
+      - 'node/**'
+      - 'spec/**'
+      - 'infra/**'
   workflow_dispatch:
     inputs:
       branch:

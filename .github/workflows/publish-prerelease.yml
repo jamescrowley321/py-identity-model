@@ -53,8 +53,12 @@ jobs:
       - name: Generate prerelease version
         id: vars
         run: |
-          # Get the latest release tag
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
+          # Latest STABLE Python release tag. Python tags are py-v{version}
+          # (CONS-2.2); select those explicitly so we never pick up a
+          # fastapi-identity-model-v* tag or a prerelease, then strip the prefix.
+          LATEST_TAG=$(git tag -l 'py-v[0-9]*.[0-9]*.[0-9]*' | grep -vE -- '-(rc|a|b)' | sort -V | tail -1)
+          CURRENT_VERSION="${LATEST_TAG#py-v}"
+          CURRENT_VERSION="${CURRENT_VERSION:-0.0.0}"
 
           # Parse current version and determine next version based on conventional commits
           BASE_SHA=${{ github.event.pull_request.base.sha }}
@@ -75,7 +79,7 @@ jobs:
           fi
 
           # Parse current version and bump it
-          IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST_TAG#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
           MAJOR=${MAJOR:-0}
           MINOR=${MINOR:-0}
           PATCH=${PATCH:-0}
