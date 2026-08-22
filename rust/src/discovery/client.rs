@@ -24,6 +24,19 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 /// (memory-exhaustion DoS).
 const MAX_BODY_BYTES: usize = 1 << 20; // 1 MiB
 
+/// Default maximum number of distinct issuer entries the cache retains. The
+/// cache is keyed by issuer URL; without a bound it grows one entry per distinct
+/// issuer forever, so a multi-tenant gateway or attacker-supplied issuer header
+/// could accumulate entries until the process exhausts memory (unbounded-growth
+/// DoS). 64 covers any realistic multi-IdP deployment while keeping worst-case
+/// memory bounded. Mirrors the Python reference's `DEFAULT_MAX_CACHE_ENTRIES`.
+const DEFAULT_MAX_CACHE_ENTRIES: usize = 64;
+
+/// Environment variable overriding [`DEFAULT_MAX_CACHE_ENTRIES`]. A value of `0`
+/// disables the bound (explicit unbounded escape hatch); garbage falls back to
+/// the default.
+const MAX_CACHE_ENTRIES_ENV: &str = "DISCO_CACHE_MAX_ENTRIES";
+
 /// An async client that fetches, validates, and caches OIDC provider metadata.
 ///
 /// Construct one with [`DiscoveryClient::new`] for the defaults (24h cache TTL,
@@ -190,16 +203,23 @@ pub struct DiscoveryClientBuilder {
     cache_ttl: Duration,
     timeout: Duration,
     allow_http: bool,
+    max_cache_entries: usize,
 }
 
 impl DiscoveryClientBuilder {
-    /// Returns a builder seeded with the default configuration.
+    /// Returns a builder seeded with the default configuration. The cache bound
+    /// defaults to [`DEFAULT_MAX_CACHE_ENTRIES`], overridable by the
+    /// `DISCO_CACHE_MAX_ENTRIES` environment variable.
     fn new() -> Self {
         Self {
             http: None,
             cache_ttl: DEFAULT_CACHE_TTL,
             timeout: DEFAULT_TIMEOUT,
             allow_http: false,
+            max_cache_entries: crate::env::max_cache_entries_from_env(
+                MAX_CACHE_ENTRIES_ENV,
+                DEFAULT_MAX_CACHE_ENTRIES,
+            ),
         }
     }
 
@@ -238,11 +258,22 @@ impl DiscoveryClientBuilder {
         self
     }
 
+    /// Bounds the number of distinct issuer entries the cache retains, evicting
+    /// the least-recently-used entry once the bound is exceeded. The cache is
+    /// keyed by issuer URL, so without a bound it grows one entry per distinct
+    /// issuer forever (unbounded-growth DoS). Defaults to
+    /// [`DEFAULT_MAX_CACHE_ENTRIES`] (overridable via `DISCO_CACHE_MAX_ENTRIES`).
+    /// A value of `0` disables the bound (unbounded).
+    pub fn max_cache_entries(mut self, max_entries: usize) -> Self {
+        self.max_cache_entries = max_entries;
+        self
+    }
+
     /// Builds the [`DiscoveryClient`].
     pub fn build(self) -> DiscoveryClient {
         DiscoveryClient {
             http: self.http.unwrap_or_else(crate::http::secure_client),
-            cache: Cache::new(),
+            cache: Cache::new(self.max_cache_entries),
             cache_ttl: self.cache_ttl,
             timeout: self.timeout,
             allow_http: self.allow_http,

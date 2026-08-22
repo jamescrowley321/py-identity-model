@@ -1,14 +1,35 @@
-//! TTL cache for JWK Sets, keyed by `jwks_uri`.
+//! Bounded TTL cache for JWK Sets, keyed by `jwks_uri`.
 //!
 //! Backed by a [`tokio::sync::RwLock`] so concurrent readers share a fresh entry
 //! without contention (JWKS-005) while a refresh takes the write lock. A
 //! [`Cache::invalidate`] drops an entry so the next fetch re-fetches from the
 //! provider (JWKS-006).
+//!
+//! Two hardening properties layered on top of the plain TTL map:
+//!
+//! - **Max-entries LRU bound.** The map is keyed by `jwks_uri`; without a cap it
+//!   grows one entry per distinct URI forever. A multi-tenant gateway or an
+//!   attacker able to steer resolution at attacker-chosen URIs could accumulate
+//!   entries until the process exhausts memory (unbounded-growth DoS). Insertion
+//!   evicts the least-recently-*used* entry once the cap is exceeded; read hits
+//!   refresh recency so a hot entry is not evicted merely because a flood of
+//!   distinct cold URIs was read after it. Mirrors the Python reference
+//!   (`py_identity_model.core.jwks_cache`, default 64). A cap of `0` disables the
+//!   bound (explicit unbounded escape hatch).
+//! - **Single-flight.** Concurrent cache-misses for the *same* `jwks_uri`
+//!   collapse to a single outbound fetch instead of each firing its own,
+//!   mirroring the Go reference's `singleflight` (`go/pkg/jwks`).
+//!
+//! The refresh-cooldown sidecar (`last_refresh`) is pruned in lockstep with LRU
+//! eviction so it cannot outgrow the bounded entry map.
 
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::Mutex as StdMutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use super::key::JsonWebKeySet;
 
@@ -18,56 +39,131 @@ use super::key::JsonWebKeySet;
 struct CacheEntry {
     key_set: JsonWebKeySet,
     expires_at: Option<Instant>,
+    /// Monotonic recency tick; the higher the value, the more recently the entry
+    /// was used. Bumped on every read hit and on insert. Interior-mutable
+    /// ([`AtomicU64`]) so a read hit can refresh recency while holding only a
+    /// shared read lock, preserving the concurrent-reader property (JWKS-005)
+    /// rather than upgrading every cache hit to a write lock.
+    last_access: AtomicU64,
 }
 
-/// A TTL cache mapping a `jwks_uri` to its parsed [`JsonWebKeySet`].
+/// A bounded TTL cache mapping a `jwks_uri` to its parsed [`JsonWebKeySet`].
 pub(crate) struct Cache {
     entries: RwLock<HashMap<String, CacheEntry>>,
     /// Records when each `jwks_uri` was last refreshed, throttling automatic
     /// refreshes so an unknown `kid` cannot drive unbounded re-fetches (see
-    /// [`Cache::refresh_throttled`]).
+    /// [`Cache::refresh_throttled`]). Pruned in lockstep with LRU eviction of
+    /// the corresponding entry so it stays bounded alongside `entries`.
     last_refresh: RwLock<HashMap<String, Instant>>,
+    /// Maximum number of distinct `jwks_uri` entries retained. `0` means
+    /// unbounded (no eviction).
+    max_entries: usize,
+    /// Source of the monotonic recency ticks stored in each entry.
+    access_counter: AtomicU64,
+    /// Per-URI single-flight gates. A cache-miss acquires the gate for its URI
+    /// so concurrent misses for the same URI serialize behind one fetch; the
+    /// waiters then observe the populated cache instead of fetching again. The
+    /// map holds only URIs with a fetch in flight and is pruned on release, so
+    /// it does not reintroduce unbounded growth. The outer lock is a std mutex
+    /// held only for the O(1) map lookup (never across an `await`); the per-URI
+    /// [`tokio::sync::Mutex`] is what is held across the fetch.
+    in_flight: StdMutex<HashMap<String, Arc<Mutex<()>>>>,
 }
 
 impl Cache {
-    /// Returns an empty cache.
-    pub(crate) fn new() -> Self {
+    /// Returns an empty cache bounded to at most `max_entries` distinct URIs.
+    /// A `max_entries` of `0` disables the bound (unbounded).
+    pub(crate) fn new(max_entries: usize) -> Self {
         Self {
             entries: RwLock::new(HashMap::new()),
             last_refresh: RwLock::new(HashMap::new()),
+            max_entries,
+            access_counter: AtomicU64::new(0),
+            in_flight: StdMutex::new(HashMap::new()),
         }
     }
 
+    /// Returns the next monotonic recency tick.
+    fn next_tick(&self) -> u64 {
+        self.access_counter.fetch_add(1, Ordering::Relaxed)
+    }
+
     /// Returns the cached key set for `key` if present and unexpired (JWKS-005);
-    /// returns `None` once the TTL has elapsed.
+    /// returns `None` once the TTL has elapsed. A hit refreshes the entry's LRU
+    /// recency so it is evicted last.
     pub(crate) async fn get(&self, key: &str) -> Option<JsonWebKeySet> {
         let entries = self.entries.read().await;
         let entry = entries.get(key)?;
         // A `None` expiry never elapses; otherwise the entry is fresh until then.
         if entry.expires_at.is_none_or(|at| Instant::now() < at) {
+            // Refresh recency under the shared read lock via the atomic tick.
+            entry.last_access.store(self.next_tick(), Ordering::Relaxed);
             Some(entry.key_set.clone())
         } else {
             None
         }
     }
 
-    /// Stores `key_set` for `key`, expiring `ttl` from now.
+    /// Stores `key_set` for `key`, expiring `ttl` from now, then evicts the
+    /// least-recently-used entries until the cache is within its bound.
     pub(crate) async fn put(&self, key: String, key_set: JsonWebKeySet, ttl: Duration) {
         // `checked_add` guards against an overflow panic for a very large TTL
         // (e.g. `Duration::MAX`); `None` means the entry never expires.
         let expires_at = Instant::now().checked_add(ttl);
-        let mut entries = self.entries.write().await;
-        entries.insert(
-            key,
-            CacheEntry {
-                key_set,
-                expires_at,
-            },
-        );
+        let tick = self.next_tick();
+        let evicted = {
+            let mut entries = self.entries.write().await;
+            entries.insert(
+                key,
+                CacheEntry {
+                    key_set,
+                    expires_at,
+                    last_access: AtomicU64::new(tick),
+                },
+            );
+            self.evict_lru(&mut entries)
+        };
+        // Prune the refresh-cooldown sidecar in lockstep so it cannot outgrow the
+        // bounded entry map. Only taken when an eviction actually happened.
+        if !evicted.is_empty() {
+            let mut last_refresh = self.last_refresh.write().await;
+            for key in &evicted {
+                last_refresh.remove(key);
+            }
+        }
+    }
+
+    /// Evicts least-recently-used entries until `entries` is within
+    /// `max_entries`, returning the evicted keys so the caller can prune sidecar
+    /// state keyed by the same URIs. A `max_entries` of `0` is unbounded and
+    /// evicts nothing. Runs under the caller's write lock.
+    fn evict_lru(&self, entries: &mut HashMap<String, CacheEntry>) -> Vec<String> {
+        let mut evicted = Vec::new();
+        if self.max_entries == 0 {
+            return evicted;
+        }
+        while entries.len() > self.max_entries {
+            // The least-recently-used entry has the smallest recency tick. Ties
+            // are effectively impossible: every tick is a distinct value handed
+            // out by `next_tick`. The scan is O(n) with n <= max_entries.
+            let lru_key = entries
+                .iter()
+                .min_by_key(|(_, entry)| entry.last_access.load(Ordering::Relaxed))
+                .map(|(key, _)| key.clone());
+            match lru_key {
+                Some(key) => {
+                    entries.remove(&key);
+                    evicted.push(key);
+                }
+                None => break,
+            }
+        }
+        evicted
     }
 
     /// Drops the cached entry for `key` so the next fetch re-fetches it from the
-    /// provider (JWKS-006).
+    /// provider (JWKS-006). The refresh-cooldown sidecar is intentionally left
+    /// intact: `force_refresh` invalidates then immediately re-marks the URI.
     pub(crate) async fn invalidate(&self, key: &str) {
         self.entries.write().await.remove(key);
     }
@@ -92,5 +188,183 @@ impl Cache {
             Some(&last) => last.elapsed() < cooldown,
             None => false,
         }
+    }
+
+    /// Returns the single-flight gate for `key`, creating one if a fetch is not
+    /// already in flight. Callers lock the returned gate across the fetch so
+    /// concurrent misses for the same URI collapse to a single request.
+    pub(crate) fn flight_gate(&self, key: &str) -> Arc<Mutex<()>> {
+        let mut in_flight = self.in_flight.lock().expect("in-flight gate map poisoned");
+        in_flight
+            .entry(key.to_string())
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
+    }
+
+    /// Releases the single-flight gate for `key`, removing it from the map only
+    /// if it is still the exact gate the caller held. Removing by identity is
+    /// safe even while other waiters are still queued on the same `Arc`: they
+    /// keep it alive through their own clone, and a later caller that finds the
+    /// entry gone re-creates a fresh gate but observes the now-populated cache
+    /// (so it never re-fetches).
+    pub(crate) fn release_flight(&self, key: &str, gate: &Arc<Mutex<()>>) {
+        let mut in_flight = self.in_flight.lock().expect("in-flight gate map poisoned");
+        let is_same = in_flight
+            .get(key)
+            .is_some_and(|existing| Arc::ptr_eq(existing, gate));
+        if is_same {
+            in_flight.remove(key);
+        }
+    }
+
+    /// Test-only: number of cached entries.
+    #[cfg(test)]
+    pub(crate) async fn entry_count(&self) -> usize {
+        self.entries.read().await.len()
+    }
+
+    /// Test-only: number of refresh-cooldown sidecar records.
+    #[cfg(test)]
+    pub(crate) async fn refresh_record_count(&self) -> usize {
+        self.last_refresh.read().await.len()
+    }
+
+    /// Test-only: number of live single-flight gates.
+    #[cfg(test)]
+    pub(crate) fn flight_gate_count(&self) -> usize {
+        self.in_flight
+            .lock()
+            .expect("in-flight gate map poisoned")
+            .len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A minimal key set value for cache-mechanics tests; contents are
+    /// irrelevant here (LRU keys on the URI, not the payload).
+    fn key_set() -> JsonWebKeySet {
+        JsonWebKeySet { keys: Vec::new() }
+    }
+
+    const TTL: Duration = Duration::from_secs(60);
+
+    // The cache never exceeds its configured cap no matter how many distinct
+    // URIs are inserted (unbounded-growth DoS bound).
+    #[tokio::test]
+    async fn size_never_exceeds_cap() {
+        let cache = Cache::new(3);
+        for i in 0..25 {
+            cache
+                .put(format!("https://p/{i}/jwks"), key_set(), TTL)
+                .await;
+            assert!(
+                cache.entry_count().await <= 3,
+                "size exceeded cap after inserting entry {i}"
+            );
+        }
+        assert_eq!(cache.entry_count().await, 3);
+    }
+
+    // LRU eviction order: the least-recently-*used* entry is evicted first, and a
+    // read hit refreshes recency so a hot entry survives a later cold insert.
+    #[tokio::test]
+    async fn evicts_least_recently_used_and_read_refreshes_recency() {
+        let cache = Cache::new(2);
+        cache.put("a".to_string(), key_set(), TTL).await;
+        cache.put("b".to_string(), key_set(), TTL).await;
+
+        // Read "a" so it becomes more recently used than "b" (inserted after a).
+        assert!(cache.get("a").await.is_some());
+
+        // Inserting "c" overflows the cap; the LRU entry is now "b".
+        cache.put("c".to_string(), key_set(), TTL).await;
+
+        assert!(cache.get("a").await.is_some(), "recently-read a survives");
+        assert!(cache.get("c").await.is_some(), "newest c present");
+        assert!(
+            cache.get("b").await.is_none(),
+            "least-recently-used b evicted"
+        );
+        assert_eq!(cache.entry_count().await, 2);
+    }
+
+    // The refresh-cooldown sidecar is pruned in lockstep when its entry is
+    // evicted, so it cannot outgrow the bounded entry map.
+    #[tokio::test]
+    async fn eviction_prunes_refresh_cooldown_sidecar() {
+        let cache = Cache::new(2);
+        cache.put("a".to_string(), key_set(), TTL).await;
+        cache.mark_refresh("a").await;
+        cache.put("b".to_string(), key_set(), TTL).await;
+        cache.mark_refresh("b").await;
+        assert_eq!(cache.refresh_record_count().await, 2);
+        assert!(cache.refresh_throttled("a", TTL).await);
+
+        // "a" is least-recently-used (never read; "b" inserted after it).
+        // Inserting "c" evicts "a" and must prune a's cooldown record too.
+        cache.put("c".to_string(), key_set(), TTL).await;
+
+        assert!(cache.get("a").await.is_none(), "a evicted");
+        assert_eq!(
+            cache.refresh_record_count().await,
+            1,
+            "sidecar record for evicted a pruned"
+        );
+        assert!(
+            cache.refresh_throttled("b", TTL).await,
+            "b's cooldown intact"
+        );
+        assert!(
+            !cache.refresh_throttled("a", TTL).await,
+            "a's cooldown pruned, no longer throttled"
+        );
+    }
+
+    // A cap of 0 disables the bound entirely (backward-compat unbounded mode).
+    #[tokio::test]
+    async fn zero_cap_is_unbounded() {
+        let cache = Cache::new(0);
+        for i in 0..100 {
+            cache.put(format!("uri-{i}"), key_set(), TTL).await;
+        }
+        assert_eq!(cache.entry_count().await, 100, "cap 0 evicts nothing");
+    }
+
+    // TTL expiry is unchanged by the LRU layer: an expired entry is not served.
+    #[tokio::test]
+    async fn expired_entry_is_not_served() {
+        let cache = Cache::new(8);
+        cache
+            .put("a".to_string(), key_set(), Duration::from_millis(10))
+            .await;
+        assert!(cache.get("a").await.is_some(), "fresh before TTL");
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        assert!(cache.get("a").await.is_none(), "expired after TTL");
+    }
+
+    // A very large TTL must not overflow `Instant`; the entry never expires.
+    #[tokio::test]
+    async fn max_ttl_never_expires() {
+        let cache = Cache::new(8);
+        cache.put("a".to_string(), key_set(), Duration::MAX).await;
+        assert!(cache.get("a").await.is_some(), "max-ttl entry stays fresh");
+    }
+
+    // Releasing a single-flight gate removes it from the map (no unbounded
+    // growth), and only the holder of the current gate removes it.
+    #[tokio::test]
+    async fn flight_gate_is_released() {
+        let cache = Cache::new(8);
+        let gate = cache.flight_gate("u");
+        assert_eq!(cache.flight_gate_count(), 1);
+        // A second request for the same URI shares the same gate.
+        let gate2 = cache.flight_gate("u");
+        assert!(Arc::ptr_eq(&gate, &gate2));
+        assert_eq!(cache.flight_gate_count(), 1);
+        cache.release_flight("u", &gate);
+        assert_eq!(cache.flight_gate_count(), 0, "gate pruned on release");
     }
 }
