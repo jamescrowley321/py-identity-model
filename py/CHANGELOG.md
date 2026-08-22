@@ -2,6 +2,84 @@
 
 <!-- version list -->
 
+## v3.11.3 (2026-08-22)
+
+### Bug Fixes
+
+- **http**: Honor the documented HTTP_RETRY_COUNT env var
+  ([`e7d7520`](https://github.com/jamescrowley321/identity-model/commit/e7d75205d7b920b3a80cc42ddf0b4c942fa3df19))
+
+### Build System
+
+- **moon**: Add moon workspace orchestration + reserve /node scaffold (CONS-2.3)
+  ([`9141c0d`](https://github.com/jamescrowley321/identity-model/commit/9141c0d0b011fbcaf3a8182d8e0d316b0b278b42))
+
+### Chores
+
+- Sync uv.lock with 3.11.2
+  ([`513f7e7`](https://github.com/jamescrowley321/identity-model/commit/513f7e7d3f95b8e9fe453132dd60e5bd07b38338))
+
+- **rename**: Repoint references to jamescrowley321/identity-model
+  ([`77a1a65`](https://github.com/jamescrowley321/identity-model/commit/77a1a65fcfee0d136c9912d9ab7bd85bff0cae8b))
+
+### Continuous Integration
+
+- Add adversarial review merge gate
+  ([#552](https://github.com/jamescrowley321/identity-model/pull/552),
+  [`56ea098`](https://github.com/jamescrowley321/identity-model/commit/56ea098bb7b50ec1e704ef79ccef0491c713391a))
+
+- Fail the merge gate closed for fork/bot PRs
+  ([#552](https://github.com/jamescrowley321/identity-model/pull/552),
+  [`56ea098`](https://github.com/jamescrowley321/identity-model/commit/56ea098bb7b50ec1e704ef79ccef0491c713391a))
+
+- Fix adversarial-review preflight check names
+  ([#552](https://github.com/jamescrowley321/identity-model/pull/552),
+  [`56ea098`](https://github.com/jamescrowley321/identity-model/commit/56ea098bb7b50ec1e704ef79ccef0491c713391a))
+
+- Harden merge gate — fail closed on partial review, guard empty lens set
+  ([#552](https://github.com/jamescrowley321/identity-model/pull/552),
+  [`56ea098`](https://github.com/jamescrowley321/identity-model/commit/56ea098bb7b50ec1e704ef79ccef0491c713391a))
+
+- **release**: Fix Go release (drop GoReleaser) + nightly native-suite skip (CONS-2.4 review)
+  ([`9aadb05`](https://github.com/jamescrowley321/identity-model/commit/9aadb056f697521e7667b32306a2b56348a33b6b))
+
+- **release**: Go + Rust release pipelines + change-detected CI (CONS-2.4)
+  ([`fa75cc0`](https://github.com/jamescrowley321/identity-model/commit/fa75cc03274ae8888caab5df619456d926d36512))
+
+- **release**: Make publish-parity directional + harden (CONS-2.5 review)
+  ([`0198391`](https://github.com/jamescrowley321/identity-model/commit/019839103ae5cab05ddb19744282583edae0137b))
+
+- **release**: Publish core py-identity-model to PyPI via OIDC Trusted Publishing
+  ([`324fa54`](https://github.com/jamescrowley321/identity-model/commit/324fa5482420f6fdfa1de5508b78b1ff621c81df))
+
+- **release**: Publishing-parity gate — prove /py packages byte-for-byte (CONS-2.5)
+  ([`846fdcd`](https://github.com/jamescrowley321/identity-model/commit/846fdcd9febafde8d9532bc8ce04e270972a0e35))
+
+- **release**: Py-v tag scheme + guard core release from cross-language commits (CONS-2.2)
+  ([`fc09e50`](https://github.com/jamescrowley321/identity-model/commit/fc09e5017ed3aa9e560b94b4adb5d0f4f571c893))
+
+### Documentation
+
+- Write for users — drop process narration, call them native libraries
+  ([#551](https://github.com/jamescrowley321/identity-model/pull/551),
+  [`54b6dd6`](https://github.com/jamescrowley321/identity-model/commit/54b6dd6047e6a540a9427b16b56af1c16b14a48d))
+
+- **readme**: Lead with the vision, not a directory listing
+  ([#555](https://github.com/jamescrowley321/identity-model/pull/555),
+  [`094e589`](https://github.com/jamescrowley321/identity-model/commit/094e58993dbc67ccbbe28c4967d01f43179964de))
+
+- **readme**: Lead with what we have, drop the .NET framing
+  ([#558](https://github.com/jamescrowley321/identity-model/pull/558),
+  [`7d4c737`](https://github.com/jamescrowley321/identity-model/commit/7d4c7372967e96a55e93117b6334f5bb2746f244))
+
+- **readme**: Surface the OpenID certification on the landing pages
+  ([#559](https://github.com/jamescrowley321/identity-model/pull/559),
+  [`d1fad88`](https://github.com/jamescrowley321/identity-model/commit/d1fad88795d328a0b17eda95c5f394c159d2d697))
+
+- **release**: Correct release_parsers module docstring to py-v tag format
+  ([`ecca6bb`](https://github.com/jamescrowley321/identity-model/commit/ecca6bbd8f003a5335149879a8f322bc00cc561c))
+
+
 ## v3.11.2 (2026-08-21)
 
 ### Bug Fixes
