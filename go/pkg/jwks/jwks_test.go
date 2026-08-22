@@ -1,6 +1,7 @@
 package jwks
 
 import (
+	"container/list"
 	"context"
 	"errors"
 	"net/http"
@@ -618,7 +619,8 @@ func TestFetchKeySet_ErrorsNotCached(t *testing.T) {
 func (c *cache) reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.entries = make(map[string]cacheEntry)
+	c.entries = make(map[string]*list.Element)
+	c.order = list.New()
 	c.lastRefresh = make(map[string]time.Time)
 	c.now = time.Now
 }
@@ -635,7 +637,7 @@ func (t *countingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 
 // TestClearCache drops all cached key sets so the next fetch re-requests.
 func TestClearCache(t *testing.T) {
-	globalCache.store("https://issuer.example/jwks", []JSONWebKey{{Kid: "k1"}}, time.Hour)
+	globalCache.store("https://issuer.example/jwks", []JSONWebKey{{Kid: "k1"}}, time.Hour, defaultMaxCacheEntries)
 	if _, ok := globalCache.lookup("https://issuer.example/jwks"); !ok {
 		t.Fatal("precondition: entry should be cached")
 	}

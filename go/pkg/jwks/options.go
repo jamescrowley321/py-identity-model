@@ -2,6 +2,9 @@ package jwks
 
 import (
 	"net/http"
+	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -10,6 +13,19 @@ import (
 // TTL is safe — a key-not-found resolution forces a refresh regardless
 // (JWKS-004).
 const defaultCacheTTL = 24 * time.Hour
+
+// defaultMaxCacheEntries bounds how many distinct jwks_uri entries the
+// package-level cache retains when [WithMaxCacheEntries] and the
+// JWKS_CACHE_MAX_ENTRIES environment variable are both unset. 64 covers any
+// realistic multi-issuer deployment while keeping worst-case memory bounded
+// against an unbounded-growth (DoS) attack that drives the relying party to
+// resolve tokens against many distinct jwks_uri values. Mirrors the reference
+// implementation's default (py-identity-model JWKS_CACHE_MAX_ENTRIES=64).
+const defaultMaxCacheEntries = 64
+
+// maxCacheEntriesEnv is the environment variable that overrides
+// [defaultMaxCacheEntries].
+const maxCacheEntriesEnv = "JWKS_CACHE_MAX_ENTRIES"
 
 // defaultRefreshCooldown is the minimum interval between automatic forced
 // refreshes for a given jwks_uri (see [WithRefreshCooldown]). It bounds the rate
@@ -25,6 +41,7 @@ type config struct {
 	timeout         time.Duration
 	allowHTTP       bool
 	refreshCooldown time.Duration
+	maxEntries      int
 }
 
 // Option customises FetchKeySet via the functional-options pattern. The option
@@ -37,6 +54,7 @@ func newConfig(opts ...Option) *config {
 		httpClient:      http.DefaultClient,
 		cacheTTL:        defaultCacheTTL,
 		refreshCooldown: defaultRefreshCooldown,
+		maxEntries:      maxCacheEntriesFromEnv(),
 	}
 	for _, opt := range opts {
 		opt(cfg)
@@ -50,7 +68,27 @@ func newConfig(opts ...Option) *config {
 	if cfg.refreshCooldown < 0 {
 		cfg.refreshCooldown = defaultRefreshCooldown
 	}
+	// maxEntries is deliberately not clamped: a value <= 0 is the documented
+	// unbounded escape hatch, so it must reach the cache verbatim.
 	return cfg
+}
+
+// maxCacheEntriesFromEnv resolves the default cache bound from
+// JWKS_CACHE_MAX_ENTRIES. An unset, empty or non-integer value falls back to
+// [defaultMaxCacheEntries] so a typo cannot silently unbound the cache; a valid
+// integer is honoured verbatim, including a value <= 0 which selects the
+// unbounded escape hatch. Mirrors the reference implementation's parsing
+// discipline (py-identity-model: garbage falls back to the default).
+func maxCacheEntriesFromEnv() int {
+	raw := strings.TrimSpace(os.Getenv(maxCacheEntriesEnv))
+	if raw == "" {
+		return defaultMaxCacheEntries
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return defaultMaxCacheEntries
+	}
+	return n
 }
 
 // WithCacheTTL sets how long a fetched key set is cached before the next call
@@ -88,4 +126,25 @@ func WithRefreshCooldown(d time.Duration) Option {
 // non-TLS providers; do not use in production.
 func WithInsecureAllowHTTP() Option {
 	return func(c *config) { c.allowHTTP = true }
+}
+
+// WithMaxCacheEntries bounds the number of distinct jwks_uri entries the
+// package-level cache retains. When the bound is exceeded the least-recently-used
+// entry is evicted (a read hit or a store counts as a use), and the evicted
+// URI's refresh-cooldown record is dropped in lockstep so that sidecar stays
+// bounded too. This caps memory against a caller driven to resolve tokens
+// against many distinct jwks_uri values — a multi-tenant gateway or an
+// attacker-supplied issuer header — which would otherwise grow the cache
+// without limit (a memory-exhaustion DoS).
+//
+// The default is 64 (see [defaultMaxCacheEntries]); it can also be set process-
+// wide with the JWKS_CACHE_MAX_ENTRIES environment variable, which this option
+// overrides for the call. A value <= 0 disables the bound (unbounded), the
+// backward-compatible escape hatch for callers that accept the risk.
+//
+// Because the cache is shared, the bound applied to a stored entry is the one
+// supplied by the caller that wins the fetch flight (first-wins), consistent
+// with [WithCacheTTL].
+func WithMaxCacheEntries(n int) Option {
+	return func(c *config) { c.maxEntries = n }
 }
