@@ -112,12 +112,20 @@ func WithInsecureAllowHTTP() Option {
 //
 // The default is 64 (see [defaultMaxCacheEntries]); it can also be set process-
 // wide with the DISCO_CACHE_MAX_ENTRIES environment variable, which this option
-// overrides for the call. A value <= 0 disables the bound (unbounded), the
-// backward-compatible escape hatch for callers that accept the risk.
+// overrides for the call. A value of 0 disables the bound (unbounded), the
+// backward-compatible escape hatch for callers that accept the risk; a negative
+// value is invalid and falls back to the default, matching the
+// DISCO_CACHE_MAX_ENTRIES env-var semantics so a mis-parsed config value cannot
+// silently unbound the cache.
 //
 // Because the cache is shared, the bound applied to a stored entry is the one
 // supplied by the caller that wins the fetch flight (first-wins), consistent
 // with [WithCacheTTL].
 func WithMaxCacheEntries(n int) Option {
-	return func(c *config) { c.maxEntries = n }
+	return func(c *config) {
+		if n < 0 {
+			n = defaultMaxCacheEntries
+		}
+		c.maxEntries = n
+	}
 }

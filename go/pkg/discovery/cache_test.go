@@ -207,9 +207,14 @@ func TestMaxCacheEntriesConfig(t *testing.T) {
 		if got := newConfig(WithMaxCacheEntries(9)).maxEntries; got != 9 {
 			t.Errorf("maxEntries = %d, want 9 (option overrides env)", got)
 		}
-		// The <=0 escape hatch survives newConfig (it must not be clamped).
+		// 0 is the unbounded escape hatch and must survive newConfig unclamped.
 		if got := newConfig(WithMaxCacheEntries(0)).maxEntries; got != 0 {
 			t.Errorf("maxEntries = %d, want 0 (unbounded escape hatch preserved)", got)
+		}
+		// A negative option value is invalid and falls back to the default,
+		// matching the env-var semantics (a mis-parsed config cannot unbound).
+		if got := newConfig(WithMaxCacheEntries(-1)).maxEntries; got != defaultMaxCacheEntries {
+			t.Errorf("maxEntries = %d, want %d (negative option -> default)", got, defaultMaxCacheEntries)
 		}
 	})
 }
