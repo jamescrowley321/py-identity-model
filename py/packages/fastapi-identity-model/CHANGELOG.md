@@ -8,6 +8,14 @@ inserted below the marker.
 
 <!-- psr: next release -->
 
+## v0.2.2 (2026-08-22)
+
+### Bug Fixes
+
+- **fastapi**: Return 503 (not 401) when the OIDC provider is unreachable
+  ([`26f425d`](https://github.com/jamescrowley321/identity-model/commit/26f425d61ea5e21a365d9e71fbdac0292224d5b5))
+
+
 ## v0.2.1 (2026-08-10)
 
 ### Bug Fixes
