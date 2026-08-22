@@ -568,11 +568,13 @@ jobs:
         run: make spec-coverage
 
   publish-parity:
-    # CONS-2.5 publishing-parity gate: prove the Python package still packages
-    # byte-for-byte from py/ — the module tree + install-relevant metadata of a
-    # freshly built wheel must match the latest release on PyPI (only version +
-    # long description may differ). Guards the CONS-2.1 relocation and the
-    # CONS-2.2 release re-point against silently shipping a different package.
+    # CONS-2.5 publishing-parity gate: a wheel freshly built from py/ must still
+    # ship everything the latest PyPI release did. Directional — it fails only on
+    # regressions (a dropped module, a removed dependency, a changed package
+    # name or wheel platform tag, a removed entry point), while legitimate
+    # additions/constraint changes pass as notes so normal evolution isn't
+    # blocked. Guards the CONS-2.1 relocation + CONS-2.2 release re-point against
+    # silently shipping a smaller/different package.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
