@@ -181,3 +181,6 @@ infra/**/expired_token.txt
 mutants/
 mutmut-stats.json
 .mutmut-cache
+
+# moon build cache — never commit (tracked cache poisons affected-detection)
+.moon/cache/

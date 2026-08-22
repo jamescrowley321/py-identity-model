@@ -1,0 +1,17 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+layer: 'library'
+language: 'rust'
+
+tasks:
+  test:
+    command: 'cargo test'
+    toolchain: 'system'
+    inputs: ['src/**/*.rs', 'tests/**/*.rs', 'Cargo.toml', 'Cargo.lock']
+  lint:
+    command: 'cargo clippy --all-targets'
+    toolchain: 'system'
+    inputs: ['src/**/*.rs', 'tests/**/*.rs', 'Cargo.toml', 'Cargo.lock']
+  build:
+    command: 'cargo build'
+    toolchain: 'system'
+    inputs: ['src/**/*.rs', 'Cargo.toml', 'Cargo.lock']

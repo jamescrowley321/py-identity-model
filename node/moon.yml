@@ -1,0 +1,6 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+layer: 'library'
+language: 'javascript'
+
+# Reserved scaffold only. The Node/TypeScript library is planned, not
+# implemented — no source, no tasks, excluded from every build and release.

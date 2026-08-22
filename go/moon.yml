@@ -1,0 +1,17 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+layer: 'library'
+language: 'go'
+
+tasks:
+  test:
+    command: 'go test ./...'
+    toolchain: 'system'
+    inputs: ['**/*.go', 'go.mod', 'go.sum']
+  lint:
+    command: 'go vet ./...'
+    toolchain: 'system'
+    inputs: ['**/*.go', 'go.mod', 'go.sum']
+  build:
+    command: 'go build ./...'
+    toolchain: 'system'
+    inputs: ['**/*.go', 'go.mod', 'go.sum']
