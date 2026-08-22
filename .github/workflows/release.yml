@@ -43,8 +43,7 @@ jobs:
       cancel-in-progress: false
 
     permissions:
-      contents: write
-      id-token: write
+      contents: write # semantic-release commits the version bump + pushes the tag
 
     steps:
       - name: Checkout Repository
@@ -125,11 +124,12 @@ jobs:
           # not attached to the GitHub Release (CONS-2.1).
           directory: py
 
-      - name: Publish to PyPI
-        if: steps.release.outputs.released == 'true'
-        env:
-          UV_PUBLISH_TOKEN: ${{ secrets.pypi_token }}
-        run: make upload-dist
+      # Publishing to PyPI is handled by publish-dist.yml, which is triggered by
+      # the py-v{version} tag semantic-release pushes above (via RELEASE_TOKEN, a
+      # PAT, so the tag push triggers downstream workflows). That job publishes
+      # via OIDC Trusted Publishing. Keeping the upload here too would be a
+      # redundant second publish, so it was removed (uv publish is idempotent,
+      # but one source of truth is clearer).
 
       - name: Release Summary
         if: steps.release.outputs.released == 'true'

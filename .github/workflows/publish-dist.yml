@@ -15,6 +15,13 @@ permissions:
 jobs:
   publish-to-pypi:
     runs-on: ubuntu-latest
+    # OIDC Trusted Publishing to PyPI (no stored API token). Requires a PyPI
+    # Trusted Publisher registered for project `py-identity-model` pointing at
+    # this repo + workflow `publish-dist.yml` + environment `pypi`.
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write # OIDC token for PyPI trusted publishing
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Set up Python 3.12
@@ -37,8 +44,9 @@ jobs:
           # breaking the build (this froze every cryptography>=50 release).
           sed -i -e "s/^version = \"0.0.0\"/version = \"${{ steps.vars.outputs.tag }}\"/" py/pyproject.toml
           make build-dist
-      - name: Publish distribution 📦 to PyPI
-        env:
-           UV_PUBLISH_TOKEN: ${{ secrets.pypi_token }}
-        run: |
-          make upload-dist
+      - name: Publish distribution 📦 to PyPI (trusted publishing)
+        # OIDC — no token. `uv build` (via make build-dist) writes to py/dist,
+        # so publish from there. `--trusted-publishing always` forces OIDC and
+        # fails loudly if the Trusted Publisher is misconfigured, rather than
+        # silently falling back to a token.
+        run: cd py && uv publish --trusted-publishing always
