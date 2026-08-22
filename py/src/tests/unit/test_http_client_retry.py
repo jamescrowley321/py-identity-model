@@ -11,6 +11,7 @@ from py_identity_model.aio.http_client import (
     get_async_http_client,
     retry_with_backoff_async,
 )
+from py_identity_model.core.http_utils import get_retry_config
 from py_identity_model.ssl_config import get_ssl_verify
 from py_identity_model.sync.http_client import (
     _reset_http_client,
@@ -26,6 +27,12 @@ EXPECTED_CALLS_AFTER_TWO_RETRIES = 3
 EXPECTED_CALLS_AFTER_ONE_RETRY = 2
 CALLS_BEFORE_SUCCESS_ON_THIRD = 3
 CALLS_BEFORE_SUCCESS_ON_SECOND = 2
+
+# get_retry_config env-resolution constants
+DEFAULT_RETRY_COUNT = 3
+ALIAS_RETRY_COUNT = 7
+MAX_ATTEMPTS_WINS = 5
+ALIAS_WHEN_MAX_ATTEMPTS_SET = 9
 
 
 class TestSyncRetryWithBackoff:
@@ -233,3 +240,33 @@ class TestAsyncHTTPClientLifecycle:
 
         # Cleanup
         await close_async_http_client()
+
+
+class TestGetRetryConfigEnv:
+    """get_retry_config env resolution, including the HTTP_RETRY_COUNT alias."""
+
+    def test_defaults_when_unset(self, monkeypatch):
+        monkeypatch.delenv("HTTP_RETRY_MAX_ATTEMPTS", raising=False)
+        monkeypatch.delenv("HTTP_RETRY_COUNT", raising=False)
+        retries, _delay = get_retry_config()
+        assert retries == DEFAULT_RETRY_COUNT
+
+    def test_documented_http_retry_count_is_honored(self, monkeypatch):
+        # The README and workspace docs advertise HTTP_RETRY_COUNT; it must
+        # actually take effect (it was previously ignored).
+        monkeypatch.delenv("HTTP_RETRY_MAX_ATTEMPTS", raising=False)
+        monkeypatch.setenv("HTTP_RETRY_COUNT", str(ALIAS_RETRY_COUNT))
+        retries, _delay = get_retry_config()
+        assert retries == ALIAS_RETRY_COUNT
+
+    def test_http_retry_count_zero_disables_retries(self, monkeypatch):
+        monkeypatch.delenv("HTTP_RETRY_MAX_ATTEMPTS", raising=False)
+        monkeypatch.setenv("HTTP_RETRY_COUNT", "0")
+        retries, _delay = get_retry_config()
+        assert retries == 0
+
+    def test_max_attempts_takes_precedence_over_alias(self, monkeypatch):
+        monkeypatch.setenv("HTTP_RETRY_MAX_ATTEMPTS", str(MAX_ATTEMPTS_WINS))
+        monkeypatch.setenv("HTTP_RETRY_COUNT", str(ALIAS_WHEN_MAX_ATTEMPTS_SET))
+        retries, _delay = get_retry_config()
+        assert retries == MAX_ATTEMPTS_WINS
