@@ -72,10 +72,15 @@ pub(crate) struct Cache {
     /// waiters then observe the populated cache instead of fetching again. The
     /// map holds only URIs with a fetch in flight and is released via the RAII
     /// [`FlightGuard`] returned by [`Cache::flight_gate`] — so even a fetch
-    /// cancelled at an `await` cannot strand its gate — and thus does not
-    /// reintroduce unbounded growth. The outer lock is a std mutex held only for
-    /// the O(1) map lookup (never across an `await`); the per-URI
-    /// [`tokio::sync::Mutex`] is what is held across the fetch.
+    /// cancelled at an `await` cannot strand its gate. Its size at any instant is
+    /// therefore the number of *concurrently in-flight* distinct-URI fetches,
+    /// which is bounded by the caller's own request concurrency and the HTTP
+    /// connection pool — not by `max_entries`. It is deliberately not an
+    /// accumulation cap (each concurrent fetch legitimately needs a gate); every
+    /// gate is reclaimed the moment its fetch completes or is cancelled, so it
+    /// cannot grow without bound the way the entry map could. The outer lock is a
+    /// std mutex held only for the O(1) map lookup (never across an `await`); the
+    /// per-URI [`tokio::sync::Mutex`] is what is held across the fetch.
     in_flight: StdMutex<HashMap<String, Arc<Mutex<()>>>>,
 }
 
@@ -120,20 +125,25 @@ impl Cache {
         // (e.g. `Duration::MAX`); `None` means the entry never expires.
         let expires_at = Instant::now().checked_add(ttl);
         let tick = self.next_tick();
-        let evicted = {
-            let mut entries = self.entries.write().await;
-            entries.insert(
-                key,
-                CacheEntry {
-                    key_set,
-                    expires_at,
-                    last_access: AtomicU64::new(tick),
-                },
-            );
-            self.evict_lru(&mut entries)
-        };
-        // Prune the refresh-cooldown sidecar in lockstep so it cannot outgrow the
-        // bounded entry map. Only taken when an eviction actually happened.
+        let mut entries = self.entries.write().await;
+        entries.insert(
+            key,
+            CacheEntry {
+                key_set,
+                expires_at,
+                last_access: AtomicU64::new(tick),
+            },
+        );
+        let evicted = self.evict_lru(&mut entries);
+        // Prune the refresh-cooldown sidecar for evicted keys while STILL holding
+        // the `entries` write lock. If the lock were released first, a concurrent
+        // `mark_refresh` on a just-evicted key could re-insert its cooldown record
+        // in the window before this prune, and the prune would then delete that
+        // fresh record — silently clearing a legitimately-refreshed URI's cooldown
+        // and weakening the anti-hammering throttle. This is the only site that
+        // holds both locks, and it always takes them entries -> last_refresh, so it
+        // cannot deadlock with `mark_refresh`/`refresh_throttled` (which take only
+        // `last_refresh`).
         if !evicted.is_empty() {
             let mut last_refresh = self.last_refresh.write().await;
             for key in &evicted {
