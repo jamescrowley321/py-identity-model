@@ -124,8 +124,12 @@ impl Cache {
         // `checked_add` guards against an overflow panic for a very large TTL
         // (e.g. `Duration::MAX`); `None` means the entry never expires.
         let expires_at = Instant::now().checked_add(ttl);
-        let tick = self.next_tick();
         let mut entries = self.entries.write().await;
+        // Take the recency tick *after* acquiring the write lock so tick order
+        // matches actual insertion order under concurrent puts. Ticking before
+        // the lock could hand a later-inserted entry a smaller tick, skewing which
+        // entry is treated as least-recently-used. Matches the Go port's `store`.
+        let tick = self.next_tick();
         entries.insert(
             key,
             CacheEntry {
