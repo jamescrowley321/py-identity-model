@@ -74,18 +74,19 @@ func newConfig(opts ...Option) *config {
 }
 
 // maxCacheEntriesFromEnv resolves the default cache bound from
-// JWKS_CACHE_MAX_ENTRIES. An unset, empty or non-integer value falls back to
-// [defaultMaxCacheEntries] so a typo cannot silently unbound the cache; a valid
-// integer is honoured verbatim, including a value <= 0 which selects the
-// unbounded escape hatch. Mirrors the reference implementation's parsing
-// discipline (py-identity-model: garbage falls back to the default).
+// JWKS_CACHE_MAX_ENTRIES. An unset, empty, non-integer or negative value falls
+// back to [defaultMaxCacheEntries] so a typo cannot silently unbound or corrupt
+// the cache; a value of 0 selects the unbounded escape hatch, and any positive
+// integer is the LRU cap. Matches the Rust and Python ports, which also reject
+// negative values rather than treating them as unbounded (cross-language
+// conformance on the shared env contract).
 func maxCacheEntriesFromEnv() int {
 	raw := strings.TrimSpace(os.Getenv(maxCacheEntriesEnv))
 	if raw == "" {
 		return defaultMaxCacheEntries
 	}
 	n, err := strconv.Atoi(raw)
-	if err != nil {
+	if err != nil || n < 0 {
 		return defaultMaxCacheEntries
 	}
 	return n

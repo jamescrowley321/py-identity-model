@@ -1,21 +1,27 @@
 package discovery
 
 import (
-	"container/list"
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/sync/singleflight"
 )
 
-// cacheEntry is a cached configuration with its expiry instant. key duplicates
-// the issuer URL the entry is stored under so an LRU eviction can drop it from
-// the lookup map by key.
+// cacheEntry is a cached configuration with its expiry instant.
 type cacheEntry struct {
-	key       string
 	cfg       *ProviderConfiguration
 	expiresAt time.Time
+
+	// lastAccess is a monotonic recency tick: the higher the value, the more
+	// recently the entry was used. It is bumped on every read hit and on store.
+	// Because it is interior-mutable (an atomic), a read hit can refresh recency
+	// while holding only the shared read lock, preserving the concurrent-reader
+	// property (DISC-004/005) instead of upgrading every cache hit to an
+	// exclusive lock. Eviction drops the entry with the smallest tick. Mirrors
+	// the Rust port's AtomicU64 last_access.
+	lastAccess atomic.Int64
 }
 
 // cache is a bounded, TTL cache for discovery documents keyed by issuer URL.
@@ -25,22 +31,26 @@ type cacheEntry struct {
 // The cache is bounded by a max-entries LRU: without a bound it grows one entry
 // per distinct issuer forever, so a caller driven to resolve many distinct
 // issuers (a multi-tenant gateway, an attacker-supplied issuer header) leaks
-// memory unbounded (a DoS). Recency is tracked in order — a read hit or a store
-// moves the entry to the front, and eviction pops the back — so the entry
+// memory unbounded (a DoS). Recency is tracked per entry via an atomic tick — a
+// read hit or a store bumps it and eviction drops the smallest — so the entry
 // evicted under pressure is the least recently *used*, not merely the least
 // recently inserted. FIFO would let an attacker reading distinct issuers in
 // insertion order evict a legitimately hot entry.
+//
+// A read hit ([cache.lookup]) takes only the shared read lock and bumps recency
+// atomically, so lookups on the hot path stay concurrent; only store and
+// eviction take the exclusive lock. Eviction scans the map for the smallest tick
+// (O(n), n <= maxEntries), a rare cost paid only on insert over the bound.
 type cache struct {
 	mu sync.RWMutex
 
-	// entries maps issuer URL -> its element in order; each element's Value is a
-	// *cacheEntry. The single map+list pair gives O(1) lookup, recency promotion
-	// and eviction, all serialized by mu.
-	entries map[string]*list.Element
+	// entries maps issuer URL -> its cached configuration. Structural mutation
+	// (insert/evict) takes the write lock; a read hit takes the read lock and
+	// bumps the entry's atomic recency tick.
+	entries map[string]*cacheEntry
 
-	// order tracks access recency: most-recently-used at the front,
-	// least-recently-used at the back. Eviction removes from the back.
-	order *list.List
+	// accessCounter hands out the monotonic recency ticks stored per entry.
+	accessCounter atomic.Int64
 
 	group singleflight.Group
 
@@ -55,30 +65,32 @@ var globalCache = newCache()
 // newCache returns an empty cache using the wall clock.
 func newCache() *cache {
 	return &cache{
-		entries: make(map[string]*list.Element),
-		order:   list.New(),
+		entries: make(map[string]*cacheEntry),
 		now:     time.Now,
 	}
 }
 
+// nextTick returns the next monotonic recency tick.
+func (c *cache) nextTick() int64 {
+	return c.accessCounter.Add(1)
+}
+
 // lookup returns the cached configuration for key if present and unexpired,
-// promoting the entry to most-recently-used on a hit. Promotion mutates the
-// recency list, so this takes the exclusive lock rather than a read lock; the
-// critical section is a map probe and an O(1) list move. An expired entry is
-// neither promoted nor removed here — it is overwritten by the next store or
-// evicted under pressure.
+// bumping the entry's recency on a hit. Recency is an atomic tick on the entry,
+// so this holds only the shared read lock — keeping concurrent lookups on the
+// hot path from serializing. An expired entry is neither promoted nor removed
+// here: it is overwritten by the next store or evicted under pressure.
 func (c *cache) lookup(key string) (*ProviderConfiguration, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	elem, ok := c.entries[key]
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	entry, ok := c.entries[key]
 	if !ok {
 		return nil, false
 	}
-	entry := elem.Value.(*cacheEntry)
 	if !c.now().Before(entry.expiresAt) {
 		return nil, false
 	}
-	c.order.MoveToFront(elem)
+	entry.lastAccess.Store(c.nextTick())
 	return entry.cfg, true
 }
 
@@ -88,29 +100,34 @@ func (c *cache) lookup(key string) (*ProviderConfiguration, bool) {
 func (c *cache) store(key string, cfg *ProviderConfiguration, ttl time.Duration, maxEntries int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	entry := &cacheEntry{key: key, cfg: cfg, expiresAt: c.now().Add(ttl)}
-	if elem, ok := c.entries[key]; ok {
-		elem.Value = entry
-		c.order.MoveToFront(elem)
-	} else {
-		c.entries[key] = c.order.PushFront(entry)
-	}
+	entry := &cacheEntry{cfg: cfg, expiresAt: c.now().Add(ttl)}
+	entry.lastAccess.Store(c.nextTick())
+	c.entries[key] = entry
 	c.evictLocked(maxEntries)
 }
 
 // evictLocked drops least-recently-used entries until at most maxEntries remain.
-// It must be called with mu held. A maxEntries <= 0 disables eviction.
+// It must be called with mu held. A maxEntries <= 0 disables eviction. The victim
+// is the entry with the smallest recency tick, found by an O(n) scan (n <=
+// maxEntries) — the trade for keeping lookup on a shared read lock.
 func (c *cache) evictLocked(maxEntries int) {
 	if maxEntries <= 0 {
 		return
 	}
-	for c.order.Len() > maxEntries {
-		back := c.order.Back()
-		if back == nil {
+	for len(c.entries) > maxEntries {
+		var lruKey string
+		var lruTick int64
+		found := false
+		for k, e := range c.entries {
+			t := e.lastAccess.Load()
+			if !found || t < lruTick {
+				lruKey, lruTick, found = k, t, true
+			}
+		}
+		if !found {
 			return
 		}
-		evicted := c.order.Remove(back).(*cacheEntry)
-		delete(c.entries, evicted.key)
+		delete(c.entries, lruKey)
 	}
 }
 
@@ -118,8 +135,7 @@ func (c *cache) evictLocked(maxEntries int) {
 func (c *cache) clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.entries = make(map[string]*list.Element)
-	c.order = list.New()
+	c.entries = make(map[string]*cacheEntry)
 }
 
 // fetch returns the cached configuration for issuerURL or fetches it, caching

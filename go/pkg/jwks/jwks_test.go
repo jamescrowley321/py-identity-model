@@ -1,7 +1,6 @@
 package jwks
 
 import (
-	"container/list"
 	"context"
 	"errors"
 	"net/http"
@@ -619,8 +618,7 @@ func TestFetchKeySet_ErrorsNotCached(t *testing.T) {
 func (c *cache) reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.entries = make(map[string]*list.Element)
-	c.order = list.New()
+	c.entries = make(map[string]*cacheEntry)
 	c.lastRefresh = make(map[string]time.Time)
 	c.now = time.Now
 }
