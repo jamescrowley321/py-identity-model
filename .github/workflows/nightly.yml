@@ -37,6 +37,10 @@ jobs:
       run-example-tests: true
       run-build: true
       run-ory-integration: true
+      # Force the Go + Rust suites: change-detection sees an empty diff on a
+      # scheduled run, so without this the nightly's drift-detection would skip
+      # them (CONS-2.4 review).
+      run-native-tests: true
     secrets: inherit
 
   load-soak:

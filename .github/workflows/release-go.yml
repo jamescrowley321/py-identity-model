@@ -1,0 +1,49 @@
+name: Release Go 🐹
+
+# The Go library versions on its own cadence, independent of the Python
+# package. A release is a `go/vX.Y.Z` tag — the subdir-module format `go get`
+# requires — and `go get github.com/jamescrowley321/py-identity-model/go@go/vX.Y.Z`
+# resolves the module directly from that tag. There is no artifact to publish
+# (a Go library ships as source via the module proxy), so this workflow just
+# verifies the library and cuts a GitHub Release for the changelog. Create one
+# with:  git tag go/v0.0.1 && git push origin go/v0.0.1
+on:
+  push:
+    tags:
+      - 'go/v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+
+      - name: Verify the library builds and tests pass
+        working-directory: go
+        run: |
+          go build ./...
+          go vet ./...
+          go test ./...
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+        with:
+          name: Go ${{ github.ref_name }}
+          generate_release_notes: true
+          body: |
+            Go library release `${{ github.ref_name }}`.
+
+            ```
+            go get github.com/jamescrowley321/py-identity-model/go@${{ github.ref_name }}
+            ```

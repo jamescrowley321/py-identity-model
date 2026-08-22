@@ -31,8 +31,42 @@ on:
         required: false
         type: boolean
         default: true
+      run-native-tests:
+        description: 'Force the Go + Rust suites regardless of change-detection (the nightly sets this so scheduled drift-detection is never skipped)'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
+  # Change-detection: the Go and Rust suites only need to run when their own
+  # code — or the shared spec/infra they test against — changed (CONS-2.4).
+  # The Python suites are NOT gated: it is the OIDF-certified library and its
+  # tests always run. ci-complete treats a skipped job as a pass, so gating is
+  # safe for the required merge gate.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      rust: ${{ steps.filter.outputs.rust }}
+      shared: ${{ steps.filter.outputs.shared }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
+        id: filter
+        with:
+          filters: |
+            go:
+              - 'go/**'
+            rust:
+              - 'rust/**'
+            shared:
+              - 'spec/**'
+              - 'infra/**'
+              - '.github/workflows/ci.yml'
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -449,6 +483,9 @@ jobs:
     # TEST_REQUIRE_LIVE=1 turns provider-unreachable skips into failures so a
     # URL/profile drift cannot green-skip the whole leg; -v keeps remaining
     # skips visible in the log.
+    # Runs only when go/ or the shared spec/infra changed (CONS-2.4).
+    needs: changes
+    if: ${{ needs.changes.outputs.go == 'true' || needs.changes.outputs.shared == 'true' || inputs.run-native-tests }}
     runs-on: ubuntu-latest
     env:
       TEST_REQUIRE_LIVE: "1"
@@ -532,9 +569,12 @@ jobs:
 
   integration-tests-rust:
     # Rust unit suite + #[ignore]-gated live suite vs the shared infra/
-    # node-oidc fixture (CONS-1.4). Change-detected per-language CI comes with
-    # CONS-2.4. TEST_REQUIRE_LIVE=1 turns silent skip-returns in the live leg
-    # into panics so an unsourced profile or dead provider cannot green-skip.
+    # node-oidc fixture (CONS-1.4). TEST_REQUIRE_LIVE=1 turns silent skip-returns
+    # in the live leg into panics so an unsourced profile or dead provider
+    # cannot green-skip. Runs only when rust/ or the shared spec/infra changed
+    # (CONS-2.4).
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.shared == 'true' || inputs.run-native-tests }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -576,12 +616,13 @@ jobs:
 
   ci-complete:
     if: always()
-    needs: [lint, unit-tests, fastapi-tests, integration-tests-ory, integration-tests-descope, integration-tests-node-oidc, integration-tests-keycloak, integration-tests-cross-issuer, integration-tests-go, integration-tests-rust, spec-vector-coverage, example-tests, build, security-gate, load-smoke]
+    needs: [changes, lint, unit-tests, fastapi-tests, integration-tests-ory, integration-tests-descope, integration-tests-node-oidc, integration-tests-keycloak, integration-tests-cross-issuer, integration-tests-go, integration-tests-rust, spec-vector-coverage, example-tests, build, security-gate, load-smoke]
     runs-on: ubuntu-latest
     steps:
       - name: Check CI results
         run: |
           results=( \
+            "${{ needs.changes.result }}" \
             "${{ needs.lint.result }}" \
             "${{ needs.unit-tests.result }}" \
             "${{ needs.fastapi-tests.result }}" \
