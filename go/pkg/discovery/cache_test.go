@@ -24,14 +24,10 @@ func cfgFor(id string) *ProviderConfiguration {
 }
 
 // cacheLen returns the number of live entries without promoting any of them
-// (lookup would move an entry to most-recently-used and perturb the LRU order).
-// It also asserts the map and the recency list never diverge.
+// (lookup would bump an entry's recency and perturb the LRU order).
 func cacheLen(c *cache) int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if len(c.entries) != c.order.Len() {
-		panic(fmt.Sprintf("entries map (%d) and order list (%d) diverged", len(c.entries), c.order.Len()))
-	}
 	return len(c.entries)
 }
 
@@ -187,8 +183,8 @@ func TestMaxCacheEntriesConfig(t *testing.T) {
 		{"3", 3},
 		{"128", 128},
 		{"  7  ", 7},
-		{"0", 0},   // explicit unbounded escape hatch
-		{"-5", -5}, // negative also unbounded
+		{"0", 0},                       // explicit unbounded escape hatch
+		{"-5", defaultMaxCacheEntries}, // negative -> default (parity with Rust/Python; a typo cannot silently unbound)
 		{"abc", defaultMaxCacheEntries},
 		{"12.5", defaultMaxCacheEntries},
 		{"   ", defaultMaxCacheEntries},
