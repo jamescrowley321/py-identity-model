@@ -103,15 +103,28 @@ jobs:
 
   gate:
     name: Merge Gate
-    needs: [config, review]
+    needs: [config, preflight, review]
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: always() && needs.review.result != 'skipped'
+    # Always run so the required "Merge Gate" check is never absent or skipped.
+    # Branch protection treats a skipped required check as passing, so a gate
+    # that skips (as it did for fork/bot PRs when review was skipped) would let
+    # an untrusted PR merge with zero adversarial review. Fail closed instead.
+    if: always()
     permissions:
       contents: read
       pull-requests: read
     steps:
+      # Fork and bot PRs are out of the trust boundary: preflight is skipped for
+      # them (no secrets), which skips the review lenses. Don't let the required
+      # check vanish — fail closed so a maintainer must review and merge manually.
+      - name: Fail closed for un-reviewed (fork/bot) PRs
+        if: needs.review.result == 'skipped'
+        run: |
+          echo "::error::Adversarial review did not run for this PR (fork or bot — out of trust boundary). The Merge Gate fails closed; a maintainer must review and merge manually."
+          exit 1
       - name: Adjudicate lenses
+        if: needs.review.result != 'skipped'
         uses: jamescrowley321/adversarial-review@7d18b99faf7567366b5091deaf1470692d668245 # v1.6.0
         with:
           mode: gate
