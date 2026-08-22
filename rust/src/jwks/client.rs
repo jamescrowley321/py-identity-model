@@ -29,6 +29,19 @@ const DEFAULT_REFRESH_COOLDOWN: Duration = Duration::from_secs(5);
 /// (memory-exhaustion DoS).
 const MAX_BODY_BYTES: usize = 1 << 20; // 1 MiB
 
+/// Default maximum number of distinct `jwks_uri` entries the cache retains. The
+/// cache is keyed by `jwks_uri`; without a bound it grows one entry per distinct
+/// URI forever, so a multi-tenant gateway or attacker-steered resolution could
+/// accumulate entries until the process exhausts memory (unbounded-growth DoS).
+/// 64 covers any realistic multi-IdP deployment while keeping worst-case memory
+/// bounded. Mirrors the Python reference's `DEFAULT_MAX_CACHE_ENTRIES`.
+const DEFAULT_MAX_CACHE_ENTRIES: usize = 64;
+
+/// Environment variable overriding [`DEFAULT_MAX_CACHE_ENTRIES`]. A value of `0`
+/// disables the bound (explicit unbounded escape hatch); garbage falls back to
+/// the default.
+const MAX_CACHE_ENTRIES_ENV: &str = "JWKS_CACHE_MAX_ENTRIES";
+
 /// An async client that fetches, validates, caches, and resolves JSON Web Keys.
 ///
 /// Construct one with [`JwksClient::new`] for the defaults (24h cache TTL, 30s
@@ -104,9 +117,35 @@ impl JwksClient {
             )));
         }
 
-        let key_set = self.fetch_and_parse(&uri).await?;
-        self.cache.put(uri, key_set.clone(), self.cache_ttl).await;
-        Ok(key_set)
+        // Single-flight: concurrent misses for the same `jwks_uri` collapse to a
+        // single outbound fetch instead of each firing its own (mirrors the Go
+        // reference's `singleflight`). The first caller holds the per-URI gate
+        // while it fetches and populates the cache; waiters then re-check under
+        // the gate and observe the populated entry rather than re-fetching. On a
+        // fetch error the gate is released without a cache write, so a waiter
+        // retries rather than sharing a transient failure — no worse than the
+        // pre-single-flight behaviour and safer than caching an error.
+        let gate = self.cache.flight_gate(&uri);
+        let outcome = {
+            let _flight = gate.lock().await;
+            // Re-check under the flight: a concurrent winner may have populated
+            // the cache while we waited on the gate.
+            if let Some(key_set) = self.cache.get(&uri).await {
+                Ok(key_set)
+            } else {
+                match self.fetch_and_parse(&uri).await {
+                    Ok(key_set) => {
+                        self.cache
+                            .put(uri.clone(), key_set.clone(), self.cache_ttl)
+                            .await;
+                        Ok(key_set)
+                    }
+                    Err(err) => Err(err),
+                }
+            }
+        };
+        self.cache.release_flight(&uri, &gate);
+        outcome
     }
 
     /// Invalidates the cached set for `jwks_uri` and re-fetches it from the
@@ -221,10 +260,13 @@ pub struct JwksClientBuilder {
     timeout: Duration,
     allow_http: bool,
     refresh_cooldown: Duration,
+    max_cache_entries: usize,
 }
 
 impl JwksClientBuilder {
-    /// Returns a builder seeded with the default configuration.
+    /// Returns a builder seeded with the default configuration. The cache bound
+    /// defaults to [`DEFAULT_MAX_CACHE_ENTRIES`], overridable by the
+    /// `JWKS_CACHE_MAX_ENTRIES` environment variable.
     fn new() -> Self {
         Self {
             http: None,
@@ -232,6 +274,10 @@ impl JwksClientBuilder {
             timeout: DEFAULT_TIMEOUT,
             allow_http: false,
             refresh_cooldown: DEFAULT_REFRESH_COOLDOWN,
+            max_cache_entries: crate::env::max_cache_entries_from_env(
+                MAX_CACHE_ENTRIES_ENV,
+                DEFAULT_MAX_CACHE_ENTRIES,
+            ),
         }
     }
 
@@ -280,11 +326,22 @@ impl JwksClientBuilder {
         self
     }
 
+    /// Bounds the number of distinct `jwks_uri` entries the cache retains,
+    /// evicting the least-recently-used entry once the bound is exceeded. The
+    /// cache is keyed by `jwks_uri`, so without a bound it grows one entry per
+    /// distinct URI forever (unbounded-growth DoS). Defaults to
+    /// [`DEFAULT_MAX_CACHE_ENTRIES`] (overridable via `JWKS_CACHE_MAX_ENTRIES`).
+    /// A value of `0` disables the bound (unbounded).
+    pub fn max_cache_entries(mut self, max_entries: usize) -> Self {
+        self.max_cache_entries = max_entries;
+        self
+    }
+
     /// Builds the [`JwksClient`].
     pub fn build(self) -> JwksClient {
         JwksClient {
             http: self.http.unwrap_or_else(crate::http::secure_client),
-            cache: Cache::new(),
+            cache: Cache::new(self.max_cache_entries),
             cache_ttl: self.cache_ttl,
             timeout: self.timeout,
             allow_http: self.allow_http,
@@ -509,6 +566,48 @@ mod tests {
 
         let received = server.received_requests().await.unwrap();
         assert_eq!(received.len(), 1, "second call served from cache");
+    }
+
+    // Single-flight: several concurrent cache-misses for the SAME jwks_uri
+    // collapse to exactly one outbound fetch. The response is delayed so the
+    // requests genuinely overlap on the gate; without single-flight each miss
+    // would fire its own request. Mirrors go/pkg/jwks TestFetchKeySet
+    // singleflight coverage.
+    #[tokio::test]
+    async fn single_flight_dedupes_concurrent_misses() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/jwks"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_string(VALID_SET)
+                    .set_delay(Duration::from_millis(200)),
+            )
+            .mount(&server)
+            .await;
+
+        let client = JwksClient::builder().allow_http(true).build();
+        let uri = jwks_uri(&server);
+
+        // Drive four fetches concurrently; the first holds the gate through the
+        // delayed fetch while the rest wait, then observe the populated cache.
+        let (a, b, c, d) = tokio::join!(
+            client.fetch(&uri),
+            client.fetch(&uri),
+            client.fetch(&uri),
+            client.fetch(&uri),
+        );
+        a.expect("fetch a");
+        b.expect("fetch b");
+        c.expect("fetch c");
+        d.expect("fetch d");
+
+        let received = server.received_requests().await.unwrap();
+        assert_eq!(
+            received.len(),
+            1,
+            "concurrent misses for one uri collapse to a single fetch"
+        );
     }
 
     // JWKS-006: force_refresh() invalidates the cache and re-fetches.

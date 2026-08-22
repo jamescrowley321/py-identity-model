@@ -29,6 +29,9 @@ pub mod userinfo;
 /// Shared HTTP client construction (redirect-downgrade defence). Internal.
 mod http;
 
+/// Internal helpers for reading numeric configuration from the environment.
+mod env;
+
 pub use discovery::{DiscoveryClient, DiscoveryClientBuilder, ProviderMetadata};
 pub use error::IdentityError;
 pub use jwks::{JsonWebKey, JsonWebKeySet, JwksClient, JwksClientBuilder};
