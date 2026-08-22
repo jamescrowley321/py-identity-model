@@ -2,6 +2,14 @@
 
 **One OIDC/OAuth2 client library, in every language, that behaves the same everywhere.**
 
+<a href="https://openid.net/certification/certified-openid-relying-parties-profiles/" title="OpenID Certified — py-identity-model as a Relying Party (Basic, Config, Form Post Basic)">
+  <img src="docs/assets/openid-certified.png" alt="OpenID Certified" align="right" width="170">
+</a>
+
+The **Python** library is [**OpenID Certified®**](https://openid.net/certification/certified-openid-relying-parties-profiles/)
+by the OpenID Foundation as a Relying Party — the certification other languages
+in the family are built to match.
+
 Writing an OpenID Connect or OAuth 2.0 *client* usually means gluing together
 three or four half-overlapping libraries per language — one for JWTs, another for
 discovery, a third for the flows — each with its own quirks, its own gaps, and no
@@ -50,8 +58,13 @@ enforced. It is:
   correct means*.
 - Each language runs those vectors through a thin executor, and a **cross-language
   coverage gate** fails CI if any language skips any vector (`make spec-coverage`).
-- **[`conformance/`](conformance/)** — the Python library additionally passes the
-  OpenID Foundation's official certification suite.
+- **[`conformance/`](conformance/)** — the Python library is
+  [**OpenID Certified®**](https://openid.net/certification/certified-openid-relying-parties-profiles/)
+  by the OpenID Foundation as a Relying Party for the **Basic RP**, **Config RP**, and
+  **Form Post Basic RP** profiles (certified 2 July 2026, `py-identity-model 3.1.0`),
+  proven against the OIDF's official conformance suite. See the
+  [certification docs](docs/certification.md).
+  *OpenID Certified is a certification mark of the OpenID Foundation.*
 - **[`infra/`](infra/)** — one shared set of local identity providers that every
   language's integration tests run against, so "works against a real provider"
   means the same thing for all of them.
