@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"container/list"
 	"context"
 	"errors"
 	"net/http"
@@ -465,7 +466,8 @@ func TestFetchConfiguration_LargeErrorBody(t *testing.T) {
 func (c *cache) reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.entries = make(map[string]cacheEntry)
+	c.entries = make(map[string]*list.Element)
+	c.order = list.New()
 	c.now = time.Now
 }
 
@@ -496,7 +498,7 @@ func (t *countingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 
 // TestClearCache drops all cached provider configurations.
 func TestClearCache(t *testing.T) {
-	globalCache.store("https://issuer.example", &ProviderConfiguration{Issuer: "https://issuer.example"}, time.Hour)
+	globalCache.store("https://issuer.example", &ProviderConfiguration{Issuer: "https://issuer.example"}, time.Hour, defaultMaxCacheEntries)
 	if _, ok := globalCache.lookup("https://issuer.example"); !ok {
 		t.Fatal("precondition: entry should be cached")
 	}

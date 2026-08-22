@@ -1,0 +1,273 @@
+package discovery
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+// The max-entries LRU bound is exercised here directly against the cache methods
+// (store/lookup/evict) so the recency behaviour is asserted without the noise of
+// HTTP plumbing; TestFetchConfiguration_MaxCacheEntries_EvictsLRU then proves the
+// same bound flows through the public FetchConfiguration path.
+
+// cfgFor builds a minimal provider configuration stored under a synthetic
+// issuer. store and lookup do no validation, so an issuer-only doc identifies an
+// entry.
+func cfgFor(id string) *ProviderConfiguration {
+	return &ProviderConfiguration{Issuer: id}
+}
+
+// cacheLen returns the number of live entries without promoting any of them
+// (lookup would move an entry to most-recently-used and perturb the LRU order).
+// It also asserts the map and the recency list never diverge.
+func cacheLen(c *cache) int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if len(c.entries) != c.order.Len() {
+		panic(fmt.Sprintf("entries map (%d) and order list (%d) diverged", len(c.entries), c.order.Len()))
+	}
+	return len(c.entries)
+}
+
+// cacheHas reports whether key is present without promoting it.
+func cacheHas(c *cache, key string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	_, ok := c.entries[key]
+	return ok
+}
+
+// (a) The number of cached entries never exceeds the configured cap, regardless
+// of how many distinct issuers are inserted.
+func TestCache_SizeNeverExceedsCap(t *testing.T) {
+	for _, limit := range []int{1, 2, 8, 64} {
+		t.Run(fmt.Sprintf("cap=%d", limit), func(t *testing.T) {
+			c := newCache()
+			for i := 0; i < limit*4; i++ {
+				key := fmt.Sprintf("https://issuer.example/%d", i)
+				c.store(key, cfgFor(key), time.Hour, limit)
+				if got := cacheLen(c); got > limit {
+					t.Fatalf("after %d inserts, size = %d, want <= %d", i+1, got, limit)
+				}
+			}
+			if got := cacheLen(c); got != limit {
+				t.Errorf("final size = %d, want %d (cap saturated)", got, limit)
+			}
+		})
+	}
+}
+
+// (b) Eviction is least-recently-used: the entry evicted under pressure is the
+// one used longest ago, and a read hit refreshes recency so a would-be victim
+// survives. Each case runs a script of store("s:key") / read("r:key") ops
+// against a cap-2 cache and asserts exactly which keys survive.
+func TestCache_LRUEvictionOrder(t *testing.T) {
+	const limit = 2
+	tests := []struct {
+		name     string
+		ops      []string
+		survives []string
+		evicted  []string
+	}{
+		{
+			name:     "insertion order evicts oldest",
+			ops:      []string{"s:A", "s:B", "s:C"},
+			survives: []string{"B", "C"},
+			evicted:  []string{"A"},
+		},
+		{
+			name:     "read refreshes recency so oldest survives",
+			ops:      []string{"s:A", "s:B", "r:A", "s:C"},
+			survives: []string{"A", "C"},
+			evicted:  []string{"B"},
+		},
+		{
+			name:     "restore promotes on write so it is not the next victim",
+			ops:      []string{"s:A", "s:B", "s:A", "s:C"},
+			survives: []string{"A", "C"},
+			evicted:  []string{"B"},
+		},
+		{
+			name:     "read miss on evicted key does not promote it back",
+			ops:      []string{"s:A", "s:B", "s:C", "r:A"},
+			survives: []string{"B", "C"},
+			evicted:  []string{"A"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newCache()
+			for _, op := range tt.ops {
+				action, id := op[:1], op[2:]
+				switch action {
+				case "s":
+					c.store(id, cfgFor(id), time.Hour, limit)
+				case "r":
+					c.lookup(id)
+				default:
+					t.Fatalf("bad op %q", op)
+				}
+			}
+			if got := cacheLen(c); got != limit {
+				t.Fatalf("size = %d, want %d", got, limit)
+			}
+			for _, id := range tt.survives {
+				if !cacheHas(c, id) {
+					t.Errorf("%q was evicted, want retained", id)
+				}
+			}
+			for _, id := range tt.evicted {
+				if cacheHas(c, id) {
+					t.Errorf("%q was retained, want evicted", id)
+				}
+			}
+		})
+	}
+}
+
+// (d) A cap of 0 or a negative value disables the bound entirely (the
+// backward-compatible unbounded escape hatch): no entry is ever evicted.
+func TestCache_UnboundedWhenCapNonPositive(t *testing.T) {
+	for _, limit := range []int{0, -1, -1000} {
+		t.Run(fmt.Sprintf("cap=%d", limit), func(t *testing.T) {
+			c := newCache()
+			const n = 500
+			for i := 0; i < n; i++ {
+				key := strconv.Itoa(i)
+				c.store(key, cfgFor(key), time.Hour, limit)
+			}
+			if got := cacheLen(c); got != n {
+				t.Fatalf("size = %d, want %d (no eviction when cap<=0)", got, n)
+			}
+			// The very first key inserted is still present.
+			if !cacheHas(c, "0") {
+				t.Error("oldest entry evicted despite unbounded cap")
+			}
+		})
+	}
+}
+
+// (e) The bound must not regress TTL expiry: a bounded cache still expires
+// entries by TTL, and an expired entry is not served (nor promoted) on lookup.
+func TestCache_BoundDoesNotRegressTTL(t *testing.T) {
+	c := newCache()
+	base := time.Unix(1_700_000_000, 0)
+	var clock atomic.Int64
+	clock.Store(base.UnixNano())
+	c.now = func() time.Time { return time.Unix(0, clock.Load()) }
+
+	c.store("A", cfgFor("A"), time.Minute, 8)
+
+	// Within TTL: hit.
+	if _, ok := c.lookup("A"); !ok {
+		t.Fatal("within TTL: lookup(A) = miss, want hit")
+	}
+	// Past TTL: miss, even though the entry still occupies a slot.
+	clock.Store(base.Add(2 * time.Minute).UnixNano())
+	if _, ok := c.lookup("A"); ok {
+		t.Error("past TTL: lookup(A) = hit, want miss (TTL regressed)")
+	}
+}
+
+// maxCacheEntriesFromEnv / newConfig: the DISCO_CACHE_MAX_ENTRIES knob resolves
+// the default bound, garbage falls back to the default rather than silently
+// unbounding the cache, and WithMaxCacheEntries overrides the env value.
+func TestMaxCacheEntriesConfig(t *testing.T) {
+	envCases := []struct {
+		raw  string // "" is treated identically to unset
+		want int
+	}{
+		{"", defaultMaxCacheEntries},
+		{"3", 3},
+		{"128", 128},
+		{"  7  ", 7},
+		{"0", 0},   // explicit unbounded escape hatch
+		{"-5", -5}, // negative also unbounded
+		{"abc", defaultMaxCacheEntries},
+		{"12.5", defaultMaxCacheEntries},
+		{"   ", defaultMaxCacheEntries},
+	}
+	for _, tc := range envCases {
+		t.Run("env="+strconv.Quote(tc.raw), func(t *testing.T) {
+			t.Setenv(maxCacheEntriesEnv, tc.raw)
+			if got := maxCacheEntriesFromEnv(); got != tc.want {
+				t.Errorf("maxCacheEntriesFromEnv() = %d, want %d", got, tc.want)
+			}
+			if got := newConfig().maxEntries; got != tc.want {
+				t.Errorf("newConfig().maxEntries = %d, want %d", got, tc.want)
+			}
+		})
+	}
+
+	// WithMaxCacheEntries wins over the environment default.
+	t.Run("option overrides env", func(t *testing.T) {
+		t.Setenv(maxCacheEntriesEnv, "3")
+		if got := newConfig(WithMaxCacheEntries(9)).maxEntries; got != 9 {
+			t.Errorf("maxEntries = %d, want 9 (option overrides env)", got)
+		}
+		// The <=0 escape hatch survives newConfig (it must not be clamped).
+		if got := newConfig(WithMaxCacheEntries(0)).maxEntries; got != 0 {
+			t.Errorf("maxEntries = %d, want 0 (unbounded escape hatch preserved)", got)
+		}
+	})
+}
+
+// End-to-end: the bound flows through FetchConfiguration. With a cap of 2,
+// fetching three distinct issuers evicts the least-recently-used one, so
+// re-fetching it re-hits the network while the most-recently-used issuer is
+// still served from cache. This proves WithMaxCacheEntries is wired into the
+// public API and that singleflight-backed fetch/store still honour the bound.
+func TestFetchConfiguration_MaxCacheEntries_EvictsLRU(t *testing.T) {
+	freshCache(t)
+
+	newDiscoServer := func() (string, *int32) {
+		var hits int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != wellKnownPath {
+				http.NotFound(w, r)
+				return
+			}
+			atomic.AddInt32(&hits, 1)
+			_, _ = w.Write(validDocFor(httpURL(r)))
+		}))
+		t.Cleanup(srv.Close)
+		return srv.URL, &hits
+	}
+
+	urlA, hitsA := newDiscoServer()
+	urlB, _ := newDiscoServer() // B's fate depends on the re-fetch sequence; not asserted.
+	urlC, hitsC := newDiscoServer()
+
+	opts := []Option{WithInsecureAllowHTTP(), WithMaxCacheEntries(2)}
+	for _, u := range []string{urlA, urlB, urlC} {
+		if _, err := FetchConfiguration(context.Background(), u, opts...); err != nil {
+			t.Fatalf("FetchConfiguration(%s): %v", u, err)
+		}
+	}
+	// A was the least-recently-used of {A,B,C} and is evicted by C's insert.
+	if got := atomic.LoadInt32(hitsA); got != 1 {
+		t.Fatalf("precondition: A fetched %d times, want 1", got)
+	}
+
+	// Re-fetching A misses (evicted) → one more network hit.
+	if _, err := FetchConfiguration(context.Background(), urlA, opts...); err != nil {
+		t.Fatalf("re-fetch A: %v", err)
+	}
+	if got := atomic.LoadInt32(hitsA); got != 2 {
+		t.Errorf("A hits = %d, want 2 (evicted then re-fetched)", got)
+	}
+
+	// C was most-recently-used and is still cached → served without a network hit.
+	if _, err := FetchConfiguration(context.Background(), urlC, opts...); err != nil {
+		t.Fatalf("re-fetch C: %v", err)
+	}
+	if got := atomic.LoadInt32(hitsC); got != 1 {
+		t.Errorf("C hits = %d, want 1 (still cached)", got)
+	}
+}
