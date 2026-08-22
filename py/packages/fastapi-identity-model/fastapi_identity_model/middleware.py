@@ -56,6 +56,27 @@ _DEFAULT_ACCESS_TOKEN_MARKER_CLAIMS = ("scope", "scp")
 # logged server-side for operators, never returned to the caller.
 _GENERIC_401_DETAIL = "Invalid or unauthorized token"
 
+# Stable message prefixes the core library uses for discovery/JWKS *fetch*
+# failures (py_identity_model.core.error_handlers). The core wraps a failed
+# fetch in an unsuccessful response, so validate_token surfaces it as a
+# TokenValidationException — NOT a NetworkException — which would otherwise be
+# reported as a 401 "invalid token" for what is really a transient provider
+# outage. We match these prefixes to map such failures to 503 instead, so
+# callers back off and 5xx monitoring fires. This is a pragmatic bridge: the
+# clean fix is in py-identity-model (raise a NetworkException subtype from
+# validate_disco_response / validate_jwks_response), after which the
+# `except NetworkException` branch below handles it directly.
+_UPSTREAM_FETCH_FAILURE_PREFIXES = (
+    "Network error during discovery",
+    "Network error during JWKS",
+)
+
+
+def _is_upstream_fetch_failure(exc: Exception) -> bool:
+    """Whether a library exception is a transient upstream fetch failure."""
+    message = str(exc)
+    return any(message.startswith(p) for p in _UPSTREAM_FETCH_FAILURE_PREFIXES)
+
 
 class TokenValidationMiddleware(BaseHTTPMiddleware):
     """
@@ -213,16 +234,21 @@ class TokenValidationMiddleware(BaseHTTPMiddleware):
             request.state.claims = claims
             request.state.token = token
             return None
-        except NetworkException:
-            # Discovery/JWKS/network fetch failure is a transient server fault,
-            # not an authentication decision — surface 5xx so callers retry
-            # instead of treating a provider outage as a bad token.
-            logger.exception("Network error during token validation")
-            return JSONResponse(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content={"detail": "Authentication temporarily unavailable"},
-            )
         except PyIdentityModelException as e:
+            # A provider outage is a transient server fault, not an auth
+            # decision: surface 503 so callers retry instead of treating it as a
+            # bad token. This covers both a real NetworkException (a
+            # PyIdentityModelException subclass — the clean path if the core
+            # raises one) and a discovery/JWKS fetch failure the core currently
+            # surfaces as a TokenValidationException (_UPSTREAM_FETCH_FAILURE_
+            # PREFIXES). Checked here rather than a separate `except
+            # NetworkException` block so both share one 503 path.
+            if isinstance(e, NetworkException) or _is_upstream_fetch_failure(e):
+                logger.exception("Upstream fetch failure during token validation")
+                return JSONResponse(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    content={"detail": "Authentication temporarily unavailable"},
+                )
             # Uniform 401 body — do NOT echo the stage-specific cause
             # (signature/audience/expiry), which would form a CWE-209 oracle
             # (F-18). Log the real cause server-side for operators.

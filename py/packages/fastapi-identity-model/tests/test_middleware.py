@@ -86,11 +86,41 @@ async def test_unexpected_error_returns_500(monkeypatch):
     assert resp.json()["detail"] == "Internal server error during authentication"
 
 
-async def test_network_error_returns_503(monkeypatch):
+async def test_network_exception_returns_503(monkeypatch):
+    # The `except NetworkException` branch: if the core raises a NetworkException
+    # subtype, a provider outage is a 503.
     validate = AsyncMock(side_effect=DiscoveryException("provider unreachable"))
     async with _client(_app(monkeypatch, validate)) as client:
         resp = await client.get("/me", headers={"Authorization": "Bearer x"})
     assert resp.status_code == 503
+
+
+async def test_upstream_fetch_failure_returns_503(monkeypatch):
+    # The real path: a discovery/JWKS fetch failure surfaces from the core as a
+    # TokenValidationException carrying the "Network error during ..." message
+    # (NOT a NetworkException), so the middleware must still map it to 503 — a
+    # transient provider outage, not an "invalid token". (The prior test mocked
+    # DiscoveryException, which the real disco/JWKS path never raises, so this
+    # 401->503 gap went uncaught.)
+    validate = AsyncMock(
+        side_effect=TokenValidationException(
+            "Network error during discovery document request: connection refused"
+        )
+    )
+    async with _client(_app(monkeypatch, validate)) as client:
+        resp = await client.get("/me", headers={"Authorization": "Bearer x"})
+    assert resp.status_code == 503
+    assert resp.json()["detail"] == "Authentication temporarily unavailable"
+
+
+async def test_generic_validation_failure_still_returns_401(monkeypatch):
+    # The 503 mapping must be narrow: a genuinely invalid token (a non-network
+    # TokenValidationException) stays a 401.
+    validate = AsyncMock(side_effect=TokenValidationException("Invalid signature"))
+    async with _client(_app(monkeypatch, validate)) as client:
+        resp = await client.get("/me", headers={"Authorization": "Bearer x"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == mw._GENERIC_401_DETAIL
 
 
 async def test_malformed_token_returns_401_not_500(monkeypatch):
