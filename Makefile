@@ -180,6 +180,11 @@ build-fastapi: ## Build the fastapi-identity-model wheel + sdist
 spec-coverage: ## CONS-1.5: run the py/go/rust /spec vector runners + 100% per-language coverage gate
 	$(UVROOT) python tools/spec_coverage_gate.py
 
+.PHONY: publish-parity
+publish-parity: ## CONS-2.5: prove the /py build packages byte-for-byte vs the latest PyPI release
+	$(UVPY) python tools/publish_parity.py --package py-identity-model
+	$(UVPY) python tools/publish_parity.py --package fastapi-identity-model
+
 .PHONY: mutation-security
 mutation-security: ## Mutation-test changed security modules vs BASE (Epic 19 G.1)
 	$(UVPY) python tools/mutation_security.py
