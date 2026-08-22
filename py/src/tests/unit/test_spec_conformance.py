@@ -55,11 +55,29 @@ from py_identity_model.exceptions import (
 )
 
 
-# The shared /spec + /infra trees are polyglot and live at the true repo root
-# (parents[4]); the Python package (and its native-test anchors) live under
-# /py (parents[3]).
+# The shared /spec + /infra trees are polyglot and live at the true repo root;
+# the Python package (and its native-test anchors) live under /py (parents[3]).
 _PY_ROOT = Path(__file__).resolve().parents[3]
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+
+
+def _find_repo_root() -> Path:
+    """Locate the repo root by its ``/spec`` marker rather than a fixed depth.
+
+    The mutation-security gate runs this suite from a mutmut sandbox
+    (``py/mutants/``), which inserts a directory level, so a hardcoded
+    ``parents[4]`` would resolve to ``py/`` and miss the (un-copied) repo-root
+    ``spec/``. Walking up to the marker works in both the normal tree and the
+    sandbox.
+    """
+    marker = Path("spec") / "conformance" / "validation.json"
+    for parent in Path(__file__).resolve().parents:
+        if (parent / marker).is_file():
+            return parent
+    # Historical layout fallback: /py at parents[3], repo root at parents[4].
+    return Path(__file__).resolve().parents[4]
+
+
+_REPO_ROOT = _find_repo_root()
 _SPEC_FILE = _REPO_ROOT / "spec" / "conformance" / "validation.json"
 _FIXTURE_ROOT = _REPO_ROOT / "spec" / "test-fixtures"
 
