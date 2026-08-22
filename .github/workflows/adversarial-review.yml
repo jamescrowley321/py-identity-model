@@ -69,7 +69,7 @@ jobs:
         with:
           mode: preflight
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          required_checks: "lint, unit-tests, security-gate"
+          required_checks: "ci / lint, ci / unit-tests, ci / security-gate"
 
   review:
     name: ${{ matrix.name }}
