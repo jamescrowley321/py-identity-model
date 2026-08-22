@@ -49,8 +49,10 @@ type cache struct {
 	// lastRefresh records when each jwks_uri was last refreshed, throttling
 	// automatic refreshes so an unknown kid cannot drive unbounded re-fetches
 	// (see [cache.refreshThrottled]). It is a sidecar keyed by the same jwks_uri
-	// as entries; an LRU eviction prunes the evicted URI's record here in
-	// lockstep (see [cache.evictLocked]) so it stays bounded alongside entries.
+	// as entries. It is kept bounded two ways: an LRU eviction prunes the evicted
+	// URI's record in lockstep (see [cache.evictLocked]), and [cache.markRefresh]
+	// independently caps it at maxEntries — a failed ForceRefresh otherwise leaves
+	// a record with no backing entry that eviction can never reclaim.
 	lastRefresh map[string]time.Time
 
 	// now returns the current time; overridable in tests to drive TTL expiry
@@ -71,11 +73,37 @@ func newCache() *cache {
 	}
 }
 
-// markRefresh records that key was just refreshed, starting its cooldown window.
-func (c *cache) markRefresh(key string) {
+// markRefresh records that key was just refreshed, starting its cooldown window,
+// then caps the cooldown sidecar so it stays bounded.
+//
+// The cap is independent of entry eviction: ForceRefresh calls invalidate (which
+// deliberately keeps the record so the cooldown still throttles repeated
+// automatic refreshes) and only re-marks on success. If the re-fetch fails, the
+// record has no backing entry, and evictLocked — which only prunes records for
+// keys still in entries — can never reclaim it. Capping here (evicting the
+// least-recently-refreshed record) keeps lastRefresh bounded under issuer/URI
+// rotation regardless. A maxEntries <= 0 is unbounded, matching the entry map.
+func (c *cache) markRefresh(key string, maxEntries int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.lastRefresh[key] = c.now()
+	if maxEntries <= 0 {
+		return
+	}
+	for len(c.lastRefresh) > maxEntries {
+		var oldestKey string
+		var oldest time.Time
+		found := false
+		for k, t := range c.lastRefresh {
+			if !found || t.Before(oldest) {
+				oldestKey, oldest, found = k, t, true
+			}
+		}
+		if !found {
+			break
+		}
+		delete(c.lastRefresh, oldestKey)
+	}
 }
 
 // refreshThrottled reports whether key was refreshed less than cooldown ago, so

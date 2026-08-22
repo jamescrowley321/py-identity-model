@@ -155,16 +155,16 @@ func TestCache_EvictionPrunesRefreshSidecar(t *testing.T) {
 
 	// A and B occupy the cache and both have cooldown records.
 	c.store("A", keysFor("A"), time.Hour, limit)
-	c.markRefresh("A")
+	c.markRefresh("A", limit)
 	c.store("B", keysFor("B"), time.Hour, limit)
-	c.markRefresh("B")
+	c.markRefresh("B", limit)
 	if sidecarLen(c) != 2 {
 		t.Fatalf("precondition: sidecar len = %d, want 2", sidecarLen(c))
 	}
 
 	// Inserting C evicts A (the LRU). Its sidecar record must go with it.
 	c.store("C", keysFor("C"), time.Hour, limit)
-	c.markRefresh("C")
+	c.markRefresh("C", limit)
 
 	if cacheHas(c, "A") {
 		t.Error("A should have been evicted from the cache")
@@ -183,6 +183,22 @@ func TestCache_EvictionPrunesRefreshSidecar(t *testing.T) {
 	// the pruning is observable through the public refresh-throttle gate too.
 	if c.refreshThrottled("A", time.Minute) {
 		t.Error("evicted URI A should not be throttled (its cooldown record was pruned)")
+	}
+}
+
+// A failed ForceRefresh leaves a cooldown record with no backing entry that LRU
+// eviction can never reclaim (it only prunes records for keys still cached).
+// markRefresh must therefore cap lastRefresh independently, so such records
+// cannot accumulate without bound under issuer/URI rotation. Records are only
+// ever created by markRefresh, so capping there bounds the map regardless.
+func TestCache_MarkRefreshBoundsSidecarIndependently(t *testing.T) {
+	const limit = 3
+	c := newCache()
+	for i := 0; i < 50; i++ {
+		c.markRefresh(fmt.Sprintf("https://p/%d/jwks", i), limit)
+		if got := sidecarLen(c); got > limit {
+			t.Fatalf("cooldown sidecar exceeded cap: got %d after marking entry %d, want <= %d", got, i, limit)
+		}
 	}
 }
 
