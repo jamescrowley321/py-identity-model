@@ -1,0 +1,43 @@
+name: Release Go 🐹
+
+# The Go library versions on its own cadence, independent of the Python
+# package. A release is a `go/vX.Y.Z` tag — the subdir-module format `go get`
+# requires — which this workflow turns into a GitHub Release via GoReleaser.
+# Create one with:  git tag go/v0.0.1 && git push origin go/v0.0.1
+on:
+  push:
+    tags:
+      - 'go/v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+
+      - name: Verify the library builds and tests pass
+        working-directory: go
+        run: |
+          go build ./...
+          go vet ./...
+          go test ./...
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
+        with:
+          version: '~> v2'
+          args: release --clean
+          workdir: go
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

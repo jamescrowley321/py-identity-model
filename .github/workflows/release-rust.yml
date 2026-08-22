@@ -1,0 +1,72 @@
+name: Release Rust 🦀
+
+# The Rust crate (rs-identity-model) versions on its own cadence. A release is
+# a `rust-vX.Y.Z` tag whose version matches rust/Cargo.toml; this workflow
+# publishes the crate to crates.io and cuts a GitHub Release. Create one with
+# cargo-release locally, or:  git tag rust-v0.0.1 && git push origin rust-v0.0.1
+# (after bumping rust/Cargo.toml to the same version).
+on:
+  push:
+    tags:
+      - 'rust-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Cache cargo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: cargo-release-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock') }}
+
+      - name: Verify the tag matches Cargo.toml version
+        id: version
+        working-directory: rust
+        run: |
+          tag_version="${GITHUB_REF_NAME#rust-v}"
+          crate_version="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
+          if [ "$tag_version" != "$crate_version" ]; then
+            echo "::error::Tag '$tag_version' does not match rust/Cargo.toml version '$crate_version'"
+            exit 1
+          fi
+          echo "version=$crate_version" >> "$GITHUB_OUTPUT"
+          echo "Releasing rs-identity-model $crate_version"
+
+      - name: Build and test
+        working-directory: rust
+        run: |
+          cargo build --release
+          cargo test
+
+      - name: Publish to crates.io
+        working-directory: rust
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+        with:
+          name: Rust ${{ github.ref_name }}
+          generate_release_notes: true
+          body: |
+            Rust crate release `${{ github.ref_name }}` — published to crates.io as `rs-identity-model`.
+
+            ```toml
+            [dependencies]
+            rs-identity-model = "${{ steps.version.outputs.version }}"
+            ```
