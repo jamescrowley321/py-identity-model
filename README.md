@@ -2,19 +2,17 @@
 
 **One OIDC/OAuth2 client library, in every language, that behaves the same everywhere.**
 
-Outside of .NET, writing an OpenID Connect or OAuth 2.0 *client* means gluing
-together three or four half-overlapping libraries per language — one for JWTs,
-another for discovery, a third for the flows — each with its own quirks, its own
-gaps, and no relationship to what you'd reach for in the next service written in
-a different language. Duende's IdentityModel solved this for C#: one coherent,
-RFC-compliant client library with clean abstractions. Nothing equivalent exists
-for the rest of the stack.
+Writing an OpenID Connect or OAuth 2.0 *client* usually means gluing together
+three or four half-overlapping libraries per language — one for JWTs, another for
+discovery, a third for the flows — each with its own quirks, its own gaps, and no
+relationship to what you'd reach for in the next service written in a different
+language.
 
-**identity-model** is that library, brought to Python, Go, and Rust (Node/TypeScript
-next). Not four unrelated ports — one design, one capability surface, one set of
-RFC-compliance guarantees, implemented natively and idiomatically in each language
-and held to a single shared behavioral contract. Move from a Python service to a
-Go one and the mental model comes with you.
+**identity-model** replaces that with a single, coherent client library —
+implemented natively in Python, Go, and Rust (Node/TypeScript next). Not four
+unrelated ports: one design, one capability surface, one set of RFC-compliance
+guarantees, held to a single shared behavioral contract and proven against it in
+CI. Move from a Python service to a Go one and the mental model comes with you.
 
 - **RFC-first** — every capability maps to a specific RFC or OpenID Connect section, not a vendor's happy path.
 - **Native, not bindings** — each library is real, idiomatic code in its own language (`httpx`/`net/http`/`reqwest`), sharing a design, not a runtime.
@@ -25,10 +23,6 @@ It is a protocol **client** library: it talks to identity providers. It is **not
 an identity provider or authorization server (no token issuance, no consent
 screens), and not framework middleware — though middleware is built on top of it
 (see [`fastapi-identity-model`](py/packages/fastapi-identity-model)).
-
-Credit where due: the design philosophy, capability taxonomy, and
-spec-compliance bar are a deliberate port of
-[Duende IdentityModel](https://github.com/DuendeSoftware/foss/tree/main/identity-model).
 
 ## The libraries
 
@@ -58,10 +52,9 @@ enforced. It is:
   coverage gate** fails CI if any language skips any vector (`make spec-coverage`).
 - **[`conformance/`](conformance/)** — the Python library additionally passes the
   OpenID Foundation's official certification suite.
-- **[`infra/`](infra/)** — one shared set of local identity providers
-  (node-oidc-provider, Keycloak, Duende IdentityServer) that every language's
-  integration tests run against, so "works against a real provider" means the
-  same thing for all of them.
+- **[`infra/`](infra/)** — one shared set of local identity providers that every
+  language's integration tests run against, so "works against a real provider"
+  means the same thing for all of them.
 
 ## Repository layout
 
