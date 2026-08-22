@@ -125,27 +125,22 @@ impl JwksClient {
         // fetch error the gate is released without a cache write, so a waiter
         // retries rather than sharing a transient failure — no worse than the
         // pre-single-flight behaviour and safer than caching an error.
-        let gate = self.cache.flight_gate(&uri);
-        let outcome = {
-            let _flight = gate.lock().await;
-            // Re-check under the flight: a concurrent winner may have populated
-            // the cache while we waited on the gate.
-            if let Some(key_set) = self.cache.get(&uri).await {
-                Ok(key_set)
-            } else {
-                match self.fetch_and_parse(&uri).await {
-                    Ok(key_set) => {
-                        self.cache
-                            .put(uri.clone(), key_set.clone(), self.cache_ttl)
-                            .await;
-                        Ok(key_set)
-                    }
-                    Err(err) => Err(err),
-                }
-            }
-        };
-        self.cache.release_flight(&uri, &gate);
-        outcome
+        // `flight` is an RAII guard: it releases the per-URI gate from the
+        // in-flight map when it drops, including if this future is cancelled at
+        // any `await` below. `flight` is declared before `_flight` so it outlives
+        // the lock guard and releases the gate last.
+        let flight = self.cache.flight_gate(&uri);
+        let _flight = flight.gate().lock().await;
+        // Re-check under the flight: a concurrent winner may have populated
+        // the cache while we waited on the gate.
+        if let Some(key_set) = self.cache.get(&uri).await {
+            return Ok(key_set);
+        }
+        let key_set = self.fetch_and_parse(&uri).await?;
+        self.cache
+            .put(uri.clone(), key_set.clone(), self.cache_ttl)
+            .await;
+        Ok(key_set)
     }
 
     /// Invalidates the cached set for `jwks_uri` and re-fetches it from the
@@ -607,6 +602,41 @@ mod tests {
             received.len(),
             1,
             "concurrent misses for one uri collapse to a single fetch"
+        );
+    }
+
+    // A fetch cancelled at an await (here via a timeout against a slow server)
+    // must release its single-flight gate; otherwise issuer/URI rotation plus
+    // mid-fetch cancellation would grow the in-flight map without bound
+    // (Finding 1 regression guard).
+    #[tokio::test]
+    async fn cancelled_fetch_releases_flight_gate() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/jwks"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_string(VALID_SET)
+                    .set_delay(Duration::from_secs(5)),
+            )
+            .mount(&server)
+            .await;
+
+        let client = JwksClient::builder().allow_http(true).build();
+        let uri = jwks_uri(&server);
+
+        // Cancel the fetch long before the 5s response by racing it against a
+        // short timeout; the fetch future is dropped mid-`fetch_and_parse`.
+        let cancelled = tokio::time::timeout(Duration::from_millis(100), client.fetch(&uri)).await;
+        assert!(
+            cancelled.is_err(),
+            "fetch should be cancelled by the timeout"
+        );
+
+        assert_eq!(
+            client.cache.flight_gate_count(),
+            0,
+            "a cancelled fetch must not strand its single-flight gate"
         );
     }
 

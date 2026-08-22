@@ -20,8 +20,13 @@
 //!   collapse to a single outbound fetch instead of each firing its own,
 //!   mirroring the Go reference's `singleflight` (`go/pkg/jwks`).
 //!
-//! The refresh-cooldown sidecar (`last_refresh`) is pruned in lockstep with LRU
-//! eviction so it cannot outgrow the bounded entry map.
+//! Both sidecars are bounded too, so neither reintroduces the unbounded growth
+//! the entry bound closes: the refresh-cooldown map (`last_refresh`) is pruned
+//! when its entry is evicted *and* independently capped at `max_entries` in
+//! [`Cache::mark_refresh`] (a failed `force_refresh` can otherwise strand a
+//! record with no backing entry that entry-eviction never reclaims), and the
+//! single-flight gate map (`in_flight`) is released through an RAII
+//! [`FlightGuard`] so a fetch cancelled at an `await` cannot strand its gate.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -52,8 +57,10 @@ pub(crate) struct Cache {
     entries: RwLock<HashMap<String, CacheEntry>>,
     /// Records when each `jwks_uri` was last refreshed, throttling automatic
     /// refreshes so an unknown `kid` cannot drive unbounded re-fetches (see
-    /// [`Cache::refresh_throttled`]). Pruned in lockstep with LRU eviction of
-    /// the corresponding entry so it stays bounded alongside `entries`.
+    /// [`Cache::refresh_throttled`]). Pruned when the corresponding entry is
+    /// evicted and independently capped at `max_entries` in
+    /// [`Cache::mark_refresh`], so a failed `force_refresh` — which leaves a
+    /// record with no backing entry — cannot strand records without bound.
     last_refresh: RwLock<HashMap<String, Instant>>,
     /// Maximum number of distinct `jwks_uri` entries retained. `0` means
     /// unbounded (no eviction).
@@ -63,9 +70,11 @@ pub(crate) struct Cache {
     /// Per-URI single-flight gates. A cache-miss acquires the gate for its URI
     /// so concurrent misses for the same URI serialize behind one fetch; the
     /// waiters then observe the populated cache instead of fetching again. The
-    /// map holds only URIs with a fetch in flight and is pruned on release, so
-    /// it does not reintroduce unbounded growth. The outer lock is a std mutex
-    /// held only for the O(1) map lookup (never across an `await`); the per-URI
+    /// map holds only URIs with a fetch in flight and is released via the RAII
+    /// [`FlightGuard`] returned by [`Cache::flight_gate`] — so even a fetch
+    /// cancelled at an `await` cannot strand its gate — and thus does not
+    /// reintroduce unbounded growth. The outer lock is a std mutex held only for
+    /// the O(1) map lookup (never across an `await`); the per-URI
     /// [`tokio::sync::Mutex`] is what is held across the fetch.
     in_flight: StdMutex<HashMap<String, Arc<Mutex<()>>>>,
 }
@@ -168,12 +177,35 @@ impl Cache {
         self.entries.write().await.remove(key);
     }
 
-    /// Records that `key` was just refreshed, starting its cooldown window.
+    /// Records that `key` was just refreshed, starting its cooldown window, then
+    /// caps the cooldown sidecar so it stays bounded.
+    ///
+    /// The cap is independent of entry eviction: `force_refresh` calls
+    /// [`Cache::invalidate`] (which deliberately keeps the record so the cooldown
+    /// still throttles repeated automatic refreshes) and only re-marks on
+    /// success. If the re-fetch fails, the record has no backing entry, and
+    /// entry-eviction — which only prunes records for keys still in `entries` —
+    /// can never reclaim it. Capping here (evicting the least-recently-refreshed
+    /// record) keeps the sidecar bounded under issuer/URI rotation regardless. A
+    /// `max_entries` of `0` is unbounded, matching the entry map.
     pub(crate) async fn mark_refresh(&self, key: &str) {
-        self.last_refresh
-            .write()
-            .await
-            .insert(key.to_string(), Instant::now());
+        let mut last_refresh = self.last_refresh.write().await;
+        last_refresh.insert(key.to_string(), Instant::now());
+        if self.max_entries == 0 {
+            return;
+        }
+        while last_refresh.len() > self.max_entries {
+            let oldest = last_refresh
+                .iter()
+                .min_by_key(|(_, instant)| **instant)
+                .map(|(key, _)| key.clone());
+            match oldest {
+                Some(key) => {
+                    last_refresh.remove(&key);
+                }
+                None => break,
+            }
+        }
     }
 
     /// Reports whether `key` was refreshed less than `cooldown` ago, so another
@@ -193,12 +225,19 @@ impl Cache {
     /// Returns the single-flight gate for `key`, creating one if a fetch is not
     /// already in flight. Callers lock the returned gate across the fetch so
     /// concurrent misses for the same URI collapse to a single request.
-    pub(crate) fn flight_gate(&self, key: &str) -> Arc<Mutex<()>> {
-        let mut in_flight = self.in_flight.lock().expect("in-flight gate map poisoned");
-        in_flight
-            .entry(key.to_string())
-            .or_insert_with(|| Arc::new(Mutex::new(())))
-            .clone()
+    pub(crate) fn flight_gate(&self, key: &str) -> FlightGuard<'_> {
+        let gate = {
+            let mut in_flight = self.in_flight.lock().expect("in-flight gate map poisoned");
+            in_flight
+                .entry(key.to_string())
+                .or_insert_with(|| Arc::new(Mutex::new(())))
+                .clone()
+        };
+        FlightGuard {
+            cache: self,
+            key: key.to_string(),
+            gate,
+        }
     }
 
     /// Releases the single-flight gate for `key`, removing it from the map only
@@ -236,6 +275,34 @@ impl Cache {
             .lock()
             .expect("in-flight gate map poisoned")
             .len()
+    }
+}
+
+/// RAII release for a single-flight gate. Holding the guard across the fetch
+/// guarantees the gate is removed from `in_flight` when the guard drops —
+/// including when the fetch future is cancelled (dropped) at an `await`. Without
+/// it, `release_flight` ran only on the normal path, so an attacker steering
+/// resolution at attacker-chosen URIs and disconnecting mid-fetch could strand
+/// one gate per URI and grow the sidecar without bound (the very unbounded-growth
+/// DoS the entry bound closes). Removal is by `Arc` identity, so the first holder
+/// to drop reclaims the map slot and later holders (or a re-created gate) are
+/// left untouched.
+pub(crate) struct FlightGuard<'a> {
+    cache: &'a Cache,
+    key: String,
+    gate: Arc<Mutex<()>>,
+}
+
+impl FlightGuard<'_> {
+    /// The per-URI gate to lock across the fetch.
+    pub(crate) fn gate(&self) -> &Arc<Mutex<()>> {
+        &self.gate
+    }
+}
+
+impl Drop for FlightGuard<'_> {
+    fn drop(&mut self) {
+        self.cache.release_flight(&self.key, &self.gate);
     }
 }
 
@@ -358,13 +425,37 @@ mod tests {
     #[tokio::test]
     async fn flight_gate_is_released() {
         let cache = Cache::new(8);
-        let gate = cache.flight_gate("u");
+        let guard = cache.flight_gate("u");
         assert_eq!(cache.flight_gate_count(), 1);
-        // A second request for the same URI shares the same gate.
-        let gate2 = cache.flight_gate("u");
-        assert!(Arc::ptr_eq(&gate, &gate2));
+        // A second request for the same URI shares the same underlying gate.
+        let guard2 = cache.flight_gate("u");
+        assert!(Arc::ptr_eq(guard.gate(), guard2.gate()));
         assert_eq!(cache.flight_gate_count(), 1);
-        cache.release_flight("u", &gate);
-        assert_eq!(cache.flight_gate_count(), 0, "gate pruned on release");
+        // Dropping a holder releases the gate via RAII; removal is by identity so
+        // it happens exactly once even while another holder is still alive.
+        drop(guard);
+        assert_eq!(
+            cache.flight_gate_count(),
+            0,
+            "gate pruned when a holder drops"
+        );
+        drop(guard2);
+        assert_eq!(cache.flight_gate_count(), 0);
+    }
+
+    // A failed force_refresh leaves a cooldown record with no backing entry that
+    // entry-eviction can never reclaim; mark_refresh must cap the sidecar so such
+    // records cannot accumulate without bound under issuer/URI rotation. Records
+    // are only ever created by mark_refresh, so capping there bounds the map.
+    #[tokio::test]
+    async fn refresh_sidecar_is_bounded_independently() {
+        let cache = Cache::new(3);
+        for i in 0..50 {
+            cache.mark_refresh(&format!("https://p/{i}/jwks")).await;
+            assert!(
+                cache.refresh_record_count().await <= 3,
+                "cooldown sidecar exceeded cap after marking entry {i}"
+            );
+        }
     }
 }
