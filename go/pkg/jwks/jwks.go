@@ -169,7 +169,7 @@ func (s *JSONWebKeySet) ForceRefresh(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	s.cache.markRefresh(s.uri)
+	s.cache.markRefresh(s.uri, s.cfg.maxEntries)
 	s.mu.Lock()
 	s.Keys = keys
 	s.mu.Unlock()
