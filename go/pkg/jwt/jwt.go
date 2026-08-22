@@ -10,7 +10,7 @@ import (
 
 	jose "github.com/go-jose/go-jose/v4"
 
-	"github.com/jamescrowley321/py-identity-model/go/pkg/jwks"
+	"github.com/jamescrowley321/identity-model/go/pkg/jwks"
 )
 
 // joseHeader is the subset of the JWS protected header this validator inspects

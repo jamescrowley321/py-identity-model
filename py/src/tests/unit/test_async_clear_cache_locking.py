@@ -12,7 +12,7 @@ without acquiring ``_*_cache_write_lock`` (the lock is an
 This is a breaking API change documented in the helper docstrings —
 callers must now ``await``. Tests in this file pin the new contract.
 
-See https://github.com/jamescrowley321/py-identity-model/issues/405
+See https://github.com/jamescrowley321/identity-model/issues/405
 """
 
 from __future__ import annotations

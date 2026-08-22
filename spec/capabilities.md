@@ -30,7 +30,7 @@ Normative keywords (MUST / SHOULD / MAY) follow [RFC 2119](https://www.rfc-edito
 | Advanced | CIBA | OpenID CIBA Core | — | planned | planned | planned |
 | Advanced | JARM | OpenID JARM | — | planned | planned | planned |
 
-> Python status reflects the reference implementation [`py-identity-model`](https://github.com/jamescrowley321/py-identity-model), which merges into `python/` at a later date. Go and Rust are scaffolded in this repo with implementation tracked per the conformance definitions.
+> Python status reflects the reference implementation [`py-identity-model`](https://github.com/jamescrowley321/identity-model), which merges into `python/` at a later date. Go and Rust are scaffolded in this repo with implementation tracked per the conformance definitions.
 
 ## Capability Definitions (Core Tier)
 

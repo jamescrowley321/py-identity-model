@@ -2,7 +2,7 @@ name: Release Go 🐹
 
 # The Go library versions on its own cadence, independent of the Python
 # package. A release is a `go/vX.Y.Z` tag — the subdir-module format `go get`
-# requires — and `go get github.com/jamescrowley321/py-identity-model/go@go/vX.Y.Z`
+# requires — and `go get github.com/jamescrowley321/identity-model/go@go/vX.Y.Z`
 # resolves the module directly from that tag. There is no artifact to publish
 # (a Go library ships as source via the module proxy), so this workflow just
 # verifies the library and cuts a GitHub Release for the changelog. Create one
@@ -45,5 +45,5 @@ jobs:
             Go library release `${{ github.ref_name }}`.
 
             ```
-            go get github.com/jamescrowley321/py-identity-model/go@${{ github.ref_name }}
+            go get github.com/jamescrowley321/identity-model/go@${{ github.ref_name }}
             ```

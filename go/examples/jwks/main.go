@@ -17,7 +17,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/jamescrowley321/py-identity-model/go/pkg/jwks"
+	"github.com/jamescrowley321/identity-model/go/pkg/jwks"
 )
 
 func main() {

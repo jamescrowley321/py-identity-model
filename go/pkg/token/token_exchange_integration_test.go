@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamescrowley321/py-identity-model/go/pkg/token"
+	"github.com/jamescrowley321/identity-model/go/pkg/token"
 )
 
 // RFC 8693 token exchange has no support in node-oidc-provider (the local

@@ -22,7 +22,7 @@
 
 set -euo pipefail
 
-REPO="${REPO:-jamescrowley321/py-identity-model}"
+REPO="${REPO:-jamescrowley321/identity-model}"
 
 SECRETS=(
   TEST_DISCO_ADDRESS

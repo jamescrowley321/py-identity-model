@@ -15,8 +15,8 @@ the caller decided to refresh, captured outside the lock and stale by the
 time the lock was acquired."
 
 See:
-- https://github.com/jamescrowley321/py-identity-model/issues/400 (monotonic)
-- https://github.com/jamescrowley321/py-identity-model/issues/404 (request_time race)
+- https://github.com/jamescrowley321/identity-model/issues/400 (monotonic)
+- https://github.com/jamescrowley321/identity-model/issues/404 (request_time race)
 """
 
 from __future__ import annotations

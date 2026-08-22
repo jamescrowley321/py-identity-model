@@ -315,10 +315,10 @@ When you push a pre-release tag, GitHub Actions will:
 
 ```bash
 # Option 1: From GitHub release (recommended)
-pip install https://github.com/jamescrowley321/py-identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
+pip install https://github.com/jamescrowley321/identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
 
 # Option 2: From git tag
-pip install git+https://github.com/jamescrowley321/py-identity-model.git@2.0.0-rc.1
+pip install git+https://github.com/jamescrowley321/identity-model.git@2.0.0-rc.1
 ```
 
 For detailed pre-release testing instructions, see [Pre-release Testing Guide](pre-release-guide.md).
@@ -345,7 +345,7 @@ py-identity-model/
 
 ## Roadmap
 
-See the [project roadmap](py_identity_model_roadmap.md) and [GitHub issues](https://github.com/jamescrowley321/py-identity-model/issues) for planned features and current priorities.
+See the [project roadmap](py_identity_model_roadmap.md) and [GitHub issues](https://github.com/jamescrowley321/identity-model/issues) for planned features and current priorities.
 
 Current focus areas:
 - **v0.1.0 - Foundation**: Testing, documentation, base classes
@@ -358,7 +358,7 @@ Current focus areas:
 
 - **Issues**: Open an issue for bugs or feature requests
 - **Discussions**: Use GitHub Discussions for questions and ideas
-- **Documentation**: Check the [docs](https://jamescrowley321.github.io/py-identity-model/)
+- **Documentation**: Check the [docs](https://jamescrowley321.github.io/identity-model/)
 
 ## Recognition
 

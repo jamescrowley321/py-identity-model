@@ -427,13 +427,13 @@ See the main `examples/docker-compose.test.yml` for Docker Compose configuration
 - **Descope Documentation**: https://docs.descope.com/
 - **Descope OIDC/OAuth Guide**: https://docs.descope.com/getting-started/oidc-endpoints
 - **Descope Python SDK**: https://github.com/descope/python-sdk
-- **py-identity-model Docs**: https://github.com/jamescrowley321/py-identity-model
+- **py-identity-model Docs**: https://github.com/jamescrowley321/identity-model
 - **FastAPI Documentation**: https://fastapi.tiangolo.com/
 
 ## Support
 
 For issues related to:
-- **This example**: Open an issue at https://github.com/jamescrowley321/py-identity-model/issues
+- **This example**: Open an issue at https://github.com/jamescrowley321/identity-model/issues
 - **Descope platform**: Contact Descope support or visit https://docs.descope.com/
 - **py-identity-model library**: See main project README
 

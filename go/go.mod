@@ -1,4 +1,4 @@
-module github.com/jamescrowley321/py-identity-model/go
+module github.com/jamescrowley321/identity-model/go
 
 go 1.26.0
 

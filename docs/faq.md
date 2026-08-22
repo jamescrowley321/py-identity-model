@@ -45,7 +45,7 @@ No, only JWT (JSON Web Token) tokens are currently supported. Opaque token suppo
 
 ### Can I use this with async/await?
 
-Not yet. Async support is planned for v0.5.0. See [issue #51](https://github.com/jamescrowley321/py-identity-model/issues/51).
+Not yet. Async support is planned for v0.5.0. See [issue #51](https://github.com/jamescrowley321/identity-model/issues/51).
 
 ### What identity providers are supported?
 
@@ -61,7 +61,7 @@ py-identity-model works with any OAuth 2.0 / OpenID Connect compliant provider, 
 
 ### Does it support token refresh?
 
-Not yet. Refresh token support is planned for v0.2.0. See [issue #19](https://github.com/jamescrowley321/py-identity-model/issues/19).
+Not yet. Refresh token support is planned for v0.2.0. See [issue #19](https://github.com/jamescrowley321/identity-model/issues/19).
 
 ## Usage Questions
 
@@ -146,7 +146,7 @@ def get_valid_token():
 
 ### Can I use this with Flask or FastAPI?
 
-Yes! py-identity-model works great with both. See the [Examples](https://github.com/jamescrowley321/py-identity-model/tree/main/examples) directory for middleware implementations.
+Yes! py-identity-model works great with both. See the [Examples](https://github.com/jamescrowley321/identity-model/tree/main/examples) directory for middleware implementations.
 
 ### How do I validate tokens in a decorator?
 
@@ -220,7 +220,7 @@ Yes, you can use py-identity-model in Lambda functions behind API Gateway to val
 
 ### Can I validate tokens from multiple issuers?
 
-This is planned for v0.2.0. See [issue #93](https://github.com/jamescrowley321/py-identity-model/issues/93).
+This is planned for v0.2.0. See [issue #93](https://github.com/jamescrowley321/identity-model/issues/93).
 
 Current workaround: Create separate validation configs for each issuer.
 
@@ -245,7 +245,7 @@ make test-integration
 
 ### Where can I find examples?
 
-Check the [examples directory](https://github.com/jamescrowley321/py-identity-model/tree/main/examples) in the repository.
+Check the [examples directory](https://github.com/jamescrowley321/identity-model/tree/main/examples) in the repository.
 
 ### Is there API documentation?
 
@@ -293,7 +293,7 @@ See the [project roadmap](py_identity_model_roadmap.md) for detailed plans. High
 
 ### Can I request a feature?
 
-Yes! Open an issue on [GitHub](https://github.com/jamescrowley321/py-identity-model/issues) describing:
+Yes! Open an issue on [GitHub](https://github.com/jamescrowley321/identity-model/issues) describing:
 - What you want to do
 - Why it's useful
 - Any relevant specifications (RFCs)
@@ -309,5 +309,5 @@ Contributions are welcome! See the [Contributing Guide](contributing.md) for:
 
 - Check the [Troubleshooting Guide](troubleshooting.md)
 - Review [Getting Started](getting-started.md)
-- Open an issue on [GitHub](https://github.com/jamescrowley321/py-identity-model/issues)
+- Open an issue on [GitHub](https://github.com/jamescrowley321/identity-model/issues)
 - Read the [project documentation](index.md)

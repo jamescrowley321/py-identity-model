@@ -22,8 +22,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jamescrowley321/py-identity-model/go/pkg/discovery"
-	"github.com/jamescrowley321/py-identity-model/go/pkg/token"
+	"github.com/jamescrowley321/identity-model/go/pkg/discovery"
+	"github.com/jamescrowley321/identity-model/go/pkg/token"
 )
 
 func main() {

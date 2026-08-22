@@ -11,6 +11,13 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
 The Go library has not yet been tagged or published; everything below is the
 initial, unreleased development state.
 
+### Changed
+
+- Module path is now `github.com/jamescrowley321/identity-model/go` (the
+  repository was renamed from `py-identity-model` to `identity-model` during the
+  polyglot consolidation). The library is unreleased, so no published version is
+  affected; the first tag is cut on the new path.
+
 ### Added
 
 - Core OIDC/OAuth 2.0 client packages: `discovery`, `jwks`, `jwt`, `token`
@@ -23,7 +30,7 @@ initial, unreleased development state.
 
 ### Notes
 
-- **Module path:** `github.com/jamescrowley321/py-identity-model/go`.
+- **Module path:** `github.com/jamescrowley321/identity-model/go`.
 - Integration tests use the `//go:build integration` tag and require the local
   provider stack (`make infra-up`); they are excluded from a plain
   `go test ./...`.

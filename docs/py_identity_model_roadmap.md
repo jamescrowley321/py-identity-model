@@ -60,20 +60,20 @@
 ## Planned
 
 ### Documentation & Examples
-- [ ] Comprehensive API documentation ([#83](https://github.com/jamescrowley321/py-identity-model/issues/83))
-- [ ] Provider examples: Auth0, Okta, Azure AD, Google, Cognito ([#35-#39](https://github.com/jamescrowley321/py-identity-model/issues/35))
-- [ ] Flask middleware example ([#33](https://github.com/jamescrowley321/py-identity-model/issues/33))
+- [ ] Comprehensive API documentation ([#83](https://github.com/jamescrowley321/identity-model/issues/83))
+- [ ] Provider examples: Auth0, Okta, Azure AD, Google, Cognito ([#35-#39](https://github.com/jamescrowley321/identity-model/issues/35))
+- [ ] Flask middleware example ([#33](https://github.com/jamescrowley321/identity-model/issues/33))
 
 ### Extended Protocol Features
-- [ ] Discovery Cache with configurable TTL ([#219](https://github.com/jamescrowley321/py-identity-model/issues/219))
-- [ ] RP-Initiated Logout ([#214](https://github.com/jamescrowley321/py-identity-model/issues/214))
-- [ ] JWT Client Authentication — private_key_jwt / client_secret_jwt ([#213](https://github.com/jamescrowley321/py-identity-model/issues/213))
-- [x] AS Issuer Identification — RFC 9207 ([#221](https://github.com/jamescrowley321/py-identity-model/issues/221))
-- [ ] CIBA — Client-Initiated Backchannel Authentication ([#217](https://github.com/jamescrowley321/py-identity-model/issues/217))
-- [ ] Rich Authorization Requests — RFC 9396 ([#220](https://github.com/jamescrowley321/py-identity-model/issues/220))
-- [ ] Dynamic Client Registration — RFC 7591 ([#216](https://github.com/jamescrowley321/py-identity-model/issues/216))
-- [ ] mTLS Client Auth — RFC 8705 ([#215](https://github.com/jamescrowley321/py-identity-model/issues/215))
-- [ ] JARM — JWT Secured Authorization Response Mode ([#218](https://github.com/jamescrowley321/py-identity-model/issues/218))
+- [ ] Discovery Cache with configurable TTL ([#219](https://github.com/jamescrowley321/identity-model/issues/219))
+- [ ] RP-Initiated Logout ([#214](https://github.com/jamescrowley321/identity-model/issues/214))
+- [ ] JWT Client Authentication — private_key_jwt / client_secret_jwt ([#213](https://github.com/jamescrowley321/identity-model/issues/213))
+- [x] AS Issuer Identification — RFC 9207 ([#221](https://github.com/jamescrowley321/identity-model/issues/221))
+- [ ] CIBA — Client-Initiated Backchannel Authentication ([#217](https://github.com/jamescrowley321/identity-model/issues/217))
+- [ ] Rich Authorization Requests — RFC 9396 ([#220](https://github.com/jamescrowley321/identity-model/issues/220))
+- [ ] Dynamic Client Registration — RFC 7591 ([#216](https://github.com/jamescrowley321/identity-model/issues/216))
+- [ ] mTLS Client Auth — RFC 8705 ([#215](https://github.com/jamescrowley321/identity-model/issues/215))
+- [ ] JARM — JWT Secured Authorization Response Mode ([#218](https://github.com/jamescrowley321/identity-model/issues/218))
 
 ### Cloud Provider Integration Testing
 - [ ] AWS Cognito integration tests

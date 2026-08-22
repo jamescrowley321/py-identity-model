@@ -27,8 +27,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/jamescrowley321/py-identity-model/go/pkg/discovery"
-	"github.com/jamescrowley321/py-identity-model/go/pkg/revocation"
+	"github.com/jamescrowley321/identity-model/go/pkg/discovery"
+	"github.com/jamescrowley321/identity-model/go/pkg/revocation"
 )
 
 func main() {

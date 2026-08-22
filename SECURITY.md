@@ -8,7 +8,7 @@ downstream consumer, so reports are taken seriously and triaged promptly.
 
 **Please do not open a public issue for security problems.**
 
-Report privately through GitHub's **[Private Vulnerability Reporting](https://github.com/jamescrowley321/py-identity-model/security/advisories/new)**
+Report privately through GitHub's **[Private Vulnerability Reporting](https://github.com/jamescrowley321/identity-model/security/advisories/new)**
 (repository **Security** tab → **Report a vulnerability**). This opens a private
 advisory visible only to you and the maintainers, where a fix and CVE can be
 coordinated.

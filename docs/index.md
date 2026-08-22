@@ -1,6 +1,6 @@
 # py-identity-model
 
-![Build](https://github.com/jamescrowley321/py-identity-model/workflows/Build/badge.svg)
+![Build](https://github.com/jamescrowley321/identity-model/workflows/Build/badge.svg)
 ![License](https://img.shields.io/pypi/l/py-identity-model)
 
 Production-grade OIDC/OAuth2.0 client library for Python. Dual sync/async API with comprehensive RFC coverage. Inspired by [Duende.IdentityModel](https://github.com/DuendeSoftware/foss/tree/main/identity-model).

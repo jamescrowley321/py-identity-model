@@ -1,5 +1,5 @@
 # py-identity-model
-![Build](https://github.com/jamescrowley321/py-identity-model/workflows/Build/badge.svg)
+![Build](https://github.com/jamescrowley321/identity-model/workflows/Build/badge.svg)
 ![License](https://img.shields.io/pypi/l/py-identity-model)
 
 Production-grade OIDC/OAuth2.0 client library for Python. Dual sync/async API with comprehensive RFC coverage. Inspired by [Duende.IdentityModel](https://github.com/DuendeSoftware/foss/tree/main/identity-model).
@@ -179,13 +179,13 @@ async def admin() -> dict:
 
 ## Documentation
 
-Full docs: **[jamescrowley321.github.io/py-identity-model](https://jamescrowley321.github.io/py-identity-model/)**
+Full docs: **[jamescrowley321.github.io/identity-model](https://jamescrowley321.github.io/identity-model/)**
 
-- [Getting Started](https://jamescrowley321.github.io/py-identity-model/getting-started/)
-- [Migration Guide](https://jamescrowley321.github.io/py-identity-model/migration-guide/)
-- [Performance Guide](https://jamescrowley321.github.io/py-identity-model/performance/)
-- [Integration Tests](https://jamescrowley321.github.io/py-identity-model/integration-tests/)
-- [API Reference](https://jamescrowley321.github.io/py-identity-model/api/)
+- [Getting Started](https://jamescrowley321.github.io/identity-model/getting-started/)
+- [Migration Guide](https://jamescrowley321.github.io/identity-model/migration-guide/)
+- [Performance Guide](https://jamescrowley321.github.io/identity-model/performance/)
+- [Integration Tests](https://jamescrowley321.github.io/identity-model/integration-tests/)
+- [API Reference](https://jamescrowley321.github.io/identity-model/api/)
 
 ## License
 

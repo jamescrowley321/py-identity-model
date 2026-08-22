@@ -5,7 +5,7 @@ package main
 import (
 	"fmt"
 
-	_ "github.com/jamescrowley321/py-identity-model/go/pkg/discovery"
+	_ "github.com/jamescrowley321/identity-model/go/pkg/discovery"
 )
 
 func main() {

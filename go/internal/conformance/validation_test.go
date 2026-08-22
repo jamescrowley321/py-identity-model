@@ -15,8 +15,8 @@ import (
 
 	jose "github.com/go-jose/go-jose/v4"
 
-	"github.com/jamescrowley321/py-identity-model/go/pkg/jwks"
-	"github.com/jamescrowley321/py-identity-model/go/pkg/jwt"
+	"github.com/jamescrowley321/identity-model/go/pkg/jwks"
+	"github.com/jamescrowley321/identity-model/go/pkg/jwt"
 )
 
 // Paths from go/internal/conformance to the shared spec tree at the repo root.

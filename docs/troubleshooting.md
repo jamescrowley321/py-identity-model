@@ -343,14 +343,14 @@ user_id = claims.get('sub')  # Extract what you need
 
 If you're still experiencing issues:
 
-1. **Check the Examples**: Review the [examples directory](https://github.com/jamescrowley321/py-identity-model/tree/main/examples) for working code
+1. **Check the Examples**: Review the [examples directory](https://github.com/jamescrowley321/identity-model/tree/main/examples) for working code
 2. **Enable Debugging**: Set up logging to see detailed information
    ```python
    import logging
    logging.basicConfig(level=logging.DEBUG)
    ```
-3. **Check GitHub Issues**: See if your issue is already reported at [GitHub Issues](https://github.com/jamescrowley321/py-identity-model/issues)
-4. **Open an Issue**: If you found a bug, please [open an issue](https://github.com/jamescrowley321/py-identity-model/issues/new) with:
+3. **Check GitHub Issues**: See if your issue is already reported at [GitHub Issues](https://github.com/jamescrowley321/identity-model/issues)
+4. **Open an Issue**: If you found a bug, please [open an issue](https://github.com/jamescrowley321/identity-model/issues/new) with:
    - Python version
    - py-identity-model version
    - Minimal code to reproduce the issue

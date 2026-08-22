@@ -42,9 +42,9 @@ dependencies = [
 server = ["uvicorn[standard]>=0.23.0"]
 
 [project.urls]
-Homepage = "https://github.com/jamescrowley321/py-identity-model"
-Repository = "https://github.com/jamescrowley321/py-identity-model"
-Issues = "https://github.com/jamescrowley321/py-identity-model/issues"
+Homepage = "https://github.com/jamescrowley321/identity-model"
+Repository = "https://github.com/jamescrowley321/identity-model"
+Issues = "https://github.com/jamescrowley321/identity-model/issues"
 
 [tool.uv.sources]
 py-identity-model = { workspace = true }

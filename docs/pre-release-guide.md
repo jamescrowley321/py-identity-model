@@ -60,10 +60,10 @@ This installs the pre-built wheel directly from the GitHub release:
 
 ```bash
 # Using pip
-pip install https://github.com/jamescrowley321/py-identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
+pip install https://github.com/jamescrowley321/identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
 
 # Using uv
-uv pip install https://github.com/jamescrowley321/py-identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
+uv pip install https://github.com/jamescrowley321/identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
 ```
 
 **Option 2: Install from Git Tag**
@@ -72,10 +72,10 @@ This builds the package from source at the specified tag:
 
 ```bash
 # Using pip
-pip install git+https://github.com/jamescrowley321/py-identity-model.git@2.0.0-rc.1
+pip install git+https://github.com/jamescrowley321/identity-model.git@2.0.0-rc.1
 
 # Using uv
-uv pip install git+https://github.com/jamescrowley321/py-identity-model.git@2.0.0-rc.1
+uv pip install git+https://github.com/jamescrowley321/identity-model.git@2.0.0-rc.1
 ```
 
 **Option 3: Install in Editable Mode for Development**
@@ -83,7 +83,7 @@ uv pip install git+https://github.com/jamescrowley321/py-identity-model.git@2.0.
 For active development and testing:
 
 ```bash
-git clone https://github.com/jamescrowley321/py-identity-model.git
+git clone https://github.com/jamescrowley321/identity-model.git
 cd py-identity-model
 git checkout 2.0.0-rc.1
 pip install -e .
@@ -91,7 +91,7 @@ pip install -e .
 
 **Finding the Wheel URL:**
 
-1. Go to the [Releases page](https://github.com/jamescrowley321/py-identity-model/releases)
+1. Go to the [Releases page](https://github.com/jamescrowley321/identity-model/releases)
 2. Find the pre-release version
 3. Copy the link to the `.whl` file from the Assets section
 4. The release notes will also include the exact installation command
@@ -106,10 +106,10 @@ python -m venv test-env
 source test-env/bin/activate  # On Windows: test-env\Scripts\activate
 
 # Install the pre-release (Option 1 - from GitHub release)
-pip install https://github.com/jamescrowley321/py-identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
+pip install https://github.com/jamescrowley321/identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
 
 # Or Option 2 - from git tag
-pip install git+https://github.com/jamescrowley321/py-identity-model.git@2.0.0-rc.1
+pip install git+https://github.com/jamescrowley321/identity-model.git@2.0.0-rc.1
 
 # Run your tests
 python your_test_script.py
@@ -124,10 +124,10 @@ To test in an existing application:
 cd /path/to/your/app
 
 # Install pre-release (Option 1 - from GitHub release)
-pip install https://github.com/jamescrowley321/py-identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
+pip install https://github.com/jamescrowley321/identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
 
 # Or Option 2 - from git tag
-pip install git+https://github.com/jamescrowley321/py-identity-model.git@2.0.0-rc.1
+pip install git+https://github.com/jamescrowley321/identity-model.git@2.0.0-rc.1
 
 # Test your application
 pytest
@@ -154,7 +154,7 @@ Before creating a pre-release:
 ## GitHub Releases vs PyPI
 
 ### GitHub Releases (Pre-releases)
-- **URL:** https://github.com/jamescrowley321/py-identity-model/releases
+- **URL:** https://github.com/jamescrowley321/identity-model/releases
 - **Purpose:** Testing package distribution before official release
 - **Retention:** Releases can be deleted or updated as needed
 - **Usage:** Pre-release testing only
@@ -175,14 +175,14 @@ If you get a 404 error when installing from GitHub:
 
 ```bash
 # Verify the release exists
-# Go to: https://github.com/jamescrowley321/py-identity-model/releases
+# Go to: https://github.com/jamescrowley321/identity-model/releases
 
 # Check the exact wheel filename in the release assets
 # The filename format is: py_identity_model-{version}-py3-none-any.whl
 # Note: Version may have dashes converted (e.g., 2.0.0-rc.1 becomes 2.0.0rc1)
 
 # Correct example:
-pip install https://github.com/jamescrowley321/py-identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
+pip install https://github.com/jamescrowley321/identity-model/releases/download/2.0.0-rc.1/py_identity_model-2.0.0rc1-py3-none-any.whl
 ```
 
 ### Version Already Exists
@@ -202,7 +202,7 @@ If installing from git tag fails:
 git --version
 
 # Try with verbose output to see the error
-pip install -v git+https://github.com/jamescrowley321/py-identity-model.git@2.0.0-rc.1
+pip install -v git+https://github.com/jamescrowley321/identity-model.git@2.0.0-rc.1
 
 # Alternative: Install from the wheel URL instead
 ```
@@ -281,10 +281,10 @@ print(f"Successfully validated {len(results)} tokens concurrently")
 - [TestPyPI](https://test.pypi.org/)
 - [PyPI Packaging Guide](https://packaging.python.org/)
 - [Semantic Versioning](https://semver.org/)
-- [py-identity-model Documentation](https://github.com/jamescrowley321/py-identity-model/tree/main/docs)
+- [py-identity-model Documentation](https://github.com/jamescrowley321/identity-model/tree/main/docs)
 
 ## Getting Help
 
-- Open an issue: https://github.com/jamescrowley321/py-identity-model/issues
+- Open an issue: https://github.com/jamescrowley321/identity-model/issues
 - Check existing discussions
 - Review CHANGELOG for breaking changes

@@ -13,8 +13,8 @@ inserted below the marker.
 ### Bug Fixes
 
 - **fastapi**: Uniform 401 body across validation failures (F-18, CWE-209)
-  ([#508](https://github.com/jamescrowley321/py-identity-model/pull/508),
-  [`d4e8aed`](https://github.com/jamescrowley321/py-identity-model/commit/d4e8aedcd9e2622aab9139ae5f6b09e2e2c1eaf0))
+  ([#508](https://github.com/jamescrowley321/identity-model/pull/508),
+  [`d4e8aed`](https://github.com/jamescrowley321/identity-model/commit/d4e8aedcd9e2622aab9139ae5f6b09e2e2c1eaf0))
 
 
 ## v0.2.0 (2026-08-09)
@@ -22,7 +22,7 @@ inserted below the marker.
 ### Features
 
 - **fastapi**: Opt-in access-token-marker enforcement (F-07)
-  ([`4e0eb10`](https://github.com/jamescrowley321/py-identity-model/commit/4e0eb10aea9c6451614b5b6cfaa4b2c410f3496b))
+  ([`4e0eb10`](https://github.com/jamescrowley321/identity-model/commit/4e0eb10aea9c6451614b5b6cfaa4b2c410f3496b))
 
 
 ## 0.1.0 (2026-07-08)
